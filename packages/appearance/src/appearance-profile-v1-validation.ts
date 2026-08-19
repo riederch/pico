@@ -1,4 +1,8 @@
 import { PicoAppearanceError } from './appearance-errors.js';
+import {
+  appearanceProfileV1FieldRanges,
+  type PicoAppearanceFieldRange,
+} from './appearance-profile-v1.js';
 import type {
   PicoAppearanceProfileV1,
   PicoHeadIdentityV1,
@@ -13,6 +17,13 @@ import { requireInteger, requirePlainObject } from './validation-primitives.js';
  * silent clamps. The returned profile is a frozen deep copy, so later
  * mutation of the input cannot change an already validated value.
  */
+const ranges = appearanceProfileV1FieldRanges;
+
+/** Range checks read the published table, so the two cannot drift apart. */
+function requireIntegerInRange(value: unknown, label: string, range: PicoAppearanceFieldRange): number {
+  return requireInteger(value, label, range.minimum, range.maximum);
+}
+
 export function validateAppearanceProfileV1(input: unknown): PicoAppearanceProfileV1 {
   const root = requirePlainObject(input, 'profile', ['profileVersion', 'headIdentity', 'surface']);
   if (typeof root.profileVersion !== 'number' || !Number.isInteger(root.profileVersion)) {
@@ -58,25 +69,25 @@ function validateRecipe(input: unknown): ProceduralHeadRecipeV2 {
   return {
     generatorVersion: 2,
     geometry: {
-      anchor: requireInteger(geometry.anchor, 'geometry.anchor', 0, 255),
-      side: requireInteger(geometry.side, 'geometry.side', -96, 96),
-      length: requireInteger(geometry.length, 'geometry.length', 0, 255),
-      lift: requireInteger(geometry.lift, 'geometry.lift', 0, 255),
-      sweep: requireInteger(geometry.sweep, 'geometry.sweep', -64, 127),
-      curl: requireInteger(geometry.curl, 'geometry.curl', -127, 127),
-      width: requireInteger(geometry.width, 'geometry.width', 0, 255),
-      taper: requireInteger(geometry.taper, 'geometry.taper', 0, 255),
-      twist: requireInteger(geometry.twist, 'geometry.twist', -127, 127),
-      segments: requireInteger(geometry.segments, 'geometry.segments', 3, 9),
-      partOffset: requireInteger(geometry.partOffset, 'geometry.partOffset', -96, 96),
-      partDepth: requireInteger(geometry.partDepth, 'geometry.partDepth', 0, 192),
-      crownBias: requireInteger(geometry.crownBias, 'geometry.crownBias', -96, 96),
-      rootSpread: requireInteger(geometry.rootSpread, 'geometry.rootSpread', 48, 192),
+      anchor: requireIntegerInRange(geometry.anchor, 'geometry.anchor', ranges.recipeGeometry.anchor),
+      side: requireIntegerInRange(geometry.side, 'geometry.side', ranges.recipeGeometry.side),
+      length: requireIntegerInRange(geometry.length, 'geometry.length', ranges.recipeGeometry.length),
+      lift: requireIntegerInRange(geometry.lift, 'geometry.lift', ranges.recipeGeometry.lift),
+      sweep: requireIntegerInRange(geometry.sweep, 'geometry.sweep', ranges.recipeGeometry.sweep),
+      curl: requireIntegerInRange(geometry.curl, 'geometry.curl', ranges.recipeGeometry.curl),
+      width: requireIntegerInRange(geometry.width, 'geometry.width', ranges.recipeGeometry.width),
+      taper: requireIntegerInRange(geometry.taper, 'geometry.taper', ranges.recipeGeometry.taper),
+      twist: requireIntegerInRange(geometry.twist, 'geometry.twist', ranges.recipeGeometry.twist),
+      segments: requireIntegerInRange(geometry.segments, 'geometry.segments', ranges.recipeGeometry.segments),
+      partOffset: requireIntegerInRange(geometry.partOffset, 'geometry.partOffset', ranges.recipeGeometry.partOffset),
+      partDepth: requireIntegerInRange(geometry.partDepth, 'geometry.partDepth', ranges.recipeGeometry.partDepth),
+      crownBias: requireIntegerInRange(geometry.crownBias, 'geometry.crownBias', ranges.recipeGeometry.crownBias),
+      rootSpread: requireIntegerInRange(geometry.rootSpread, 'geometry.rootSpread', ranges.recipeGeometry.rootSpread),
     },
     material: {
-      hue: requireInteger(material.hue, 'material.hue', 0, 359),
-      chroma: requireInteger(material.chroma, 'material.chroma', 0, 255),
-      translucency: requireInteger(material.translucency, 'material.translucency', 0, 255),
+      hue: requireIntegerInRange(material.hue, 'material.hue', ranges.recipeMaterial.hue),
+      chroma: requireIntegerInRange(material.chroma, 'material.chroma', ranges.recipeMaterial.chroma),
+      translucency: requireIntegerInRange(material.translucency, 'material.translucency', ranges.recipeMaterial.translucency),
     },
   };
 }
@@ -95,21 +106,21 @@ function validateSurface(input: unknown): PicoSurfaceAppearanceV1 {
   return {
     surfaceVersion: 1,
     shell: {
-      hue: requireInteger(shell.hue, 'shell.hue', 0, 359),
-      chroma: requireInteger(shell.chroma, 'shell.chroma', 0, 255),
-      lightness: requireInteger(shell.lightness, 'shell.lightness', 0, 255),
-      gloss: requireInteger(shell.gloss, 'shell.gloss', 0, 255),
+      hue: requireIntegerInRange(shell.hue, 'shell.hue', ranges.surfaceShell.hue),
+      chroma: requireIntegerInRange(shell.chroma, 'shell.chroma', ranges.surfaceShell.chroma),
+      lightness: requireIntegerInRange(shell.lightness, 'shell.lightness', ranges.surfaceShell.lightness),
+      gloss: requireIntegerInRange(shell.gloss, 'shell.gloss', ranges.surfaceShell.gloss),
     },
     face: {
-      hue: requireInteger(face.hue, 'face.hue', 0, 359),
-      tint: requireInteger(face.tint, 'face.tint', 0, 255),
-      blackLevel: requireInteger(face.blackLevel, 'face.blackLevel', 0, 255),
-      reflectivity: requireInteger(face.reflectivity, 'face.reflectivity', 0, 255),
+      hue: requireIntegerInRange(face.hue, 'face.hue', ranges.surfaceFace.hue),
+      tint: requireIntegerInRange(face.tint, 'face.tint', ranges.surfaceFace.tint),
+      blackLevel: requireIntegerInRange(face.blackLevel, 'face.blackLevel', ranges.surfaceFace.blackLevel),
+      reflectivity: requireIntegerInRange(face.reflectivity, 'face.reflectivity', ranges.surfaceFace.reflectivity),
     },
     trim: {
-      hue: requireInteger(trim.hue, 'trim.hue', 0, 359),
-      chroma: requireInteger(trim.chroma, 'trim.chroma', 0, 255),
-      metalness: requireInteger(trim.metalness, 'trim.metalness', 0, 255),
+      hue: requireIntegerInRange(trim.hue, 'trim.hue', ranges.surfaceTrim.hue),
+      chroma: requireIntegerInRange(trim.chroma, 'trim.chroma', ranges.surfaceTrim.chroma),
+      metalness: requireIntegerInRange(trim.metalness, 'trim.metalness', ranges.surfaceTrim.metalness),
     },
   };
 }

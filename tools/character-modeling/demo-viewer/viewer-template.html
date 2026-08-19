@@ -280,6 +280,32 @@
   .zone-chip {
     width: 26px; height: 18px; border: 1px solid var(--line);
   }
+  .report { display: flex; flex-direction: column; gap: 4px; }
+  .report-line {
+    display: grid; grid-template-columns: minmax(0, 10rem) 1fr; gap: 4px 10px;
+    font-size: 0.74rem; align-items: baseline;
+  }
+  .report-line dt { font-family: var(--mono); color: var(--muted); }
+  .report-line dd { margin: 0; word-break: break-all; }
+  .report-line.bad dd { color: var(--bad, #c0392b); }
+  .code-label {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+    margin-top: 8px; display: block;
+  }
+  .code-box {
+    width: 100%; box-sizing: border-box; font-family: var(--mono);
+    font-size: 0.72rem; padding: 5px 6px; border: 1px solid var(--line);
+    background: var(--surface-sunk); color: inherit;
+  }
+  .code-box:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .coverage { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+  .coverage-row {
+    display: grid; grid-template-columns: 6.5rem 1fr; gap: 8px;
+    font-size: 0.72rem; padding: 2px 0;
+  }
+  .coverage-row code { font-family: var(--mono); color: var(--muted); }
+  .coverage-row span { color: var(--muted); }
+  .coverage-row.drives span { color: inherit; }
   .field { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-top: 7px; }
   .field label {
     font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
@@ -331,8 +357,11 @@
     <h1>Pico, in seine Bauteile zerlegt</h1>
     <p>
       Der autorisierte Core aus dem Blender-Checkpoint. Ziehen dreht, Rad zoomt.
-      Rechts lässt sich jede Bauteilgruppe einzeln zu- und abschalten — die
-      Kopfidentität als Auswahl, weil sich die drei gegenseitig ausschließen.
+      Rechts lässt sich jede Bauteilgruppe einzeln zu- und abschalten. Welches
+      Kopfmodul erscheint, entscheidet nicht die Seite, sondern der Generator:
+      die Eingabefelder bilden ein Appearance-Objekt V1, das echte Paket
+      <code>@pico/appearance</code> prüft, kodiert und projiziert es, und erst
+      dessen semantische Familie wählt die autorisierte Geometrie aus.
     </p>
   </header>
 
@@ -363,6 +392,11 @@
       <details class="panel" open>
         <summary>Kopfidentität</summary>
         <div class="panel-body" id="heads" role="radiogroup" aria-label="Kopfidentität"></div>
+        <p class="swatch-note">
+          Diese Auswahl setzt das Profil: die Antenne als Identität, ein Modul
+          als sein autorisiertes Rezept. Sichtbar wird, was der Generator
+          daraus ableitet.
+        </p>
       </details>
 
       <details class="panel" open>
@@ -380,14 +414,36 @@
       </details>
 
       <details class="panel" open>
-        <summary>Oberflächen-Attribute</summary>
+        <summary>Oberfläche (Profil V1)</summary>
         <div id="surfaces"></div>
         <p class="swatch-note" id="corridorNote"></p>
       </details>
 
       <details class="panel">
-        <summary>Nicht im Prüfstand</summary>
-        <p class="swatch-note" id="geometryNote"></p>
+        <summary>Kopfmodul-Rezept (Profil V1)</summary>
+        <div class="panel-body">
+          <p class="swatch-note" id="recipeNote"></p>
+        </div>
+        <div id="recipe"></div>
+      </details>
+
+      <details class="panel" open>
+        <summary>Generator</summary>
+        <div class="panel-body">
+          <div id="generator" class="report"></div>
+          <label class="code-label" for="codeIn">Appearance-Code</label>
+          <input id="codeIn" class="code-box" type="text" spellcheck="false"
+                 autocomplete="off" aria-describedby="codeNote">
+          <p class="swatch-note" id="codeNote"></p>
+        </div>
+      </details>
+
+      <details class="panel">
+        <summary>Feldwirkung, gemessen</summary>
+        <div class="panel-body">
+          <p class="swatch-note" id="coverageNote"></p>
+          <div id="coverage" class="coverage"></div>
+        </div>
       </details>
     </div>
   </div>
@@ -396,6 +452,7 @@
     <div class="cell"><dt>Sichtbare Teile</dt><dd id="mParts">–</dd></div>
     <div class="cell"><dt>Dreiecke</dt><dd id="mTris">–</dd></div>
     <div class="cell"><dt>Kopfidentität</dt><dd id="mHead">–</dd></div>
+    <div class="cell"><dt>Semantische Familie</dt><dd id="mFamily">–</dd></div>
     <div class="cell"><dt>Mimik</dt><dd id="mFace">–</dd></div>
     <div class="cell"><dt>Höhe (Einheiten)</dt><dd id="mHeight">–</dd></div>
   </dl>
@@ -404,6 +461,9 @@
 </div>
 
 <script id="model" type="application/json">__PICO_MODEL_DATA__</script>
+<!-- The shipped @pico/appearance, bundled at export time. The page runs the
+     real contract: no second implementation of it lives here. -->
+<script>__PICO_APPEARANCE_BUNDLE__</script>
 <script>
 (function () {
   "use strict";
@@ -744,17 +804,127 @@
     return worst;
   }
 
-  var surfaceValues = {};
-  Object.keys(MODEL.surfaceCorridors || {}).forEach(function (zone) {
-    surfaceValues[zone] = {};
+  /* ---- the appearance object ------------------------------------------
+     Everything a person can set here is one Profile V1. The page keeps a
+     draft of the whole thing -- both halves of the head identity included --
+     so switching the identity does not throw the other half away, and hands
+     the assembled object to the shipped package for the verdict. */
+
+  var APPEARANCE = window.PicoAppearance;
+  var RANGES = APPEARANCE.appearanceProfileV1FieldRanges;
+  var GEOMETRY_FIELDS = MODEL.geometryFields;
+  var AUTHORED = MODEL.authoredHeadRecipes || {};
+  var STUB = MODEL.stubComponent;
+
+  function copyOf(source) {
+    var target = {};
+    Object.keys(source).forEach(function (key) { target[key] = source[key]; });
+    return target;
+  }
+
+  function corridorDefaults(zone) {
+    var values = {};
     MODEL.surfaceCorridors[zone].fields.forEach(function (field) {
-      surfaceValues[zone][field.id] = field.value;
+      values[field.id] = field.value;
     });
+    return values;
+  }
+
+  // The recipe starts on an authored one, so the first procedural profile
+  // resolves to geometry that exists rather than to a placeholder.
+  var firstAuthored = AUTHORED.head_crown || AUTHORED[Object.keys(AUTHORED)[0]];
+  var draft = {
+    kind: "standard_antenna",
+    geometry: copyOf(firstAuthored.geometry),
+    material: corridorDefaults("head_module"),
+    surface: {
+      shell: corridorDefaults("shell"),
+      face: corridorDefaults("face_display"),
+      trim: corridorDefaults("trim")
+    }
+  };
+
+  var ZONE_SLOT = {
+    shell: function () { return draft.surface.shell; },
+    face_display: function () { return draft.surface.face; },
+    trim: function () { return draft.surface.trim; },
+    head_module: function () { return draft.material; }
+  };
+
+  function zoneValues(zone) { return ZONE_SLOT[zone](); }
+
+  function buildProfile() {
+    var identity = draft.kind === "standard_antenna"
+      ? { kind: "standard_antenna" }
+      : {
+          kind: "procedural_neon_hair",
+          recipe: {
+            generatorVersion: 2,
+            geometry: copyOf(draft.geometry),
+            material: copyOf(draft.material)
+          }
+        };
+    return {
+      profileVersion: 1,
+      headIdentity: identity,
+      surface: {
+        surfaceVersion: 1,
+        shell: copyOf(draft.surface.shell),
+        face: copyOf(draft.surface.face),
+        trim: copyOf(draft.surface.trim)
+      }
+    };
+  }
+
+  // Which authored module belongs to which semantic family is not stated
+  // here: each authored recipe is put through the same derivation the
+  // projection uses, so the answer comes from the contract.
+  var MODULE_BY_FAMILY = {};
+  Object.keys(AUTHORED).forEach(function (component) {
+    MODULE_BY_FAMILY[APPEARANCE.deriveSemanticHeadFamilyV1(AUTHORED[component].geometry)] = component;
   });
+
+  function sameProfile(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+
+  function runGenerator() {
+    var profile;
+    try {
+      profile = APPEARANCE.validateAppearanceProfileV1(buildProfile());
+    } catch (error) {
+      return { ok: false, message: error && error.message, errorCode: error && error.code };
+    }
+    var code = APPEARANCE.formatAppearanceProfileV1(profile);
+    var core = APPEARANCE.projectAppearanceProfileV1ToCompatibilityCoreV1(profile);
+    var component = core.head.kind === "standard_antenna"
+      ? "head_antenna"
+      : (MODULE_BY_FAMILY[core.head.family] || null);
+    return {
+      ok: true,
+      profile: profile,
+      code: code,
+      bytes: APPEARANCE.encodeAppearanceProfileV1(profile).length,
+      roundTrip: sameProfile(APPEARANCE.parseAppearanceProfileV1(code), profile),
+      core: core,
+      component: component,
+      family: core.head.family
+    };
+  }
+
+  var report = runGenerator();
+
+  function applyGenerator() {
+    report = runGenerator();
+    if (!report.ok) return;
+    HEAD.forEach(function (id) { visible[id] = id === report.component; });
+    visible[STUB] = report.component === null;
+    head = report.component || STUB;
+  }
 
   function zoneColour(zone) {
     var corridor = MODEL.surfaceCorridors[zone];
-    var values = surfaceValues[zone];
+    var values = zoneValues(zone);
     var amountField = {
       shell: "chroma", face_display: "tint",
       trim: "chroma", head_module: "chroma"
@@ -775,7 +945,7 @@
   function applySurfaceColours() {
     Object.keys(MODEL.surfaceCorridors || {}).forEach(function (zone) {
       var colour = zoneColour(zone);
-      var values = surfaceValues[zone];
+      var values = zoneValues(zone);
       parts.forEach(function (part) {
         if (part.zone !== zone) return;
         part.baseColour = colour.slice();
@@ -919,8 +1089,7 @@
       '<span class="row-count">' + countFor(component.id) + "</span>";
     row.addEventListener("click", function () {
       if (isHead) {
-        HEAD.forEach(function (id) { visible[id] = id === component.id; });
-        head = component.id;
+        loadHeadPreset(component.id);
       } else {
         visible[component.id] = !visible[component.id];
       }
@@ -973,6 +1142,61 @@
     return { entry: entry, button: button };
   });
 
+  var inputs = [];
+
+  function refreshInputs() {
+    inputs.forEach(function (entry) { entry.refresh(); });
+  }
+
+  function loadHeadPreset(component) {
+    if (component === "head_antenna") {
+      draft.kind = "standard_antenna";
+    } else if (AUTHORED[component]) {
+      draft.kind = "procedural_neon_hair";
+      draft.geometry = copyOf(AUTHORED[component].geometry);
+      draft.material = copyOf(AUTHORED[component].material);
+    }
+    refreshInputs();
+    applyGenerator();
+    applySurfaceColours();
+  }
+
+  function slider(host, key, label, range, read, write) {
+    var row = document.createElement("div");
+    row.className = "field";
+    var name = document.createElement("label");
+    // `hue` exists in four zones, so the label alone would hand several
+    // inputs the same id and every one of their labels would point at the
+    // first of them.
+    var id = "f_" + key.replace(/[^a-z0-9]+/gi, "_");
+    name.setAttribute("for", id);
+    name.textContent = label;
+    var value = document.createElement("output");
+    var input = document.createElement("input");
+    input.type = "range";
+    input.id = id;
+    input.min = String(range.minimum);
+    input.max = String(range.maximum);
+    input.step = "1";
+    function refresh() {
+      input.value = String(read());
+      value.textContent = String(read());
+    }
+    input.addEventListener("input", function () {
+      write(Number(input.value));
+      value.textContent = input.value;
+      applyGenerator();
+      applySurfaceColours();
+      sync();
+    });
+    refresh();
+    inputs.push({ refresh: refresh });
+    row.appendChild(name);
+    row.appendChild(value);
+    row.appendChild(input);
+    host.appendChild(row);
+  }
+
   var surfaceHost = document.getElementById("surfaces");
   var zoneChips = {};
   Object.keys(MODEL.surfaceCorridors || {}).forEach(function (zone) {
@@ -992,32 +1216,25 @@
     zoneChips[zone] = chip;
 
     corridor.fields.forEach(function (field) {
-      var row = document.createElement("div");
-      row.className = "field";
-      var label = document.createElement("label");
-      var id = "f_" + zone + "_" + field.id;
-      label.setAttribute("for", id);
-      label.textContent = field.label;
-      var value = document.createElement("output");
-      value.textContent = field.value;
-      var input = document.createElement("input");
-      input.type = "range";
-      input.id = id;
-      input.min = "0";
-      input.max = String(field.max);
-      input.value = String(field.value);
-      input.addEventListener("input", function () {
-        surfaceValues[zone][field.id] = Number(input.value);
-        value.textContent = input.value;
-        applySurfaceColours();
-        sync();
-      });
-      row.appendChild(label);
-      row.appendChild(value);
-      row.appendChild(input);
-      block.appendChild(row);
+      // The bounds come from the package, never from this page: a field that
+      // offered a value validation rejects would be a second contract.
+      slider(
+        block, zone + "_" + field.id, field.label,
+        RANGES[corridor.profileGroup][field.id],
+        function () { return zoneValues(zone)[field.id]; },
+        function (next) { zoneValues(zone)[field.id] = next; }
+      );
     });
     surfaceHost.appendChild(block);
+  });
+
+  var recipeHost = document.getElementById("recipe");
+  GEOMETRY_FIELDS.forEach(function (name) {
+    slider(
+      recipeHost, "geometry_" + name, name, RANGES.recipeGeometry[name],
+      function () { return draft.geometry[name]; },
+      function (next) { draft.geometry[name] = next; }
+    );
   });
 
   var drift = checkCorridorPort();
@@ -1036,13 +1253,224 @@
       + "dunkel, Trim nicht emissiv.";
   }
 
-  document.getElementById("geometryNote").innerHTML =
-    "Die " + MODEL.geometryFields.length + " Geometriefelder des Kopfmoduls ("
-    + "<code>" + MODEL.geometryFields.join("</code>, <code>") + "</code>) "
-    + "aendern Geometrie, nicht Farbe. Sie bleiben dem Blender-Generator "
-    + "vorbehalten: sie hier nachzubauen hiesse, einen zweiten Generator "
-    + "neben den ersten zu stellen. Diese Seite zeigt die drei erzeugten "
-    + "Kopfidentitaeten, nicht den Korridor dazwischen.";
+  /* ---- generator report ----------------------------------------------- */
+
+  var COMPONENT_LABEL = {};
+  MODEL.components.forEach(function (component) {
+    COMPONENT_LABEL[component.id] = component.label.replace("Kopf: ", "");
+  });
+
+  function reportLine(host, label, text, bad) {
+    var line = document.createElement("dl");
+    line.className = "report-line" + (bad ? " bad" : "");
+    var term = document.createElement("dt");
+    term.textContent = label;
+    var detail = document.createElement("dd");
+    detail.textContent = text;
+    line.appendChild(term);
+    line.appendChild(detail);
+    host.appendChild(line);
+  }
+
+  function renderReport() {
+    var host = document.getElementById("generator");
+    host.innerHTML = "";
+    if (!report.ok) {
+      reportLine(host, "Pruefung", (report.errorCode || "abgelehnt") + ": " + report.message, true);
+      reportLine(host, "Ausgabe", "keine — ein ungueltiges Profil erzeugt nichts", true);
+      return;
+    }
+    var head = report.core.head;
+    reportLine(host, "Pruefung", "gueltig, geprueft von validateAppearanceProfileV1");
+    reportLine(
+      host, "Nutzlast",
+      report.bytes + " Byte" + (report.roundTrip ? ", Rundlauf identisch" : ", RUNDLAUF WEICHT AB"),
+      !report.roundTrip
+    );
+    reportLine(host, "Familie", head.family);
+    reportLine(
+      host, "Kompatibilitaetskern",
+      "length " + head.length + " · volume " + head.volume + " · parting " + head.parting
+        + " · primaryHue " + head.primaryHue
+    );
+    reportLine(
+      host, "Geometrie",
+      report.component
+        ? COMPONENT_LABEL[report.component] + " (autorisiert)"
+        : "kein autorisiertes Modul fuer diese Familie — Platzhalter",
+      !report.component
+    );
+  }
+
+  /* ---- what each recipe field actually changes -------------------------
+     Measured, not claimed: every geometry field is swept through its whole
+     published range against the current recipe, and what moves is read off
+     the same projection the product uses. */
+
+  function projectedHead(geometry) {
+    return APPEARANCE.projectAppearanceProfileV1ToCompatibilityCoreV1({
+      profileVersion: 1,
+      headIdentity: {
+        kind: "procedural_neon_hair",
+        recipe: {
+          generatorVersion: 2,
+          geometry: geometry,
+          material: copyOf(draft.material)
+        }
+      },
+      surface: {
+        surfaceVersion: 1,
+        shell: copyOf(draft.surface.shell),
+        face: copyOf(draft.surface.face),
+        trim: copyOf(draft.surface.trim)
+      }
+    }).head;
+  }
+
+  function moduleFor(family) {
+    return MODULE_BY_FAMILY[family] || "(Platzhalter)";
+  }
+
+  function renderCoverage() {
+    var host = document.getElementById("coverage");
+    var note = document.getElementById("coverageNote");
+    host.innerHTML = "";
+    if (draft.kind !== "procedural_neon_hair") {
+      note.textContent =
+        "Die Standardantenne traegt kein Rezept: die vierzehn Geometriefelder "
+        + "sind dann nicht Teil des Profils. Auf ein Kopfmodul umschalten, um "
+        + "ihre Wirkung zu messen.";
+      return;
+    }
+    var reference = projectedHead(copyOf(draft.geometry));
+    var steps = 16;
+    var counts = { module: 0, family: 0, core: 0, none: 0 };
+    GEOMETRY_FIELDS.forEach(function (name) {
+      var range = RANGES.recipeGeometry[name];
+      var families = {};
+      var modules = {};
+      var coreMoves = false;
+      for (var step = 0; step <= steps; step += 1) {
+        var value = Math.round(
+          range.minimum + (range.maximum - range.minimum) * (step / steps)
+        );
+        var geometry = copyOf(draft.geometry);
+        geometry[name] = value;
+        var head = projectedHead(geometry);
+        families[head.family] = true;
+        modules[moduleFor(head.family)] = true;
+        if (head.length !== reference.length || head.volume !== reference.volume
+            || head.parting !== reference.parting) {
+          coreMoves = true;
+        }
+      }
+      var text;
+      var drives = true;
+      if (Object.keys(modules).length > 1) {
+        text = "waehlt die gezeigte Geometrie";
+        counts.module += 1;
+      } else if (Object.keys(families).length > 1) {
+        text = "aendert die semantische Familie";
+        counts.family += 1;
+      } else if (coreMoves) {
+        text = "nur im Kompatibilitaetskern";
+        counts.core += 1;
+        drives = false;
+      } else {
+        text = "wird getragen, aendert hier nichts";
+        counts.none += 1;
+        drives = false;
+      }
+      var row = document.createElement("div");
+      row.className = "coverage-row" + (drives ? " drives" : "");
+      var code = document.createElement("code");
+      code.textContent = name;
+      var span = document.createElement("span");
+      span.textContent = text;
+      row.appendChild(code);
+      row.appendChild(span);
+      host.appendChild(row);
+    });
+    note.textContent =
+      "Vom aktuellen Rezept aus gemessen, jedes Feld ueber seinen ganzen "
+      + "Bereich: " + counts.module + " waehlen die gezeigte Geometrie, "
+      + counts.family + " nur die Familie, " + counts.core
+      + " nur Werte im Kompatibilitaetskern, " + counts.none
+      + " aendern hier nichts. Die letzten beiden Gruppen sind nicht "
+      + "bedeutungslos — sie haben in diesem Prueftand nur noch keine "
+      + "Geometrie, die auf sie hoert.";
+  }
+
+  /* ---- the code, in and out -------------------------------------------- */
+
+  var codeInput = document.getElementById("codeIn");
+  var codeNote = document.getElementById("codeNote");
+
+  function loadProfile(profile) {
+    draft.kind = profile.headIdentity.kind;
+    if (profile.headIdentity.kind === "procedural_neon_hair") {
+      draft.geometry = copyOf(profile.headIdentity.recipe.geometry);
+      draft.material = copyOf(profile.headIdentity.recipe.material);
+    }
+    draft.surface.shell = copyOf(profile.surface.shell);
+    draft.surface.face = copyOf(profile.surface.face);
+    draft.surface.trim = copyOf(profile.surface.trim);
+    refreshInputs();
+    applyGenerator();
+    applySurfaceColours();
+  }
+
+  codeInput.addEventListener("change", function () {
+    var text = codeInput.value.trim();
+    if (!text) return;
+    try {
+      loadProfile(APPEARANCE.parseAppearanceProfileV1(text));
+      codeNote.className = "swatch-note";
+      codeNote.textContent = "Code gelesen, Felder gesetzt.";
+      sync();
+    } catch (error) {
+      codeNote.className = "swatch-note bad";
+      codeNote.textContent = "Abgelehnt: " + (error && error.message);
+    }
+  });
+
+  // Field names are the other half of the contract: a corridor zone naming a
+  // field the package does not publish would build an input nothing reads.
+  function checkFieldNames() {
+    var problems = [];
+    Object.keys(MODEL.surfaceCorridors).forEach(function (zone) {
+      var corridor = MODEL.surfaceCorridors[zone];
+      var group = RANGES[corridor.profileGroup];
+      if (!group) {
+        problems.push(zone + ": Gruppe " + corridor.profileGroup + " fehlt im Paket");
+        return;
+      }
+      var listed = corridor.fields.map(function (field) { return field.id; }).sort().join(",");
+      var published = Object.keys(group).sort().join(",");
+      if (listed !== published) problems.push(zone + ": " + listed + " gegen " + published);
+    });
+    var listedGeometry = GEOMETRY_FIELDS.slice().sort().join(",");
+    var publishedGeometry = Object.keys(RANGES.recipeGeometry).sort().join(",");
+    if (listedGeometry !== publishedGeometry) {
+      problems.push("recipeGeometry: " + listedGeometry + " gegen " + publishedGeometry);
+    }
+    return problems;
+  }
+
+  var fieldProblems = checkFieldNames();
+  var recipeNote = document.getElementById("recipeNote");
+  if (fieldProblems.length) {
+    recipeNote.className = "swatch-note bad";
+    recipeNote.textContent =
+      "Felder dieser Seite und des Pakets stimmen nicht ueberein: "
+      + fieldProblems.join("; ");
+  } else {
+    recipeNote.textContent =
+      "Vierzehn Geometriefelder, Grenzen aus "
+      + "appearanceProfileV1FieldRanges des Pakets. Sie beschreiben das "
+      + "Kopfmodul; welche autorisierte Geometrie daraus wird, entscheidet die "
+      + "Projektion, nicht dieses Feld.";
+  }
 
   document.getElementById("reset").addEventListener("click", function () {
     camera.yaw = HOME.yaw;
@@ -1086,8 +1514,16 @@
     document.getElementById("mParts").textContent = shown.length + " / " + parts.length;
     document.getElementById("mTris").textContent =
       shown.reduce(function (total, part) { return total + part.triangles; }, 0).toLocaleString("de-DE");
-    var label = MODEL.components.filter(function (component) { return component.id === head; })[0];
-    document.getElementById("mHead").textContent = label ? label.label.replace("Kopf: ", "") : "–";
+    document.getElementById("mHead").textContent =
+      report.ok
+        ? (report.component ? COMPONENT_LABEL[report.component] : "Platzhalter")
+        : "ungueltig";
+    document.getElementById("mFamily").textContent = report.ok ? report.family : "–";
+    renderReport();
+    renderCoverage();
+    if (document.activeElement !== codeInput) {
+      codeInput.value = report.ok ? report.code : "";
+    }
     var entry = STATES.filter(function (item) { return item.state === state; })[0];
     var faceCell = document.getElementById("mFace");
     if (faceCell) faceCell.textContent = entry ? entry.label : "–";
@@ -1117,6 +1553,7 @@
     if (scheme.addEventListener) scheme.addEventListener("change", draw);
   }
 
+  applyGenerator();
   applySurfaceColours();
   applyStatusColour();
   sync();

@@ -19,6 +19,7 @@ import json
 import math
 import os
 import struct
+import subprocess
 import sys
 
 import bpy
@@ -121,48 +122,52 @@ SURFACE_CORRIDORS = {
     "shell": {
         "label": "Schale",
         "zones": ["shell"],
+        "profileGroup": "surfaceShell",
         "lightness": [0.78, 0.96],
         "chroma": [0.0, 0.070],
         "fields": [
-            {"id": "hue", "label": "hue", "max": 359, "value": 232},
-            {"id": "chroma", "label": "chroma", "max": 255, "value": 40},
-            {"id": "lightness", "label": "lightness", "max": 255, "value": 150},
-            {"id": "gloss", "label": "gloss", "max": 255, "value": 190},
+            {"id": "hue", "label": "hue", "value": 232},
+            {"id": "chroma", "label": "chroma", "value": 40},
+            {"id": "lightness", "label": "lightness", "value": 150},
+            {"id": "gloss", "label": "gloss", "value": 190},
         ],
     },
     "face_display": {
         "label": "Display",
         "zones": ["face_display"],
+        "profileGroup": "surfaceFace",
         "lightness": [0.025, 0.110],
         "chroma": [0.0, 0.040],
         "fields": [
-            {"id": "hue", "label": "hue", "max": 359, "value": 226},
-            {"id": "tint", "label": "tint", "max": 255, "value": 60},
-            {"id": "blackLevel", "label": "blackLevel", "max": 255, "value": 40},
-            {"id": "reflectivity", "label": "reflectivity", "max": 255, "value": 90},
+            {"id": "hue", "label": "hue", "value": 226},
+            {"id": "tint", "label": "tint", "value": 60},
+            {"id": "blackLevel", "label": "blackLevel", "value": 40},
+            {"id": "reflectivity", "label": "reflectivity", "value": 90},
         ],
     },
     "trim": {
         "label": "Trim",
         "zones": ["trim"],
+        "profileGroup": "surfaceTrim",
         # Trim has no lightness field in the standard; it stays dark by design.
         "lightness": [0.30, 0.30],
         "chroma": [0.0, 0.140],
         "fields": [
-            {"id": "hue", "label": "hue", "max": 359, "value": 230},
-            {"id": "chroma", "label": "chroma", "max": 255, "value": 46},
-            {"id": "metalness", "label": "metalness", "max": 255, "value": 110},
+            {"id": "hue", "label": "hue", "value": 230},
+            {"id": "chroma", "label": "chroma", "value": 46},
+            {"id": "metalness", "label": "metalness", "value": 110},
         ],
     },
     "head_module": {
         "label": "Kopfmodul (persoenlich)",
         "zones": ["head_module"],
+        "profileGroup": "recipeMaterial",
         "lightness": [0.500, 0.640],
         "chroma": [0.040, 0.220],
         "fields": [
-            {"id": "hue", "label": "hue", "max": 359, "value": 286},
-            {"id": "chroma", "label": "chroma", "max": 255, "value": 156},
-            {"id": "translucency", "label": "translucency", "max": 255, "value": 184},
+            {"id": "hue", "label": "hue", "value": 286},
+            {"id": "chroma", "label": "chroma", "value": 156},
+            {"id": "translucency", "label": "translucency", "value": 184},
         ],
     },
 }
@@ -202,6 +207,117 @@ def corridor_reference_samples():
                 "rgb": [round(v, 6) for v in oklch_to_linear_rgb(lightness, chroma, hue)],
             })
     return samples
+
+
+def authored_head_recipes():
+    """The two authored recipes, read back out of the checkpoint.
+
+    The generator wrote each recipe onto its collection as integers, so the
+    page can hand them to the real projection instead of this file claiming
+    which semantic family they belong to.
+    """
+    fields = (
+        "anchor", "side", "length", "lift", "sweep", "curl", "width", "taper",
+        "twist", "segments", "partOffset", "partDepth", "crownBias", "rootSpread",
+    )
+    by_vector = {
+        "head-raised-crown": "head_crown",
+        "head-long-neon-tail": "head_tail",
+    }
+    recipes = {}
+    for collection in bpy.data.collections:
+        if collection.get("pico_head_identity") != "procedural_neon_hair":
+            continue
+        component = by_vector.get(collection.get("pico_vector_name"))
+        if component is None:
+            continue
+        recipes[component] = {
+            "recipeName": collection["pico_vector_name"],
+            "generatorVersion": int(collection["pico_generator_version"]),
+            "geometry": {name: int(collection[f"pico_geometry_{name}"]) for name in fields},
+            "material": {
+                name: int(collection[f"pico_material_{name}"])
+                for name in ("hue", "chroma", "translucency")
+            },
+        }
+    if len(recipes) != len(by_vector):
+        raise SystemExit(f"the checkpoint carries {sorted(recipes)} instead of both recipes")
+    return recipes
+
+
+def stub_head_module():
+    """A visible placeholder for a head module family nothing models yet.
+
+    The projection knows seven semantic families and two of them have authored
+    geometry. Showing nothing for the rest would read as "this profile has no
+    head module", which is a different statement from "nobody has modelled this
+    one yet". The placeholder is built here, in the viewer export, and never
+    enters the checkpoint.
+    """
+    mount_point = bpy.data.objects["PICO_MOUNT_head_module"].matrix_world.translation
+    half = 0.052
+    top = 0.030
+    height = 0.185
+    lower = [(-half, 0.0, -half), (half, 0.0, -half), (half, 0.0, half), (-half, 0.0, half)]
+    upper = [(-top, height, -top), (top, height, -top), (top, height, top), (-top, height, top)]
+    corners = [
+        tuple(mount_point[axis] + offset[axis] for axis in range(3))
+        for offset in lower + upper
+    ]
+    quads = (
+        (3, 2, 1, 0), (4, 5, 6, 7),
+        (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7),
+    )
+    positions, packed_normals, indices = [], [], []
+    for quad in quads:
+        a, b, c = (Vector(corners[quad[index]]) for index in range(3))
+        normal = (b - a).cross(c - a).normalized()
+        first = len(positions) // 3
+        for corner in quad:
+            positions.extend(corners[corner])
+            packed_normals.extend(
+                max(-127, min(127, int(round(normal[axis] * 127.0)))) for axis in range(3)
+            )
+            packed_normals.append(0)
+        indices.extend((first, first + 1, first + 2, first, first + 2, first + 3))
+    return {
+        "name": "STUB.HeadModule",
+        "component": "head_stub",
+        "surface": {
+            "zone": "head_module", "material": "stub",
+            "colour": [0.5, 0.5, 0.5], "emissive": False,
+            "alpha": 1.0, "metallic": 0.0, "roughness": 0.55,
+        },
+        "positions": positions,
+        "normals": packed_normals,
+        "indices": indices,
+    }
+
+
+def appearance_bundle():
+    """Bundle the real `@pico/appearance` into the page.
+
+    The page builds, validates, encodes and projects a Profile V1 with the
+    shipped package rather than with a copy of it. Re-implementing the contract
+    in the page would put a second authority beside the one the product uses,
+    and the two would agree only until somebody changed one of them.
+    """
+    root = os.path.dirname(os.path.dirname(HERE))
+    esbuild = os.path.join(root, "node_modules", ".bin", "esbuild")
+    entry = os.path.join(root, "packages", "appearance", "src", "index.ts")
+    if not os.path.isfile(esbuild):
+        raise SystemExit(f"{esbuild} is missing; install the workspace before exporting")
+    result = subprocess.run(
+        [
+            esbuild, entry, "--bundle", "--format=iife",
+            "--global-name=PicoAppearance", "--target=es2020",
+            "--platform=browser", "--legal-comments=none",
+        ],
+        capture_output=True, text=True, cwd=root, check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(f"esbuild failed: {result.stderr.strip()}")
+    return result.stdout
 
 
 def surface_of(material):
@@ -352,6 +468,8 @@ select_identity(2)
 parts += collect(tail, share)
 select_identity(0)
 
+parts.append(stub_head_module())
+
 blob = bytearray()
 records = []
 
@@ -411,6 +529,8 @@ model = {
         "rootSpread",
     ],
     "headComponents": list(HEAD_COMPONENTS),
+    "authoredHeadRecipes": authored_head_recipes(),
+    "stubComponent": "head_stub",
     "bounds": {
         "min": [round(value, 4) for value in lo],
         "max": [round(value, 4) for value in hi],
@@ -423,6 +543,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 with open(TEMPLATE, "r", encoding="utf-8") as handle:
     page = handle.read()
 page = page.replace("__PICO_MODEL_DATA__", json.dumps(model, separators=(",", ":")))
+bundle = appearance_bundle()
+page = page.replace("__PICO_APPEARANCE_BUNDLE__", bundle)
 with open(OUTPUT_HTML, "w", encoding="utf-8") as handle:
     handle.write(page)
 
@@ -432,6 +554,7 @@ print(f"PICO_DEMO_VIEWER_PARTS={len(records)}")
 print(f"PICO_DEMO_VIEWER_TRIANGLES={triangles}")
 print(f"PICO_DEMO_VIEWER_BUFFER_BYTES={len(blob)}")
 print(f"PICO_DEMO_VIEWER_PAGE_BYTES={os.path.getsize(OUTPUT_HTML)}")
+print(f"PICO_DEMO_VIEWER_APPEARANCE_BUNDLE_BYTES={len(bundle)}")
 print("PICO_DEMO_VIEWER_STATUS=diagnostic_prototype_not_character_approved")
 sys.stdout.flush()
 sys.stderr.flush()

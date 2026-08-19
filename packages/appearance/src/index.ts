@@ -21,8 +21,10 @@ export {
 
 export {
   appearanceProfileV1AntennaByteLength,
+  appearanceProfileV1FieldRanges,
   appearanceProfileV1HeadModuleByteLength,
   appearanceProfileV1TextPrefix,
+  type PicoAppearanceFieldRange,
   type PicoAppearanceProfileV1,
   type PicoHeadIdentityV1,
   type PicoSurfaceAppearanceV1,

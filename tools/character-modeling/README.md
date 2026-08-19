@@ -38,14 +38,60 @@ Nothing here is a production Character asset:
   triangle budget and travels inside the page, so it is a picture of the
   checkpoint and never a second source for it.
 
+  Since the generator pass it does not carry loose slider values at all. The
+  page assembles one **Profile V1 appearance object** and hands it to the
+  shipped `@pico/appearance`, bundled into the page at export time with
+  esbuild. The package validates it, encodes it to its canonical `pa1_` code,
+  reads that code back and projects the profile onto the compatibility core —
+  all of it the code the product runs, not a second implementation beside it.
+  The page shows the verdict: the typed error code when a value is refused,
+  the payload length, whether the code round-trips, and the derived semantic
+  head family.
+
+  **The generator, not the page, decides which head module appears.** Both
+  authored recipes are read out of the checkpoint, where the character
+  generator wrote them as integers, and put through the real family
+  derivation; the family that comes back is what selects the geometry. So the
+  page never states that the raised crown is `top_structured` — it asks.
+
+  Four of the six reachable families have no authored geometry. They resolve
+  to a **visible placeholder** built in the exporter and never in the
+  checkpoint, because showing nothing would say "this profile has no head
+  module", which is a different sentence from "nobody has modelled this one
+  yet".
+
+  A panel measures **what each recipe field actually changes**, by sweeping
+  every field through its published range against the current recipe and
+  watching the projection: from the raised crown `side`, `length` and `lift`
+  select the geometry; from the concept tail `side`, `length` and `sweep` do.
+  The rest move only values inside the compatibility core, or nothing here at
+  all. That is measured on load, not written down.
+
+  Field bounds are published by the package as
+  `appearanceProfileV1FieldRanges`, and the validator reads that same table
+  rather than repeating the numbers — an input built from it cannot offer a
+  value validation would refuse. A test drives every field to both endpoints
+  and one step past each.
+
+  `validate_demo_viewer.mjs` checks the exported page from Node, where the
+  Blender validators cannot see: it evaluates the inlined bundle, reads the
+  model data beside it and holds the two against each other — same field
+  names per zone, no restated bounds, both authored recipes valid, projecting
+  to *distinct* families and surviving their own codes, and a placeholder that
+  is not dead weight. Four mutations were run against it and each is caught: a
+  renamed field, a removed placeholder, two recipes collapsed onto one family,
+  and a bound restated in the page.
+
   It also drives the **PAS surface attributes** live: all fourteen fields of
   the four surface zones — shell `hue/chroma/lightness/gloss`, face
   `hue/tint/blackLevel/reflectivity`, trim `hue/chroma/metalness` and the
   personal head module `hue/chroma/translucency`, from
   `parametric-appearance-system.md` sections 10.1 to 10.3 and 9.
 
-  The corridor bounds are defined once, in `SURFACE_CORRIDORS` in the
-  exporter, and shipped to the page as data. The page needs the mapping as a
+  The corridor bounds — the OKLCH box each zone stays inside — are defined
+  once, in `SURFACE_CORRIDORS` in the exporter, and shipped to the page as
+  data. They are a *rendering* statement and stay here; the *field* bounds are
+  a contract statement and belong to the package. The page needs the mapping as a
   *function*, since it recomputes while a slider moves, so it carries the same
   OKLCH conversion — and checks itself on load against reference colours
   computed in the exporter. A drift between the two is reported on the page
