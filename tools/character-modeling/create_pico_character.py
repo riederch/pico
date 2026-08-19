@@ -218,6 +218,52 @@ def support_surface_z(support_profile, x, y):
     return nearest[2] * math.sqrt(max(0.0, 1.0 - normalized_x ** 2))
 
 
+# The head is shortened at the back so it ends level with the body. The
+# revolved profile cannot express that on its own -- its depth is one radius
+# shared by front and back -- so the rear is compressed afterwards. Everything
+# that sits on the head reads the same compression, or it would be placed
+# against a surface that is no longer there.
+HEAD_MAX_DEPTH = 0.432
+HEAD_REAR_REDUCTION = 0.0
+
+
+def head_rear_scale(z):
+    """How far the rear of the head is drawn in at this depth.
+
+    Smooth at both ends: the compression starts with zero slope at the head's
+    equator, so pulling the back in leaves no crease where it begins.
+    """
+    if z >= 0.0 or HEAD_REAR_REDUCTION <= 0.0:
+        return 1.0
+    amount = min(1.0, -z / HEAD_MAX_DEPTH)
+    return 1.0 - HEAD_REAR_REDUCTION * amount * amount * (3.0 - 2.0 * amount)
+
+
+def head_rear_unscale(z):
+    """The profile depth a shortened rear point came from."""
+    if z >= 0.0 or HEAD_REAR_REDUCTION <= 0.0:
+        return z
+    original = z
+    for _ in range(40):
+        original = z / head_rear_scale(original)
+    return original
+
+
+def shorten_head_back(obj, reduction):
+    """Draw the back of the head in, leaving the front and the sides alone."""
+    global HEAD_REAR_REDUCTION
+    HEAD_REAR_REDUCTION = reduction
+    moved = 0
+    for vertex in obj.data.vertices:
+        scale = head_rear_scale(vertex.co.z)
+        if scale < 1.0:
+            vertex.co.z *= scale
+            moved += 1
+    obj.data.update()
+    print(f"PICO_HEAD_BACK_SHORTENED_VERTICES={moved}")
+    return obj
+
+
 def head_surface_y(support_profile, x, z, ceiling=0.395, floor=-0.120):
     """Height of the revolved head shell above (x, z).
 
@@ -225,7 +271,7 @@ def head_surface_y(support_profile, x, z, ceiling=0.395, floor=-0.120):
     it on a stalk, so its height is sampled from the same profile that builds
     the head rather than guessed from the mount.
     """
-    target = abs(z)
+    target = abs(head_rear_unscale(z))
     if support_surface_z(support_profile, x, floor) < target:
         return floor
     low, high = floor, ceiling
@@ -1298,12 +1344,11 @@ def make_arm(side):
         f"Trim.Wrist.{side}", wrist, (0.036, 0.039, 0.036),
         TRIM, "trim", segments=64, rings=40,
     )
-    # One piece, as on the concept board: the fingers are grooves in a single
-    # shell and the palm is cupped. The palm faces inward and forward on the
-    # left, so the concept's exposed dark palm still reads.
-    palm_normal = (
-        (0.34, 0.0, 0.94) if side == "L" else (-0.62, 0.0, -0.78)
-    )
+    # On the concept board both hands hang with their palms turned inward, so
+    # the hand reads narrow from the front and its fingers point straight
+    # down. Facing the palm forward turned the same hand into a raised, open
+    # gesture.
+    palm_normal = (-sign * 0.94, 0.0, 0.30)
     hand_direction = (palm - wrist).normalized()
     hand_shell(
         f"Trim.Hand.{side}",
@@ -1475,7 +1520,12 @@ def rear_ribbon_guide(support_profile, amounts):
     # still slides the plate, but within that half: rooted further forward the
     # broad band has to turn over the dome itself, and its lower edge cuts
     # into the shell while it does — which the corridor check catches.
-    fitting_z = -0.105 - anchor_amount * 0.135
+    #
+    # The position is a fraction of how deep the head actually is, not a fixed
+    # depth. Shortening the head's back moved a fixed depth from the middle of
+    # the crown to its rim, and the plate slid off the crown with it.
+    rear_depth = HEAD_MAX_DEPTH * (1.0 - HEAD_REAR_REDUCTION)
+    fitting_z = -rear_depth * (0.34 + anchor_amount * 0.20)
     front_z = fitting_z + fitting_half_length
     rear_z = fitting_z - fitting_half_length
 
@@ -1663,7 +1713,7 @@ def head_shell_penetration(support_profile, point):
     bottom = support_profile[-1][0]
     if y > top or y < bottom:
         return 0.0
-    return max(0.0, support_surface_z(support_profile, x, y) - abs(z))
+    return max(0.0, support_surface_z(support_profile, x, y) - abs(head_rear_unscale(z)))
 
 
 def side_module_penetration(point, half=(0.055, 0.140, 0.145), centre=(0.484, -0.075, 0.0)):
@@ -2470,6 +2520,16 @@ torso_profile = sample_bezier_segments([
     ),
 ], steps=48)
 TORSO = revolved_mesh("Shell.Torso", torso_profile, SHELL, "shell", interpolate=False)
+
+# The head ended a good way behind the body. It is drawn in until its back is
+# level with the torso's, and the head modules built further down read the
+# compressed surface through `head_surface_y`, so the hair fitting still lies
+# on the head rather than floating where the old surface used to be.
+HEAD_MAX_DEPTH = max(row[2] for row in head_profile)
+shorten_head_back(
+    HEAD_SHELL,
+    1.0 - max(row[2] for row in torso_profile) / HEAD_MAX_DEPTH,
+)
 surface_seam("Trim.TorsoSeam.Upper", torso_profile, -0.405, -0.505, TRIM, "trim")
 surface_seam("Trim.TorsoSeam.Lower", torso_profile, -0.833, -1.055, TRIM, "trim")
 
@@ -2615,9 +2675,11 @@ install_head_identity_selector(mount)
 
 # Underside emitter and hover form. The broader luminous falloff belongs to
 # rendering; these meshes are the authored emitting surfaces only.
-uv_sphere("Status.Underside", (0.0, -1.095, 0.0), (0.100, 0.030, 0.075), STATUS, "status_emitters", segments=64, rings=40)
+# The two glows lie on the floor plane, so their two floor axes are equal: an
+# ellipse there reads as a light pointing sideways rather than downward.
+uv_sphere("Status.Underside", (0.0, -1.095, 0.0), (0.100, 0.030, 0.100), STATUS, "status_emitters", segments=64, rings=40)
 torus("Status.HoverRing", (0.0, -1.245, 0.0), 0.345, 0.016, STATUS, "status_emitters")
-uv_sphere("Status.HoverCore", (0.0, -1.245, 0.0), (0.155, 0.010, 0.070), STATUS, "status_emitters", segments=64, rings=40)
+uv_sphere("Status.HoverCore", (0.0, -1.245, 0.0), (0.155, 0.010, 0.155), STATUS, "status_emitters", segments=64, rings=40)
 
 preview_face(head_profile)
 

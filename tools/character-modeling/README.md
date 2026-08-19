@@ -148,6 +148,24 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
+### Head depth, arm pose and floor light after the fifth review
+
+- The head is shortened at the back until it ends level with the torso. The
+  revolved profile cannot express that on its own — its depth is one radius
+  shared by front and back — so the rear is compressed afterwards, smoothly
+  from the head's equator so the compression leaves no crease where it begins.
+  Everything that sits on the head reads the same compression through
+  `head_rear_unscale`, or it would be placed against a surface that is no
+  longer there.
+- The tail fitting is placed at a fraction of how deep the head actually is,
+  not at a fixed depth. Shortening the back moved a fixed depth from the
+  middle of the crown to its rim, and the plate slid off the crown with it.
+- Both hands hang with their palms turned inward, as on the concept board, so
+  a hand reads narrow from the front and its fingers point straight down.
+  Facing the palm forward turned the same hand into a raised, open gesture.
+- The two glows under the character are round in the floor plane. An ellipse
+  there reads as a light pointing sideways rather than downward.
+
 ### Curvature, ears, hands, head and neck after the fourth review
 
 - The display keeps the curvature it had before the head was cut. That
