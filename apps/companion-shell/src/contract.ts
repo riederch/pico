@@ -569,7 +569,7 @@ const decisions = new Set<PicoCompanionPresentationDecision>([
  * numbers are interpolated into the sentence for the same reason - prose that
  * disagrees with the rule is a third copy waiting to drift.
  */
-export function picoCompanionCardPinPrompt(): {
+export function picoCompanionCardPinPrompt(purpose: 'choose' | 'enter' = 'choose'): {
   title: string;
   instruction: string;
   maximumLength: number;
@@ -579,11 +579,46 @@ export function picoCompanionCardPinPrompt(): {
   const maxLength = 64;
   const pattern = new RegExp(`^[0-9a-z]{${minLength},${maxLength}}$`, 'u');
   return {
-    title: 'Choose the Card PIN',
-    instruction: `Type ${minLength}\u2013${maxLength} digits or lowercase letters, then `
-      + 'press Enter. Keep this PIN somewhere the card is not.',
+    title: purpose === 'choose' ? 'Choose the Card PIN' : 'Enter the Card PIN',
+    /**
+     * Both purposes, one rule. The PIN a person chooses when the card is
+     * printed and the PIN they type when it is used are the same string, so
+     * a window that validated them differently would refuse its own card -
+     * and refuse it silently, since a rejected secure input answers with a
+     * character count and nothing else.
+     */
+    instruction: purpose === 'choose'
+      ? `Type ${minLength}\u2013${maxLength} digits or lowercase letters, then press Enter. `
+        + 'Keep this PIN somewhere the card is not.'
+      : 'Type the PIN you chose when this card was printed, then press Enter.',
     maximumLength: maxLength,
     validate: (value: string) => pattern.test(value),
+  };
+}
+
+/**
+ * ADR 0112. Typing or scanning the code printed under the QR block.
+ *
+ * The prefix is a parameter rather than a literal, because this file loads in
+ * the renderer and cannot import `picoRecoveryCardScanPrefix` - and because a
+ * literal here is precisely what went wrong: the camera path read the
+ * protocol's constant while the typed path beside it demanded
+ * `pico-recovery-card-v2:`, a spelling no card has ever carried. The card's
+ * *metadata* schema is v2; its scan transport is v1. A person restoring a
+ * device without a camera typed a valid code into a box that only blinked.
+ */
+export function picoCompanionRecoveryCardEntryPrompt(prefix: string): {
+  title: string;
+  instruction: string;
+  maximumLength: number;
+  validate(value: string): boolean;
+} {
+  return {
+    title: 'Scan or type the Recovery Card code',
+    instruction: 'Use a USB scanner, or type the code printed under the QR block, then '
+      + 'press Enter.',
+    maximumLength: 8_192,
+    validate: (value: string) => value.startsWith(prefix) && value.length > prefix.length,
   };
 }
 

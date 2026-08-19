@@ -2,6 +2,33 @@
 
 ## Status
 
+Status note, 2026-08-19 (second, and the worse one): **a printed Recovery
+Card could be photographed but not typed.** The first-run window offers two
+ways to hand over the code under the QR block - a camera, or a USB scanner
+and the keyboard. The camera path read the prefix from
+`picoRecoveryCardScanPrefix`; the branch beside it demanded
+`pico-recovery-card-v2:`, a spelling no card has ever carried. The card's
+*metadata* schema is v2 and its scan transport is v1, and the two got
+confused in the one place nothing checked.
+
+`buildPicoRecoveryCardScanTransport` emits the v1 prefix and
+`parsePicoRecoveryCardScanTransport` refuses anything else, so this was not
+a drift risk but a broken path: every real card was rejected. And rejected
+silently - `collectPicoCompanionSecureInput` answers a rejected value with a
+character count and nothing else - so a person restoring their identity
+without a camera would have typed a correct code from a card in their hand
+into a box that only blinked at them. That is the ADR 0112 scenario itself:
+the printed card is what this ADR prefers over a file export, and the person
+using it is the one who has already lost a device.
+
+Both prompts now come from the contract with the prefix passed in from
+`@pico/protocol`, so no spelling of it exists in the window at all, and a
+test builds a real transport and requires the prompt to accept it. The
+`docs:check` gate could not run in this verification: an untracked
+`packages/gesture` from a parallel session is not yet named in the
+repository structure. Everything else - workspace typecheck, all suites, and
+every other gate - was run and passed.
+
 Status note, 2026-08-19: **the window's Card PIN rule is bound to the vault's
 rule now, rather than resembling it.** `picoRecoveryPinProtection` states the
 lengths and the alphabet once and the vault and daemon both derive from it;

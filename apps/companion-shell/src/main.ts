@@ -21,6 +21,7 @@ import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
 } from '@pico/companion/profile';
+import { picoRecoveryCardScanPrefix } from '@pico/protocol';
 import {
   picoCompanionEnrolmentReadPrefix,
   picoCompanionSponsorExchange,
@@ -48,6 +49,7 @@ import {
   picoCompanionEnrolmentStepLine,
   picoCompanionCardPinPrompt,
   picoCompanionEnrolmentValidUntil,
+  picoCompanionRecoveryCardEntryPrompt,
   picoCompanionFirstRunFailureBody,
   picoCompanionHostRotationLine,
   picoCompanionHostRotationReasonLines,
@@ -1673,18 +1675,11 @@ async function runFirstRun(source: PicoCompanionFirstRunScanSource): Promise<voi
   if (need.need === 'card_and_secrets') {
     cardTransport = source === 'camera'
       ? await scanCardWithCamera()
-      : await captureSecret({
-        title: 'Scan or type the Recovery Card code',
-        instruction: 'Use a USB scanner, or type the code printed under the QR block, then press Enter.',
-        maximumLength: 8_192,
-        validate: (value: string) => value.startsWith('pico-recovery-card-v2:'),
-      });
-    pin = await captureSecret({
-      title: 'Enter the Card PIN',
-      instruction: 'Type the PIN you chose when this card was printed, then press Enter.',
-      maximumLength: 64,
-      validate: (value: string) => /^[0-9a-z]{6,64}$/u.test(value),
-    });
+      // The protocol's own prefix, which is what the camera path has always
+      // used: this branch demanded `pico-recovery-card-v2:` and no card
+      // carries that, so a card could be photographed but never typed.
+      : await captureSecret(picoCompanionRecoveryCardEntryPrompt(picoRecoveryCardScanPrefix));
+    pin = await captureSecret(picoCompanionCardPinPrompt('enter'));
   }
   const passphrase = await captureSecret({
     title: need.need === 'card_and_secrets'
