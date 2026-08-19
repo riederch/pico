@@ -150,18 +150,21 @@ before the band.
 
 ### Arms and hand roll after the sixth review
 
-Read against `docs/assets/pico-design-concept.png` at high magnification. A
-first pass rebuilt each arm as one continuous piece; the owner rejected it,
-and a closer look at the board shows why:
+Read against `docs/assets/pico-design-concept.png` at high magnification.
 
-- The arm stays **articulated**. The board draws a dark ball at the shoulder,
-  a light upper shell, a dark elbow and a second light shell — not one smooth
-  tube.
-- What makes it read as an arm rather than as beads on a string is that each
-  joint is seated *inside* what it connects: the shoulder ball is mostly
-  buried in the torso and the shells cap over the balls, so a joint shows as a
-  thin dark seam. Left exposed, the same balls read as knobs bolted between
-  barrels — which is exactly what the first restoration looked like.
+- Each arm is **one continuous tapering piece** from the shoulder to the
+  wrist. `arm_shell` lofts it along a single curve whose control point is
+  placed so the curve passes through the elbow: the arm bends *through* the
+  elbow rather than being hinged at it, so there is no string of shell
+  segments threaded onto joint spheres.
+- The **shoulder keeps its ball**. It is what the arm turns on, and without it
+  the arm merely grows out of the torso. It is seated deep enough that only
+  its outer cap shows past the shell; left exposed it reads as a knob rather
+  than as a joint.
+- `joint_collar` marks the elbow with a dark band. The band has to clear the
+  arm all the way round: the arm bends through the elbow, so on the inside of
+  the bend it sits closer to the collar's wall than the nominal radius
+  suggests and pokes through a band sized to that radius alone.
 - Both hands are rolled so the **back of the hand faces outward** and the palm
   turns toward the body, which is what makes a hanging hand read narrow from
   the front. The thumbs point forward.
