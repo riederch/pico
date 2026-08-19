@@ -540,6 +540,24 @@ Node host beside each of them.
 - **E2 - Founding and binding vertical (implemented):** `claim-home`,
   `open-identity-session`, and the first production write of the profile
   and Platform Keystore binding, closing the ADR 0113 residual.
+
+  **A shell-side sanity check was swallowing a distinction the core takes
+  care to make (found 2026-08-19, while auditing this vertical for ADR 0131
+  A5).** `parsePicoHomeSetupAnnouncement` tells "this Home has already been
+  claimed" apart from "that is not a Home log" on purpose - its own comment
+  says the two send a person to different places. The window never let
+  either reach anybody: it pre-checked the pasted line for the move-in
+  code's *field name*, and a line from a Home's second boot has no such
+  field, so the secure input rejected it - and a rejected value there is
+  answered with a character count and no sentence at all. The person most
+  likely to meet this is the one whose Home has been restarted once, and
+  what they got was a box that would not take their input and would not say
+  why.
+
+  The check now tests the transport's shape rather than the protocol's, so
+  the parser speaks; the two failures have their own sentences, and all of
+  that wording moved into the contract where the rest of it lives - which is
+  also what made it testable.
 - **E3 - Device lifecycle vertical (implemented):** delegate, enroll, renew,
   revoke, inspect - each under ADR 0099 approval and ADR 0106 rendering.
   Inspect, revoke, enrolment and renewal - of this device and of another one

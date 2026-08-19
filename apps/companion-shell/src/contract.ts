@@ -540,6 +540,61 @@ const decisions = new Set<PicoCompanionPresentationDecision>([
  * is told while there is still room to act, which is what makes ADR 0118's
  * capture floor honest under exhaustion.
  */
+/**
+ * ADR 0130 E2. Why a first run stopped, in the words the person needs.
+ *
+ * Here rather than beside the window that shows it, for the reason this file
+ * already gives about conditions: the wording of a failure lives in one place
+ * instead of being re-invented at each producer - and here it can be tested,
+ * which is how the two announcement failures below were found to be
+ * unreachable rather than merely unwritten.
+ *
+ * `fallbackReason` is passed in rather than derived, because turning an
+ * unknown error into a public reason is the shell's job and this file loads
+ * in the renderer.
+ */
+export function picoCompanionFirstRunFailureBody(
+  message: string,
+  fallbackReason: string,
+): string {
+  if (message.startsWith('invalid_recovery_card_scan')
+    || message.startsWith('noncanonical_recovery_card')) {
+    return 'That code is not a Pico Recovery Card this device can use. A card printed '
+      + 'before your Home pinned its acceptor cannot start a device on its own.';
+  }
+  if (message.startsWith('camera_scan_')) {
+    return message === 'camera_scan_unavailable'
+      ? 'Pico found no camera decoder on this system. Install zbar-tools, or use a USB '
+        + 'scanner or typing instead.'
+      : 'Pico did not read a card from the camera. Try again, or use a USB scanner or '
+        + 'typing instead.';
+  }
+  if (message === 'secure_input_cancelled') {
+    return 'Setup was cancelled. Nothing was sent to your Home.';
+  }
+  if (message.startsWith('first_run_home_unverified')) {
+    return 'This device could not verify that the Home on the card is really your Home, '
+      + 'so it did nothing. Check that you are on the right network and try again.';
+  }
+  /**
+   * The two the core takes care to tell apart. A line with no move-in code is
+   * a Home that has already been claimed - the person needs the *enrolment*
+   * path, not this one - while an unparsable line is usually the wrong line
+   * copied out of the wrong place.
+   */
+  if (message === 'pico_home_setup_announcement_has_no_move_in_code') {
+    return 'That line has no move-in code, which means this Home has already been claimed. '
+      + 'Add this device from the one that claimed it instead - it is the same three codes '
+      + 'as any other device.';
+  }
+  if (message.startsWith('invalid_pico_home_setup_announcement')) {
+    return 'Pico could not read that line as the one your Home printed when it started. '
+      + 'Copy the whole line, including the braces at both ends.';
+  }
+  return `Pico could not set this device up (${fallbackReason}). Nothing was changed at `
+    + 'your Home.';
+}
+
 export function picoCompanionConditionsFor(input: {
   online?: boolean;
   homeReachable?: boolean;

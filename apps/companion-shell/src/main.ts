@@ -47,6 +47,7 @@ import {
   picoCompanionDeviceRevocationReasonLines,
   picoCompanionEnrolmentStepLine,
   picoCompanionEnrolmentValidUntil,
+  picoCompanionFirstRunFailureBody,
   picoCompanionHostRotationLine,
   picoCompanionHostRotationReasonLines,
   picoCompanionMembershipEndingLines,
@@ -1799,10 +1800,19 @@ async function runFounding(): Promise<void> {
       + 'your Home to. Pico checks it against the Home before using it, which is why it '
       + 'comes from your own log rather than from the Home itself.',
     maximumLength: 8_192,
-    validate: (value: string) => value.includes('picoHomeMoveInCode'),
+    /**
+     * The transport's shape, not the protocol's. This used to check for the
+     * move-in code's field name, which made the parser's own distinction
+     * unreachable: a line from a Home's *second* boot has no such field, and
+     * the secure input answers a rejected value with a character count and no
+     * sentence - so the person whose Home had been restarted once got stuck
+     * with nothing to read, while `founding.ts` had the exact words ready.
+     */
+    validate: (value: string) => value.trim().startsWith('{'),
   });
   // Parsed before a passphrase is asked for, so a mistyped line costs a
-  // retype and not a vault nobody can open.
+  // retype and not a vault nobody can open - and its refusal now reaches the
+  // person through `presentFirstRunFailure`.
   const announcement = parsePicoHomeSetupAnnouncement(announcementLine);
 
   const passphrase = await captureSecret({
@@ -2099,20 +2109,10 @@ async function presentFirstRunOutcome(
  */
 async function presentFirstRunFailure(error: unknown): Promise<void> {
   const message = error instanceof Error ? error.message : '';
-  const body = message.startsWith('invalid_recovery_card_scan')
-    || message.startsWith('noncanonical_recovery_card')
-    ? 'That code is not a Pico Recovery Card this device can use. A card printed before your Home pinned its acceptor cannot start a device on its own.'
-    : message.startsWith('camera_scan_')
-      ? message === 'camera_scan_unavailable'
-        ? 'Pico found no camera decoder on this system. Install zbar-tools, or use a USB scanner or typing instead.'
-        : 'Pico did not read a card from the camera. Try again, or use a USB scanner or typing instead.'
-      : message === 'secure_input_cancelled'
-        ? 'Setup was cancelled. Nothing was sent to your Home.'
-        : message.startsWith('first_run_home_unverified')
-          ? 'This device could not verify that the Home on the card is really your Home, so it did nothing. Check that you are on the right network and try again.'
-          : `Pico could not set this device up (${
-            picoCompanionPublicServiceErrorReason(error)
-          }). Nothing was changed at your Home.`;
+  const body = picoCompanionFirstRunFailureBody(
+    message,
+    picoCompanionPublicServiceErrorReason(error),
+  );
   await presentationPort.present(parsePicoCompanionPresentation({
     kind: 'first_run',
     severity: 'blocked',
