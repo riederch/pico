@@ -540,9 +540,27 @@ local-first product's most security-critical moment.
   client with Android as an additional channel, and the measurement is now
   the reason rather than the caution.
 
+  **The long run, read 2026-08-19 after 5 hours 26 minutes:** 23 heartbeats
+  against a requested 15-minute period, mean gap 14.8 minutes, worst 22.5 -
+  so the period is honoured on average and stretched by up to half when it
+  is not. Nine of twenty-two gaps ran past sixteen minutes, in both screen
+  states. **Not one of the twenty-three ran while `isDeviceIdleMode()` was
+  true**, which is the forced-doze result again without the forcing: the
+  work does not slip inside doze, it waits for the device to stir.
+
+  That is an upper bound on Android's generosity rather than a typical week.
+  The app stayed in the `ACTIVE` standby bucket the whole time, because it
+  was attached to a laptop and being watched; a phone in a pocket for two
+  days drops through `WORKING_SET` to `RARE` and dozes far deeper. So the
+  honest reading of ADR 0112's seven chances in 48 hours is: comfortable for
+  a phone in use, unmeasured for a phone left alone - and the unmeasured
+  case is exactly the one the desktop anchor exists for.
+
   Outstanding: Samsung's own "put unused apps to sleep" toggle in Device
   Care, which needs a person tapping in a settings UI. `force-stop` is the
-  harsher case and it is measured; the branded softer one is not.
+  harsher case and it is measured; the branded softer one is not. The probe
+  is left installed on the test phone so that step can be taken without
+  rebuilding anything.
 - **A5 - Ceremony parity (open, and measured 2026-08-19):** the ADR 0130
   verticals, in the same order, on Android.
 
