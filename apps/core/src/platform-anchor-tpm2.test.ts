@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +35,7 @@ beforeAll(async () => {
   }
   // Short prefix on purpose: a unix socket path is capped near 108 bytes, and
   // the usual scratch directory is already longer than that.
-  stateDir = mkdtempSync('/tmp/pico-tpm-');
+  stateDir = mkdtempSync(join(tmpdir(), 'pico-tpm-'));
   const socketPath = join(stateDir, 's');
   daemon = spawn('swtpm', [
     'socket',
@@ -113,7 +114,7 @@ describe.skipIf(!toolsPresent)('ADR 0027 IM1 tpm2 counter against a software TPM
   });
 
   it('catches a rolled-back anchor document end to end', () => {
-    const dir = mkdtempSync('/tmp/pico-tpm-anchor-');
+    const dir = mkdtempSync(join(tmpdir(), 'pico-tpm-anchor-'));
     try {
       const anchorPath = join(dir, 'anchor.json');
       const counter = openPicoTpm2AnchorCounter({ nvIndex, tcti });

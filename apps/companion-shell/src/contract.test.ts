@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -75,7 +76,7 @@ describe('companion renderer presentation contract', () => {
 
   it('rejects generic, extended and unbounded renderer payloads', () => {
     const valid = picoCompanionIdlePresentation();
-    expect(() => parsePicoCompanionPresentation({ ...valid, socketPath: '/tmp/vault.sock' }))
+    expect(() => parsePicoCompanionPresentation({ ...valid, socketPath: join(tmpdir(), 'vault.sock') }))
       .toThrow('invalid_companion_presentation_shape');
     expect(() => parsePicoCompanionPresentation({ ...valid, body: 'x'.repeat(4_001) }))
       .toThrow('invalid_companion_presentation_text');

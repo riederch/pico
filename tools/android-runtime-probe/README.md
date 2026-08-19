@@ -50,8 +50,10 @@ create 833 ms / open 582 ms, IPC 0.36 ms.
 
 Termux Node is a *proxy* runtime - same kernel, filesystem, Bionic and V8
 family as the embedded runtime the product will use, but not that runtime.
-A1's remaining distance: the same run under nodejs-mobile in an APK, and the
-fixture suites (which need a dev-deps stage, not this `--prod` one).
+A1's remaining distance: the same runs under nodejs-mobile in an APK. The
+fixture suites themselves are green on-device - 937 tests via
+`run-suites-on-device.sh`, with the two server-booting suites
+(claim-ceremony, link-relay-client) named as host-side rather than skipped.
 
 The Android emulator is not an option on this development host: 36.3.10 and
 37.2.5 both SIGSEGV in their host renderer/scene path on Fedora 44 / kernel

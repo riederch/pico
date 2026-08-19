@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -20,7 +21,7 @@ afterEach(() => {
 
 describe('ADR 0112 S3 companion recovery continuation state', () => {
   it('round-trips a pending view privately and atomically', () => {
-    const directory = mkdtempSync('/tmp/pico-companion-recovery-state-');
+    const directory = mkdtempSync(join(tmpdir(), 'pico-companion-recovery-state-'));
     temporaryDirectories.push(directory);
     const path = join(directory, 'nested', 'recovery-state.json');
     const state = pendingState();

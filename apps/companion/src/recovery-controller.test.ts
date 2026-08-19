@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PicoHomeDeviceRecoveryPendingView } from '@pico/protocol';
@@ -142,7 +143,7 @@ function setup(): {
   pending: PicoHomeDeviceRecoveryPendingView;
   profile: PicoCompanionProfile;
 } {
-  const directory = mkdtempSync('/tmp/pico-companion-recovery-controller-');
+  const directory = mkdtempSync(join(tmpdir(), 'pico-companion-recovery-controller-'));
   temporaryDirectories.push(directory);
   const statePath = join(directory, 'recovery-state.json');
   const pending: PicoHomeDeviceRecoveryPendingView = {

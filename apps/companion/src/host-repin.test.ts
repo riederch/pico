@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import sodium from 'libsodium-wrappers-sumo';
@@ -35,7 +36,7 @@ afterEach(() => {
 });
 
 function tempProfilePath(): string {
-  const directory = mkdtempSync('/tmp/pico-companion-repin-');
+  const directory = mkdtempSync(join(tmpdir(), 'pico-companion-repin-'));
   temporaryDirectories.push(directory);
   return join(directory, 'profile.json');
 }

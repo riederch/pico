@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -62,8 +63,20 @@ afterEach(() => {
   }
 });
 
+/**
+ * `tmpdir()` unless the daemon socket underneath it would burst sun_path -
+ * the guard `index.test.ts` already carries. The old hardcoded `/tmp` was
+ * that guard's conclusion with its reasoning deleted, and it failed on the
+ * first host without a `/tmp`: Android, in the ADR 0131 A1 on-device run.
+ */
+function socketSafeBaseDir(): string {
+  const candidate = tmpdir();
+  const probe = join(candidate, 'pico-vd-abcdef', 'run', 'daemon.sock');
+  return Buffer.byteLength(probe, 'utf8') > 90 ? '/tmp' : candidate;
+}
+
 function tempDir(prefix: string): string {
-  const directory = mkdtempSync(join('/tmp', prefix));
+  const directory = mkdtempSync(join(socketSafeBaseDir(), prefix));
   temporaryDirectories.push(directory);
   return directory;
 }

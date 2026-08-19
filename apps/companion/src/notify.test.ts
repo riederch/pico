@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -37,12 +38,15 @@ function pendingView(): PicoHomeDeviceRecoveryPendingView {
 
 /** A fake notify-send that records its argv - the adapter test is a real spawn. */
 function fakeNotifySend(behavior: 'record' | 'fail'): { command: string; argvFile: string } {
-  const directory = mkdtempSync('/tmp/pico-companion-notify-');
+  const directory = mkdtempSync(join(tmpdir(), 'pico-companion-notify-'));
   temporaryDirectories.push(directory);
   const argvFile = join(directory, 'argv.json');
   const command = join(directory, 'notify-send');
   writeFileSync(command, [
-    '#!/usr/bin/env node',
+    // The running Node by absolute path, not `/usr/bin/env node`: a shebang
+    // resolves against the host filesystem, and Android has no /usr/bin/env
+    // - which an on-device fixture run turned from a lint nit into ENOENT.
+    `#!${process.execPath}`,
     `require('node:fs').writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));`,
     behavior === 'fail' ? 'process.exit(3);' : 'process.exit(0);',
     '',

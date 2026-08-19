@@ -657,7 +657,7 @@ describe('pico-vault CLI argument contract (ADR 0097 D5)', () => {
       '--host-agreement-fingerprint', '22'.repeat(32),
       '--host-agreement-public-key', '33'.repeat(32),
       '--endpoint-hint', 'pico-link://cli-contract',
-      '--output-dir', '/tmp/pico-cli-contract',
+      '--output-dir', join(tmpdir(), 'pico-cli-contract'),
     ]);
     expect(issue.ceremony).toBe('issue-recovery-card');
 

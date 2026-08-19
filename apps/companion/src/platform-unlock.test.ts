@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import {
   mkdtempSync,
   readFileSync,
@@ -46,7 +47,7 @@ describe('Linux Platform Keystore unlock path (ADR 0081 P3)', () => {
     const automatic = createPicoCompanionAutomaticVaultUnlock({
       path,
       profile: profile(),
-      socketPath: '/tmp/fake-vault.sock',
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
       secrets,
       connect: daemon.connect,
     });
@@ -92,7 +93,7 @@ describe('Linux Platform Keystore unlock path (ADR 0081 P3)', () => {
     const automatic = createPicoCompanionAutomaticVaultUnlock({
       path,
       profile: changed,
-      socketPath: '/tmp/fake-vault.sock',
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
       secrets,
       connect: daemon.connect,
     });
@@ -104,7 +105,7 @@ describe('Linux Platform Keystore unlock path (ADR 0081 P3)', () => {
 });
 
 function temporaryPath(): string {
-  const directory = mkdtempSync('/tmp/pico-platform-unlock-');
+  const directory = mkdtempSync(join(tmpdir(), 'pico-platform-unlock-'));
   temporaryDirectories.push(directory);
   return join(directory, 'companion', 'platform-unlock.json');
 }

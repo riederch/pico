@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -62,7 +63,7 @@ describe('ADR 0112 S3 first run', () => {
     const outcome = await runPicoCompanionFirstRun({
       ...paths,
       sodium: stubSodium(),
-      socketPath: '/tmp/pico-first-run-test.sock',
+      socketPath: join(tmpdir(), 'pico-first-run-test.sock'),
       decisions: silentDecisions(),
       connect: fakeDaemonClient().connect,
       secrets: { passphrase: 'device passphrase' },
@@ -94,7 +95,7 @@ describe('ADR 0112 S3 first run', () => {
     const outcome = await runPicoCompanionFirstRun({
       ...paths,
       sodium: stubSodium(),
-      socketPath: '/tmp/pico-first-run-test.sock',
+      socketPath: join(tmpdir(), 'pico-first-run-test.sock'),
       decisions: silentDecisions(),
       connect: fakeDaemonClient().connect,
       secrets: { passphrase: 'device passphrase' },
@@ -119,7 +120,7 @@ describe('ADR 0112 S3 first run', () => {
     await runPicoCompanionFirstRun({
       ...paths,
       sodium: stubSodium(),
-      socketPath: '/tmp/pico-first-run-test.sock',
+      socketPath: join(tmpdir(), 'pico-first-run-test.sock'),
       decisions: silentDecisions(),
       connect: daemon.connect,
       secrets: { passphrase: 'device passphrase' },
@@ -162,7 +163,7 @@ describe('ADR 0112 S3 first run', () => {
     await expect(runPicoCompanionFirstRun({
       ...paths,
       sodium: stubSodium(),
-      socketPath: '/tmp/pico-first-run-test.sock',
+      socketPath: join(tmpdir(), 'pico-first-run-test.sock'),
       decisions: silentDecisions(),
       connect: daemon.connect,
       secrets: {
@@ -184,7 +185,7 @@ describe('ADR 0112 S3 first run', () => {
     await expect(runPicoCompanionFirstRun({
       ...paths,
       sodium: stubSodium(),
-      socketPath: '/tmp/pico-first-run-test.sock',
+      socketPath: join(tmpdir(), 'pico-first-run-test.sock'),
       decisions: silentDecisions(),
       connect: fakeDaemonClient().connect,
       secrets: { passphrase: 'device passphrase' },
@@ -194,7 +195,7 @@ describe('ADR 0112 S3 first run', () => {
     await expect(runPicoCompanionFirstRun({
       ...paths,
       sodium: stubSodium(),
-      socketPath: '/tmp/pico-first-run-test.sock',
+      socketPath: join(tmpdir(), 'pico-first-run-test.sock'),
       decisions: silentDecisions(),
       connect: fakeDaemonClient().connect,
       secrets: { passphrase: '' },
@@ -227,7 +228,7 @@ describe('ADR 0112 S3 first run', () => {
     await expect(runPicoCompanionFirstRun({
       ...paths,
       sodium: stubSodium(),
-      socketPath: '/tmp/pico-first-run-test.sock',
+      socketPath: join(tmpdir(), 'pico-first-run-test.sock'),
       decisions: silentDecisions(),
       connect: fakeDaemonClient({ swapUnlockedFingerprint: true }).connect,
       secrets: { passphrase: 'device passphrase' },
@@ -242,7 +243,7 @@ function temporaryPaths(): {
   journalPath: string;
   recoveryStatePath: string;
 } {
-  const directory = mkdtempSync('/tmp/pico-companion-first-run-');
+  const directory = mkdtempSync(join(tmpdir(), 'pico-companion-first-run-'));
   temporaryDirectories.push(directory);
   const profilePath = join(directory, 'companion', 'profile.json');
   return {

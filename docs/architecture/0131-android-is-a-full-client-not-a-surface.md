@@ -2,6 +2,34 @@
 
 ## Status
 
+Status note, 2026-08-19: **the existing fixture suites are green on the
+phone - A1's own words, run.** Galaxy A55, Android 16, arm64, Termux Node 24
+as proxy runtime, `tools/android-runtime-probe/run-suites-on-device.sh`:
+protocol 588, identity 34, vault 19 (55 s wall - the argon2id-heavy suite),
+sync 26, companion 170, vault-daemon 100 - **937 tests, all passing on the
+device**. Two suites deliberately stay host-side and are named rather than
+skipped: `claim-ceremony.test.ts` boots @pico/core and the
+`link-relay-client` suite boots the real relay - both servers backed by
+better-sqlite3, which never runs on a phone (its x86_64 binary failing to
+dlopen on arm64 is how the boundary announced itself).
+
+The run found three portability defects in the fixtures themselves, which
+is what on-device runs are for. Thirteen test files hardcoded `/tmp`, which
+Android does not have - every one now derives from `tmpdir()`. The notify
+test built its fake tool with a `#!/usr/bin/env node` shebang, which
+resolves against a filesystem Android does not have - it now writes the
+running Node's own absolute path. And two vault-daemon suites carried the
+*conclusion* of `index.test.ts`'s sun_path length guard - a hardcoded
+`/tmp` - with the reasoning deleted; they carry the guard itself now. The
+staging recipe that made the run possible without device-side network is
+pnpm's own `supportedArchitectures` (both OSes, both CPUs in one
+node_modules), a worktree so the repository stays untouched, and the same
+tar rules the probe learned the hard way.
+
+What still separates this from closing A1: the same runs under nodejs-mobile
+in an APK, since Termux Node shares the kernel, Bionic and V8 family but is
+not the embedded runtime.
+
 Status note, 2026-08-18 (later): **the primitive path is green on real
 hardware.** Samsung SM-A556B (Galaxy A55), Android 16, arm64, kernel
 6.1.157-android14, via `tools/android-runtime-probe/run-on-device.sh` and a

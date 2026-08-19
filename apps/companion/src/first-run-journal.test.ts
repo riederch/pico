@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -24,7 +25,7 @@ afterEach(() => {
 });
 
 function temporaryJournalPath(): string {
-  const directory = mkdtempSync('/tmp/pico-companion-first-run-');
+  const directory = mkdtempSync(join(tmpdir(), 'pico-companion-first-run-'));
   temporaryDirectories.push(directory);
   return defaultPicoCompanionFirstRunJournalPath(
     join(directory, 'nested', 'profile.json'),

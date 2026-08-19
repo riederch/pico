@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -17,7 +18,7 @@ afterEach(() => {
 });
 
 function tempDir(): string {
-  const directory = mkdtempSync('/tmp/pico-companion-profile-');
+  const directory = mkdtempSync(join(tmpdir(), 'pico-companion-profile-'));
   temporaryDirectories.push(directory);
   return directory;
 }
