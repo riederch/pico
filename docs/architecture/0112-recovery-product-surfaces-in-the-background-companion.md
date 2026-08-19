@@ -2,6 +2,27 @@
 
 ## Status
 
+Status note, 2026-08-19: **the window's Card PIN rule is bound to the vault's
+rule now, rather than resembling it.** `picoRecoveryPinProtection` states the
+lengths and the alphabet once and the vault and daemon both derive from it;
+the companion window carried a hand-written `/^[0-9a-z]{6,64}$/` and said the
+numbers a third time in its instruction. Today the three agree, which is
+exactly the state in which such a copy stops being noticed.
+
+It deserved more care than the usual duplicate for a reason that has nothing
+to do with the PIN: a value this window refuses never becomes an error
+message. `collectPicoCompanionSecureInput` answers a rejected value with a
+character count and nothing else, so a person typing a PIN their vault would
+accept would watch a box blink at them with no sentence anywhere - the same
+silence that hid the founding-line failure found the same day (ADR 0130 E2).
+
+The rule and its sentence now come from one function in the shell contract,
+with the numbers interpolated into the prose, and a test binds it to
+`picoRecoveryPinProtection` - the arrangement `browser:check` names as the
+remedy for a copy that cannot be an import, since the contract loads in the
+renderer where a bare specifier does not resolve.
+
+
 Accepted; partially implemented. The transitional CLI wrappers (gate S1)
 landed with this ADR; ADR 0113 C1/C2 have since implemented S2's alarm
 carrier, Electron adapters and real-process proof. S3 now has a first bounded

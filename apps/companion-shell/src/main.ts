@@ -46,6 +46,7 @@ import {
   picoCompanionIpcChannels,
   picoCompanionDeviceRevocationReasonLines,
   picoCompanionEnrolmentStepLine,
+  picoCompanionCardPinPrompt,
   picoCompanionEnrolmentValidUntil,
   picoCompanionFirstRunFailureBody,
   picoCompanionHostRotationLine,
@@ -2156,12 +2157,7 @@ async function runRecoveryCardIssuance(
       await presentSecureInput(passphrasePrompt, count, invalid);
     },
   });
-  const pinPrompt = {
-    title: 'Choose the Card PIN',
-    instruction: 'Type 6–64 digits or lowercase letters, then press Enter. Keep this PIN somewhere the card is not.',
-    maximumLength: 64,
-    validate: (value: string) => /^[0-9a-z]{6,64}$/u.test(value),
-  };
+  const pinPrompt = picoCompanionCardPinPrompt();
   const pin = await collectPicoCompanionSecureInput({
     window,
     prompt: pinPrompt,

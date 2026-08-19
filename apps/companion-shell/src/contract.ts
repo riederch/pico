@@ -553,6 +553,40 @@ const decisions = new Set<PicoCompanionPresentationDecision>([
  * unknown error into a public reason is the shell's job and this file loads
  * in the renderer.
  */
+/**
+ * ADR 0112. What the window asks for when it asks for the Card PIN.
+ *
+ * The vault owns this rule (`picoRecoveryPinProtection`) and this file cannot
+ * import it: it loads in the renderer, where a bare specifier does not
+ * resolve. So the rule is stated a second time here and bound to the vault's
+ * by a test - the arrangement `browser:check` names as the remedy for exactly
+ * this shape.
+ *
+ * Worth more care than the usual copy. A PIN the vault would accept and this
+ * refuses never reaches an error message: `collectPicoCompanionSecureInput`
+ * answers a rejected value with a character count and nothing else, so the
+ * person would be typing a valid PIN into a box that blinks at them. The
+ * numbers are interpolated into the sentence for the same reason - prose that
+ * disagrees with the rule is a third copy waiting to drift.
+ */
+export function picoCompanionCardPinPrompt(): {
+  title: string;
+  instruction: string;
+  maximumLength: number;
+  validate(value: string): boolean;
+} {
+  const minLength = 6;
+  const maxLength = 64;
+  const pattern = new RegExp(`^[0-9a-z]{${minLength},${maxLength}}$`, 'u');
+  return {
+    title: 'Choose the Card PIN',
+    instruction: `Type ${minLength}\u2013${maxLength} digits or lowercase letters, then `
+      + 'press Enter. Keep this PIN somewhere the card is not.',
+    maximumLength: maxLength,
+    validate: (value: string) => pattern.test(value),
+  };
+}
+
 export function picoCompanionFirstRunFailureBody(
   message: string,
   fallbackReason: string,
