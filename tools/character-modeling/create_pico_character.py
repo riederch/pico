@@ -1188,6 +1188,116 @@ def _digit_rings(base, control, tip, radius_base, radius_tip, around, along=13):
     return rings
 
 
+def joint_collar(name, start, end, radius, mat, zone, around=40, along=12):
+    """A dark cuff wrapping the arm where it meets the body or bends.
+
+    The concept board closes the arm against the torso with a collar rather
+    than letting the shell run into the body, and marks the elbow the same
+    way. The cuff is slightly wider than the arm underneath and barrels a
+    little, so it reads as a fitted band and not as a sleeve.
+    """
+    start, end = Vector(start), Vector(end)
+    axis = (end - start).normalized()
+    side = axis.cross(Vector((0.0, 0.0, 1.0)))
+    if side.length < 0.001:
+        side = axis.cross(Vector((0.0, 1.0, 0.0)))
+    side.normalize()
+    up = axis.cross(side).normalized()
+    rings = []
+    for index in range(along + 1):
+        amount = index / along
+        centre = start + (end - start) * amount
+        local = radius * (0.90 + 0.10 * math.sin(math.pi * amount))
+        rings.append([
+            tuple(
+                centre
+                + side * (local * math.cos(2.0 * math.pi * s / around))
+                + up * (local * math.sin(2.0 * math.pi * s / around))
+            )
+            for s in range(around)
+        ])
+    vertices = []
+    faces = []
+    _loft(vertices, faces, rings, around)
+    mesh = bpy.data.meshes.new(f"{name}.Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    MODEL.objects.link(obj)
+    obj.parent = ROOT
+    apply_material(obj, mat, zone)
+    smooth(obj)
+    return obj
+
+
+def arm_shell(
+    name, shoulder, elbow, wrist, radius_shoulder, radius_elbow, radius_wrist,
+    mat, zone, around=40, along=30,
+):
+    """One continuous arm from the shoulder to the wrist.
+
+    The concept board draws the arm as a single tapering piece, not as shells
+    threaded onto a string of joint spheres. It bends through the elbow rather
+    than being hinged at it, and its shoulder end is a rounded cap that closes
+    against the torso.
+    """
+    shoulder = Vector(shoulder)
+    elbow = Vector(elbow)
+    wrist = Vector(wrist)
+    # a quadratic whose control is placed so the curve passes through the elbow
+    control = elbow * 2.0 - (shoulder + wrist) * 0.5
+
+    rings = []
+    for index in range(along + 1):
+        amount = index / along
+        inverse = 1.0 - amount
+        centre = (
+            inverse * inverse * shoulder
+            + 2.0 * inverse * amount * control
+            + amount * amount * wrist
+        )
+        tangent = (
+            2.0 * inverse * (control - shoulder) + 2.0 * amount * (wrist - control)
+        ).normalized()
+        side = tangent.cross(Vector((0.0, 0.0, 1.0)))
+        if side.length < 0.001:
+            side = tangent.cross(Vector((0.0, 1.0, 0.0)))
+        side.normalize()
+        up = tangent.cross(side).normalized()
+        if amount <= 0.5:
+            local = amount / 0.5
+            radius = radius_shoulder + (radius_elbow - radius_shoulder) * local
+        else:
+            local = (amount - 0.5) / 0.5
+            radius = radius_elbow + (radius_wrist - radius_elbow) * local
+        # both ends close as domes rather than as cut tubes
+        if amount < 0.06:
+            radius *= math.sqrt(max(0.0, 1.0 - ((0.06 - amount) / 0.06) ** 2)) * 0.6 + 0.4
+        if amount > 0.94:
+            radius *= math.sqrt(max(0.0, 1.0 - ((amount - 0.94) / 0.06) ** 2)) * 0.5 + 0.5
+        rings.append([
+            tuple(
+                centre
+                + side * (radius * math.cos(2.0 * math.pi * s / around))
+                + up * (radius * math.sin(2.0 * math.pi * s / around))
+            )
+            for s in range(around)
+        ])
+
+    vertices = []
+    faces = []
+    _loft(vertices, faces, rings, around)
+    mesh = bpy.data.meshes.new(f"{name}.Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    MODEL.objects.link(obj)
+    obj.parent = ROOT
+    apply_material(obj, mat, zone)
+    smooth(obj)
+    return obj
+
+
 def hand_shell(
     name, wrist, knuckles, palm_normal, half_width, half_thickness, mat, zone,
     thumb_toward=(1.0, 0.0, 0.0), finger_length=0.100, palm_hollow=0.55,
@@ -1318,46 +1428,45 @@ def make_arm(side):
         elbow = Vector((0.570, -0.690, 0.035))
         wrist = Vector((0.600, -0.835, 0.075))
         palm = Vector((0.600, -0.900, 0.090))
+    # One continuous arm, as on the concept board: no shoulder, elbow or
+    # wrist spheres threaded onto shell segments. The shoulder end is pushed
+    # slightly into the torso so it closes against the body instead of
+    # floating beside it.
+    torso_seat = shoulder + (shoulder - elbow).normalized() * 0.030
+    arm_shell(
+        f"Shell.Arm.{side}",
+        torso_seat, elbow, wrist,
+        0.086, 0.066, 0.050,
+        SHELL, "shell",
+    )
     upper_direction = (elbow - shoulder).normalized()
+    joint_collar(
+        f"Trim.Shoulder.{side}",
+        shoulder - upper_direction * 0.026,
+        shoulder + upper_direction * 0.030,
+        0.094, TRIM, "trim",
+    )
     lower_direction = (wrist - elbow).normalized()
-    uv_sphere(
-        f"Trim.Shoulder.{side}", shoulder, (0.060, 0.065, 0.062),
-        TRIM, "trim", segments=64, rings=40,
+    joint_collar(
+        f"Trim.Elbow.{side}",
+        elbow - upper_direction * 0.024,
+        elbow + lower_direction * 0.026,
+        0.072, TRIM, "trim",
     )
-    tapered_shell_between(
-        f"Shell.UpperArm.{side}",
-        shoulder + upper_direction * 0.014,
-        elbow - upper_direction * 0.016,
-        0.096, 0.064, SHELL, "shell", cap_fraction=0.18,
-    )
-    uv_sphere(
-        f"Trim.Elbow.{side}", elbow, (0.050, 0.053, 0.050),
-        TRIM, "trim", segments=64, rings=40,
-    )
-    tapered_shell_between(
-        f"Shell.Forearm.{side}",
-        elbow + lower_direction * 0.012,
-        wrist - lower_direction * 0.012,
-        0.080, 0.054, SHELL, "shell", cap_fraction=0.18,
-    )
-    uv_sphere(
-        f"Trim.Wrist.{side}", wrist, (0.036, 0.039, 0.036),
-        TRIM, "trim", segments=64, rings=40,
-    )
-    # On the concept board both hands hang with their palms turned inward, so
-    # the hand reads narrow from the front and its fingers point straight
-    # down. Facing the palm forward turned the same hand into a raised, open
-    # gesture.
-    palm_normal = (-sign * 0.94, 0.0, 0.30)
+
+    # The back of the hand faces outward, so the palm turns toward the body and
+    # the hand reads narrow from the front. Facing the palm forward turns the
+    # same hand into a raised, open gesture; the thumb then points forward.
+    palm_normal = (-sign, 0.0, 0.0)
     hand_direction = (palm - wrist).normalized()
     hand_shell(
         f"Trim.Hand.{side}",
-        wrist - hand_direction * 0.014,
-        wrist + hand_direction * 0.086,
+        wrist - hand_direction * 0.020,
+        wrist + hand_direction * 0.082,
         palm_normal,
-        0.068, 0.030, TRIM, "trim",
-        thumb_toward=(-sign, 0.0, 0.30),
-        finger_length=0.104,
+        0.080, 0.036, TRIM, "trim",
+        thumb_toward=(0.0, 0.0, 1.0),
+        finger_length=0.116,
     )
 
 
@@ -2521,14 +2630,16 @@ torso_profile = sample_bezier_segments([
 ], steps=48)
 TORSO = revolved_mesh("Shell.Torso", torso_profile, SHELL, "shell", interpolate=False)
 
-# The head ended a good way behind the body. It is drawn in until its back is
-# level with the torso's, and the head modules built further down read the
-# compressed surface through `head_surface_y`, so the hair fitting still lies
-# on the head rather than floating where the old surface used to be.
+# The head ended a good way behind the body. It is drawn in until it reaches
+# exactly as far back as the torso. The head modules built further down read
+# the compressed surface through `head_surface_y`, so the hair fitting still
+# lies on the head rather than floating where the old surface used to be.
 HEAD_MAX_DEPTH = max(row[2] for row in head_profile)
+HEAD_REAR_OVERHANG = 1.0
 shorten_head_back(
     HEAD_SHELL,
-    1.0 - max(row[2] for row in torso_profile) / HEAD_MAX_DEPTH,
+    1.0
+    - max(row[2] for row in torso_profile) * HEAD_REAR_OVERHANG / HEAD_MAX_DEPTH,
 )
 surface_seam("Trim.TorsoSeam.Upper", torso_profile, -0.405, -0.505, TRIM, "trim")
 surface_seam("Trim.TorsoSeam.Lower", torso_profile, -0.833, -1.055, TRIM, "trim")

@@ -148,6 +148,23 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
+### Arms, shoulders and hand roll after the sixth review
+
+Analysed against `docs/assets/pico-design-concept.png` at high magnification:
+
+- The board draws each arm as **one continuous tapering piece** from the
+  shoulder to the wrist. It bends *through* the elbow rather than being hinged
+  at it, so the shoulder, elbow and wrist spheres with shell segments threaded
+  between them are gone; `arm_shell` lofts the whole arm along one curve.
+- The board closes the arm against the torso with a **dark collar**, and marks
+  the elbow the same way. `joint_collar` builds those cuffs: slightly wider
+  than the arm underneath and barrelled a little, so each reads as a fitted
+  band rather than a sleeve. That is how the shoulder terminates.
+- Both hands are rolled so the **back of the hand faces outward** and the palm
+  turns toward the body, which is what makes the hand read narrow from the
+  front. The thumbs point forward.
+- The head reaches exactly as far back as the torso.
+
 ### Head depth, arm pose and floor light after the fifth review
 
 - The head is shortened at the back until it ends level with the torso. The
