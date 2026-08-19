@@ -39,22 +39,38 @@ OUTPUT_HTML = os.path.join(OUTPUT_DIR, "pico-demo-viewer.html")
 TRIANGLE_BUDGET = 46000
 MIN_TRIANGLES = 120
 
-# The visible avatar states, in the order the standard lists them. They are
-# drawings in front of an unchanged visor, so they are switched like the head
-# identity: exactly one at a time.
-FACE_STATES = (
-    ("idle", "Ruhend"),
-    ("listening", "Zuhoerend"),
-    ("thinking", "Denkend"),
-    ("speaking", "Sprechend"),
-    ("waiting", "Wartend"),
-    ("executing", "Arbeitend"),
-    ("warning", "Achtung"),
-    ("blocked", "Blockiert"),
-    ("error", "Fehler"),
-    ("success", "Erfolg"),
-    ("offline", "Offline"),
-)
+# A state is a pairing of one eye shape and one mouth shape. The pairing is
+# read from the checkpoint, where the generator wrote it, so the page cannot
+# resolve a state differently from the file it is showing.
+STATE_LABELS = {
+    "idle": "Ruhend",
+    "listening": "Zuhoerend",
+    "thinking": "Denkend",
+    "working": "Arbeitend",
+    "unsure": "Unsicher",
+    "warning": "Achtung",
+    "confirmation_required": "Bestaetigung noetig",
+    "blocked": "Blockiert",
+    "success": "Erfolg",
+    "sleeping": "Schlafend",
+}
+
+
+def avatar_state_faces():
+    preview = bpy.data.collections["PICO_PREVIEW_ONLY"]
+    packed = preview.get("pico_avatar_state_faces")
+    if not packed:
+        raise SystemExit("the checkpoint carries no avatar state mapping")
+    entries = []
+    for record in packed.split("|"):
+        state, eye, mouth = record.split(":")
+        entries.append({
+            "state": state,
+            "label": STATE_LABELS.get(state, state),
+            "eye": f"eye_{eye}",
+            "mouth": f"mouth_{mouth}",
+        })
+    return entries
 
 COMPONENTS = (
     ("shell", "Schale", "Kopf, Torso, Arme und Handruecken"),
@@ -64,17 +80,16 @@ COMPONENTS = (
     ("head_antenna", "Kopf: Standardantenne", "Die neutrale Kopfidentitaet"),
     ("head_crown", "Kopf: erhoehte Krone", "Haarstil 2, noch im Rohzustand"),
     ("head_tail", "Kopf: Konzept-Schweif", "Haarstil 3, im Detail nachgezogen"),
-) + tuple(
-    (f"face_{state}", label, "Augen- und Mundzeichnung vor dem Visier")
-    for state, label in FACE_STATES
 )
 HEAD_COMPONENTS = ("head_antenna", "head_crown", "head_tail")
-FACE_COMPONENTS = tuple(f"face_{state}" for state, _ in FACE_STATES)
 
 
 def component_of(name):
-    if name.startswith("PREVIEW.Face."):
-        return "face_" + name.split(".")[2]
+    # Eye and mouth shapes are their own groups; a state pairs two of them.
+    if name.startswith("PREVIEW.Eye."):
+        return "eye_" + name.split(".")[2]
+    if name.startswith("PREVIEW.Mouth."):
+        return "mouth_" + name.split(".")[2]
     if name in ("Trim.AntennaStem", "Status.AntennaSphere"):
         return "head_antenna"
     if name.startswith("HeadModule.Crown.") or name == "Status.HeadAccent.Crown":
@@ -325,6 +340,7 @@ preview = list(bpy.data.collections["PICO_PREVIEW_ONLY"].all_objects)
 crown = head_objects("HEAD_RECIPE_head_raised_crown")
 tail = head_objects("HEAD_RECIPE_head_long_neon_tail")
 
+AVATAR_STATE_FACES = avatar_state_faces()
 counted = [obj for obj in core + preview + crown + tail if component_of(obj.name)]
 share = TRIANGLE_BUDGET / max(1, len(counted))
 
@@ -385,6 +401,7 @@ model = {
     "components": [
         {"id": key, "label": label, "hint": hint} for key, label, hint in COMPONENTS
     ],
+    "avatarStates": AVATAR_STATE_FACES,
     "surfaceCorridors": SURFACE_CORRIDORS,
     "corridorSamples": corridor_reference_samples(),
     "geometryFields": [
@@ -394,7 +411,6 @@ model = {
         "rootSpread",
     ],
     "headComponents": list(HEAD_COMPONENTS),
-    "faceComponents": list(FACE_COMPONENTS),
     "bounds": {
         "min": [round(value, 4) for value in lo],
         "max": [round(value, 4) for value in hi],

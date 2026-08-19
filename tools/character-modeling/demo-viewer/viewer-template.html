@@ -673,7 +673,14 @@
   /* ---- state --------------------------------------------------------- */
 
   var HEAD = MODEL.headComponents;
-  var FACE = MODEL.faceComponents || [];
+  // A state is a pairing of one eye shape and one mouth shape, resolved from
+  // the mapping the generator wrote into the checkpoint.
+  var STATES = MODEL.avatarStates || [];
+  var FACE = [];
+  STATES.forEach(function (entry) {
+    if (FACE.indexOf(entry.eye) === -1) FACE.push(entry.eye);
+    if (FACE.indexOf(entry.mouth) === -1) FACE.push(entry.mouth);
+  });
   var visible = {};
   MODEL.components.forEach(function (component) {
     visible[component.id] =
@@ -681,8 +688,17 @@
   });
   var head = "head_antenna";
   visible[head] = true;
-  var face = FACE.length ? FACE[0] : null;
-  if (face) visible[face] = true;
+  var state = STATES.length ? STATES[0].state : null;
+
+  function applyState() {
+    FACE.forEach(function (id) { visible[id] = false; });
+    var entry = STATES.filter(function (item) { return item.state === state; })[0];
+    if (entry) {
+      visible[entry.eye] = true;
+      visible[entry.mouth] = true;
+    }
+  }
+  applyState();
 
   var STATUS_COLOURS = [
     { id: "working", label: "Arbeitend (normal)", rgb: [0.0, 0.30, 0.60] },
@@ -873,7 +889,7 @@
   }
 
   function swatchFor(id) {
-    if (id === "status" || FACE.indexOf(id) !== -1) return "var(--status)";
+    if (id === "status") return "var(--status)";
     if (HEAD.indexOf(id) !== -1) return "var(--personal)";
     return "var(--ink-dim)";
   }
@@ -884,15 +900,13 @@
   var rows = {};
 
   MODEL.components.forEach(function (component) {
+    if (FACE.indexOf(component.id) !== -1) return;
     var isHead = HEAD.indexOf(component.id) !== -1;
-    var isFace = FACE.indexOf(component.id) !== -1;
-    var exclusive = isHead || isFace;
-    var group = isHead ? HEAD : (isFace ? FACE : null);
     var row = document.createElement("button");
     row.type = "button";
-    row.className = "row" + (exclusive ? " radio" : "");
+    row.className = "row" + (isHead ? " radio" : "");
     row.style.setProperty("--swatch", swatchFor(component.id));
-    if (exclusive) {
+    if (isHead) {
       row.setAttribute("role", "radio");
       row.setAttribute("aria-checked", String(visible[component.id]));
     } else {
@@ -904,17 +918,39 @@
       '<span class="row-hint">' + component.hint + "</span></span>" +
       '<span class="row-count">' + countFor(component.id) + "</span>";
     row.addEventListener("click", function () {
-      if (exclusive) {
-        group.forEach(function (id) { visible[id] = id === component.id; });
-        if (isHead) head = component.id; else face = component.id;
+      if (isHead) {
+        HEAD.forEach(function (id) { visible[id] = id === component.id; });
+        head = component.id;
       } else {
         visible[component.id] = !visible[component.id];
       }
       sync();
     });
     rows[component.id] = row;
-    faceHost && isFace ? faceHost.appendChild(row)
-      : (isHead ? headHost : componentHost).appendChild(row);
+    (isHead ? headHost : componentHost).appendChild(row);
+  });
+
+  var stateRows = {};
+  STATES.forEach(function (entry) {
+    var row = document.createElement("button");
+    row.type = "button";
+    row.className = "row radio";
+    row.style.setProperty("--swatch", "var(--status)");
+    row.setAttribute("role", "radio");
+    row.setAttribute("aria-checked", String(entry.state === state));
+    row.innerHTML =
+      '<span class="mark" aria-hidden="true"></span>' +
+      '<span class="row-name">' + entry.label +
+      '<span class="row-hint">' + entry.state + " &middot; " +
+      entry.eye.replace("eye_", "Auge ") + " + " +
+      entry.mouth.replace("mouth_", "Mund ") + "</span></span>";
+    row.addEventListener("click", function () {
+      state = entry.state;
+      applyState();
+      sync();
+    });
+    stateRows[entry.state] = row;
+    faceHost.appendChild(row);
   });
 
   var swatchHost = document.getElementById("statusColours");
@@ -1024,11 +1060,17 @@
   function sync() {
     MODEL.components.forEach(function (component) {
       var row = rows[component.id];
-      if (HEAD.indexOf(component.id) !== -1 || FACE.indexOf(component.id) !== -1) {
+      if (!row) return;
+      if (HEAD.indexOf(component.id) !== -1) {
         row.setAttribute("aria-checked", String(visible[component.id]));
       } else {
         row.setAttribute("aria-pressed", String(visible[component.id]));
       }
+    });
+    STATES.forEach(function (entry) {
+      stateRows[entry.state].setAttribute(
+        "aria-checked", String(entry.state === state)
+      );
     });
     swatchButtons.forEach(function (item) {
       item.button.setAttribute("aria-pressed", String(item.entry.id === statusColour.id));
@@ -1046,11 +1088,9 @@
       shown.reduce(function (total, part) { return total + part.triangles; }, 0).toLocaleString("de-DE");
     var label = MODEL.components.filter(function (component) { return component.id === head; })[0];
     document.getElementById("mHead").textContent = label ? label.label.replace("Kopf: ", "") : "–";
-    var faceLabel = MODEL.components.filter(function (component) {
-      return component.id === face;
-    })[0];
+    var entry = STATES.filter(function (item) { return item.state === state; })[0];
     var faceCell = document.getElementById("mFace");
-    if (faceCell) faceCell.textContent = faceLabel ? faceLabel.label : "–";
+    if (faceCell) faceCell.textContent = entry ? entry.label : "–";
 
     var low = Infinity;
     var high = -Infinity;

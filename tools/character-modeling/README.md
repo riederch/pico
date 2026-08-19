@@ -52,14 +52,22 @@ Nothing here is a production Character asset:
   instead of quietly changing what a value means; the current port agrees to
   5e-7.
 
-  It carries the **eleven avatar states** as a second exclusive selector
-  beside the head identity. The core used to hold a single face; a state was
-  only ever a drawing in front of an unchanged visor, so `preview_face` now
-  builds all eleven on the visor surface and the viewer shows one at a time.
+  It carries the **avatar states** as a second exclusive selector beside the
+  head identity. A state was only ever a drawing in front of an unchanged
+  visor, so `preview_face` draws **eight eye shapes and eight mouth shapes**
+  and a state is a *pairing* of one of each. A new state then needs one line
+  in `AVATAR_STATE_FACES`, not new geometry.
+
+  The state names come from `avatarStates` in `@pico/protocol` — a closed,
+  shipped `as const` tuple carried by `avatar.state_changed`. An earlier pass
+  built eleven faces from the prose in ADR 0009 and 0013 instead, and only six
+  of eleven names matched the type that actually ships. `validate_head_variants.py`
+  now reads that tuple out of the protocol source and asserts the mapping
+  covers exactly it, in order, with every pairing distinct; three deliberate
+  mutations (wrong name, missing state, duplicated pairing) each fail it.
+
   Each state differs in **shape**, not only in colour — a state read off
-  colour alone is unreadable to anyone who cannot separate the hues. The
-  drawings are named `PREVIEW.Face.<state>.*`, and the head validator names
-  the idle pair.
+  colour alone is unreadable to anyone who cannot separate the hues.
 
   Every group on the page is a native `<details>` disclosure, so it collapses
   with the keyboard as well as the mouse and needs no script. A collapsed

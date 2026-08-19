@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 
 import bpy
@@ -334,7 +335,7 @@ shell_material_names = {
 }
 assert status_material.name not in shell_material_names
 for name in (
-    "PREVIEW.Face.idle.Eye.L", "PREVIEW.Face.idle.Mouth", "Status.ChestCore",
+    "PREVIEW.Eye.open.L", "PREVIEW.Mouth.smile", "Status.ChestCore",
     "Status.Underside", "Status.HoverRing",
 ):
     assert bpy.data.objects[name].data.materials[0] is status_material, name
@@ -364,6 +365,65 @@ print(
     "PICO_HEAD_TAIL_FITTING="
     f"min_signed_distance={min(fitting_distances):.4f} "
     f"max_signed_distance={max(fitting_distances):.4f}"
+)
+
+# ---------------------------------------------------------------------------
+# The avatar state faces cover exactly the vocabulary the protocol ships.
+# ---------------------------------------------------------------------------
+
+PREVIEW = bpy.data.collections["PICO_PREVIEW_ONLY"]
+state_faces = [
+    record.split(":") for record in PREVIEW["pico_avatar_state_faces"].split("|")
+]
+
+# Read the shipped tuple rather than restating it. An earlier pass built faces
+# from ADR prose while a closed `as const` list was already exported, and only
+# six of eleven names matched; comparing against the source makes that drift
+# impossible to repeat rather than merely unlikely.
+def repo_root():
+    override = os.environ.get("PICO_REPO_ROOT")
+    candidates = [override] if override else []
+    if bpy.data.filepath:
+        here = os.path.dirname(bpy.data.filepath)
+        candidates.append(os.path.abspath(os.path.join(here, os.pardir, os.pardir, os.pardir)))
+        candidates.append(os.path.abspath(os.path.join(here, os.pardir)))
+    candidates.append(os.getcwd())
+    for candidate in candidates:
+        if candidate and os.path.isfile(
+            os.path.join(candidate, "packages", "protocol", "src", "index.ts")
+        ):
+            return os.path.abspath(candidate)
+    raise SystemExit("cannot locate the repository root; set PICO_REPO_ROOT")
+
+
+PROTOCOL_SOURCE = os.path.join(
+    repo_root(), "packages", "protocol", "src", "index.ts"
+)
+with open(PROTOCOL_SOURCE, "r", encoding="utf-8") as handle:
+    protocol_text = handle.read()
+declaration = re.search(
+    r"export const avatarStates = \[(.*?)\] as const;", protocol_text, re.S
+)
+assert declaration, "avatarStates not found in @pico/protocol"
+shipped_states = re.findall(r"'([a-z_]+)'", declaration.group(1))
+assert len(shipped_states) >= 8, shipped_states
+
+assert [state for state, _, _ in state_faces] == shipped_states, (
+    [state for state, _, _ in state_faces], shipped_states,
+)
+for state, eye, mouth in state_faces:
+    for side in ("L", "R"):
+        assert f"PREVIEW.Eye.{eye}.{side}" in bpy.data.objects, (state, eye, side)
+    assert any(
+        name.startswith(f"PREVIEW.Mouth.{mouth}") for name in bpy.data.objects.keys()
+    ), (state, mouth)
+# every pairing is distinct, or two states would draw the same face
+pairs = [(eye, mouth) for _, eye, mouth in state_faces]
+assert len(set(pairs)) == len(pairs), pairs
+print(
+    f"PICO_AVATAR_STATE_FACES={len(state_faces)} "
+    f"eyes={len({eye for _, eye, _ in state_faces})} "
+    f"mouths={len({mouth for _, _, mouth in state_faces})}"
 )
 
 carriers = {

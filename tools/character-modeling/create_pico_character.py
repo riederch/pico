@@ -396,7 +396,7 @@ def superellipse_patch(
 
 def conforming_marker_patch(
     name, marker_x, marker_y, radius_x, radius_y, support_profile,
-    mat, zone, target,
+    mat, zone, target, tilt_degrees=0.0,
 ):
     """Build a paper-thin marker that follows the authored face surface."""
     around = 64
@@ -414,10 +414,17 @@ def conforming_marker_patch(
     faces = []
     for ring in range(1, radial + 1):
         distance = ring / radial
+        tilt = math.radians(tilt_degrees)
+        cos_tilt, sin_tilt = math.cos(tilt), math.sin(tilt)
         for segment in range(around):
             angle = 2.0 * math.pi * segment / around
-            x = marker_x + radius_x * distance * math.cos(angle)
-            y = marker_y + radius_y * distance * math.sin(angle)
+            # The tilt turns the ellipse about its own centre, before the
+            # point is dropped onto the visor: rotating the finished object
+            # would swing it around the world origin instead.
+            local_x = radius_x * distance * math.cos(angle)
+            local_y = radius_y * distance * math.sin(angle)
+            x = marker_x + local_x * cos_tilt - local_y * sin_tilt
+            y = marker_y + local_x * sin_tilt + local_y * cos_tilt
             vertices.append((x, y, depth(x, y)))
     for segment in range(around):
         faces.append((0, 1 + segment, 1 + (segment + 1) % around))
@@ -1487,32 +1494,46 @@ def make_arm(side):
     )
 
 
-# The visible avatar state vocabulary, from ADR 0009 and ADR 0013 by way of
-# the feature stub manifest. The core carried a single face; a state was only
-# ever a drawing in front of an unchanged visor, so all eleven are built here
-# and exactly one is shown.
+# Eye and mouth shapes are drawn once each, and a state is a *pairing* of one
+# of each. Building eleven finished faces meant a new state needed new
+# geometry; here it needs one line in the mapping below.
 #
-# Each entry gives the eye ellipse (half width, half height, height above the
-# eye line) and a mouth kind. Every state differs in shape, not only in
-# colour: a state read off colour alone is unreadable to anyone who cannot
-# separate the hues.
-AVATAR_STATES = (
-    ("idle", (0.058, 0.090, 0.015), "smile"),
-    ("listening", (0.072, 0.104, 0.018), "small"),
-    ("thinking", (0.052, 0.076, 0.036), "dots"),
-    ("speaking", (0.058, 0.090, 0.015), "open"),
-    ("waiting", (0.058, 0.046, 0.006), "small"),
-    ("executing", (0.064, 0.034, 0.014), "dash"),
-    ("warning", (0.050, 0.086, 0.020), "flat"),
-    ("blocked", (0.048, 0.048, 0.014), "slash"),
-    ("error", (0.046, 0.046, 0.014), "frown"),
-    ("success", (0.064, 0.032, 0.024), "smile_wide"),
-    ("offline", (0.038, 0.018, 0.008), "tiny"),
+# The state names are not invented here. `avatarStates` in @pico/protocol is a
+# closed, shipped `as const` tuple carried by `avatar.state_changed`, so the
+# mapping is keyed by exactly those ten. An earlier pass built faces from the
+# prose in ADR 0009 and 0013 instead, and only six of eleven names matched the
+# type that actually ships.
+EYE_SHAPES = {
+    # name: (half width, half height, height above the eye line, tilt)
+    "open": (0.058, 0.090, 0.015, 0.0),
+    "wide": (0.072, 0.104, 0.018, 0.0),
+    "narrow": (0.064, 0.034, 0.014, 0.0),
+    "half": (0.058, 0.046, 0.006, 0.0),
+    "raised": (0.052, 0.076, 0.036, 0.0),
+    "angled": (0.050, 0.086, 0.020, 16.0),
+    "square": (0.050, 0.050, 0.014, 0.0),
+    "closed": (0.062, 0.012, 0.008, 0.0),
+}
+
+MOUTH_SHAPES = ("smile", "smile_wide", "flat", "small", "dots", "open", "slash", "frown")
+
+# The ten states of `avatarStates`, each as one eye shape and one mouth shape.
+AVATAR_STATE_FACES = (
+    ("idle", "open", "smile"),
+    ("listening", "wide", "small"),
+    ("thinking", "raised", "dots"),
+    ("working", "narrow", "open"),
+    ("unsure", "half", "frown"),
+    ("warning", "angled", "flat"),
+    ("confirmation_required", "wide", "flat"),
+    ("blocked", "square", "slash"),
+    ("success", "narrow", "smile_wide"),
+    ("sleeping", "closed", "small"),
 )
 
 
 def preview_mouth(name, support_profile, kind):
-    """One mouth drawing on the visor surface, in the shape the state needs."""
+    """One mouth drawing on the visor surface, in the shape a state needs."""
     def depth(x, y):
         return visor_surface_z(
             x, y, FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
@@ -1521,7 +1542,7 @@ def preview_mouth(name, support_profile, kind):
         ) + 0.0035
 
     if kind in ("dots", "open"):
-        # Drawn as patches rather than as a line: a speaking mouth is open and
+        # Drawn as patches rather than as a line: a working mouth is open and
         # a thinking one is a row of dots, and neither is a stroke.
         if kind == "open":
             spots = [(0.0, -0.160, 0.036, 0.030)]
@@ -1539,9 +1560,7 @@ def preview_mouth(name, support_profile, kind):
         "smile_wide": (0.052, lambda a: -0.150 - 0.026 * (1.0 - a * a)),
         "frown": (0.044, lambda a: -0.168 + 0.022 * (1.0 - a * a)),
         "flat": (0.038, lambda a: -0.158),
-        "dash": (0.056, lambda a: -0.158),
         "small": (0.020, lambda a: -0.158),
-        "tiny": (0.012, lambda a: -0.158),
         "slash": (0.046, lambda a: -0.158 + 0.030 * a),
     }
     half_width, profile = shapes[kind]
@@ -1567,15 +1586,27 @@ def preview_mouth(name, support_profile, kind):
 
 def preview_face(support_profile):
     # Preview-only geometry: the normative GLB deliberately excludes it.
-    for state, (radius_x, radius_y, lift), mouth in AVATAR_STATES:
-        for side, x in (("L", -0.170), ("R", 0.170)):
+    for shape, (radius_x, radius_y, lift, tilt) in EYE_SHAPES.items():
+        for side, sign in (("L", -1.0), ("R", 1.0)):
             conforming_marker_patch(
-                f"PREVIEW.Face.{state}.Eye.{side}", x, lift,
+                f"PREVIEW.Eye.{shape}.{side}", sign * 0.170, lift,
                 radius_x, radius_y, support_profile,
                 STATUS, "status_emitters", PREVIEW,
+                tilt_degrees=tilt * sign,
             )
-        preview_mouth(f"PREVIEW.Face.{state}.Mouth", support_profile, mouth)
-    print(f"PICO_FACE_STATES={len(AVATAR_STATES)}")
+    for shape in MOUTH_SHAPES:
+        preview_mouth(f"PREVIEW.Mouth.{shape}", support_profile, shape)
+
+    # The mapping travels with the file, so the exporter and anything else
+    # reading the checkpoint resolve a state the same way this generator does.
+    PREVIEW["pico_avatar_state_faces"] = "|".join(
+        f"{state}:{eye}:{mouth}" for state, eye, mouth in AVATAR_STATE_FACES
+    )
+    PREVIEW["pico_avatar_state_source"] = "@pico/protocol avatarStates"
+    print(
+        f"PICO_FACE_SHAPES=eyes:{len(EYE_SHAPES)} mouths:{len(MOUTH_SHAPES)} "
+        f"states:{len(AVATAR_STATE_FACES)}"
+    )
 
 
 def head_module_material(name, hue, chroma, translucency, face="outer"):
