@@ -392,6 +392,45 @@ is the body's silhouette, not the arm's. For the same reason the stated "arm
 thickness 0.07 tapering to 0.04" is not a diameter to build to: in those rows
 it is the width of the sliver visible beside the body.
 
+### Which side is which, and where the thumb belongs (thirteenth review)
+
+**The side suffixes were swapped.** The visor faces +Z and up is +Y, so the
+character's right is `forward × up = −X` and their left is +X. The model named
+the arm at −X `.L`. Every arm, hand, finger and joint mount carried the wrong
+side, and a Pose V1 asking for the right arm moved the left one — while nothing
+in the geometry looked wrong, because the two arms are mirror images.
+
+`validate_head_variants.py` now pins the convention: `Shell.Arm.L` must lie on
+the +X side and `.R` on −X. The derivation is in the check, not only in prose.
+
+**The hands themselves measure correct**, which is worth recording because they
+did not look it. Raycasting both faces of each hand: the cupped face sits
+0.0236 from the hand's centre and the closed back 0.0421, and the cupped face
+is the one turned towards the body on both sides. Palm inward, back outward,
+mirrored — as specified.
+
+**What made them read as swapped was the thumb.** It sat at 0.42 along the same
+axis the three fingers spread on (−0.54, 0, +0.54), with no offset towards the
+palm at all: a fourth digit *inside* the row, between the middle and the front
+finger. A hand whose thumb does not stand apart has no readable handedness, so
+the eye takes whichever reading fits and both hands can look like the other
+one's. The thumb now sits at 0.68 — past the front finger — and is displaced
+towards the palm so it opposes the fingers, and its tip curls back towards them
+instead of splaying outward.
+
+Two earlier readings of this were wrong and are recorded because the method
+matters: a centroid-extent test said the palms faced outward, and a close-up
+render seemed to show an open scoop facing the wrong way. The first was
+backwards — a dish moves the centroid *away* from itself — and the second was a
+camera at 0.55 units with an 80 mm lens, which framed the wrist and not the
+hand. Only the raycast answered the question it was asked.
+
+**Still open, and visible in the renders:** the hand reads as a flat slab with
+separate blocks hanging under it. The owner's description forbids exactly that —
+"no ball with finger rods attached", knuckle roots that pass softly into the
+palm. The digit roots step rather than blend, and the palm's cross-section is
+too boxy. That is a shape question, not a naming one, and it is untouched here.
+
 ### The measured reference, finally read by a check (eleventh review)
 
 `Character_Geometry_Measurements.md` states what is measurable on the

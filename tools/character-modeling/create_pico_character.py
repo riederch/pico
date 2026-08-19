@@ -1378,11 +1378,18 @@ def hand_shell(
             "radius_tip": digit_radius * 0.86,
         })
 
+    # The thumb comes off the side of the palm and opposes the fingers. It used
+    # to sit at 0.42 along the same axis the fingers spread on (-0.54, 0,
+    # +0.54) with no offset towards the palm at all -- a fourth digit inside
+    # the row, between the middle and the front finger. A hand with no thumb
+    # standing apart has no readable handedness: the eye takes whichever
+    # reading fits, and both hands can look like the other one's.
     thumb_length = finger_length * 0.74
     thumb_base = (
         wrist
         + forward * (palm_length * 0.46)
-        + axis_side * (half_width * 0.42)
+        + axis_side * (half_width * 0.68)
+        + axis_palm * (half_thickness * 0.55)
     )
     digits.append({
         "kind": "thumb",
@@ -1390,14 +1397,17 @@ def hand_shell(
         "base": thumb_base,
         "control": (
             thumb_base
-            + axis_side * (thumb_length * 0.46)
+            + axis_side * (thumb_length * 0.30)
             + forward * (thumb_length * 0.30)
+            - axis_palm * (thumb_length * 0.10)
         ),
+        # and it curls back towards the fingers rather than splaying outward,
+        # which is what makes it read as opposing them.
         "tip": (
             thumb_base
-            + axis_side * (thumb_length * 0.52)
+            + axis_side * (thumb_length * 0.26)
             + forward * (thumb_length * 0.86)
-            - axis_palm * (thumb_length * 0.20)
+            - axis_palm * (thumb_length * 0.34)
         ),
         "radius_base": digit_radius * 1.04,
         "radius_tip": digit_radius * 0.88,
@@ -1406,7 +1416,12 @@ def hand_shell(
 
 
 def make_arm(side):
-    sign = -1.0 if side == "L" else 1.0
+    # Which side is which follows from the character, not from the viewer. The
+    # visor faces +Z and up is +Y, so the character's right is
+    # `forward x up = -X` and their left is +X. The suffixes used to be the
+    # other way round, which named every arm, hand, finger and joint mount on
+    # the wrong side -- and a pose asking for the right arm moved the left one.
+    sign = 1.0 if side == "L" else -1.0
     # Measured off docs/assets/pico-design-concept.png rather than estimated.
     # Calibrating on the torso width and the head-top-to-chest-core height, the
     # board's arm leaves the shoulder at 34.7 degrees below horizontal for
@@ -1435,14 +1450,9 @@ def make_arm(side):
     # perched under the head at -0.450. Only the shoulder moves; the elbow and
     # the wrist stay on the reference's arm table, so the limb hangs a little
     # steeper rather than sliding down as a whole.
-    if side == "L":
-        shoulder = Vector((-0.352, -0.492, 0.000))
-        wrist = Vector((-0.664, -0.780, 0.062))
-        palm = Vector((-0.669, -0.870, 0.080))
-    else:
-        shoulder = Vector((0.352, -0.492, 0.000))
-        wrist = Vector((0.664, -0.780, 0.062))
-        palm = Vector((0.669, -0.870, 0.080))
+    shoulder = Vector((sign * 0.352, -0.492, 0.000))
+    wrist = Vector((sign * 0.664, -0.780, 0.062))
+    palm = Vector((sign * 0.669, -0.870, 0.080))
     # The arm is straight from the shoulder to the wrist on the owner's call.
     # The shell is still built on the same quadratic, and a quadratic whose
     # middle point lies on the chord *is* a straight segment -- so the bend is

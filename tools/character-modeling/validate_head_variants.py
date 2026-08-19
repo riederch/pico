@@ -393,6 +393,17 @@ assert sorted(joints) == sorted(expected_joints), sorted(joints)
 assert not any(
     obj.get("pico_joint") == "elbow" for obj in bpy.data.objects
 ), "an elbow joint survives"
+# Which side is which follows from the character. The visor faces +Z and up is
+# +Y, so the character's right is `forward x up = -X` and their left is +X. The
+# suffixes were once the other way round, which named every arm, hand, finger
+# and joint mount on the wrong side; a pose asking for the right arm moved the
+# left one, and nothing in the geometry looked wrong.
+for side, expected in (("L", 1.0), ("R", -1.0)):
+    arm = bpy.data.objects[f"Shell.Arm.{side}"]
+    points = [arm.matrix_world @ vertex.co for vertex in arm.data.vertices]
+    middle = (min(p.x for p in points) + max(p.x for p in points)) / 2.0
+    assert middle * expected > 0.0, (side, middle)
+
 # The arm is one continuous shell per side, with nothing dividing it at the
 # bend. The collar that briefly marked the bend was removed again on the
 # owner's call; what the rule protects is the shell, not a name.
