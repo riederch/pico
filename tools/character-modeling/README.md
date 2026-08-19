@@ -360,11 +360,31 @@ radius at each height turns those into a centreline, and the joints sit on it:
 | −0.761 | −0.690 | −0.664 | −0.688 |
 | −0.868 | −0.710 | *no arm* | −0.722 |
 
-After the shoulders were lowered the outer edge sits within 0.027 at every row
+After the shoulders were lowered the outer edge sat within 0.027 at every row
 and within 0.017 at five of six. Lowest point −0.937 against the reference's
 −0.949. Whole-figure silhouette coverage went from 89.6 to 91.7 per cent; the
 core is 94.7, essentially unchanged, which is right — the core measurement
 excludes arms.
+
+**Then the arm was straightened, on the owner's call, and that costs some of
+it.** The shell is still built on the same quadratic; a quadratic whose middle
+control lies on the chord *is* a straight segment, so the bend is removed by
+placing the elbow on that chord rather than by swapping the curve for a line.
+Taper, shoulder dome and the frame carrying the hand keep working unchanged.
+
+The reference's arm bows outward through its middle, and a straight line cannot
+follow a bowed contour while keeping both ends. The ends still match — −0.761 at
++0.002 and −0.868 at −0.012 — and the middle now sits inside the reference by up
+to 0.046:
+
+| y | reference outer | bent | straight |
+|---:|---:|---:|---:|
+| −0.492 | −0.510 | −0.519 | −0.465 |
+| −0.546 | −0.560 | −0.577 | −0.514 |
+| −0.653 | −0.650 | −0.653 | −0.610 |
+
+Whole-figure coverage 91.7 → 91.4 per cent. That is the price of a straight
+arm against this reference, recorded rather than argued away.
 
 The table's *inner* edges are not used. Between −0.487 and −0.702 the reference
 merges arm and torso — its own torso table says so — and the inner edge there

@@ -1437,14 +1437,19 @@ def make_arm(side):
     # steeper rather than sliding down as a whole.
     if side == "L":
         shoulder = Vector((-0.352, -0.492, 0.000))
-        elbow = Vector((-0.552, -0.612, 0.024))
         wrist = Vector((-0.664, -0.780, 0.062))
         palm = Vector((-0.669, -0.870, 0.080))
     else:
         shoulder = Vector((0.352, -0.492, 0.000))
-        elbow = Vector((0.552, -0.612, 0.031))
         wrist = Vector((0.664, -0.780, 0.062))
         palm = Vector((0.669, -0.870, 0.080))
+    # The arm is straight from the shoulder to the wrist on the owner's call.
+    # The shell is still built on the same quadratic, and a quadratic whose
+    # middle point lies on the chord *is* a straight segment -- so the bend is
+    # removed by placing the elbow on that chord rather than by swapping the
+    # curve for a line. The taper, the shoulder dome and the frame that carries
+    # the hand all keep working unchanged.
+    elbow = (shoulder + wrist) * 0.5
     # One continuous arm, as on the concept board: no shoulder, elbow or
     # wrist spheres threaded onto shell segments. The shoulder end is pushed
     # slightly into the torso so it closes against the body instead of
