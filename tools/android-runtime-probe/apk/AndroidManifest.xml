@@ -5,6 +5,12 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- ADR 0131 A4. Declared so the *restricted* half can be measured: on
+       Android 14+ this is granted by app-op, not by declaration, and a
+       non-calling app meets it denied. That default is the measurement. -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <application android:label="Pico A1 Probe" android:debuggable="true"
       android:extractNativeLibs="true">
     <service android:name=".CustodyService" android:process=":custody"
@@ -17,6 +23,17 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
     </service>
+    <!-- ADR 0131 A4: the reachability contract. Its own process, because
+         what is being measured is what the system does to a process that
+         only wants to keep checking. -->
+    <service android:name=".ReachabilityProbeService" android:process=":reach"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a4_reachability_probe" />
+    </service>
+    <service android:name=".ReachabilityJobService" android:process=":reach"
+        android:exported="false"
+        android:permission="android.permission.BIND_JOB_SERVICE" />
     <!-- ADR 0131 A3: no Node, no stage - pure platform API, so it neither
          loads libnode nor shares a process with anything that does. -->
     <service android:name=".KeystoreProbeService" android:process=":keystore"

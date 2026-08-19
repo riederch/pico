@@ -53,6 +53,31 @@ attestation extension. Shipping the root and reading verified-boot state,
 patch level and the challenge belongs to the implementation; a probe that
 faked it would measure its own fake.
 
+## The reachability probe (ADR 0131 A4)
+
+`apk/run-reachability-probe.sh start` records what the device grants a first
+run - battery-optimisation exemption, background restriction, standby bucket,
+exact-alarm and full-screen-intent permission, notification channel importance
+as actually granted - posts the ADR 0112 alarm both with and without the
+restricted full-screen intent, and leaves a heartbeat job running so the
+distance between a requested interval and the intervals that arrive becomes a
+subtraction rather than an argument.
+
+    run-reachability-probe.sh start                # the default state a first run meets
+    run-reachability-probe.sh start --full-screen  # the same alarm with the app-op allowed
+    run-reachability-probe.sh read                 # heartbeats so far
+    run-reachability-probe.sh force-stop           # the harshest task-killer case
+    run-reachability-probe.sh stop                 # force-stop and uninstall
+
+It deliberately does not request the battery-optimisation exemption: the
+default is what a first run meets, and a probe that fixed its own environment
+would measure the fix. It also never claims the alarm was *seen* - whether a
+notification is unmissable is a person's observation, so it records what the
+system permitted and posted, and the looking is left to whoever holds the
+phone.
+
+The cadence half needs hours, not minutes. `start` now, `read` later.
+
 ## Status
 
 2026-08-18: **green on real hardware.** Samsung SM-A556B (Galaxy A55),
