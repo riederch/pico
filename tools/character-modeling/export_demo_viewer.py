@@ -39,22 +39,42 @@ OUTPUT_HTML = os.path.join(OUTPUT_DIR, "pico-demo-viewer.html")
 TRIANGLE_BUDGET = 46000
 MIN_TRIANGLES = 120
 
+# The visible avatar states, in the order the standard lists them. They are
+# drawings in front of an unchanged visor, so they are switched like the head
+# identity: exactly one at a time.
+FACE_STATES = (
+    ("idle", "Ruhend"),
+    ("listening", "Zuhoerend"),
+    ("thinking", "Denkend"),
+    ("speaking", "Sprechend"),
+    ("waiting", "Wartend"),
+    ("executing", "Arbeitend"),
+    ("warning", "Achtung"),
+    ("blocked", "Blockiert"),
+    ("error", "Fehler"),
+    ("success", "Erfolg"),
+    ("offline", "Offline"),
+)
+
 COMPONENTS = (
     ("shell", "Schale", "Kopf, Torso, Arme und Handruecken"),
     ("visor", "Visier", "Displayflaeche und ihre Fassung"),
     ("trim", "Trim / Mechanik", "Hals, Schultern, Gelenke, Finger, Seitenmodule"),
     ("status", "Statusgruppe", "Brustkern, Unterseite, Schwebering, Kopfkappen"),
-    ("face", "Gesichtszeichnung", "Augen und Mundlinie vor dem Visier"),
     ("head_antenna", "Kopf: Standardantenne", "Die neutrale Kopfidentitaet"),
     ("head_crown", "Kopf: erhoehte Krone", "Haarstil 2, noch im Rohzustand"),
     ("head_tail", "Kopf: Konzept-Schweif", "Haarstil 3, im Detail nachgezogen"),
+) + tuple(
+    (f"face_{state}", label, "Augen- und Mundzeichnung vor dem Visier")
+    for state, label in FACE_STATES
 )
 HEAD_COMPONENTS = ("head_antenna", "head_crown", "head_tail")
+FACE_COMPONENTS = tuple(f"face_{state}" for state, _ in FACE_STATES)
 
 
 def component_of(name):
-    if name.startswith("PREVIEW.Status."):
-        return "face"
+    if name.startswith("PREVIEW.Face."):
+        return "face_" + name.split(".")[2]
     if name in ("Trim.AntennaStem", "Status.AntennaSphere"):
         return "head_antenna"
     if name.startswith("HeadModule.Crown.") or name == "Status.HeadAccent.Crown":
@@ -70,6 +90,103 @@ def component_of(name):
     if name.startswith("Status."):
         return "status"
     return None
+
+
+# The PAS surface corridors, from docs/development/briefs/
+# parametric-appearance-system.md sections 10.1 to 10.3 and 9. Each zone maps
+# its byte fields into a bounded OKLCH box, so no value a person can pick
+# leaves the corridor.
+#
+# The viewer needs the mapping as a function, not as baked colours, because it
+# recomputes while a slider moves. Defining the corridor here and shipping it
+# as data keeps one source for the numbers; the page carries the same OKLCH
+# conversion and checks itself against reference samples computed right here,
+# so the two cannot drift apart unnoticed.
+SURFACE_CORRIDORS = {
+    "shell": {
+        "label": "Schale",
+        "zones": ["shell"],
+        "lightness": [0.78, 0.96],
+        "chroma": [0.0, 0.070],
+        "fields": [
+            {"id": "hue", "label": "hue", "max": 359, "value": 232},
+            {"id": "chroma", "label": "chroma", "max": 255, "value": 40},
+            {"id": "lightness", "label": "lightness", "max": 255, "value": 150},
+            {"id": "gloss", "label": "gloss", "max": 255, "value": 190},
+        ],
+    },
+    "face_display": {
+        "label": "Display",
+        "zones": ["face_display"],
+        "lightness": [0.025, 0.110],
+        "chroma": [0.0, 0.040],
+        "fields": [
+            {"id": "hue", "label": "hue", "max": 359, "value": 226},
+            {"id": "tint", "label": "tint", "max": 255, "value": 60},
+            {"id": "blackLevel", "label": "blackLevel", "max": 255, "value": 40},
+            {"id": "reflectivity", "label": "reflectivity", "max": 255, "value": 90},
+        ],
+    },
+    "trim": {
+        "label": "Trim",
+        "zones": ["trim"],
+        # Trim has no lightness field in the standard; it stays dark by design.
+        "lightness": [0.30, 0.30],
+        "chroma": [0.0, 0.140],
+        "fields": [
+            {"id": "hue", "label": "hue", "max": 359, "value": 230},
+            {"id": "chroma", "label": "chroma", "max": 255, "value": 46},
+            {"id": "metalness", "label": "metalness", "max": 255, "value": 110},
+        ],
+    },
+    "head_module": {
+        "label": "Kopfmodul (persoenlich)",
+        "zones": ["head_module"],
+        "lightness": [0.500, 0.640],
+        "chroma": [0.040, 0.220],
+        "fields": [
+            {"id": "hue", "label": "hue", "max": 359, "value": 286},
+            {"id": "chroma", "label": "chroma", "max": 255, "value": 156},
+            {"id": "translucency", "label": "translucency", "max": 255, "value": 184},
+        ],
+    },
+}
+
+
+def oklch_to_linear_rgb(lightness, chroma, hue_degrees):
+    """One OKLCH-to-linear-RGB conversion, shared with the head module material."""
+    radians = math.radians(hue_degrees % 360.0)
+    axis_a = chroma * math.cos(radians)
+    axis_b = chroma * math.sin(radians)
+    cone_l = (lightness + 0.3963377774 * axis_a + 0.2158037573 * axis_b) ** 3
+    cone_m = (lightness - 0.1055613458 * axis_a - 0.0638541728 * axis_b) ** 3
+    cone_s = (lightness - 0.0894841775 * axis_a - 1.2914855480 * axis_b) ** 3
+    return tuple(
+        max(0.0, min(1.0, channel))
+        for channel in (
+            4.0767416621 * cone_l - 3.3077115913 * cone_m + 0.2309699292 * cone_s,
+            -1.2684380046 * cone_l + 2.6097574011 * cone_m - 0.3413193965 * cone_s,
+            -0.0041960863 * cone_l - 0.7034186147 * cone_m + 1.7076147010 * cone_s,
+        )
+    )
+
+
+def corridor_reference_samples():
+    """Colours the page must reproduce, so a drifting port announces itself."""
+    samples = []
+    for key, corridor in SURFACE_CORRIDORS.items():
+        low, high = corridor["lightness"]
+        chroma_low, chroma_high = corridor["chroma"]
+        for hue, amount in ((0, 0.0), (120, 0.5), (286, 1.0)):
+            lightness = low + (high - low) * amount
+            chroma = chroma_low + (chroma_high - chroma_low) * amount
+            samples.append({
+                "zone": key,
+                "hue": hue,
+                "amount": round(amount, 3),
+                "rgb": [round(v, 6) for v in oklch_to_linear_rgb(lightness, chroma, hue)],
+            })
+    return samples
 
 
 def surface_of(material):
@@ -268,7 +385,16 @@ model = {
     "components": [
         {"id": key, "label": label, "hint": hint} for key, label, hint in COMPONENTS
     ],
+    "surfaceCorridors": SURFACE_CORRIDORS,
+    "corridorSamples": corridor_reference_samples(),
+    "geometryFields": [
+        # Listed so the page can name what it deliberately does not drive.
+        "anchor", "side", "length", "lift", "sweep", "curl", "width", "taper",
+        "twist", "segments", "partOffset", "partDepth", "crownBias",
+        "rootSpread",
+    ],
     "headComponents": list(HEAD_COMPONENTS),
+    "faceComponents": list(FACE_COMPONENTS),
     "bounds": {
         "min": [round(value, 4) for value in lo],
         "max": [round(value, 4) for value in hi],

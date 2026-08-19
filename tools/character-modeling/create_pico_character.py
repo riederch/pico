@@ -1487,15 +1487,65 @@ def make_arm(side):
     )
 
 
-def preview_face(support_profile):
-    # Preview-only geometry: the normative GLB deliberately excludes it.
-    for name, x in (("Left", -0.170), ("Right", 0.170)):
-        conforming_marker_patch(
-            f"PREVIEW.Status.Eye.{name}", x, 0.015,
-            0.058, 0.090, support_profile,
-            STATUS, "status_emitters", PREVIEW,
-        )
-    curve = bpy.data.curves.new("PREVIEW.Status.Mouth.Curve", "CURVE")
+# The visible avatar state vocabulary, from ADR 0009 and ADR 0013 by way of
+# the feature stub manifest. The core carried a single face; a state was only
+# ever a drawing in front of an unchanged visor, so all eleven are built here
+# and exactly one is shown.
+#
+# Each entry gives the eye ellipse (half width, half height, height above the
+# eye line) and a mouth kind. Every state differs in shape, not only in
+# colour: a state read off colour alone is unreadable to anyone who cannot
+# separate the hues.
+AVATAR_STATES = (
+    ("idle", (0.058, 0.090, 0.015), "smile"),
+    ("listening", (0.072, 0.104, 0.018), "small"),
+    ("thinking", (0.052, 0.076, 0.036), "dots"),
+    ("speaking", (0.058, 0.090, 0.015), "open"),
+    ("waiting", (0.058, 0.046, 0.006), "small"),
+    ("executing", (0.064, 0.034, 0.014), "dash"),
+    ("warning", (0.050, 0.086, 0.020), "flat"),
+    ("blocked", (0.048, 0.048, 0.014), "slash"),
+    ("error", (0.046, 0.046, 0.014), "frown"),
+    ("success", (0.064, 0.032, 0.024), "smile_wide"),
+    ("offline", (0.038, 0.018, 0.008), "tiny"),
+)
+
+
+def preview_mouth(name, support_profile, kind):
+    """One mouth drawing on the visor surface, in the shape the state needs."""
+    def depth(x, y):
+        return visor_surface_z(
+            x, y, FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
+            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
+            dome_radius_x=FACE_DOME_RADIUS_X, dome_radius_y=FACE_DOME_RADIUS_Y,
+        ) + 0.0035
+
+    if kind in ("dots", "open"):
+        # Drawn as patches rather than as a line: a speaking mouth is open and
+        # a thinking one is a row of dots, and neither is a stroke.
+        if kind == "open":
+            spots = [(0.0, -0.160, 0.036, 0.030)]
+        else:
+            spots = [(offset, -0.156, 0.011, 0.011) for offset in (-0.042, 0.0, 0.042)]
+        for index, (x, y, radius_x, radius_y) in enumerate(spots, start=1):
+            conforming_marker_patch(
+                f"{name}.{index:02d}", x, y, radius_x, radius_y,
+                support_profile, STATUS, "status_emitters", PREVIEW,
+            )
+        return
+
+    shapes = {
+        "smile": (0.040, lambda a: -0.156 - 0.014 * (1.0 - a * a)),
+        "smile_wide": (0.052, lambda a: -0.150 - 0.026 * (1.0 - a * a)),
+        "frown": (0.044, lambda a: -0.168 + 0.022 * (1.0 - a * a)),
+        "flat": (0.038, lambda a: -0.158),
+        "dash": (0.056, lambda a: -0.158),
+        "small": (0.020, lambda a: -0.158),
+        "tiny": (0.012, lambda a: -0.158),
+        "slash": (0.046, lambda a: -0.158 + 0.030 * a),
+    }
+    half_width, profile = shapes[kind]
+    curve = bpy.data.curves.new(f"{name}.Curve", "CURVE")
     curve.dimensions = "3D"
     curve.resolution_u = 4
     curve.bevel_depth = 0.0045
@@ -1505,21 +1555,27 @@ def preview_face(support_profile):
     spline.points.add(point_count - 1)
     for index, point in enumerate(spline.points):
         amount = index / (point_count - 1)
-        x = -0.040 + 0.080 * amount
-        normalized = x / 0.040
-        y = -0.156 - 0.014 * (1.0 - normalized * normalized)
-        z = visor_surface_z(
-            x, y,
-            FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
-            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
-            dome_radius_x=FACE_DOME_RADIUS_X, dome_radius_y=FACE_DOME_RADIUS_Y,
-        ) + 0.0035
-        point.co = (x, y, z, 1.0)
-    mouth = bpy.data.objects.new("PREVIEW.Status.Mouth", curve)
-    PREVIEW.objects.link(mouth)
-    mouth.visible_shadow = False
+        x = -half_width + 2.0 * half_width * amount
+        y = profile(x / max(half_width, 1e-6))
+        point.co = (x, y, depth(x, y), 1.0)
+    obj = bpy.data.objects.new(name, curve)
+    PREVIEW.objects.link(obj)
+    obj.visible_shadow = False
     curve.materials.append(STATUS)
-    mouth["pico_material_zone"] = "status_emitters"
+    obj["pico_material_zone"] = "status_emitters"
+
+
+def preview_face(support_profile):
+    # Preview-only geometry: the normative GLB deliberately excludes it.
+    for state, (radius_x, radius_y, lift), mouth in AVATAR_STATES:
+        for side, x in (("L", -0.170), ("R", 0.170)):
+            conforming_marker_patch(
+                f"PREVIEW.Face.{state}.Eye.{side}", x, lift,
+                radius_x, radius_y, support_profile,
+                STATUS, "status_emitters", PREVIEW,
+            )
+        preview_mouth(f"PREVIEW.Face.{state}.Mouth", support_profile, mouth)
+    print(f"PICO_FACE_STATES={len(AVATAR_STATES)}")
 
 
 def head_module_material(name, hue, chroma, translucency, face="outer"):
@@ -1608,6 +1664,8 @@ def head_recipe_amounts(geometry):
 # ADR 0125 rules out a group of separate strands.
 GATHER_WIDTH = 0.46
 GATHER_LENGTH = 0.20
+# How far the root plate tips towards the face, as a share of its own normal.
+PLATE_FORWARD_TILT = 0.20
 
 
 def rear_ribbon_guide(support_profile, amounts):
@@ -1665,6 +1723,12 @@ def rear_ribbon_guide(support_profile, amounts):
     fitting_front = root_curve_point(0.0)
     fitting_rear = root_curve_point(1.0)
     fitting_normal = head_surface_normal(support_profile, fitting_x, fitting_z)
+    # The plate is tipped a little forward, towards the face. Only the plate:
+    # the band leaves along the untilted surface normal, and rolling that
+    # forward would tip the whole arc with it.
+    plate_normal = (
+        fitting_normal + Vector((0.0, 0.0, PLATE_FORWARD_TILT))
+    ).normalized()
     embed = fitting_normal * fitting_half_thickness * 0.40
     # The hair leaves the plate at its centre, so the plate sits around the
     # root rather than in front of it.
@@ -1814,6 +1878,7 @@ def rear_ribbon_guide(support_profile, amounts):
         # surface point instead is what keeps the plate low but visible.
         "fitting_centre": crown_point(fitting_x, fitting_z),
         "fitting_normal": fitting_normal,
+        "plate_normal": plate_normal,
         "fitting_radius": fitting_radius,
         "fitting_half_width": fitting_half_width,
         "fitting_half_thickness": fitting_half_thickness,
@@ -2078,8 +2143,8 @@ def make_procedural_head_variant(
         collar = tangent_plate(
             f"HeadModule.{name}.RootCollar",
             fitting_centre
-            - guide["fitting_normal"] * guide["fitting_half_thickness"] * 0.42,
-            guide["fitting_normal"],
+            - guide["plate_normal"] * guide["fitting_half_thickness"] * 0.42,
+            guide["plate_normal"],
             fitting_along,
             guide["fitting_radius"] * 0.92,
             guide["fitting_radius"] * 0.92,
@@ -2095,7 +2160,7 @@ def make_procedural_head_variant(
         root_shell = tangent_plate(
             f"HeadModule.{name}.HairRoot",
             fitting_centre,
-            guide["fitting_normal"],
+            guide["plate_normal"],
             fitting_along,
             guide["fitting_radius"],
             guide["fitting_radius"],
@@ -2652,7 +2717,7 @@ TORSO = revolved_mesh("Shell.Torso", torso_profile, SHELL, "shell", interpolate=
 # the compressed surface through `head_surface_y`, so the hair fitting still
 # lies on the head rather than floating where the old surface used to be.
 HEAD_MAX_DEPTH = max(row[2] for row in head_profile)
-HEAD_REAR_OVERHANG = 1.0
+HEAD_REAR_OVERHANG = 1.10
 shorten_head_back(
     HEAD_SHELL,
     1.0

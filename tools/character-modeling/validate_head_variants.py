@@ -334,7 +334,7 @@ shell_material_names = {
 }
 assert status_material.name not in shell_material_names
 for name in (
-    "PREVIEW.Status.Eye.Left", "PREVIEW.Status.Mouth", "Status.ChestCore",
+    "PREVIEW.Face.idle.Eye.L", "PREVIEW.Face.idle.Mouth", "Status.ChestCore",
     "Status.Underside", "Status.HoverRing",
 ):
     assert bpy.data.objects[name].data.materials[0] is status_material, name

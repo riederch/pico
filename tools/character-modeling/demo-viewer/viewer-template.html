@@ -168,16 +168,59 @@
 
   .rail { display: flex; flex-direction: column; gap: 14px; }
   .panel { border: 1px solid var(--line); background: var(--surface); }
-  .panel > h2 {
+  .panel > summary {
     font-size: var(--step--1);
     font-family: var(--mono);
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--muted);
     padding: 10px 14px;
-    border-bottom: 1px solid var(--line-soft);
     font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
+  .panel > summary::-webkit-details-marker { display: none; }
+  .panel[open] > summary { border-bottom: 1px solid var(--line-soft); }
+  .panel > summary:hover { color: var(--status); }
+  .panel > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  /* A caret that turns: the group's state is readable without opening it. */
+  .panel > summary::before {
+    content: "";
+    width: 0; height: 0;
+    border-left: 5px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 120ms ease;
+  }
+  .panel[open] > summary::before { transform: rotate(90deg); }
+
+  .zone > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    list-style: none;
+    padding: 2px 0 6px;
+  }
+  .zone > summary::-webkit-details-marker { display: none; }
+  .zone > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .zone > summary:hover .zone-name { color: var(--status); }
+  /* the zones carry the same caret as the panels, so both read as openable */
+  .zone-name::before {
+    content: "";
+    display: inline-block;
+    width: 0; height: 0;
+    margin-right: 7px;
+    border-left: 5px solid var(--muted);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 120ms ease;
+  }
+  .zone[open] .zone-name::before { transform: rotate(90deg); }
   .panel-body { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 
   .row {
@@ -229,6 +272,27 @@
   }
   .swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
   .swatch-note { padding: 0 14px 12px; font-size: 0.74rem; color: var(--muted); }
+  .swatch-note.bad { color: var(--warn); }
+
+  .zone { border-top: 1px solid var(--line-soft); padding: 10px 14px 12px; }
+  .zone:first-child { border-top: 0; }
+  .zone-name { font-size: var(--step-0); }
+  .zone-chip {
+    width: 26px; height: 18px; border: 1px solid var(--line);
+  }
+  .field { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-top: 7px; }
+  .field label {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+  .field output {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .field input {
+    grid-column: 1 / -1; width: 100%; margin: 0; accent-color: var(--status);
+  }
+  .field input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
   .readout {
     display: grid;
@@ -291,24 +355,40 @@
     </div>
 
     <div class="rail">
-      <section class="panel">
-        <h2>Bauteilgruppen</h2>
+      <details class="panel" open>
+        <summary>Bauteilgruppen</summary>
         <div class="panel-body" id="components"></div>
-      </section>
+      </details>
 
-      <section class="panel">
-        <h2>Kopfidentität</h2>
+      <details class="panel" open>
+        <summary>Kopfidentität</summary>
         <div class="panel-body" id="heads" role="radiogroup" aria-label="Kopfidentität"></div>
-      </section>
+      </details>
 
-      <section class="panel">
-        <h2>Statusfarbe</h2>
+      <details class="panel" open>
+        <summary>Mimik</summary>
+        <div class="panel-body" id="faces" role="radiogroup" aria-label="Mimik"></div>
+      </details>
+
+      <details class="panel" open>
+        <summary>Statusfarbe</summary>
         <div class="swatches" id="statusColours"></div>
         <p class="swatch-note">
           Setzt alle Flächen der Zone <code>status_emitters</code> gemeinsam.
           Eine Statusgruppe zeigt immer genau eine Farbe.
         </p>
-      </section>
+      </details>
+
+      <details class="panel" open>
+        <summary>Oberflächen-Attribute</summary>
+        <div id="surfaces"></div>
+        <p class="swatch-note" id="corridorNote"></p>
+      </details>
+
+      <details class="panel">
+        <summary>Nicht im Prüfstand</summary>
+        <p class="swatch-note" id="geometryNote"></p>
+      </details>
     </div>
   </div>
 
@@ -316,6 +396,7 @@
     <div class="cell"><dt>Sichtbare Teile</dt><dd id="mParts">–</dd></div>
     <div class="cell"><dt>Dreiecke</dt><dd id="mTris">–</dd></div>
     <div class="cell"><dt>Kopfidentität</dt><dd id="mHead">–</dd></div>
+    <div class="cell"><dt>Mimik</dt><dd id="mFace">–</dd></div>
     <div class="cell"><dt>Höhe (Einheiten)</dt><dd id="mHeight">–</dd></div>
   </dl>
 
@@ -592,12 +673,16 @@
   /* ---- state --------------------------------------------------------- */
 
   var HEAD = MODEL.headComponents;
+  var FACE = MODEL.faceComponents || [];
   var visible = {};
   MODEL.components.forEach(function (component) {
-    visible[component.id] = HEAD.indexOf(component.id) === -1;
+    visible[component.id] =
+      HEAD.indexOf(component.id) === -1 && FACE.indexOf(component.id) === -1;
   });
   var head = "head_antenna";
   visible[head] = true;
+  var face = FACE.length ? FACE[0] : null;
+  if (face) visible[face] = true;
 
   var STATUS_COLOURS = [
     { id: "working", label: "Arbeitend (normal)", rgb: [0.0, 0.30, 0.60] },
@@ -607,6 +692,90 @@
     { id: "success", label: "Erfolg", rgb: [0.05, 0.52, 0.20] }
   ];
   var statusColour = STATUS_COLOURS[0];
+
+  /* ---- surface corridors ---------------------------------------------- */
+
+  // The same OKLCH-to-linear-RGB conversion the exporter uses. It is checked
+  // against reference colours computed there, so a drift between the two
+  // announces itself instead of quietly changing what a value means.
+  function oklchToLinearRgb(lightness, chroma, hueDegrees) {
+    var radians = (hueDegrees % 360) * Math.PI / 180;
+    var a = chroma * Math.cos(radians);
+    var b = chroma * Math.sin(radians);
+    var l = Math.pow(lightness + 0.3963377774 * a + 0.2158037573 * b, 3);
+    var m = Math.pow(lightness - 0.1055613458 * a - 0.0638541728 * b, 3);
+    var s = Math.pow(lightness - 0.0894841775 * a - 1.2914855480 * b, 3);
+    return [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+    ].map(function (channel) { return Math.min(1, Math.max(0, channel)); });
+  }
+
+  function checkCorridorPort() {
+    var worst = 0;
+    (MODEL.corridorSamples || []).forEach(function (sample) {
+      var corridor = MODEL.surfaceCorridors[sample.zone];
+      var lightness = corridor.lightness[0]
+        + (corridor.lightness[1] - corridor.lightness[0]) * sample.amount;
+      var chroma = corridor.chroma[0]
+        + (corridor.chroma[1] - corridor.chroma[0]) * sample.amount;
+      var here = oklchToLinearRgb(lightness, chroma, sample.hue);
+      for (var i = 0; i < 3; i += 1) {
+        worst = Math.max(worst, Math.abs(here[i] - sample.rgb[i]));
+      }
+    });
+    return worst;
+  }
+
+  var surfaceValues = {};
+  Object.keys(MODEL.surfaceCorridors || {}).forEach(function (zone) {
+    surfaceValues[zone] = {};
+    MODEL.surfaceCorridors[zone].fields.forEach(function (field) {
+      surfaceValues[zone][field.id] = field.value;
+    });
+  });
+
+  function zoneColour(zone) {
+    var corridor = MODEL.surfaceCorridors[zone];
+    var values = surfaceValues[zone];
+    var amountField = {
+      shell: "chroma", face_display: "tint",
+      trim: "chroma", head_module: "chroma"
+    }[zone];
+    var lightField = {
+      shell: "lightness", face_display: "blackLevel",
+      trim: null, head_module: "translucency"
+    }[zone];
+    var chromaAmount = values[amountField] / 255;
+    var lightAmount = lightField === null ? 1 : values[lightField] / 255;
+    var chroma = corridor.chroma[0]
+      + (corridor.chroma[1] - corridor.chroma[0]) * chromaAmount;
+    var lightness = corridor.lightness[0]
+      + (corridor.lightness[1] - corridor.lightness[0]) * lightAmount;
+    return oklchToLinearRgb(lightness, chroma, values.hue);
+  }
+
+  function applySurfaceColours() {
+    Object.keys(MODEL.surfaceCorridors || {}).forEach(function (zone) {
+      var colour = zoneColour(zone);
+      var values = surfaceValues[zone];
+      parts.forEach(function (part) {
+        if (part.zone !== zone) return;
+        part.baseColour = colour.slice();
+        if (part.zone !== STATUS_ZONE) part.colour = colour.slice();
+        if (zone === "shell") {
+          part.roughness = 0.45 - 0.40 * (values.gloss / 255);
+        } else if (zone === "face_display") {
+          part.roughness = 0.40 - 0.35 * (values.reflectivity / 255);
+        } else if (zone === "trim") {
+          part.metallic = 0.35 + 0.65 * (values.metalness / 255);
+        } else if (zone === "head_module") {
+          part.alpha = 1.0 - 0.45 * (values.translucency / 255);
+        }
+      });
+    });
+  }
 
   function applyStatusColour() {
     parts.forEach(function (part) {
@@ -704,24 +873,28 @@
   }
 
   function swatchFor(id) {
-    if (id === "status" || id === "face") return "var(--status)";
+    if (id === "status" || FACE.indexOf(id) !== -1) return "var(--status)";
     if (HEAD.indexOf(id) !== -1) return "var(--personal)";
     return "var(--ink-dim)";
   }
 
   var componentHost = document.getElementById("components");
   var headHost = document.getElementById("heads");
+  var faceHost = document.getElementById("faces");
   var rows = {};
 
   MODEL.components.forEach(function (component) {
     var isHead = HEAD.indexOf(component.id) !== -1;
+    var isFace = FACE.indexOf(component.id) !== -1;
+    var exclusive = isHead || isFace;
+    var group = isHead ? HEAD : (isFace ? FACE : null);
     var row = document.createElement("button");
     row.type = "button";
-    row.className = "row" + (isHead ? " radio" : "");
+    row.className = "row" + (exclusive ? " radio" : "");
     row.style.setProperty("--swatch", swatchFor(component.id));
-    if (isHead) {
+    if (exclusive) {
       row.setAttribute("role", "radio");
-      row.setAttribute("aria-checked", String(component.id === head));
+      row.setAttribute("aria-checked", String(visible[component.id]));
     } else {
       row.setAttribute("aria-pressed", String(visible[component.id]));
     }
@@ -731,16 +904,17 @@
       '<span class="row-hint">' + component.hint + "</span></span>" +
       '<span class="row-count">' + countFor(component.id) + "</span>";
     row.addEventListener("click", function () {
-      if (isHead) {
-        head = component.id;
-        HEAD.forEach(function (id) { visible[id] = id === head; });
+      if (exclusive) {
+        group.forEach(function (id) { visible[id] = id === component.id; });
+        if (isHead) head = component.id; else face = component.id;
       } else {
         visible[component.id] = !visible[component.id];
       }
       sync();
     });
     rows[component.id] = row;
-    (isHead ? headHost : componentHost).appendChild(row);
+    faceHost && isFace ? faceHost.appendChild(row)
+      : (isHead ? headHost : componentHost).appendChild(row);
   });
 
   var swatchHost = document.getElementById("statusColours");
@@ -763,6 +937,77 @@
     return { entry: entry, button: button };
   });
 
+  var surfaceHost = document.getElementById("surfaces");
+  var zoneChips = {};
+  Object.keys(MODEL.surfaceCorridors || {}).forEach(function (zone) {
+    var corridor = MODEL.surfaceCorridors[zone];
+    var block = document.createElement("details");
+    block.className = "zone";
+    block.open = zone === "shell";
+    var head = document.createElement("summary");
+    var name = document.createElement("span");
+    name.className = "zone-name";
+    name.textContent = corridor.label;
+    var chip = document.createElement("span");
+    chip.className = "zone-chip";
+    head.appendChild(name);
+    head.appendChild(chip);
+    block.appendChild(head);
+    zoneChips[zone] = chip;
+
+    corridor.fields.forEach(function (field) {
+      var row = document.createElement("div");
+      row.className = "field";
+      var label = document.createElement("label");
+      var id = "f_" + zone + "_" + field.id;
+      label.setAttribute("for", id);
+      label.textContent = field.label;
+      var value = document.createElement("output");
+      value.textContent = field.value;
+      var input = document.createElement("input");
+      input.type = "range";
+      input.id = id;
+      input.min = "0";
+      input.max = String(field.max);
+      input.value = String(field.value);
+      input.addEventListener("input", function () {
+        surfaceValues[zone][field.id] = Number(input.value);
+        value.textContent = input.value;
+        applySurfaceColours();
+        sync();
+      });
+      row.appendChild(label);
+      row.appendChild(value);
+      row.appendChild(input);
+      block.appendChild(row);
+    });
+    surfaceHost.appendChild(block);
+  });
+
+  var drift = checkCorridorPort();
+  var note = document.getElementById("corridorNote");
+  if (drift > 0.002) {
+    note.className = "swatch-note bad";
+    note.textContent =
+      "Der Farbkorridor dieser Seite weicht um " + drift.toFixed(4)
+      + " von den Referenzwerten des Exports ab. Die Werte unten sind nicht "
+      + "verlaesslich.";
+  } else {
+    note.textContent =
+      "Werte 0-255 aus dem PAS-Korridor, hier gegen die Referenzfarben des "
+      + "Exports geprueft (Abweichung " + drift.toExponential(1) + "). "
+      + "Jede Zone bleibt in ihrem Korridor: die Schale hell, das Display "
+      + "dunkel, Trim nicht emissiv.";
+  }
+
+  document.getElementById("geometryNote").innerHTML =
+    "Die " + MODEL.geometryFields.length + " Geometriefelder des Kopfmoduls ("
+    + "<code>" + MODEL.geometryFields.join("</code>, <code>") + "</code>) "
+    + "aendern Geometrie, nicht Farbe. Sie bleiben dem Blender-Generator "
+    + "vorbehalten: sie hier nachzubauen hiesse, einen zweiten Generator "
+    + "neben den ersten zu stellen. Diese Seite zeigt die drei erzeugten "
+    + "Kopfidentitaeten, nicht den Korridor dazwischen.";
+
   document.getElementById("reset").addEventListener("click", function () {
     camera.yaw = HOME.yaw;
     camera.pitch = HOME.pitch;
@@ -779,14 +1024,20 @@
   function sync() {
     MODEL.components.forEach(function (component) {
       var row = rows[component.id];
-      if (HEAD.indexOf(component.id) !== -1) {
-        row.setAttribute("aria-checked", String(component.id === head));
+      if (HEAD.indexOf(component.id) !== -1 || FACE.indexOf(component.id) !== -1) {
+        row.setAttribute("aria-checked", String(visible[component.id]));
       } else {
         row.setAttribute("aria-pressed", String(visible[component.id]));
       }
     });
     swatchButtons.forEach(function (item) {
       item.button.setAttribute("aria-pressed", String(item.entry.id === statusColour.id));
+    });
+    Object.keys(zoneChips).forEach(function (zone) {
+      var colour = zoneColour(zone);
+      zoneChips[zone].style.background = "rgb(" + colour.map(function (channel) {
+        return Math.round(Math.pow(channel, 1 / 2.2) * 255);
+      }).join(",") + ")";
     });
 
     var shown = parts.filter(partVisible);
@@ -795,6 +1046,11 @@
       shown.reduce(function (total, part) { return total + part.triangles; }, 0).toLocaleString("de-DE");
     var label = MODEL.components.filter(function (component) { return component.id === head; })[0];
     document.getElementById("mHead").textContent = label ? label.label.replace("Kopf: ", "") : "–";
+    var faceLabel = MODEL.components.filter(function (component) {
+      return component.id === face;
+    })[0];
+    var faceCell = document.getElementById("mFace");
+    if (faceCell) faceCell.textContent = faceLabel ? faceLabel.label : "–";
 
     var low = Infinity;
     var high = -Infinity;
@@ -821,6 +1077,7 @@
     if (scheme.addEventListener) scheme.addEventListener("change", draw);
   }
 
+  applySurfaceColours();
   applyStatusColour();
   sync();
 })();

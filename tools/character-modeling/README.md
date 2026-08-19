@@ -37,6 +37,39 @@ Nothing here is a production Character asset:
   whole `status_emitters` zone at once. Its geometry is decimated to a
   triangle budget and travels inside the page, so it is a picture of the
   checkpoint and never a second source for it.
+
+  It also drives the **PAS surface attributes** live: all fourteen fields of
+  the four surface zones — shell `hue/chroma/lightness/gloss`, face
+  `hue/tint/blackLevel/reflectivity`, trim `hue/chroma/metalness` and the
+  personal head module `hue/chroma/translucency`, from
+  `parametric-appearance-system.md` sections 10.1 to 10.3 and 9.
+
+  The corridor bounds are defined once, in `SURFACE_CORRIDORS` in the
+  exporter, and shipped to the page as data. The page needs the mapping as a
+  *function*, since it recomputes while a slider moves, so it carries the same
+  OKLCH conversion — and checks itself on load against reference colours
+  computed in the exporter. A drift between the two is reported on the page
+  instead of quietly changing what a value means; the current port agrees to
+  5e-7.
+
+  It carries the **eleven avatar states** as a second exclusive selector
+  beside the head identity. The core used to hold a single face; a state was
+  only ever a drawing in front of an unchanged visor, so `preview_face` now
+  builds all eleven on the visor surface and the viewer shows one at a time.
+  Each state differs in **shape**, not only in colour — a state read off
+  colour alone is unreadable to anyone who cannot separate the hues. The
+  drawings are named `PREVIEW.Face.<state>.*`, and the head validator names
+  the idle pair.
+
+  Every group on the page is a native `<details>` disclosure, so it collapses
+  with the keyboard as well as the mouse and needs no script. A collapsed
+  surface zone still shows its colour chip: the state of a group is readable
+  without opening it.
+
+  The **fourteen geometry fields** of the head module are deliberately not
+  driven. They change geometry rather than colour, and reproducing them in the
+  page would stand a second generator next to the Blender one. The page says
+  so, and names them.
 - `render_inspection.py` produces the reference, front, side, rear, top and
   bottom inspection views from an opened checkpoint.
 - `validate_head_variants.py` checks the authored head mount, geometry bounds
