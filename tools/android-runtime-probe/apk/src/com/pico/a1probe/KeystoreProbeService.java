@@ -239,9 +239,36 @@ public final class KeystoreProbeService extends Service {
       boolean softwareRoot = root.toLowerCase().contains("software");
       String level = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         ? String.valueOf(info.getSecurityLevel()) : "pre_31";
+
+      /**
+       * Each certificate against the next one's key. Reading the last
+       * subject only tells us what the last certificate calls itself;
+       * checking the signatures is what makes "this key was attested by
+       * something that chains to that root" a claim rather than a label.
+       *
+       * The root is *not* pinned here, deliberately: pinning Google's
+       * attestation root means shipping it, which is the implementation's
+       * job and not a probe's. That is the distance between this
+       * measurement and a P3 implementation, and it is stated rather than
+       * papered over.
+       */
+      boolean linked = true;
+      String linkFailure = "none";
+      for (int i = 0; i + 1 < chain.length; i++) {
+        try {
+          chain[i].verify(chain[i + 1].getPublicKey());
+        } catch (Throwable broken) {
+          linked = false;
+          linkFailure = "index " + i + ": " + broken.getClass().getSimpleName();
+          break;
+        }
+      }
       return "\"chainLength\":" + chain.length
         + ",\"rootSubject\":\"" + root.replace('"', '\'') + "\""
         + ",\"softwareAttestationRoot\":" + softwareRoot
+        + ",\"signaturesLinkToRoot\":" + linked
+        + ",\"linkFailure\":\"" + linkFailure + "\""
+        + ",\"rootIsPinned\":false"
         + ",\"keyInfoSecurityLevel\":\"" + level + "\"";
     } catch (Throwable error) {
       return "\"available\":false,\"refusal\":\"" + error.getClass().getSimpleName() + "\"";

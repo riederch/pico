@@ -433,10 +433,49 @@ local-first product's most security-critical moment.
   over an app-private AF_UNIX socket, or an in-process seam over the same
   request families; decided with A1, with the ADR 0099 approval binding
   preserved either way.
-- **A3 - Android keystore tranche (open, ADR 0081 P3):** device-key and
+- **A3 - Android keystore tranche (analysis done on measured evidence
+  2026-08-19, implementation open, ADR 0081 P3):** device-key and
   passphrase protection through the platform keystore and biometric
   prompt, with the canonical keyfile format unchanged and hardware-backed
   storage verified rather than assumed.
+
+  Measured on a Galaxy A55 (Android 16, patch 2026-07-05) with
+  `tools/android-runtime-probe/apk/run-keystore-probe.sh`:
+
+  - **Hardware-backed, and verified twice over.** `KeyInfo.getSecurityLevel()`
+    reports `TRUSTED_ENVIRONMENT`, and independently a five-certificate
+    attestation chain whose signatures link, certificate by certificate, to
+    `C=US, O=Google LLC, OU=Android, CN=Key Attestation CA1`. The root is
+    **not pinned** by the probe and the attestation extension is not parsed:
+    shipping Google's root and reading verified-boot state, patch level and
+    the challenge out of the extension is the implementation's work, and
+    naming that distance is the point of measuring rather than assuming.
+  - **StrongBox is not universal, and its absence is honest.** A current
+    mid-range phone on a six-week-old patch declares no StrongBox and
+    *throws* `StrongBoxUnavailableException` rather than quietly handing back
+    a weaker key. So the tranche's floor is the TEE and StrongBox is a bonus
+    where it exists - requiring it would refuse real phones - and the
+    refusal is what makes that floor safe to stand on.
+  - **The keystore fails closed.** A key with
+    `setUserAuthenticationRequired(true)` and `AUTH_BIOMETRIC_STRONG` refused
+    to initialise a cipher with `UserNotAuthenticatedException`. ADR 0112's
+    fail-closed Platform Keystore unlock owner is therefore implementable on
+    Android as specified, rather than as a prompt that decorates an unlock
+    that would have happened anyway.
+  - **An unlock secret round-trips** through a TEE-held key (32 bytes, 48
+    sealed, identical on the way back) and the alias survives process death,
+    which is the whole job ADR 0081 gives a platform keystore: hold the
+    *unlock secret*, never the keys as their canonical form.
+
+  Two things follow for the implementation. The Android analogue of refusing
+  Electron's `basic_text` is a closed list of **security levels**, not
+  backend names: `trusted_environment` and `strongbox` count, `software` is
+  refused - and it has to be judged from `getSecurityLevel()` *plus*
+  attestation, because every other call in this probe succeeds identically
+  on a keystore that is software all the way down. And that judgement cannot
+  live where the Linux one lives: the shell-free core never sees a
+  `KeyInfo`, so on Android the platform code judges and what crosses into the
+  core is a verdict with its evidence, not a backend name to be judged there.
 - **A4 - Reachability contract measured (open):** foreground service,
   periodic check interval, alarm loudness with and without the restricted
   full-screen permission, and behaviour under battery optimisation and at

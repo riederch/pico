@@ -2,6 +2,23 @@
 
 ## Status
 
+Status note, 2026-08-19: **the Android tranche has its P3 analysis, on
+measured evidence rather than on documentation.** ADR 0131 A3 carries the
+detail; the decisive facts are that a current mid-range phone holds keys in
+the TEE (reported by `KeyInfo.getSecurityLevel()` and independently by an
+attestation chain whose signatures link to Google's Key Attestation CA),
+that StrongBox is *not* universal and its absence surfaces as a thrown
+`StrongBoxUnavailableException` rather than a silent downgrade, that a
+biometric-gated key genuinely refuses to work without a fresh authentication
+(`UserNotAuthenticatedException`), and that an unlock secret round-trips
+through such a key and survives process death. The unlock-secret posture
+this ADR fixes therefore holds on Android without changing the canonical
+keyfile: the keystore holds the secret that opens the keyfile, never the
+person-role key itself. Implementation waits on an Android client (ADR 0131
+A5), and with it the two things a probe must not fake: pinning the
+attestation root and reading the attestation extension.
+
+
 Accepted as the threat model and custody direction for **person-role private keys** — the Pico Identity Key and the owner's device keys under `pico.suite.id.v1` (ADR 0079): the exclusive Vault boundary (the Foundation host and every browser context are structurally excluded custody locations), one canonical encrypted at-rest format (`pico.vault.keyfile.v1`: Argon2id-derived key, XChaCha20-Poly1305 with an AAD-bound labeled header), the agent-pattern process boundary with label-checked signing, root minimization (one primary Vault, delegated device keys everywhere else), encrypted-or-absent export, and the honest loss rule — behind three gates. **Gate P1 is implemented**: `@pico/protocol` exports the Vault keyfile vocabulary plus a pure `buildPicoVaultKeyfileHeaderAad` builder, and `docs/protocol/fixtures/vault-keyfile/` publishes the authoritative header-AAD vector suite. **Gate P2 is implemented as a minimal package-level runtime in `@pico/vault`**: create/open encrypted person-role keyfiles, Argon2id execution, XChaCha20-Poly1305 seal/open with the P1 header AAD, explicit lock, idle auto-lock, role-scoped label-checked signing, key-agreement sealed-box unwrap, encrypted export only, private file mode writes and Foundation data/backup path separation tests. This discharges ADR 0079 Gate G2 for the person-role custody floor. Subsequent ADRs 0097-0102 implement the daemon and approval boundary, and ADR 0110 implements the one named PIN-protected Recovery Card export and time-locked recovery path through R4. **Gate P3 now has its first implemented platform tranche:** the packaged Linux Electron companion uses only reviewed `safeStorage` backends backed by GNOME libsecret or KWallet, refuses `basic_text`, and can re-establish only profile-bound device sessions without changing the canonical keyfile. Product onboarding still has to create that binding; other platforms, broader Vault product UX and compatibility certification remain open.
 
 ## Context

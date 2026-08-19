@@ -38,6 +38,21 @@ is scripted), installs Node from Termux's repository using the device's own
 network, pushes the stage, and runs the probe under the device's filesystem
 and sockets. `PICO_TERMUX_APK=/path/to.apk` skips the download.
 
+## The keystore probe (ADR 0131 A3 / ADR 0081 P3)
+
+`apk/run-keystore-probe.sh` builds the same APK and runs `KeystoreProbeService`
+only - no Node, no staged core, because that measurement is pure platform API.
+It asks where a key actually lives (`KeyInfo.getSecurityLevel()` *and* an
+attestation chain verified signature by signature), whether StrongBox exists,
+whether a biometric-gated key refuses to work without a fresh authentication,
+whether an unlock secret round-trips through a hardware-held key, and whether
+the alias survives. It deletes its own aliases when it finishes.
+
+What it deliberately does not do: pin Google's attestation root or parse the
+attestation extension. Shipping the root and reading verified-boot state,
+patch level and the challenge belongs to the implementation; a probe that
+faked it would measure its own fake.
+
 ## Status
 
 2026-08-18: **green on real hardware.** Samsung SM-A556B (Galaxy A55),
