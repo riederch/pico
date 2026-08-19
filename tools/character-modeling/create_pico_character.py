@@ -1416,21 +1416,22 @@ def make_arm(side):
     #
     # The shoulder sits on the torso surface at that height, not inside it.
     #
-    # Shortened by a seventh on 2026-08-19: 0.491 along the two segments read
-    # long against the torso once the arm was one piece. The path keeps its
-    # measured angles -- both joints are pulled in along the same line from the
-    # shoulder -- so the arm reads shorter without leaving the board's pose.
-    # The hand keeps its own size and simply follows the wrist in.
+    # Measured against the board a second time on 2026-08-19, calibrated on the
+    # torso width. The reach was about right and *distributed* wrong: the board
+    # puts 0.39-0.43 of the torso width into the arm and 0.31 into the hand,
+    # while this model had 0.55 and 0.23. So the arm comes in again -- both
+    # joints pulled along the same line from the shoulder, so the measured
+    # angles survive -- and the hand grows to meet it.
     if side == "L":
         shoulder = Vector((-0.352, -0.450, 0.000))
-        elbow = Vector((-0.574, -0.604, 0.024))
-        wrist = Vector((-0.672, -0.712, 0.062))
-        palm = Vector((-0.672, -0.777, 0.078))
+        elbow = Vector((-0.530, -0.573, 0.019))
+        wrist = Vector((-0.608, -0.660, 0.050))
+        palm = Vector((-0.608, -0.742, 0.070))
     else:
         shoulder = Vector((0.352, -0.450, 0.000))
-        elbow = Vector((0.574, -0.604, 0.031))
-        wrist = Vector((0.672, -0.712, 0.062))
-        palm = Vector((0.672, -0.777, 0.078))
+        elbow = Vector((0.530, -0.573, 0.025))
+        wrist = Vector((0.608, -0.660, 0.050))
+        palm = Vector((0.608, -0.742, 0.070))
     # One continuous arm, as on the concept board: no shoulder, elbow or
     # wrist spheres threaded onto shell segments. The shoulder end is pushed
     # slightly into the torso so it closes against the body instead of
@@ -1464,10 +1465,12 @@ def make_arm(side):
     # surface: at 0.014 the two shells were coplanar along the upper edge and
     # the renderer speckled the seam.
     torso_seat = shoulder + (shoulder - elbow).normalized() * 0.026
+    # The board tapers about two to one from the shoulder to the wrist; this
+    # arm tapered 1.64 to one and read like a tube beside it.
     arm = arm_shell(
         f"Shell.Arm.{side}",
         torso_seat, elbow, wrist,
-        0.082, 0.066, 0.050,
+        0.084, 0.063, 0.042,
         SHELL, "shell",
     )
     parent_preserve_world(arm, shoulder_mount)
@@ -1483,14 +1486,17 @@ def make_arm(side):
     # same hand into a raised, open gesture; the thumb then points forward.
     palm_normal = (-sign, 0.0, 0.0)
     hand_direction = (palm - wrist).normalized()
+    # The hand carries a third of the limb on the board and under a quarter
+    # here, so it grows by about a quarter in every direction at once -- palm,
+    # thickness and digits together, or it would read as a mitten.
     hand, digits = hand_shell(
         f"Trim.Hand.{side}",
-        wrist - hand_direction * 0.020,
-        wrist + hand_direction * 0.082,
+        wrist - hand_direction * 0.025,
+        wrist + hand_direction * 0.103,
         palm_normal,
-        0.080, 0.036, TRIM, "trim",
+        0.101, 0.045, TRIM, "trim",
         thumb_toward=(0.0, 0.0, 1.0),
-        finger_length=0.116,
+        finger_length=0.146,
     )
     parent_preserve_world(hand, arm_mount)
     # One joint per digit. Each mount sits at the digit's own root, so turning

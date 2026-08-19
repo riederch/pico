@@ -288,6 +288,59 @@ then **turns them**: the shoulder must move the arm and the hand, the arm
 joint must move the hand and leave the arm where it is. A mount that does not
 drive its children is decoration.
 
+### The board's arms, read again and measured (tenth review)
+
+Before changing anything further the concept board was read once more, with the
+shadows lifted so the arm's dark side becomes visible. What the **Basis-Avatar**
+shows:
+
+- **One piece, no elbow.** A single continuous shell from shoulder to wrist.
+  There are exactly two breaks: a dark collar at the shoulder and a cuff at the
+  wrist. What an earlier pass took for an elbow band is that cuff.
+- **A ring at the shoulder, not a ball.** A dark collar — a torus seen at an
+  angle — sits between torso and arm, and the arm's rounded top plugs into it.
+  No free-standing sphere appears anywhere on the board. The sphere in this
+  model is the owner's decision and stays; it is recorded here as a deliberate
+  departure, not an oversight.
+- **A comma, not a tube.** Broadest just under the collar, narrowing all the
+  way to the wrist, about two to one. The outer contour is a long convex arc
+  and the inner one concave: the arm goes out, then turns down.
+- **An open cuff** at the wrist — a visible rim with a darker interior, like a
+  sleeve the hand leaves.
+- **Not a circular section**: a lengthwise seam and a flattened facet on top.
+- A **separate, darker hand** with three fingers and a thumb.
+
+**The board contradicts itself, and that is worth writing down.** Only the
+Basis-Avatar has a one-piece arm. The middle figure (*Ausdruck & Interaktion*)
+clearly shows two shells with a dark band between them — an elbow — and the
+right figure shows a weaker version of the same. The Basis-Avatar remains the
+reference by the owner's decision; the other two figures are why the elbow
+question keeps returning.
+
+#### What the measurement said
+
+Calibrated on the torso width, with the board's three-quarter perspective
+treated as a source of error rather than ignored:
+
+| | board | before | after |
+|---|---|---|---|
+| shoulder → wrist | 0.39–0.43 × torso width | 0.55 | **0.44** |
+| hand from the wrist | 0.31 × | 0.23 | **0.29** |
+| shoulder → fingertip | 0.71–0.74 × | 0.78 | **0.73** |
+
+The reach was roughly right and **distributed wrong**: the board puts a third
+of the limb into the hand, this model put under a quarter. So the arm came in
+again by a fifth along the same measured line, and the hand grew by about a
+quarter in every direction at once — palm, thickness and digits together, or it
+would read as a mitten. The taper went from 1.64 to 2 to one with it.
+
+The GLB envelope follows: ±0.740 → ±0.693.
+
+**Deliberately not built.** The wrist cuff sits exactly where the hand covers
+it; it is worth building only if the hand is later set off from the wrist. The
+lengthwise seam is a surface detail on a shell whose section is not final. Both
+are named here rather than quietly skipped.
+
 ### The arm, shortened and rounded into its joint (ninth review)
 
 Two changes, both to `Shell.Arm.<side>`:
