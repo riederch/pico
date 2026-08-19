@@ -73,6 +73,18 @@ Nothing here is a production Character asset:
   value validation would refuse. A test drives every field to both endpoints
   and one step past each.
 
+  `validate_pose_corridor.py` reads the corridor and the mount list out of
+  `@pico/gesture` and applies them to the checkpoint: every named mount exists,
+  is a joint and drives children; the rig carries no joint the projection
+  cannot reach; the whole corridor — one axis at a time and every axis at once
+  — stays inside a stated world envelope; and returning to rest restores the
+  rest bounds exactly. `render_pose_corners.py` draws thirteen corners of that
+  corridor from the package's own limits, because what a machine cannot decide
+  here is whether a pose *reads* right. Both are described in
+  [`gesture-pose-v1.md`](../../docs/development/briefs/gesture-pose-v1.md),
+  including the three geometric criteria that were tried for deriving the
+  corridor and why each measured the wrong thing.
+
   `validate_demo_viewer.mjs` checks the exported page from Node, where the
   Blender validators cannot see: it evaluates the inlined bundle, reads the
   model data beside it and holds the two against each other — same field
@@ -80,7 +92,24 @@ Nothing here is a production Character asset:
   to *distinct* families and surviving their own codes, and a placeholder that
   is not dead weight. Four mutations were run against it and each is caught: a
   renamed field, a removed placeholder, two recipes collapsed onto one family,
-  and a bound restated in the page.
+  and a bound restated in the page. It covers the rig the same way — the page
+  and the projection must name the same joints, every part must hang off a real
+  mount, and the reference poses must be poses the corridor allows. Four more
+  mutations are caught there: a sample outside the corridor, a part on an
+  invented mount, a missing joint, and a digit turned off its one axis.
+
+  Since the gesture pass it also **poses what it draws**. The page assembles a
+  Gesture Pose V1 from its own inputs, hands it to the shipped `@pico/gesture`
+  — bundled in beside the appearance — and turns only the mounts the projection
+  names. A refused pose moves nothing at all.
+
+  The exported geometry is baked in rest world space, so the page composes the
+  joint chain itself: undo a mount's rest place, apply the pose down the chain,
+  put it back. That arithmetic is checked on load against matrices Blender
+  computed for the same poses and shipped beside the geometry; it currently
+  agrees to 7.7e-7. A page composing the chain differently would pose a
+  character nobody authored — and the check earned its keep immediately, by
+  catching a first version that compared a model matrix against a world matrix.
 
   It also drives the **PAS surface attributes** live: all fourteen fields of
   the four surface zones — shell `hue/chroma/lightness/gloss`, face

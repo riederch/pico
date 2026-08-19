@@ -298,6 +298,13 @@
     background: var(--surface-sunk); color: inherit;
   }
   .code-box:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  #poseReset {
+    align-self: flex-start; margin-top: 6px; font: inherit; font-size: 0.74rem;
+    padding: 3px 8px; border: 1px solid var(--line); background: var(--surface-sunk);
+    color: inherit; cursor: pointer;
+  }
+  #poseReset:hover { border-color: var(--status); color: var(--status); }
+  #poseReset:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .coverage { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
   .coverage-row {
     display: grid; grid-template-columns: 6.5rem 1fr; gap: 8px;
@@ -402,6 +409,17 @@
       <details class="panel" open>
         <summary>Mimik</summary>
         <div class="panel-body" id="faces" role="radiogroup" aria-label="Mimik"></div>
+        <div class="panel-body" id="intensities" role="radiogroup" aria-label="Intensität"></div>
+      </details>
+
+      <details class="panel">
+        <summary>Geste (Pose V1)</summary>
+        <div class="panel-body">
+          <div id="poseReport" class="report"></div>
+          <button type="button" id="poseReset">Pose zurücksetzen</button>
+          <p class="swatch-note" id="rigNote"></p>
+        </div>
+        <div id="pose"></div>
       </details>
 
       <details class="panel" open>
@@ -453,6 +471,7 @@
     <div class="cell"><dt>Dreiecke</dt><dd id="mTris">–</dd></div>
     <div class="cell"><dt>Kopfidentität</dt><dd id="mHead">–</dd></div>
     <div class="cell"><dt>Semantische Familie</dt><dd id="mFamily">–</dd></div>
+    <div class="cell"><dt>Pose</dt><dd id="mPose">–</dd></div>
     <div class="cell"><dt>Mimik</dt><dd id="mFace">–</dd></div>
     <div class="cell"><dt>Höhe (Einheiten)</dt><dd id="mHeight">–</dd></div>
   </dl>
@@ -464,6 +483,9 @@
 <!-- The shipped @pico/appearance, bundled at export time. The page runs the
      real contract: no second implementation of it lives here. -->
 <script>__PICO_APPEARANCE_BUNDLE__</script>
+<!-- The shipped @pico/gesture, bundled the same way: the pose the page shows
+     is the pose the contract accepts, or it is not shown at all. -->
+<script>__PICO_GESTURE_BUNDLE__</script>
 <script>
 (function () {
   "use strict";
@@ -517,6 +539,7 @@
     return {
       name: record.name,
       component: record.component,
+      mount: record.mount || null,
       zone: record.surface.zone,
       material: record.surface.material,
       colour: record.surface.colour.slice(),
@@ -541,12 +564,16 @@
     "attribute vec4 aNormal;",
     "uniform mat4 uProjection;",
     "uniform mat4 uView;",
+    "uniform mat4 uModel;",
     "varying vec3 vNormal;",
     "varying vec3 vWorld;",
     "void main() {",
-    "  vNormal = normalize(aNormal.xyz);",
-    "  vWorld = aPosition;",
-    "  gl_Position = uProjection * uView * vec4(aPosition, 1.0);",
+    // The geometry is baked in rest world space; a pose turns it here, so the
+    // normal has to be turned with it or the lighting stays in the rest pose.
+    "  vec4 world = uModel * vec4(aPosition, 1.0);",
+    "  vNormal = normalize(mat3(uModel) * aNormal.xyz);",
+    "  vWorld = world.xyz;",
+    "  gl_Position = uProjection * uView * world;",
     "}"
   ].join("\n");
 
@@ -616,6 +643,7 @@
   gl.useProgram(program);
 
   var loc = {
+    model: gl.getUniformLocation(program, "uModel"),
     position: gl.getAttribLocation(program, "aPosition"),
     normal: gl.getAttribLocation(program, "aNormal"),
     projection: gl.getUniformLocation(program, "uProjection"),
@@ -801,6 +829,129 @@
         worst = Math.max(worst, Math.abs(here[i] - sample.rgb[i]));
       }
     });
+    return worst;
+  }
+
+  /* ---- the rig ---------------------------------------------------------
+     The exported geometry is baked in rest world space, so a pose is applied
+     by turning the mounts above each part: move the pivot to the origin, turn,
+     move it back, and carry the parent's matrix down the chain. The arithmetic
+     is checked against matrices Blender computed for the same poses, because a
+     page that composed the chain differently would pose a character nobody
+     authored. */
+
+  var MOUNTS = MODEL.mounts || {};
+  var GESTURE = window.PicoGesture;
+  var poseAngles = {};
+  Object.keys(MOUNTS).forEach(function (name) {
+    poseAngles[name] = { pitch: 0, yaw: 0, roll: 0 };
+  });
+
+  function identity() {
+    return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  }
+
+  function multiply(left, right) {
+    var out = new Array(16);
+    for (var column = 0; column < 4; column += 1) {
+      for (var row = 0; row < 4; row += 1) {
+        var total = 0;
+        for (var k = 0; k < 4; k += 1) {
+          total += left[k * 4 + row] * right[column * 4 + k];
+        }
+        out[column * 4 + row] = total;
+      }
+    }
+    return out;
+  }
+
+  function translation(offset, sign) {
+    var matrix = identity();
+    matrix[12] = sign * offset[0];
+    matrix[13] = sign * offset[1];
+    matrix[14] = sign * offset[2];
+    return matrix;
+  }
+
+  // Blender composes an XYZ euler as Rz · Ry · Rx.
+  function jointMatrix(pivot, angles) {
+    var x = angles.pitch * Math.PI / 180;
+    var y = angles.yaw * Math.PI / 180;
+    var z = angles.roll * Math.PI / 180;
+    var sx = Math.sin(x), cx = Math.cos(x);
+    var sy = Math.sin(y), cy = Math.cos(y);
+    var sz = Math.sin(z), cz = Math.cos(z);
+    var rotation = [
+      cy * cz, cy * sz, -sy, 0,
+      sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy, 0,
+      cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy, 0,
+      0, 0, 0, 1
+    ];
+    return rotation;
+  }
+
+  var posedCache = {};
+  var modelCache = {};
+
+  // Where a mount sits once the pose is applied. Its own rotation happens about
+  // its own origin, and the offset to the parent is the rest offset, because
+  // every mount is authored at rest.
+  function mountPosed(name) {
+    if (posedCache[name]) return posedCache[name];
+    var mount = MOUNTS[name];
+    var parentPivot = mount.parent ? MOUNTS[mount.parent].pivot : [0, 0, 0];
+    var offset = [
+      mount.pivot[0] - parentPivot[0],
+      mount.pivot[1] - parentPivot[1],
+      mount.pivot[2] - parentPivot[2]
+    ];
+    var here = multiply(
+      translation(offset, 1),
+      jointMatrix(mount.pivot, poseAngles[name] || { pitch: 0, yaw: 0, roll: 0 })
+    );
+    var matrix = mount.parent ? multiply(mountPosed(mount.parent), here) : here;
+    posedCache[name] = matrix;
+    return matrix;
+  }
+
+  // What to do to geometry that is baked in the rest pose: undo the mount's
+  // rest place, then put it where the pose puts it.
+  function mountMatrix(name) {
+    if (!name || !MOUNTS[name]) return identity();
+    if (modelCache[name]) return modelCache[name];
+    var matrix = multiply(mountPosed(name), translation(MOUNTS[name].pivot, -1));
+    modelCache[name] = matrix;
+    return matrix;
+  }
+
+  function clearPose() { posedCache = {}; modelCache = {}; }
+
+  function checkRigPort() {
+    var worst = 0;
+    (MODEL.poseSamples || []).forEach(function (sample) {
+      Object.keys(poseAngles).forEach(function (name) {
+        poseAngles[name] = { pitch: 0, yaw: 0, roll: 0 };
+      });
+      Object.keys(sample.rotations).forEach(function (name) {
+        poseAngles[name] = {
+          pitch: sample.rotations[name][0],
+          yaw: sample.rotations[name][1],
+          roll: sample.rotations[name][2]
+        };
+      });
+      clearPose();
+      Object.keys(sample.matrices).forEach(function (name) {
+        var here = mountPosed(name);
+        var there = sample.matrices[name];
+        for (var i = 0; i < 16; i += 1) {
+          worst = Math.max(worst, Math.abs(here[i] - there[i]));
+        }
+      });
+    });
+    Object.keys(poseAngles).forEach(function (name) {
+      poseAngles[name] = { pitch: 0, yaw: 0, roll: 0 };
+    });
+    clearPose();
     return worst;
   }
 
@@ -1042,6 +1193,7 @@
     gl.enableVertexAttribArray(loc.normal);
     gl.vertexAttribPointer(loc.normal, 4, gl.BYTE, true, 0, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, part.index);
+    gl.uniformMatrix4fv(loc.model, false, mountMatrix(part.mount));
     gl.uniform3fv(loc.colour, part.colour);
     gl.uniform1f(loc.emissive, part.emissive ? 1 : 0);
     gl.uniform1f(loc.alpha, part.alpha);
@@ -1116,6 +1268,7 @@
     row.addEventListener("click", function () {
       state = entry.state;
       applyState();
+      applyPose();
       sync();
     });
     stateRows[entry.state] = row;
@@ -1161,7 +1314,7 @@
     applySurfaceColours();
   }
 
-  function slider(host, key, label, range, read, write) {
+  function slider(host, key, label, range, read, write, after) {
     var row = document.createElement("div");
     row.className = "field";
     var name = document.createElement("label");
@@ -1185,8 +1338,12 @@
     input.addEventListener("input", function () {
       write(Number(input.value));
       value.textContent = input.value;
-      applyGenerator();
-      applySurfaceColours();
+      if (after) {
+        after();
+      } else {
+        applyGenerator();
+        applySurfaceColours();
+      }
       sync();
     });
     refresh();
@@ -1226,6 +1383,127 @@
       );
     });
     surfaceHost.appendChild(block);
+  });
+
+  /* ---- the gesture object ----------------------------------------------
+     Parallel to the appearance and deliberately not part of it: appearance is
+     identity and is kept, a pose is momentary and is not. The page assembles
+     one Pose V1, hands it to the shipped `@pico/gesture` and turns only the
+     mounts the projection names. A refused pose moves nothing. */
+
+  var POSE_LIMITS = GESTURE.gesturePoseV1Limits;
+  var gestureDraft = JSON.parse(JSON.stringify(GESTURE.gesturePoseV1Rest));
+  var intensity = gestureDraft.expression.intensity;
+  var poseReport = { ok: true };
+
+  function applyPose() {
+    gestureDraft.expression.state = state;
+    gestureDraft.expression.intensity = intensity;
+    try {
+      var projection = GESTURE.projectGesturePoseV1(gestureDraft);
+      Object.keys(poseAngles).forEach(function (name) {
+        poseAngles[name] = { pitch: 0, yaw: 0, roll: 0 };
+      });
+      projection.rotations.forEach(function (rotation) {
+        poseAngles[rotation.mount] = {
+          pitch: rotation.pitch, yaw: rotation.yaw, roll: rotation.roll
+        };
+      });
+      poseReport = { ok: true, moved: projection.rotations.filter(function (rotation) {
+        return rotation.pitch !== 0 || rotation.yaw !== 0 || rotation.roll !== 0;
+      }).length };
+    } catch (error) {
+      poseReport = { ok: false, errorCode: error && error.code, message: error && error.message };
+    }
+    clearPose();
+  }
+
+  var poseHost = document.getElementById("pose");
+
+  function poseGroup(label, open) {
+    var block = document.createElement("details");
+    block.className = "zone";
+    block.open = Boolean(open);
+    var head = document.createElement("summary");
+    var name = document.createElement("span");
+    name.className = "zone-name";
+    name.textContent = label;
+    head.appendChild(name);
+    block.appendChild(head);
+    poseHost.appendChild(block);
+    return block;
+  }
+
+  function rotationSliders(block, key, limits, read) {
+    ["pitch", "yaw", "roll"].forEach(function (axis) {
+      slider(
+        block, key + "_" + axis, axis, limits[axis],
+        function () { return read()[axis]; },
+        function (next) { read()[axis] = next; },
+        applyPose
+      );
+    });
+  }
+
+  rotationSliders(
+    poseGroup("Kopf: nicken, drehen, neigen", true), "pose_head",
+    POSE_LIMITS.head, function () { return gestureDraft.head; }
+  );
+  rotationSliders(
+    poseGroup("Körper: neigen, drehen"), "pose_body",
+    POSE_LIMITS.body, function () { return gestureDraft.body; }
+  );
+  [["left", "Arm links"], ["right", "Arm rechts"]].forEach(function (entry) {
+    var side = entry[0];
+    var block = poseGroup(entry[1]);
+    rotationSliders(block, "pose_" + side + "_shoulder", POSE_LIMITS.shoulder,
+      function () { return gestureDraft.arms[side].shoulder; });
+    rotationSliders(block, "pose_" + side + "_arm", POSE_LIMITS.arm,
+      function () { return gestureDraft.arms[side].arm; });
+    slider(
+      block, "pose_" + side + "_thumb", "Daumen", POSE_LIMITS.thumb,
+      function () { return gestureDraft.arms[side].thumb; },
+      function (next) { gestureDraft.arms[side].thumb = next; },
+      applyPose
+    );
+    [0, 1, 2].forEach(function (index) {
+      slider(
+        block, "pose_" + side + "_finger" + index, "Finger " + (index + 1), POSE_LIMITS.finger,
+        function () { return gestureDraft.arms[side].fingers[index]; },
+        function (next) { gestureDraft.arms[side].fingers[index] = next; },
+        applyPose
+      );
+    });
+  });
+
+  document.getElementById("poseReset").addEventListener("click", function () {
+    gestureDraft = JSON.parse(JSON.stringify(GESTURE.gesturePoseV1Rest));
+    intensity = gestureDraft.expression.intensity;
+    refreshInputs();
+    applyPose();
+    sync();
+  });
+
+  var intensityHost = document.getElementById("intensities");
+  var intensityRows = {};
+  ["low", "normal", "high"].forEach(function (name) {
+    var row = document.createElement("button");
+    row.type = "button";
+    row.className = "row radio";
+    row.style.setProperty("--swatch", "var(--ink-dim)");
+    row.setAttribute("role", "radio");
+    row.setAttribute("aria-checked", String(name === intensity));
+    row.innerHTML =
+      '<span class="mark" aria-hidden="true"></span>' +
+      '<span class="row-name">Intensität: ' + name +
+      '<span class="row-hint">wird getragen, nicht in Geometrie aufgeloest</span></span>';
+    row.addEventListener("click", function () {
+      intensity = name;
+      applyPose();
+      sync();
+    });
+    intensityRows[name] = row;
+    intensityHost.appendChild(row);
   });
 
   var recipeHost = document.getElementById("recipe");
@@ -1457,6 +1735,35 @@
     return problems;
   }
 
+  function renderPoseReport() {
+    var host = document.getElementById("poseReport");
+    host.innerHTML = "";
+    if (!poseReport.ok) {
+      reportLine(host, "Pose", (poseReport.errorCode || "abgelehnt") + ": " + poseReport.message, true);
+      reportLine(host, "Rig", "unveraendert — eine abgelehnte Pose bewegt nichts", true);
+      return;
+    }
+    reportLine(host, "Pose", "gueltig, geprueft von validateGesturePoseV1");
+    reportLine(host, "Rig", poseReport.moved + " von " + Object.keys(MOUNTS).length + " Gelenken gedreht");
+    reportLine(host, "Mimik", gestureDraft.expression.state + " · " + gestureDraft.expression.intensity);
+  }
+
+  var rigDrift = checkRigPort();
+  var rigNote = document.getElementById("rigNote");
+  if (rigDrift > 0.001) {
+    rigNote.className = "swatch-note bad";
+    rigNote.textContent =
+      "Die Gelenkkette dieser Seite weicht um " + rigDrift.toFixed(5)
+      + " von den Matrizen ab, die Blender fuer dieselben Posen gerechnet hat. "
+      + "Die Haltung unten ist nicht die, die im Checkpoint entstuende.";
+  } else {
+    rigNote.textContent =
+      "Grenzen in Grad aus gesturePoseV1Limits des Pakets, je Gelenk gegen sein "
+      + "Elterngelenk — im Weltmass addieren sie sich. Die Kettenrechnung dieser "
+      + "Seite ist gegen Blenders eigene Matrizen geprueft (Abweichung "
+      + rigDrift.toExponential(1) + ").";
+  }
+
   var fieldProblems = checkFieldNames();
   var recipeNote = document.getElementById("recipeNote");
   if (fieldProblems.length) {
@@ -1519,7 +1826,14 @@
         ? (report.component ? COMPONENT_LABEL[report.component] : "Platzhalter")
         : "ungueltig";
     document.getElementById("mFamily").textContent = report.ok ? report.family : "–";
+    document.getElementById("mPose").textContent = poseReport.ok
+      ? (poseReport.moved ? poseReport.moved + " Gelenke" : "Ruhe")
+      : "ungueltig";
+    Object.keys(intensityRows).forEach(function (name) {
+      intensityRows[name].setAttribute("aria-checked", String(name === intensity));
+    });
     renderReport();
+    renderPoseReport();
     renderCoverage();
     if (document.activeElement !== codeInput) {
       codeInput.value = report.ok ? report.code : "";
@@ -1554,6 +1868,7 @@
   }
 
   applyGenerator();
+  applyPose();
   applySurfaceColours();
   applyStatusColour();
   sync();

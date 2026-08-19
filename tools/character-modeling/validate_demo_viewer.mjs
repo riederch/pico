@@ -106,6 +106,70 @@ assert.ok(
   'every reachable family has authored geometry, so the placeholder is dead weight',
 );
 
+// 4  the rig the page poses is the rig the gesture contract names -----------
+const gestureMatch = html.match(/<script>((?:"use strict";\s*)?var PicoGesture[\s\S]*?)<\/script>/);
+assert.ok(gestureMatch, 'the page carries no gesture bundle');
+const gesture = new Function(`${gestureMatch[1]}; return PicoGesture;`)();
+
+const mountNames = Object.keys(model.mounts).sort();
+assert.deepEqual(
+  mountNames,
+  [...gesture.gesturePoseV1MountNames()].sort(),
+  'the page and the pose projection disagree about which joints exist',
+);
+for (const [name, mount] of Object.entries(model.mounts)) {
+  assert.ok(
+    mount.parent === null || model.mounts[mount.parent],
+    `${name} hangs off ${mount.parent}, which is not a mount`,
+  );
+  assert.equal(mount.pivot.length, 3, `${name} has no pivot`);
+}
+for (const part of model.parts) {
+  assert.ok(
+    part.mount === null || model.mounts[part.mount],
+    `${part.name} hangs off ${part.mount}, which is not a mount`,
+  );
+}
+
+// The reference poses have to be poses the corridor allows, or the page would
+// check its rig arithmetic against a pose nobody can reach.
+assert.ok(model.poseSamples.length > 0, 'the page has no reference poses');
+const limits = gesture.gesturePoseV1Limits;
+const limitFor = (mount) => {
+  if (mount === 'PICO_MOUNT_head') return limits.head;
+  if (mount === 'PICO_MOUNT_body') return limits.body;
+  if (mount.startsWith('PICO_MOUNT_shoulder')) return limits.shoulder;
+  if (mount.startsWith('PICO_MOUNT_arm')) return limits.arm;
+  return null;
+};
+for (const sample of model.poseSamples) {
+  assert.deepEqual(
+    Object.keys(sample.matrices).sort(),
+    mountNames,
+    `${sample.name} does not report every joint`,
+  );
+  for (const [mount, [pitch, yaw, roll]] of Object.entries(sample.rotations)) {
+    assert.ok(model.mounts[mount], `${sample.name} turns ${mount}, which is not a mount`);
+    const range = limitFor(mount);
+    if (range) {
+      for (const [axis, value] of [['pitch', pitch], ['yaw', yaw], ['roll', roll]]) {
+        assert.ok(
+          value >= range[axis].minimum && value <= range[axis].maximum,
+          `${sample.name} turns ${mount}.${axis} to ${value}, outside the corridor`,
+        );
+      }
+    } else {
+      const span = mount.includes('thumb') ? limits.thumb : limits.finger;
+      assert.equal(pitch, 0, `${sample.name} turns a digit off its one axis`);
+      assert.equal(yaw, 0, `${sample.name} turns a digit off its one axis`);
+      assert.ok(
+        roll >= span.minimum && roll <= span.maximum,
+        `${sample.name} curls ${mount} to ${roll}, outside the corridor`,
+      );
+    }
+  }
+}
+
 function sampleGeometries(group) {
   // The five fields the family derivation reads, each at its low, middle and
   // high value. Corners alone are not enough: with `side` only ever at its
@@ -135,5 +199,10 @@ function sampleGeometries(group) {
 console.log(
   `PICO_DEMO_VIEWER_CONTRACT=fields_match authored_families=${[...families.keys()].sort().join(',')} `
   + `unmodelled_families_sampled=${unmodelled.sort().join(',')}`,
+);
+console.log(
+  `PICO_DEMO_VIEWER_RIG=mounts=${mountNames.length} `
+  + `pose_samples=${model.poseSamples.length} parts_on_joints=`
+  + `${model.parts.filter((part) => part.mount).length}/${model.parts.length}`,
 );
 console.log('PICO_DEMO_VIEWER_CONTRACT_STATUS=valid');

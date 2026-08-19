@@ -298,6 +298,7 @@ Details are documented in:
 ├── modules               # shipped Pico modules (ADR 0127)
 ├── packages
 │   ├── appearance        # appearance profile and tier vocabulary
+│   ├── gesture           # pose and expression corridor, beside the appearance
 │   ├── identity          # minimal identity signature verification and lifecycle projection runtime
 │   ├── link-relay-client # talking to a relay, from a Pico that must not ship one
 │   ├── protocol          # shared event and payload types

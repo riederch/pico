@@ -196,6 +196,12 @@ importers:
 
   packages/appearance: {}
 
+  packages/gesture:
+    dependencies:
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/identity:
     dependencies:
       '@pico/protocol':

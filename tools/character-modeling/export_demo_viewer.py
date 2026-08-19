@@ -283,6 +283,7 @@ def stub_head_module():
     return {
         "name": "STUB.HeadModule",
         "component": "head_stub",
+        "mount": mount_of(bpy.data.objects["PICO_MOUNT_head_module"]),
         "surface": {
             "zone": "head_module", "material": "stub",
             "colour": [0.5, 0.5, 0.5], "emissive": False,
@@ -292,6 +293,108 @@ def stub_head_module():
         "normals": packed_normals,
         "indices": indices,
     }
+
+
+def joint_mounts():
+    """The rig, as the page needs it to pose what it draws.
+
+    The exported geometry is baked in rest world space, so the page turns a
+    part by turning the mounts above it. Each mount reports its parent and its
+    pivot, and every part reports the innermost mount it hangs off; the chain
+    up from there is the parent list.
+    """
+    mounts = {}
+    for obj in bpy.data.objects:
+        if not obj.get("pico_joint"):
+            continue
+        parent = obj.parent
+        while parent is not None and not parent.get("pico_joint"):
+            parent = parent.parent
+        mounts[obj.name] = {
+            "joint": obj["pico_joint"],
+            "parent": parent.name if parent is not None else None,
+            "pivot": [round(value, 6) for value in obj.matrix_world.translation],
+        }
+    return mounts
+
+
+def mount_of(obj):
+    node = obj
+    while node is not None:
+        if node.get("pico_joint"):
+            return node.name
+        node = node.parent
+    return None
+
+
+# Poses whose result is computed here, in Blender, so the page can check its
+# own rig arithmetic against the file it is showing. A page that composed the
+# joint chain differently would pose a character nobody authored.
+POSE_SAMPLES = (
+    ("head_only", {"PICO_MOUNT_head": (-25.0, 45.0, -18.0)}),
+    ("body_and_head", {
+        "PICO_MOUNT_body": (-15.0, -35.0, 10.0),
+        "PICO_MOUNT_head": (20.0, 45.0, -18.0),
+    }),
+    ("arm_chain", {
+        "PICO_MOUNT_body": (12.0, 20.0, -10.0),
+        "PICO_MOUNT_shoulder.L": (-70.0, 30.0, -70.0),
+        "PICO_MOUNT_arm.L": (45.0, -30.0, 60.0),
+        "PICO_MOUNT_finger.L.2": (0.0, 0.0, -60.0),
+    }),
+)
+
+
+def pose_reference_samples(mounts):
+    """World matrices for a few poses, as Blender composes them."""
+    objects = {name: bpy.data.objects[name] for name in mounts}
+    samples = []
+    for name, rotations in POSE_SAMPLES:
+        for mount in objects.values():
+            mount.rotation_euler = (0.0, 0.0, 0.0)
+        for mount_name, (pitch, yaw, roll) in rotations.items():
+            objects[mount_name].rotation_euler = (
+                math.radians(pitch), math.radians(yaw), math.radians(roll)
+            )
+        bpy.context.view_layer.update()
+        samples.append({
+            "name": name,
+            "rotations": {
+                mount_name: list(values) for mount_name, values in rotations.items()
+            },
+            "matrices": {
+                mount_name: [
+                    round(value, 6)
+                    for column in objects[mount_name].matrix_world.transposed()
+                    for value in column
+                ]
+                for mount_name in mounts
+            },
+        })
+    for mount in objects.values():
+        mount.rotation_euler = (0.0, 0.0, 0.0)
+    bpy.context.view_layer.update()
+    return samples
+
+
+def gesture_bundle():
+    """Bundle the real `@pico/gesture`, for the same reason as the appearance."""
+    root = os.path.dirname(os.path.dirname(HERE))
+    esbuild = os.path.join(root, "node_modules", ".bin", "esbuild")
+    entry = os.path.join(root, "packages", "gesture", "src", "index.ts")
+    if not os.path.isfile(esbuild):
+        raise SystemExit(f"{esbuild} is missing; install the workspace before exporting")
+    result = subprocess.run(
+        [
+            esbuild, entry, "--bundle", "--format=iife",
+            "--global-name=PicoGesture", "--target=es2020",
+            "--platform=browser", "--legal-comments=none",
+        ],
+        capture_output=True, text=True, cwd=root, check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(f"esbuild failed: {result.stderr.strip()}")
+    return result.stdout
 
 
 def appearance_bundle():
@@ -427,6 +530,7 @@ def collect(objects, budget_share):
         parts.append({
             "name": obj.name,
             "component": component,
+            "mount": mount_of(obj),
             "surface": surface,
             "positions": positions,
             "normals": packed_normals,
@@ -468,6 +572,7 @@ select_identity(2)
 parts += collect(tail, share)
 select_identity(0)
 
+JOINT_MOUNTS = joint_mounts()
 parts.append(stub_head_module())
 
 blob = bytearray()
@@ -491,6 +596,7 @@ for part in parts:
     records.append({
         "name": part["name"],
         "component": part["component"],
+        "mount": part.get("mount"),
         "surface": part["surface"],
         "vertexCount": len(part["positions"]) // 3,
         "indexCount": len(part["indices"]),
@@ -531,6 +637,8 @@ model = {
     "headComponents": list(HEAD_COMPONENTS),
     "authoredHeadRecipes": authored_head_recipes(),
     "stubComponent": "head_stub",
+    "mounts": JOINT_MOUNTS,
+    "poseSamples": pose_reference_samples(JOINT_MOUNTS),
     "bounds": {
         "min": [round(value, 4) for value in lo],
         "max": [round(value, 4) for value in hi],
@@ -545,6 +653,8 @@ with open(TEMPLATE, "r", encoding="utf-8") as handle:
 page = page.replace("__PICO_MODEL_DATA__", json.dumps(model, separators=(",", ":")))
 bundle = appearance_bundle()
 page = page.replace("__PICO_APPEARANCE_BUNDLE__", bundle)
+pose_bundle = gesture_bundle()
+page = page.replace("__PICO_GESTURE_BUNDLE__", pose_bundle)
 with open(OUTPUT_HTML, "w", encoding="utf-8") as handle:
     handle.write(page)
 
@@ -555,6 +665,7 @@ print(f"PICO_DEMO_VIEWER_TRIANGLES={triangles}")
 print(f"PICO_DEMO_VIEWER_BUFFER_BYTES={len(blob)}")
 print(f"PICO_DEMO_VIEWER_PAGE_BYTES={os.path.getsize(OUTPUT_HTML)}")
 print(f"PICO_DEMO_VIEWER_APPEARANCE_BUNDLE_BYTES={len(bundle)}")
+print(f"PICO_DEMO_VIEWER_GESTURE_BUNDLE_BYTES={len(pose_bundle)}")
 print("PICO_DEMO_VIEWER_STATUS=diagnostic_prototype_not_character_approved")
 sys.stdout.flush()
 sys.stderr.flush()
