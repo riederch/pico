@@ -46,6 +46,16 @@ mkdirSync(join(files, 'vault'), { recursive: true });
  */
 let speak = null;
 let pendingAnswer = null;
+/**
+ * Android recreates an Activity whenever it likes - a rotation, a moment of
+ * memory pressure, the app coming back to the foreground. The surface says
+ * `begin` each time it connects, so `begin` has to mean "I am here, tell me
+ * where we are" rather than "start over". It meant the second one once, which
+ * asked a person for a passphrase they had already chosen and orphaned the
+ * question the walk was actually waiting on.
+ */
+let walking = false;
+let lastQuestion = null;
 
 const send = (message) => {
   if (speak !== null) {
@@ -55,7 +65,8 @@ const send = (message) => {
 
 const ask = async (kind, step, extra = {}) => await new Promise((resolve) => {
   pendingAnswer = resolve;
-  send({ v: 'ask', kind, step, ...extra });
+  lastQuestion = { v: 'ask', kind, step, ...extra };
+  send(lastQuestion);
 });
 
 const surface = {
@@ -96,7 +107,16 @@ createServer((connection) => {
         answer(String(parsed.text ?? ''));
       }
       if (parsed.v === 'begin') {
-        void walkTheJoin();
+        if (walking) {
+          // A surface that came back. Show it the question that is open,
+          // rather than a ceremony that never stopped.
+          if (lastQuestion !== null) {
+            send(lastQuestion);
+          }
+        } else {
+          walking = true;
+          void walkTheJoin();
+        }
       }
     }
   });

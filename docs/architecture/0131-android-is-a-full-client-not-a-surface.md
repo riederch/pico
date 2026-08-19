@@ -694,7 +694,29 @@ local-first product's most security-critical moment.
   be carried back, so the second half of the walk is still unwitnessed;
   `finish-join.sh` resumes it without founding a second Home.
 
-  Two findings came out of the lab that no amount of reading would have
+  **The last step did not complete, and why is the finding: a grant cannot
+  be typed.** Both halves work - the phone makes its keys and shows a
+  213-character offer, the sponsor grants against exactly that offer and
+  produces a grant carrying the bridged address - but the grant is **1,127
+  characters**, because it holds the activation signature input, the Home's
+  host keys, its identity and the endpoint. Nobody types that. Driving it by
+  machine failed four times over, and each failure is a fact about the path
+  rather than about the automation: a system dialog took the foreground, the
+  field lost focus and the remainder went to the dialer, the screen locked
+  mid-code, and a caret placed by a tap interleaved the chunks into
+  something the right length and the wrong order - which the ceremony
+  refused as `invalid_pico_device_enrolment_grant_body`, correctly.
+
+  On top of that the grant carries a **four-minute activation window**, so
+  any hand-carried path slow enough to need care is too slow to finish.
+
+  So the camera is not an optional convenience on Android; for the grant it
+  is the path, and the typed field is a fallback for a *scanner* rather than
+  for fingers. That is a product conclusion, and it arrived from a lab
+  rather than from an opinion - which is what the lab was for. The offer,
+  at 213 characters, is the one code a person could carry by hand.
+
+  Two more findings came out of the lab that no amount of reading would have
   produced.
 
   **Android 16 says nodejs-mobile is not 16 KB-page compatible.** A system

@@ -232,13 +232,31 @@ const profile = readPicoCompanionProfile(profilePath);
 say(`   Home ${profile.home.homeHostPicoIdentityFingerprintHex.slice(0, 12)} founded`);
 say(`   profile now points at ${profile.coreUrl}, which is what the grant carries`);
 
+/**
+ * All three keys, not only the identity one. A Link client seals with the
+ * device key agreement key and signs with the device signing key; unlocking
+ * the identity alone gets as far as `link_device_signing_key_not_unlocked`,
+ * which is the daemon being right about what it was asked for.
+ */
 const session = await openPicoCompanionVaultProductSession({
   socketPath,
-  unlock: [{
-    keyRole: 'pico_identity',
-    keyFingerprintHex: profile.identity.keyFingerprintHex,
-    passphrase: PASSPHRASE,
-  }],
+  unlock: [
+    {
+      keyRole: 'pico_identity',
+      keyFingerprintHex: profile.identity.keyFingerprintHex,
+      passphrase: PASSPHRASE,
+    },
+    {
+      keyRole: 'device_signing',
+      keyFingerprintHex: profile.device.signingKeyFingerprintHex,
+      passphrase: PASSPHRASE,
+    },
+    {
+      keyRole: 'device_key_agreement',
+      keyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
+      passphrase: PASSPHRASE,
+    },
+  ],
   decisions: { decideApproval: async () => true },
 });
 
