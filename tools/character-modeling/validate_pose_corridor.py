@@ -44,10 +44,13 @@ ROOT_DIR = os.path.dirname(os.path.dirname(HERE))
 # a limit. It is stated here rather than derived, for the same reason the GLB
 # envelope is: a renderer reserves a frame in advance, and a pose that grows
 # past it crops silently.
+# Measured corridor plus about a tenth: the frame is reserved in advance, so it
+# is re-cut when a measurement leaves it or when the headroom grows past a
+# quarter, not on every edit.
 POSED_ENVELOPE = {
-    "x": (-0.95, 1.06),
+    "x": (-1.07, 1.11),
     "y": (-1.34, 0.64),
-    "z": (-0.78, 0.80),
+    "z": (-0.78, 0.82),
 }
 
 
@@ -100,7 +103,10 @@ assert sorted(joints) == sorted(MOUNT_NAMES), (
 for name in MOUNT_NAMES:
     mount = joints[name]
     assert mount.children, f"{name} drives nothing"
-assert not any("elbow" in name.lower() for name in bpy.data.objects.keys())
+# No elbow *joint*. The dark collar at the bend is a marker the owner asked
+# for; `validate_head_variants.py` holds it to owning nothing and standing
+# clear of the arm.
+assert not any(obj.get("pico_joint") == "elbow" for obj in bpy.data.objects)
 
 # ---------------------------------------------------------------------------
 # 2  every axis of the corridor, applied to the rig

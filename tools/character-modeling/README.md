@@ -291,6 +291,79 @@ then **turns them**: the shoulder must move the arm and the hand, the arm
 joint must move the hand and leave the arm where it is. A mount that does not
 drive its children is decoration.
 
+### The arm and hand description, and the arm table (twelfth review)
+
+The owner wrote out the arm and hand form, and with it settled two questions
+this work had been circling.
+
+**The elbow collar is back, as a marker.** An earlier pass left it out with
+"a band where no joint is promises a joint". The description says it belongs
+there as a technical marking of the bend zone, standing clear of the arm all
+round and never dividing it. So it exists now, and its geometry carries that
+reading: `bend_collar` takes the arm's own curve, its own frame and its own
+radius at the bend, and sits a ring at that radius plus a gap. Placed by hand
+it would be pierced first on the inside of the bend, where a curved shell leans
+towards it and nobody looks.
+
+The rule in `validate_head_variants.py` changed with it. It used to ban the
+string `Elbow` from every object name, which is a rule about spelling. It now
+says what it means: no object carries `pico_joint = "elbow"`, the collar owns
+nothing, the arm stays one object per side, and the collar keeps more than
+0.004 clearance from the arm all the way round. Measured: 0.0090 on both sides,
+zero triangle intersections.
+
+**The hand stays five objects**, on the owner's decision. "One closed mesh"
+cannot be posed per digit with this rig, and one joint per finger was itself an
+owner instruction. The description's intent is visual — nothing floating, no
+cylinders stuck onto a ball — and the digits already root deep in the palm.
+
+Everything else the description asks for was already there and is worth
+recording as checked rather than assumed: one continuous shell with no separate
+upper and lower arm, an even taper (0.084 → 0.063 → 0.042), a cupped palm
+rather than a knob, finger roots sunk into the palm so no end caps show through
+it, a longer middle finger with the outer two at 88 per cent, and the neutral
+pose with the back of the hand outward, the palm inward and the thumb forward.
+
+**The shoulder ball now sits deep in the torso**, with only its outer cap
+showing — 32 per cent of it outside, against 58 before — and it touches the
+arm's dome, so the two meet without a gap. It is pushed *in towards the body*,
+not back along the arm: along the arm it rides up out of the shoulder whenever
+the limb's angle changes, which is exactly what happened when it was first
+tried that way.
+
+The wrist ball the description mentions is deliberately left for later, on the
+owner's call.
+
+#### The arm placed from the registered reference
+
+The description says the arm hangs relaxed downward with the fingers close to
+vertical, and the reference's own arm table says how far. Two earlier passes
+had placed the arm from the concept board, calibrated on torso width, and moved
+it *away* from that table: the limb reached y −0.825 head widths where the
+reference reaches −0.949.
+
+The table gives the outer silhouette edge at six heights. Adding the arm's own
+radius at each height turns those into a centreline, and the joints sit on it:
+
+| y | reference outer | before | after |
+|---:|---:|---:|---:|
+| −0.438 | −0.430 | −0.479 | −0.474 |
+| −0.492 | −0.510 | −0.539 | −0.530 |
+| −0.546 | −0.560 | −0.589 | −0.578 |
+| −0.653 | −0.650 | −0.633 | **−0.650** |
+| −0.761 | −0.690 | −0.664 | −0.688 |
+| −0.868 | −0.710 | *no arm* | −0.722 |
+
+Lowest point −0.937 against the reference's −0.949. Whole-figure silhouette
+coverage went from 89.6 to 91.7 per cent; the core is unchanged at 94.6, which
+is right, because the core measurement excludes arms.
+
+The table's *inner* edges are not used. Between −0.487 and −0.702 the reference
+merges arm and torso — its own torso table says so — and the inner edge there
+is the body's silhouette, not the arm's. For the same reason the stated "arm
+thickness 0.07 tapering to 0.04" is not a diameter to build to: in those rows
+it is the width of the sliver visible beside the body.
+
 ### The measured reference, finally read by a check (eleventh review)
 
 `Character_Geometry_Measurements.md` states what is measurable on the

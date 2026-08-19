@@ -1272,6 +1272,76 @@ def arm_shell(
     return obj
 
 
+def bend_collar(
+    name, start, elbow, wrist, radius, gap, thickness, mat, zone,
+    around=48, tube=14,
+):
+    """A dark ring marking where the arm bends, standing clear of it.
+
+    It is a marker and not a joint: the arm passes through it as one
+    continuous shell, and the ring never divides it into two. The concept
+    board draws such a band, and an earlier pass left it out because a band
+    where no joint is promises one. It is back on the owner's decision, with
+    that reading written into its geometry -- it touches nothing.
+
+    Its radius is the arm's own radius at the bend plus a gap, taken from the
+    same curve and the same frame the arm is built on. That is what keeps the
+    inside of the bend clear: on a curved shell the surface leans towards the
+    ring exactly there, and a ring placed by hand would be pierced first at
+    the one place hardest to see.
+    """
+    start = Vector(start)
+    elbow = Vector(elbow)
+    wrist = Vector(wrist)
+    control = elbow * 2.0 - (start + wrist) * 0.5
+    amount = 0.5
+    inverse = 1.0 - amount
+    centre = (
+        inverse * inverse * start
+        + 2.0 * inverse * amount * control
+        + amount * amount * wrist
+    )
+    tangent = (
+        2.0 * inverse * (control - start) + 2.0 * amount * (wrist - control)
+    ).normalized()
+    side = tangent.cross(Vector((0.0, 0.0, 1.0)))
+    if side.length < 0.001:
+        side = tangent.cross(Vector((0.0, 1.0, 0.0)))
+    side.normalize()
+    up = tangent.cross(side).normalized()
+
+    major = radius + gap
+    vertices = []
+    faces = []
+    for step in range(around):
+        angle = 2.0 * math.pi * step / around
+        outward = side * math.cos(angle) + up * math.sin(angle)
+        ring_centre = centre + outward * major
+        for segment in range(tube):
+            turn = 2.0 * math.pi * segment / tube
+            vertices.append(tuple(
+                ring_centre
+                + outward * (thickness * math.cos(turn))
+                + tangent * (thickness * math.sin(turn))
+            ))
+    for step in range(around):
+        for segment in range(tube):
+            here = step * tube + segment
+            next_segment = step * tube + (segment + 1) % tube
+            next_step = ((step + 1) % around) * tube + segment
+            diagonal = ((step + 1) % around) * tube + (segment + 1) % tube
+            faces.append((here, next_step, diagonal, next_segment))
+    mesh = bpy.data.meshes.new(f"{name}.Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    MODEL.objects.link(obj)
+    obj.parent = ROOT
+    apply_material(obj, mat, zone)
+    smooth(obj)
+    return obj
+
+
 def digit_shell(
     name, base, control, tip, radius_base, radius_tip, mat, zone, around=26,
 ):
@@ -1416,22 +1486,30 @@ def make_arm(side):
     #
     # The shoulder sits on the torso surface at that height, not inside it.
     #
-    # Measured against the board a second time on 2026-08-19, calibrated on the
-    # torso width. The reach was about right and *distributed* wrong: the board
-    # puts 0.39-0.43 of the torso width into the arm and 0.31 into the hand,
-    # while this model had 0.55 and 0.23. So the arm comes in again -- both
-    # joints pulled along the same line from the shoulder, so the measured
-    # angles survive -- and the hand grows to meet it.
+    # Placed from the arm table in `Character_Geometry_Measurements.md`, which
+    # is the registered reference and outranks the concept board this arm had
+    # been measured against. Two earlier passes shortened it on the board's
+    # proportions and moved it away from that table: the limb reached y -0.825
+    # head widths where the reference reaches -0.949, a quarter short in drop.
+    #
+    # The table gives the outer silhouette edge at six heights. Adding the
+    # arm's own radius at each height turns those into a centreline, and the
+    # joints sit on it. The outer edge itself already matched within 0.05 and
+    # is not moved further out.
+    #
+    # The limb also hangs more steeply, which is what the owner's arm and hand
+    # description asks for: relaxed downward, with the fingers close to
+    # vertical.
     if side == "L":
         shoulder = Vector((-0.352, -0.450, 0.000))
-        elbow = Vector((-0.530, -0.573, 0.019))
-        wrist = Vector((-0.608, -0.660, 0.050))
-        palm = Vector((-0.608, -0.742, 0.070))
+        elbow = Vector((-0.552, -0.612, 0.024))
+        wrist = Vector((-0.664, -0.780, 0.062))
+        palm = Vector((-0.669, -0.870, 0.080))
     else:
         shoulder = Vector((0.352, -0.450, 0.000))
-        elbow = Vector((0.530, -0.573, 0.025))
-        wrist = Vector((0.608, -0.660, 0.050))
-        palm = Vector((0.608, -0.742, 0.070))
+        elbow = Vector((0.552, -0.612, 0.031))
+        wrist = Vector((0.664, -0.780, 0.062))
+        palm = Vector((0.669, -0.870, 0.080))
     # One continuous arm, as on the concept board: no shoulder, elbow or
     # wrist spheres threaded onto shell segments. The shoulder end is pushed
     # slightly into the torso so it closes against the body instead of
@@ -1474,12 +1552,25 @@ def make_arm(side):
         SHELL, "shell",
     )
     parent_preserve_world(arm, shoulder_mount)
+    collar = bend_collar(
+        f"Trim.ElbowCollar.{side}", torso_seat, elbow, wrist,
+        0.063, 0.020, 0.011, TRIM, "trim",
+    )
+    parent_preserve_world(collar, shoulder_mount)
     # Dropped a little below the shoulder point. The offset is along the body's
     # own down axis, not along the arm: sliding it down the limb would move the
     # ball outward as well, and it belongs on the torso's shoulder.
+    #
+    # It also sits deep in the torso, so only its outer cap shows -- a joint
+    # the arm turns in, not a sphere the arm rests against. The arm's own dome
+    # starts inside it, so the two meet without a gap.
+    #
+    # Pushed in towards the body, not back along the arm. Along the arm it
+    # would ride up out of the shoulder as the limb's angle changes, which is
+    # exactly what happened when it was first tried that way.
     ball = uv_sphere(
         f"Trim.Shoulder.{side}",
-        shoulder - upper_direction * 0.034 + Vector((0.0, -0.026, 0.0)),
+        shoulder + Vector((-sign * 0.055, -0.026, 0.0)),
         (0.094, 0.098, 0.094),
         TRIM, "trim", segments=64, rings=40,
     )

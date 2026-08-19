@@ -3,6 +3,7 @@ import re
 import sys
 
 import bpy
+from mathutils.bvhtree import BVHTree
 from mathutils import Vector
 
 
@@ -383,7 +384,35 @@ for side in ("L", "R"):
         f"PICO_MOUNT_thumb.{side}",
     ] + [f"PICO_MOUNT_finger.{side}.{index}" for index in (1, 2, 3)]
 assert sorted(joints) == sorted(expected_joints), sorted(joints)
-assert not any("Elbow" in name for name in bpy.data.objects.keys()), "an elbow survives"
+
+# There is no elbow *joint*, and the rule now says that rather than banning a
+# name. The concept board draws a dark collar at the bend and the owner asked
+# for it back on 2026-08-19; it is a marker of where the shell bends, not a
+# hinge. So it may exist, and it has to prove it is not a joint: it carries no
+# `pico_joint`, owns nothing, and the arm above and below it stays one object.
+assert not any(
+    obj.get("pico_joint") == "elbow" for obj in bpy.data.objects
+), "an elbow joint survives"
+for side in ("L", "R"):
+    collar = bpy.data.objects[f"Trim.ElbowCollar.{side}"]
+    assert collar.get("pico_joint") is None, side
+    assert not collar.children, f"the collar at {side} carries something"
+    assert len([
+        obj for obj in bpy.data.objects if obj.name.startswith(f"Shell.Arm.{side}")
+    ]) == 1, f"the arm at {side} is split in two"
+    # And it stands clear of the arm all the way round, including on the inside
+    # of the bend, where a ring placed by hand would be pierced first.
+    arm = bpy.data.objects[f"Shell.Arm.{side}"]
+    arm_tree = BVHTree.FromPolygons(
+        [arm.matrix_world @ vertex.co for vertex in arm.data.vertices],
+        [tuple(polygon.vertices) for polygon in arm.data.polygons],
+    )
+    clearance = min(
+        arm_tree.find_nearest(collar.matrix_world @ vertex.co)[3]
+        for vertex in collar.data.vertices
+    )
+    assert clearance > 0.004, (side, clearance)
+    print(f"PICO_ELBOW_COLLAR side={side} clearance={clearance:.4f}")
 
 for side in ("L", "R"):
     shoulder_mount = joints[f"PICO_MOUNT_shoulder.{side}"]
