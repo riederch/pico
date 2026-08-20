@@ -1,3 +1,5 @@
+import { isPicoInstant } from './instant.js';
+
 /**
  * ADR 0129 SR2. The second kind of store the core may own.
  *
@@ -55,11 +57,6 @@ export interface PicoObservation {
   payload: string;
 }
 
-function isCanonicalInstant(value: unknown): value is string {
-  return typeof value === 'string'
-    && !Number.isNaN(Date.parse(value))
-    && new Date(value).toISOString() === value;
-}
 
 /**
  * A single sample's ceiling, so one broken producer cannot write a document.
@@ -91,7 +88,7 @@ export function parsePicoObservation(value: unknown): PicoObservation {
     // sample nobody can destroy.
     throw new Error('invalid_pico_observation_domain');
   }
-  if (!isCanonicalInstant(record.observedAt)) {
+  if (!isPicoInstant(record.observedAt)) {
     throw new Error('invalid_pico_observation_observed_at');
   }
   if (typeof record.payload !== 'string'

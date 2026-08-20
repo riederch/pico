@@ -4,9 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { rendererReachableFiles } from './companion-window.mjs';
 
 /**
- * One rule for how Pico says *when* to a person, across the product.
+ * One answer about instants, across the product: which ones exist, and how one
+ * is said to a person.
  *
- * Three defects, one subject, and they were found in that order:
+ * The two halves are one subject because they fail the same way. An instant
+ * Pico accepts and an instant Pico shows are both statements this product
+ * makes about time, and both were made in several places at once - which is
+ * how each of them came to be made differently in one of those places.
+ *
+ * Four defects, one subject, and they were found in this order:
  *
  * **The cut**, because it looks right. `'2027-01-01T23:30:00.000Z'.slice(0, 10)`
  * is the *UTC* calendar date wearing no label, which is the wrong day for
@@ -34,6 +40,18 @@ import { rendererReachableFiles } from './companion-window.mjs';
  * 0106) right beside what the companion shows them. The rule moved to
  * `@pico/protocol/when-display` for that reason - the same move, the same day,
  * as `fingerprint-display.ts` - and its check moved with it.
+ *
+ * **And then the other half, which decides rather than shows.** "Is this a
+ * canonical instant" existed **nine** times: in `@pico/vault`, in four
+ * Foundation modules and in four of the protocol's own parsers, beside the
+ * correct one in the same package. Every copy checked only that the value
+ * round-tripped through `toISOString`, and the extended-year form does -
+ * `+275760-09-13T00:00:00.000Z` is a real Date that re-serializes to itself.
+ * `+` is 0x2B, below every digit, so the farthest future a Date can hold sorts
+ * *before* every ordinary year, and every consumer of one of these compares it
+ * as a string. A sealed batch opened after expiry; a freshness checkpoint
+ * carried a window longer than the policy allows. The rule is
+ * `@pico/protocol/instant` now, and this check refuses the tenth copy.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
@@ -57,8 +75,21 @@ const renderers = new Map([
 ]);
 const rendered = new RegExp(`\\b(?:${[...renderers.keys()].join('|')})\\s*\\(`);
 
-/** The module that owns the rule. */
-const owner = 'packages/protocol/src/when-display.ts';
+/** The two modules that own the two halves. */
+const owners = new Set([
+  'packages/protocol/src/when-display.ts',
+  'packages/protocol/src/instant.ts',
+]);
+
+/**
+ * A canonical-instant rule written by hand.
+ *
+ * Keyed on the re-serialization because that is the part every copy shared and
+ * the part that looks sufficient: it is an exact calendar check, and it reads
+ * like the whole rule. The fixed-width pattern beside it is what the string
+ * comparisons actually need, and it is the half that kept being dropped.
+ */
+const handWrittenInstantRule = /toISOString\(\)\s*===\s*\w+/g;
 
 /**
  * An instant-shaped field, named the way this tree names them.
@@ -105,11 +136,19 @@ for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'
   // Tests are left alone for the reason they are next door: pinning the rule
   // means naming the form it must *not* produce, and `not.toContain(raw)` is
   // the assertion doing the guarding.
-  if (path.endsWith('.test.ts') || path === owner) {
+  if (path.endsWith('.test.ts') || owners.has(path)) {
     continue;
   }
   scanned += 1;
   const content = readFileSync(file, 'utf8');
+
+  for (const _ of content.matchAll(handWrittenInstantRule)) {
+    errors.push(`${path}: decides what a canonical instant is with a rule of its own. `
+      + '`isPicoInstant` in `@pico/protocol/instant` is the product\'s answer, and it pins the '
+      + 'fixed width as well as the calendar - which is what the string comparisons these values '
+      + 'go into actually need. A round-trip check alone admits the extended-year form, and that '
+      + 'form sorts before every ordinary year.');
+  }
 
   for (const [, expression] of content.matchAll(instantInterpolation)) {
     if (rendered.test(expression)) {
@@ -155,7 +194,7 @@ for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'
 }
 
 if (errors.length > 0) {
-  console.error('Instant display check failed:');
+  console.error('Instant rules check failed:');
   for (const error of errors) {
     console.error(`- ${error}`);
   }
@@ -163,10 +202,10 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Instant display check passed (${scanned} source files across apps and packages,`
+  `Instant rules check passed (${scanned} source files across apps and packages,`
   + ` ${renderers.size} renderings named with reasons, no instant reaching a person raw,`
-  + ' cut to a UTC day, or counted in blocks, and no duration spoken as a literal'
-  + ' - the window included).',
+  + ' cut to a UTC day, counted in blocks, spoken as a literal duration,'
+  + ' or judged canonical by a rule of its own - the window included).',
 );
 
 function* sourceFiles(...roots) {

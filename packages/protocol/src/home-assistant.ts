@@ -1,3 +1,5 @@
+import { isPicoInstant } from './instant.js';
+
 /**
  * ADR 0128 H4. What Home Assistant tells Pico, and what Pico is allowed to
  * believe about it.
@@ -52,11 +54,6 @@ export interface PicoHomeAssistantEntityState {
   changedAt: string;
 }
 
-function isCanonicalInstant(value: unknown): value is string {
-  return typeof value === 'string'
-    && !Number.isNaN(Date.parse(value))
-    && new Date(value).toISOString() === value;
-}
 
 function isBoundedString(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.trim() !== '' && value.length <= max;
@@ -94,7 +91,7 @@ export function parsePicoHomeAssistantEntityState(
     && !isBoundedString(record.friendlyName, maxPicoHomeAssistantFriendlyNameChars)) {
     throw new Error('invalid_pico_home_assistant_friendly_name');
   }
-  if (!isCanonicalInstant(record.changedAt)) {
+  if (!isPicoInstant(record.changedAt)) {
     throw new Error('invalid_pico_home_assistant_changed_at');
   }
   return Object.freeze({

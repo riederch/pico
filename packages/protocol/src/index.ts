@@ -1,3 +1,5 @@
+export { isPicoInstant, picoCanonicalInstantPattern } from './instant.js';
+import { isPicoInstant } from './instant.js';
 import type { PicoActionRisk, PicoModuleActivationView } from './module.js';
 import type { PicoApprovalOutcome } from './approval.js';
 import type { PicoRulesDecisionValue } from './pico-rules.js';
@@ -5072,7 +5074,6 @@ function isNonEmptyString(value: unknown, maxLength: number | undefined): value 
 const canonicalTextEncoder = new TextEncoder();
 const canonicalAsciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
 const canonicalHexPattern = /^[0-9a-f]+$/;
-const canonicalInstantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 function concatCanonicalElements(elements: readonly Uint8Array[]): Uint8Array {
   const parts = elements.map((element) => {
@@ -5151,33 +5152,6 @@ function assertInstant(value: string): void {
   if (!isPicoInstant(value)) {
     throw new Error('invalid_instant');
   }
-}
-
-/**
- * The same question, asked by a surface rather than by the canonicalizer.
- *
- * Exported because a surface that renders an instant has to know it has one
- * first: `picoDisplayInstant` refuses a string it cannot parse rather than
- * printing "Invalid Date" into a sentence somebody is being asked to act on,
- * and a field that reaches it unchecked turns that refusal into a crash one
- * layer too late. Whoever accepts the value should be the one to refuse it,
- * with the exact word - and that has to be this rule, not a second one, or
- * the two will disagree about which instants exist.
- */
-export function isPicoInstant(value: unknown): value is string {
-  return typeof value === 'string'
-    && canonicalInstantPattern.test(value)
-    && isRoundTripInstant(value);
-}
-
-/**
- * The shape check alone still admits impossible dates: `Date.parse` rolls
- * `2026-02-30` forward to March 2 rather than failing. Re-serializing is the
- * exact calendar check, because `toISOString` emits precisely this form.
- */
-function isRoundTripInstant(value: string): boolean {
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
 }
 
 function assertExactKeys(record: Record<string, unknown>, expectedKeys: readonly string[]): void {

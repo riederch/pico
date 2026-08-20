@@ -328,7 +328,7 @@ for (const { file, why } of trayForbidden) {
  * two surfaces that share a reader is a check with a blind spot where the
  * reader is.
  *
- * They are `check-fingerprint-display.mjs` and `check-instant-display.mjs`
+ * They are `check-fingerprint-display.mjs` and `check-instant-rules.mjs`
  * now, over every app and package, and the rules they guard are
  * `@pico/protocol/fingerprint-display` and `@pico/protocol/when-display`. The
  * list of renderer-reachable files all three needed is stated once, in

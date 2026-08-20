@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import {
+  isPicoInstant,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
   buildPicoReaderCustodyKekRotationSignatureInput,
@@ -1192,7 +1193,7 @@ export class ReaderCustodyStore {
         return 'wrong_home';
       }
       buildPicoReaderCustodyDomainSignatureInput(domain);
-      if (!isCanonicalInstant(record.receivedAt)
+      if (!isPicoInstant(record.receivedAt)
         || record.ownerIdentityKeyRecord.suite !== picoIdentitySuite
         || record.ownerIdentityKeyRecord.keyRole !== 'pico_identity'
         || record.ownerReaderKeyRecord.suite !== picoIdentitySuite
@@ -1247,7 +1248,7 @@ export class ReaderCustodyStore {
           ownerEnvelope.issuerIdentityKeyRecord,
           record.ownerIdentityKeyRecord,
         )
-        || !isCanonicalInstant(ownerEnvelope.createdAt)
+        || !isPicoInstant(ownerEnvelope.createdAt)
         || !isCanonicalHex(ownerEnvelope.sealedWrapHex)) {
         return false;
       }
@@ -1306,7 +1307,7 @@ export class ReaderCustodyStore {
         })
         || !Array.isArray(record.envelopes)
         || record.envelopes.length === 0
-        || !isCanonicalInstant(record.receivedAt)) {
+        || !isPicoInstant(record.receivedAt)) {
         return false;
       }
       buildPicoReaderCustodyReaderGrantSignatureInput(grant);
@@ -1383,7 +1384,7 @@ export class ReaderCustodyStore {
           record.ownerIdentityKeyRecord,
           domainRecord.ownerIdentityKeyRecord,
         )
-        && isCanonicalInstant(record.receivedAt)
+        && isPicoInstant(record.receivedAt)
         && verifyPicoIdentityDetachedSignature(this.sodium, {
           publicKeyHex: record.ownerIdentityKeyRecord.publicKeyHex,
           signatureInput:
@@ -1428,7 +1429,7 @@ export class ReaderCustodyStore {
         )
         || !Array.isArray(record.envelopes)
         || rotation.rotatedAt > at
-        || !isCanonicalInstant(record.receivedAt)) {
+        || !isPicoInstant(record.receivedAt)) {
         return false;
       }
       buildPicoReaderCustodyKekRotationSignatureInput(rotation);
@@ -1546,7 +1547,7 @@ export class ReaderCustodyStore {
           record.issuerIdentityKeyRecord,
           expected.ownerIdentityKeyRecord,
         )
-        || !isCanonicalInstant(record.createdAt)
+        || !isPicoInstant(record.createdAt)
         || !isCanonicalHex(record.sealedWrapHex)) {
         return false;
       }
@@ -1604,7 +1605,7 @@ export class ReaderCustodyStore {
           expectedFingerprintHex:
             grant.writerDeviceSigningKeyFingerprintHex,
         })
-        && isCanonicalInstant(record.receivedAt)
+        && isPicoInstant(record.receivedAt)
         && verifyPicoIdentityDetachedSignature(this.sodium, {
           publicKeyHex: record.ownerIdentityKeyRecord.publicKeyHex,
           signatureInput:
@@ -1652,7 +1653,7 @@ export class ReaderCustodyStore {
           record.ownerIdentityKeyRecord,
           domainRecord.ownerIdentityKeyRecord,
         )
-        && isCanonicalInstant(record.receivedAt)
+        && isPicoInstant(record.receivedAt)
         && verifyPicoIdentityDetachedSignature(this.sodium, {
           publicKeyHex: record.ownerIdentityKeyRecord.publicKeyHex,
           signatureInput:
@@ -1701,7 +1702,7 @@ export class ReaderCustodyStore {
           record.writerDeviceSigningKeyRecord,
           grantRecord.writerDeviceSigningKeyRecord,
         )
-        || !isCanonicalInstant(record.receivedAt)
+        || !isPicoInstant(record.receivedAt)
         || !isCanonicalHex(record.contentCiphertextHex)
         || !isCanonicalHex(record.wrappedDekHex)) {
         return false;
@@ -2229,10 +2230,3 @@ function isCanonicalHex(value: string): boolean {
     && /^[0-9a-f]+$/.test(value);
 }
 
-function isCanonicalInstant(value: string): boolean {
-  if (typeof value !== 'string') {
-    return false;
-  }
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
-}

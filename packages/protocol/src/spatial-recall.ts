@@ -3,6 +3,7 @@ import {
   picoConfidenceRank,
   type PicoConfidenceLevel,
 } from './confidence.js';
+import { isPicoInstant } from './instant.js';
 import { assertPicoPlace, type PicoPlace } from './place.js';
 
 /**
@@ -106,11 +107,6 @@ export interface PicoParkingCandidate {
   sourceTransitionAt: string;
 }
 
-function isCanonicalInstant(value: unknown): value is string {
-  return typeof value === 'string'
-    && !Number.isNaN(Date.parse(value))
-    && new Date(value).toISOString() === value;
-}
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -134,7 +130,7 @@ export function parsePicoLocationFix(value: unknown): PicoLocationFix {
   if (!hasExactKeys(record, ['at', 'latitudeDeg', 'longitudeDeg', 'accuracyM'])) {
     throw new Error('invalid_pico_location_fix');
   }
-  if (!isCanonicalInstant(record.at)) {
+  if (!isPicoInstant(record.at)) {
     throw new Error('invalid_pico_location_fix_at');
   }
   // The position half is the core capability, validated by its own code so
@@ -148,7 +144,7 @@ export function parsePicoMobilitySample(value: unknown): PicoMobilitySample {
   if (!hasExactKeys(record, ['at', 'mobility', 'confidence'])) {
     throw new Error('invalid_pico_mobility_sample');
   }
-  if (!isCanonicalInstant(record.at)) {
+  if (!isPicoInstant(record.at)) {
     throw new Error('invalid_pico_mobility_sample_at');
   }
   if (typeof record.mobility !== 'string'
@@ -187,7 +183,7 @@ export function parsePicoParkingCandidate(value: unknown): PicoParkingCandidate 
     longitudeDeg: record.longitudeDeg,
     accuracyM: record.accuracyM,
   });
-  if (!isCanonicalInstant(record.sourceTransitionAt)) {
+  if (!isPicoInstant(record.sourceTransitionAt)) {
     throw new Error('invalid_pico_parking_candidate_source');
   }
   if (typeof record.confidence !== 'string'

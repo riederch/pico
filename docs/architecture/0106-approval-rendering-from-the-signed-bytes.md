@@ -104,7 +104,7 @@ list.
   is meant to be rendered from what the record says; a number inside it that
   no record supplies is the one part of the sentence nobody would think to
   check, and it goes on reading correctly after the rule beneath it has
-  changed. It is derived now, and `check-instant-display.mjs` fails on the
+  changed. It is derived now, and `check-instant-rules.mjs` fails on the
   next literal.
 
 - **R3 - Callers migrated: Done.** All CLI ceremonies send fields. The ADR

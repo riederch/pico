@@ -1,4 +1,5 @@
 import type { IdentityVerificationSodium } from '@pico/identity';
+import { isPicoInstant } from '@pico/protocol';
 import type {
   EventStore,
   PicoIdentityReaderKeyCandidate,
@@ -172,9 +173,9 @@ function validateCurrentCheckpoint(
     || freshness.delegationId !== candidate.delegationId
     || !isAsciiReference(freshness.sourceRef)
     || !isLifecycleOrder(freshness.observedThroughLifecycleOrder)
-    || !isCanonicalInstant(at)
-    || !isCanonicalInstant(freshness.checkedAt)
-    || !isCanonicalInstant(freshness.freshUntil)) {
+    || !isPicoInstant(at)
+    || !isPicoInstant(freshness.checkedAt)
+    || !isPicoInstant(freshness.freshUntil)) {
     return 'invalid_freshness_checkpoint';
   }
 
@@ -198,10 +199,6 @@ function isLifecycleOrder(value: string): boolean {
   return /^seq:[0-9]{16}$/.test(value);
 }
 
-function isCanonicalInstant(value: string): boolean {
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value;
-}
 
 function isAsciiReference(value: string): boolean {
   return /^[A-Za-z0-9._:/-]{1,256}$/.test(value);

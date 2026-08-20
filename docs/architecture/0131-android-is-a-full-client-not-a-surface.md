@@ -1060,7 +1060,7 @@ local-first product's most security-critical moment.
   which is where an ICU-free rendering rule ought to be enforced rather than
   promised.
 
-  `check-instant-display.mjs` reads every app and package for all three shapes
+  `check-instant-rules.mjs` reads every app and package for all three shapes
   of this defect - the raw instant, the ten-character UTC cut, the day counted
   in blocks - and found one on its first run that no companion-scoped check
   could have: the Recovery Card PDF stamped the UTC day, so a card printed at

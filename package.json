@@ -20,7 +20,7 @@
     "dev:core": "pnpm --filter @pico/core dev",
     "docs:check": "node scripts/check-docs-structure.mjs",
     "fingerprint:check": "node scripts/check-fingerprint-display.mjs",
-    "instant:check": "node scripts/check-instant-display.mjs",
+    "instant:check": "node scripts/check-instant-rules.mjs",
     "license:check": "node scripts/check-license.mjs",
     "link:check": "node scripts/check-link-seal.mjs",
     "module:check": "node scripts/check-modules.mjs",

@@ -3,6 +3,7 @@ import {
   type IdentityVerificationSodium,
 } from '@pico/identity';
 import {
+  isPicoInstant,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
@@ -255,7 +256,7 @@ function isCanonicalQuery(query: PicoIdentityReaderKeyFreshnessQuery): boolean {
     && isHexFingerprint(query.deviceKeyAgreementKeyFingerprintHex)
     && isAsciiReference(query.delegationId)
     && isLifecycleOrder(query.locallyObservedThroughLifecycleOrder)
-    && isCanonicalInstant(query.evaluatedAt);
+    && isPicoInstant(query.evaluatedAt);
 }
 
 function identityFloorKey(query: PicoIdentityReaderKeyFreshnessQuery): string {
@@ -302,10 +303,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isCanonicalInstant(value: string): boolean {
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value;
-}
 
 function isLifecycleOrder(value: string): boolean {
   return /^seq:[0-9]{16}$/.test(value);

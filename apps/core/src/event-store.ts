@@ -67,6 +67,7 @@ import type {
   PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import {
+  isPicoInstant,
   evaluatePicoStorageCondition,
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
@@ -5734,7 +5735,7 @@ export class EventStore {
         || serializePayload(record.issuerIdentityKeyRecord)
           !== serializePayload(grant.issuerIdentityKeyRecord)
         || !isCanonicalHex(record.sealedWrapHex)
-        || !isCanonicalInstant(record.createdAt)) {
+        || !isPicoInstant(record.createdAt)) {
         return false;
       }
 
@@ -8492,10 +8493,6 @@ function isCanonicalHex(value: string): boolean {
     && /^[0-9a-f]+$/.test(value);
 }
 
-function isCanonicalInstant(value: string): boolean {
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value;
-}
 
 function assertFingerprint(value: string, label: string): void {
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {

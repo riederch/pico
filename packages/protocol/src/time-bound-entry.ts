@@ -1,3 +1,5 @@
+import { isPicoInstant } from './instant.js';
+
 /**
  * ADR 0118 O1, the fifth floor family: an appointment or reminder recorded with
  * a due instant, and the local scheduling that raises it.
@@ -52,11 +54,6 @@ export interface PicoTimeBoundEntry {
   announcedAt?: string;
 }
 
-function isCanonicalInstant(value: unknown): value is string {
-  return typeof value === 'string'
-    && !Number.isNaN(Date.parse(value))
-    && new Date(value).toISOString() === value;
-}
 
 export function parsePicoTimeBoundEntry(value: unknown): PicoTimeBoundEntry {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -83,13 +80,13 @@ export function parsePicoTimeBoundEntry(value: unknown): PicoTimeBoundEntry {
     || record.title.length > maxPicoTimeBoundEntryTitleChars) {
     throw new Error('invalid_pico_time_bound_entry_title');
   }
-  if (!isCanonicalInstant(record.dueAt)) {
+  if (!isPicoInstant(record.dueAt)) {
     // Canonical, not merely parseable: two spellings of the same instant would
     // compare unequal and sort apart, and this value decides when something
     // reaches the person.
     throw new Error('invalid_pico_time_bound_entry_due');
   }
-  if (record.raisedAt !== undefined && !isCanonicalInstant(record.raisedAt)) {
+  if (record.raisedAt !== undefined && !isPicoInstant(record.raisedAt)) {
     throw new Error('invalid_pico_time_bound_entry_raised');
   }
   return Object.freeze({
@@ -196,7 +193,7 @@ export function parsePicoHomeDueEntriesView(value: unknown): PicoHomeDueEntriesV
       || !(picoTimeBoundEntryKinds as readonly string[]).includes(row.kind)) {
       throw new Error('invalid_pico_home_due_entries');
     }
-    if (!isCanonicalInstant(row.dueAt)) {
+    if (!isPicoInstant(row.dueAt)) {
       throw new Error('invalid_pico_home_due_entries');
     }
     return Object.freeze({
@@ -225,7 +222,7 @@ export function duePicoTimeBoundEntries(input: {
   entries: readonly PicoTimeBoundEntry[];
   nowIso: string;
 }): readonly PicoTimeBoundEntry[] {
-  if (!isCanonicalInstant(input.nowIso)) {
+  if (!isPicoInstant(input.nowIso)) {
     throw new Error('invalid_pico_time_bound_entry_now');
   }
   const nowMs = Date.parse(input.nowIso);

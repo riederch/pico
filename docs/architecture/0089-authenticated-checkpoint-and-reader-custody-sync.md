@@ -148,6 +148,16 @@ The positive manifest vector is 502 bytes:
   `@pico/sync` so that removing the fix opens it again rather than merely
   changing an error string.
 
+  Counting the copies afterwards found **nine**, not two: four more in the
+  Foundation and four in the protocol's own parsers, standing beside the
+  correct rule in the same package. `@pico/core`'s freshness check is the
+  second reachable one - it compares `checkedAt`, `freshUntil` and the
+  evaluation instant as strings, so a `checkedAt` in the extended-year form
+  computes a negative window, the ADR 0085 max-freshness bound never fires,
+  and a checkpoint the policy forbids is accepted. All nine are one rule now,
+  in `@pico/protocol/instant`, and `check-instant-rules.mjs` refuses the
+  tenth.
+
 - **S9.6 — bounded scope: Done.** No new Foundation endpoint, database table or
   migration; no draft Pico Link packet promoted into runtime.
 

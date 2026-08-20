@@ -91,6 +91,10 @@
       "types": "./dist/when-display.d.ts",
       "import": "./dist/when-display.js"
     },
+    "./instant": {
+      "types": "./dist/instant.d.ts",
+      "import": "./dist/instant.js"
+    },
     "./home-address": {
       "types": "./dist/home-address.d.ts",
       "import": "./dist/home-address.js"

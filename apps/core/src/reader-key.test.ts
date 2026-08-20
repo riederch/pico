@@ -139,6 +139,37 @@ describe('reader-key registration and freshness contract (ADR 0083)', () => {
         ok: false,
         reason: 'invalid_freshness_checkpoint',
       });
+
+      /**
+       * The same overlong window, hidden in an instant that sorts before every
+       * ordinary year.
+       *
+       * These are compared as strings here - `checkedAt > at`,
+       * `freshUntil <= checkedAt`, `at >= freshUntil` - which is only sound
+       * while every writer uses one fixed-width form. `@pico/core` carried a
+       * round-trip-only check until 2026-08-20, one of nine copies of that
+       * rule, and the extended-year form round-trips exactly:
+       * `+275760-09-13T00:00:00.000Z` is a real Date that re-serializes to
+       * itself. `+` is 0x2B, below every digit, so a `checkedAt` in that form
+       * reads as earlier than everything - the window between it and
+       * `freshUntil` computes negative, the max-freshness bound never fires,
+       * and the checkpoint above is accepted after all.
+       */
+      const groundInstant = new PicoIdentityReaderKeySelector(
+        fixture.store,
+        sodium,
+        {
+          check: async (query) => currentCheckpoint(query, {
+            checkedAt: '+275760-09-13T00:00:00.000Z',
+            freshUntil: '2026-07-27T10:05:00.001Z',
+          }),
+        },
+      );
+      await expect(groundInstant.select(selectionInput(fixture.delegationId))).resolves.toEqual({
+        ok: false,
+        reason: 'invalid_freshness_checkpoint',
+      });
+      expect('+275760-09-13T00:00:00.000Z' < '2026-07-27T10:00:00.000Z').toBe(true);
     } finally {
       fixture.close();
     }
