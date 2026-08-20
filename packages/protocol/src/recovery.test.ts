@@ -87,6 +87,35 @@ describe('ADR 0110 recovery protocol forms', () => {
     });
   });
 
+  it('refuses a card whose text is not valid UTF-8', () => {
+    /**
+     * The refusal exists; nothing tested that it was reachable. It matters
+     * more since 2026-08-19, when the strictness behind it changed: the
+     * decoder used to be `TextDecoder` with `fatal: true`, which throws
+     * `ERR_NO_ICU` on the runtime Android uses, so the whole card path was
+     * unreadable there. What replaced it re-encodes and compares bytes.
+     *
+     * What this pins is *which* refusal answers. Take the strictness away
+     * and the card is still refused - the canonical re-encode below catches
+     * the replacement character - but it says `noncanonical_recovery_card_
+     * payload`, which sends the reader looking for the wrong fault. The
+     * grant path has no such second riegel; see device-enrolment.test.ts.
+     */
+    const vector = fixtureCard();
+    const canonical = buildPicoRecoveryCardPayload(vector.fields);
+    const name = new TextEncoder().encode(vector.fields.picoName);
+    const at = Buffer.from(canonical).indexOf(Buffer.from(name));
+    expect(at).toBeGreaterThan(0);
+
+    const broken = Uint8Array.from(canonical);
+    // A lone continuation byte: valid length, impossible sequence, which is
+    // what a cut or re-encoded card looks like.
+    broken[at] = 0x80;
+
+    expect(() => parsePicoRecoveryCardPayload(broken))
+      .toThrow('invalid_recovery_card_utf8');
+  });
+
   it('round-trips the one card form and pins its bytes', () => {
     const vector = fixtureCard();
     const fields = vector.fields;

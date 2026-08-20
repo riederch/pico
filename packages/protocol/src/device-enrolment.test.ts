@@ -82,6 +82,35 @@ describe('ADR 0130 E3 - the codes two devices show each other', () => {
     )).toThrow('offer_body');
   });
 
+  it('refuses a grant whose text is not valid UTF-8', () => {
+    /**
+     * The card path has a second riegel behind this one - it re-encodes the
+     * whole payload and compares. The enrolment path has none: this refusal
+     * is the only thing standing between a broken byte and a value read as
+     * U+FFFD, and a grant is what hands a device its Home.
+     *
+     * The test is also a marker for 2026-08-19, when a phone refused every
+     * grant with exactly this message. The bytes were fine; the decoder was
+     * `TextDecoder` with `fatal: true`, which nodejs-mobile cannot build
+     * because it ships without ICU. One message, two meanings. What replaced
+     * it re-encodes and compares, and still says this - for the real reason.
+     */
+    const code = buildPicoDeviceEnrolmentGrant({ activation, home });
+    const bytes = Buffer.from(code.slice(picoDeviceEnrolmentGrantPrefix.length), 'base64url');
+    const at = bytes.indexOf(Buffer.from(home.coreUrl, 'utf8'));
+    expect(at).toBeGreaterThan(0);
+
+    // A lone continuation byte, the shape a cut or re-encoded code has. It
+    // goes inside the host part on purpose: corrupting the scheme would be
+    // caught downstream by the `http://` check, and then this test would be
+    // passing for a reason that has nothing to do with UTF-8.
+    bytes[at + 10] = 0x80;
+    const broken = `${picoDeviceEnrolmentGrantPrefix}${bytes.toString('base64url')}`;
+
+    expect(() => parsePicoDeviceEnrolmentGrant(broken))
+      .toThrow('invalid_pico_device_enrolment_grant_body');
+  });
+
   it('validates the activation with the builder the signature is taken over', () => {
     const code = buildPicoDeviceEnrolmentGrant({ activation, home });
     const parsed = parsePicoDeviceEnrolmentGrant(code);

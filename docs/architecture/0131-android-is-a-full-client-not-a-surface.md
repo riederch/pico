@@ -757,6 +757,24 @@ local-first product's most security-critical moment.
   Both parsers use it now. Planting the round-trip away, and planting
   `fatal: true` back, each fail the new tests.
 
+  **Then the two parsers were asked what actually holds the line, and they
+  answered differently** (2026-08-20). The helper had tests; neither *path*
+  did, and the paths are what a code travels. Written now, one each, and
+  falsified by taking the round-trip away.
+
+  The card path answered `noncanonical_recovery_card_payload`: it re-encodes
+  the whole payload and compares, so a replacement character is caught there
+  regardless. Its UTF-8 refusal is about *naming* the fault, not about being
+  the only one who sees it - and a wrong name costs the next reader an hour.
+
+  The grant path did not answer at all. It has no such second riegel: with
+  the strictness gone, a grant whose Home address carries one broken byte is
+  **accepted**, and the device is pointed at `http://192\uFFFD168.1.20:3000`
+  - a Home that does not exist, from a code that looked fine to whoever read
+  it aloud. The downstream shape checks do not help; `http://` still matches,
+  the length still fits. So on the path that hands a device its Home,
+  `decodeCanonicalText` is the whole guard, and the test says so.
+
   **The absence of ICU was then audited for anything else it touches, and
   nothing else needed changing.** Six calls to `localeCompare` sit in the
   identity core, deciding which lifecycle statement is freshest and ordering
