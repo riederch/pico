@@ -61,3 +61,27 @@ export function picoCompanionDisplayInstant(instant: string): string {
   return `${picoCompanionDisplayDate(instant)} `
     + `${twoDigits(at.getHours())}:${twoDigits(at.getMinutes())}`;
 }
+
+/**
+ * Whole days from one instant to another, counted the way a calendar counts.
+ *
+ * **Not the same as dividing by twenty-four hours**, which is what the window
+ * did until 2026-08-20 - and the difference showed up in two adjacent
+ * sentences. At 23:00 in Vienna, an authority ending at 00:30 the next night
+ * is 1.5 hours away, so the block count said nought and the row said "That is
+ * today" directly beneath "It can act as you until 2027-01-02". A person who
+ * believes the second sentence renews a day late.
+ *
+ * So both ends are taken to their local midnight first, and what is counted
+ * is the number of midnights between them. `new Date(y, m, d)` builds in the
+ * host's own zone with no ICU, and the rounding absorbs the twenty-three and
+ * twenty-five hour days that daylight saving makes.
+ */
+export function picoCompanionCalendarDaysUntil(
+  instant: string,
+  now: Date = new Date(),
+): number {
+  const midnight = (at: Date): number =>
+    new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+  return Math.round((midnight(parse(instant)) - midnight(now)) / (24 * 60 * 60 * 1_000));
+}

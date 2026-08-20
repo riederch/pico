@@ -373,6 +373,22 @@ const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.slice\s*\(/g;
  * `Intl` at all (ADR 0131 A1).
  */
 const instantSlice = /(\w*(?:At|Until))\s*(?:\}\s*)?\.slice\s*\(0,\s*10\)/g;
+/**
+ * And the arithmetic behind it, which the window also did.
+ *
+ * "That is today", printed under a row whose own date said tomorrow: the
+ * expiry warning divided the difference by twenty-four hours, and an
+ * authority ending at 00:30 the next night is an hour and a half away at
+ * 23:00. Days a person counts are midnights, not blocks, and a day is not
+ * always twenty-four hours anyway - Vienna has one of twenty-three every
+ * March. The count crosses IPC now, from `picoCompanionCalendarDaysUntil`.
+ *
+ * Only the window is asked about this: a day-length constant in the main
+ * process or the core is ordinary (`first-run.ts` builds a year from one),
+ * and it is the *rendering* side doing calendar arithmetic that has been
+ * wrong twice.
+ */
+const dayArithmetic = /(?:24\s*\*\s*60\s*\*\s*60|86_?400_?000)/g;
 let fingerprintRuleFiles = 0;
 for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
   for (const file of listSourceFiles(root)) {
@@ -381,6 +397,18 @@ for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
       continue;
     }
     const content = readFileSync(file, 'utf8');
+    if (rendererReachable.has(name)) {
+      for (const _ of content.matchAll(dayArithmetic)) {
+        fingerprintRuleFiles += 1;
+        errors.push(
+          `${relative(repoRoot, file)}: counts days from a length in milliseconds, in the window. `
+          + 'Days a person counts are midnights - a day is twenty-three hours once a year - and '
+          + 'this is how "That is today" came to sit under a date that said tomorrow. '
+          + '`picoCompanionCalendarDaysUntil` counts them, in the main process, and the number '
+          + 'crosses with the row.',
+        );
+      }
+    }
     for (const [, symbol] of content.matchAll(instantSlice)) {
       fingerprintRuleFiles += 1;
       errors.push(

@@ -1803,6 +1803,8 @@ export interface PicoCompanionDeviceAuthority {
    */
   validUntil: string;
   validUntilDisplay: string;
+  /** Midnights from today to that day, in the reader's own zone. */
+  daysRemaining: number;
   isThisDevice: boolean;
 }
 
@@ -1902,7 +1904,6 @@ export function picoCompanionDeviceAuthoritySummary(
 
 export function picoCompanionDeviceAuthorityLines(
   view: PicoCompanionDeviceAuthorityView,
-  now: Date = new Date(),
 ): readonly PicoCompanionDeviceAuthorityLine[] {
   const active = view.devices.filter((device) => device.status === 'active');
   return Object.freeze(view.devices.map((device) => {
@@ -1914,7 +1915,7 @@ export function picoCompanionDeviceAuthorityLines(
         ? 'This device'
         : 'Another of your devices',
       detail: picoCompanionDeviceAuthorityDetail(device),
-      expiryWarning: picoCompanionDeviceAuthorityExpiry(device, now),
+      expiryWarning: picoCompanionDeviceAuthorityExpiry(device),
       renewLabel: endable && device.isThisDevice
         ? 'Keep it working for another year'
         : null,
@@ -1944,14 +1945,14 @@ export const picoCompanionDeviceAuthorityWarningDays = 30;
 
 function picoCompanionDeviceAuthorityExpiry(
   device: PicoCompanionDeviceAuthority,
-  now: Date,
 ): string | null {
   if (device.status !== 'active') {
     return null;
   }
-  const days = Math.floor(
-    (Date.parse(device.validUntil) - now.getTime()) / (24 * 60 * 60 * 1_000),
-  );
+  // Counted before it crossed, in midnights rather than in twenty-four hour
+  // blocks: this used to divide the difference by a day and say "today" about
+  // a row whose own date said tomorrow.
+  const days = device.daysRemaining;
   if (days > picoCompanionDeviceAuthorityWarningDays) {
     return null;
   }
@@ -2061,6 +2062,8 @@ export function parsePicoCompanionDeviceAuthority(
         || typeof device.deviceSigningKeyFingerprintHex !== 'string'
         || typeof device.validUntil !== 'string'
         || typeof device.validUntilDisplay !== 'string'
+        || typeof device.daysRemaining !== 'number'
+        || !Number.isFinite(device.daysRemaining)
         || typeof device.isThisDevice !== 'boolean'
         || (device.status !== 'active'
           && device.status !== 'not_yet_valid'
@@ -2075,6 +2078,7 @@ export function parsePicoCompanionDeviceAuthority(
         status: device.status,
         validUntil: device.validUntil,
         validUntilDisplay: device.validUntilDisplay,
+        daysRemaining: device.daysRemaining,
         isThisDevice: device.isThisDevice,
       });
     })),

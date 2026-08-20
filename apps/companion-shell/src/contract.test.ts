@@ -545,6 +545,13 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
       status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
       isThisDevice?: boolean;
       validUntil?: string;
+      /**
+       * What the main process counted before the row crossed. Given here
+       * rather than derived from a `now` the test passes in, because that is
+       * the shape the window sees: a number it was handed. The counting
+       * itself is `picoCompanionCalendarDaysUntil`, tested where it lives.
+       */
+      daysRemaining?: number;
     }[],
     mayEndAuthority = true,
   ): PicoCompanionDeviceAuthorityView => ({
@@ -560,6 +567,8 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
       validUntilDisplay: picoCompanionDisplayDate(
         device.validUntil ?? '2027-01-01T00:00:00.000Z',
       ),
+      // Far enough away not to warn unless a test says otherwise.
+      daysRemaining: device.daysRemaining ?? 365,
       isThisDevice: device.isThisDevice ?? false,
     })),
   });
@@ -625,10 +634,10 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
      * this is a sentence rather than a colour.
      */
     const soon = picoCompanionDeviceAuthorityLines(view([
-      { delegationId: 'a', status: 'active', isThisDevice: true, validUntil: '2027-01-10T00:00:00.000Z' },
-      { delegationId: 'b', status: 'active', validUntil: '2027-01-10T00:00:00.000Z' },
-      { delegationId: 'c', status: 'active', validUntil: '2027-06-01T00:00:00.000Z' },
-    ]), new Date('2027-01-01T00:00:00.000Z'));
+      { delegationId: 'a', status: 'active', validUntil: '2027-01-10T00:00:00.000Z', isThisDevice: true, daysRemaining: 9 },
+      { delegationId: 'b', status: 'active', validUntil: '2027-01-10T00:00:00.000Z', daysRemaining: 9 },
+      { delegationId: 'c', status: 'active', validUntil: '2027-06-01T00:00:00.000Z', daysRemaining: 151 },
+    ]));
     expect(soon[0]?.expiryWarning).toContain('in 9 days');
     expect(soon[0]?.expiryWarning).toContain('cannot renew itself');
     // Another device is a different answer, and it is said rather than left
@@ -639,8 +648,8 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
     expect(soon[2]?.expiryWarning).toBeNull();
 
     const lapsed = picoCompanionDeviceAuthorityLines(view([
-      { delegationId: 'a', status: 'active', isThisDevice: true, validUntil: '2027-01-01T00:00:00.000Z' },
-    ]), new Date('2027-01-01T00:00:00.000Z'));
+      { delegationId: 'a', status: 'active', isThisDevice: true, validUntil: '2027-01-01T00:00:00.000Z', daysRemaining: 0 },
+    ]));
     expect(lapsed[0]?.expiryWarning).toContain('today');
 
     // Nothing to warn about on a row that already ended.
@@ -675,8 +684,8 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
 
     // The warning on another device now names the walk instead of a gap.
     const soon = picoCompanionDeviceAuthorityLines(view([
-      { delegationId: 'b', status: 'active', validUntil: '2027-01-10T00:00:00.000Z' },
-    ]), new Date('2027-01-01T00:00:00.000Z'));
+      { delegationId: 'b', status: 'active', validUntil: '2027-01-10T00:00:00.000Z', daysRemaining: 9 },
+    ]));
     expect(soon[0]?.expiryWarning).toContain('holding the two screens up');
     expect(soon[0]?.expiryWarning).not.toContain('cannot do that yet');
   });
@@ -779,6 +788,7 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
         status: 'retired',
         validUntil: '2027-01-01T00:00:00.000Z',
         validUntilDisplay: picoCompanionDisplayDate('2027-01-01T00:00:00.000Z'),
+        daysRemaining: 365,
         isThisDevice: false,
       }],
     })).toThrow('invalid_pico_companion_device_authority_row');
@@ -791,6 +801,7 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
         status: 'active',
         validUntil: '2027-01-01T00:00:00.000Z',
         validUntilDisplay: picoCompanionDisplayDate('2027-01-01T00:00:00.000Z'),
+        daysRemaining: 365,
         isThisDevice: true,
       }],
     }).devices).toHaveLength(1);

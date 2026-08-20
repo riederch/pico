@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { picoCompanionDisplayDate, picoCompanionDisplayInstant } from './when.js';
+import {
+  picoCompanionCalendarDaysUntil,
+  picoCompanionDisplayDate,
+  picoCompanionDisplayInstant,
+} from './when.js';
 
 const original = process.env.TZ;
 afterEach(() => {
@@ -48,4 +52,41 @@ describe('ADR 0112 with ADR 0131 A5 - how this client says when', () => {
     expect(() => picoCompanionDisplayInstant('')).toThrow('invalid_pico_companion_instant');
   });
 
+});
+
+describe('ADR 0104 - days counted the way a calendar counts them', () => {
+  it('counts midnights, not twenty-four hour blocks', () => {
+    process.env.TZ = 'Europe/Vienna';
+    const endsAt = '2027-01-01T23:30:00.000Z';
+    const now = new Date('2027-01-01T22:00:00.000Z');
+
+    /**
+     * The defect this replaces, in one assertion. It is 23:00 for this
+     * reader and the authority ends at 00:30 tomorrow night - an hour and a
+     * half away, which divided by twenty-four is nought. The window said
+     * "That is today" under a line that said "until 2027-01-02".
+     */
+    expect(Math.floor((Date.parse(endsAt) - now.getTime()) / (24 * 60 * 60 * 1_000))).toBe(0);
+    expect(picoCompanionCalendarDaysUntil(endsAt, now)).toBe(1);
+    expect(picoCompanionDisplayDate(endsAt)).toBe('2027-01-02');
+  });
+
+  it('says nought on the day itself and counts backwards after it', () => {
+    process.env.TZ = 'Europe/Vienna';
+    expect(picoCompanionCalendarDaysUntil(
+      '2027-03-01T08:00:00.000Z', new Date('2027-03-01T20:00:00.000Z'),
+    )).toBe(0);
+    expect(picoCompanionCalendarDaysUntil(
+      '2027-02-27T08:00:00.000Z', new Date('2027-03-01T08:00:00.000Z'),
+    )).toBe(-2);
+  });
+
+  it('survives the day daylight saving makes twenty-three hours long', () => {
+    // 2027-03-28 is when Vienna springs forward; that day is 23 hours, and a
+    // block count would drift by one across it.
+    process.env.TZ = 'Europe/Vienna';
+    expect(picoCompanionCalendarDaysUntil(
+      '2027-03-29T10:00:00.000Z', new Date('2027-03-27T10:00:00.000Z'),
+    )).toBe(2);
+  });
 });

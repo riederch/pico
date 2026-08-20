@@ -1,5 +1,8 @@
 import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
-import { picoCompanionDisplayDate } from '@pico/companion/when';
+import {
+  picoCompanionCalendarDaysUntil,
+  picoCompanionDisplayDate,
+} from '@pico/companion/when';
 import type { PicoCompanionDeviceView } from '@pico/companion/presence';
 import type { PicoCompanionDeviceAuthorityView } from '@pico/companion/device-lifecycle';
 import type { PicoCompanionHomeMember as PicoCompanionCoreHomeMember }
@@ -44,6 +47,14 @@ export function picoCompanionRenderedDeviceAuthority(
     devices: view.devices.map((device) => ({
       ...device,
       validUntilDisplay: picoCompanionDisplayDate(device.validUntil),
+      /**
+       * Counted here rather than in the window, for the reason the day is
+       * rendered here: the window cannot reach the rule, and counting
+       * twenty-four hour blocks instead put "That is today" under "until
+       * 2027-01-02". It is as fresh as the read that carried it, which is
+       * also true of the date beside it and of every other word in the row.
+       */
+      daysRemaining: picoCompanionCalendarDaysUntil(device.validUntil),
     })),
   };
 }

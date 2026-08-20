@@ -675,6 +675,20 @@ local-first product's most security-critical moment.
   local is the house answer, and the companion was the surface disagreeing
   with it.
 
+  **And the arithmetic behind the date was wrong in the same direction.** The
+  expiry warning counted twenty-four hour blocks: at 23:00 in Vienna, an
+  authority ending at 00:30 the next night is an hour and a half away, so the
+  row printed "That is today" directly under "It can act as you until
+  2027-01-02". A person who believes the second sentence renews a day late,
+  and a device whose authority has run out cannot renew itself - it is a
+  Recovery Card away.
+
+  Days a person counts are midnights, and one of Vienna's is twenty-three
+  hours long every March. `picoCompanionCalendarDaysUntil` counts midnights,
+  the number crosses with the row, and the window no longer holds a day
+  length at all - which the boundary check now says out loud, because the
+  rendering side has been wrong about calendars twice.
+
   With the rows now crossing rendered, the seam has a name:
   `apps/companion-shell/src/rendered-rows.ts`. It exists as a module rather
   than four expressions inside the IPC handlers because the real-process
