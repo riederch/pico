@@ -87,6 +87,10 @@
       "types": "./dist/fingerprint-display.d.ts",
       "import": "./dist/fingerprint-display.js"
     },
+    "./when-display": {
+      "types": "./dist/when-display.d.ts",
+      "import": "./dist/when-display.js"
+    },
     "./home-address": {
       "types": "./dist/home-address.d.ts",
       "import": "./dist/home-address.js"

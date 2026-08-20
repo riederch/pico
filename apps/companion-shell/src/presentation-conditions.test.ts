@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { picoDisplayInstant } from '@pico/protocol/when-display';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
 import type { PicoCompanionPresentation } from './contract.js';
 
@@ -144,7 +145,11 @@ describe('ADR 0118 O1 due entries reach the person', () => {
     const state = presented.at(-1);
     expect(state?.kind).toBe('time_bound_entry_due');
     expect(state?.severity).toBe('warning');
-    expect(state?.body).toContain('2026-08-06T09:00:00.000Z');
+    expect(state?.body).toContain(picoDisplayInstant('2026-08-06T09:00:00.000Z'));
+    // Not the raw instant: what a person is shown is their own day and
+    // minute, and a fixture pinned to the ISO string would pass only where
+    // the two happen to look alike.
+    expect(state?.body).not.toContain('2026-08-06T09:00:00.000Z');
     expect(state?.body).toContain('not given the words');
   });
 
@@ -160,7 +165,7 @@ describe('ADR 0118 O1 due entries reach the person', () => {
     });
 
     expect(presented.at(-1)?.title).toBe('2 entries are due');
-    expect(presented.at(-1)?.body).toContain('2026-08-06T07:00:00.000Z');
+    expect(presented.at(-1)?.body).toContain(picoDisplayInstant('2026-08-06T07:00:00.000Z'));
   });
 
   it('clears only its own presentation when nothing is due', async () => {
@@ -208,7 +213,7 @@ describe('ADR 0118 O1 the title only where custody allowed it', () => {
     });
 
     expect(presented.at(-1)?.title).toBe('Call the dentist');
-    expect(presented.at(-1)?.body).toContain('2026-08-06T09:00:00.000Z');
+    expect(presented.at(-1)?.body).toContain(picoDisplayInstant('2026-08-06T09:00:00.000Z'));
   });
 
   it('does not invent a placeholder when the words were withheld', async () => {

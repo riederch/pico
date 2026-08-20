@@ -35,7 +35,7 @@ import {
 import { maxPicoDeviceEnrolmentTransportLength } from '@pico/protocol/device-enrolment';
 import { isPicoCompanionMembershipSubject } from '@pico/companion/home-authority';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
-import { picoCompanionDisplayDate } from '@pico/companion/when';
+import { picoDisplayDate, picoDisplayInstant } from '@pico/protocol/when-display';
 import {
   picoCompanionRenderedDeviceAuthority,
   picoCompanionRenderedDevices,
@@ -1283,7 +1283,7 @@ function registerIpc(): void {
         const renewed = await runtime.renewDeviceAuthority();
         return {
           ...renewed,
-          validUntilDisplay: picoCompanionDisplayDate(renewed.validUntil),
+          validUntilDisplay: picoDisplayDate(renewed.validUntil),
         };
       } finally {
         productOperationActive = false;
@@ -1412,7 +1412,7 @@ function registerIpc(): void {
           ...admitted,
           picoIdentityDisplay:
             picoDisplayFingerprint(admitted.picoIdentityFingerprintHex),
-          validUntilDisplay: picoCompanionDisplayDate(admitted.validUntil),
+          validUntilDisplay: picoDisplayDate(admitted.validUntil),
         };
       } finally {
         productOperationActive = false;
@@ -2127,7 +2127,7 @@ async function presentFirstRunOutcome(
       symbol: '!',
       decision: 'none',
       title: 'Your Home is holding the objection window open',
-      body: `Any device you still have can stop this until ${outcome.pending.effectiveAt}. Come back after that and Pico will finish setting this device up; it will ask for the Vault passphrase again, and nothing else.`,
+      body: `Any device you still have can stop this until ${picoDisplayInstant(outcome.pending.effectiveAt)}. Come back after that and Pico will finish setting this device up; it will ask for the Vault passphrase again, and nothing else.`,
       observedAt: new Date().toISOString(),
     }));
     return;

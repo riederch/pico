@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { picoCompanionDisplayDate } from '@pico/companion/when';
+import { picoDisplayDate } from '@pico/protocol/when-display';
 import {
   picoCompanionRenderedDeviceAuthority,
   picoCompanionRenderedHomeMembers,
@@ -44,7 +44,7 @@ describe('ADR 0113 C2 - what the window is handed', () => {
     ] as never);
 
     expect(founder?.validUntilDisplay).toBeNull();
-    expect(member?.validUntilDisplay).toBe(picoCompanionDisplayDate('2027-06-01T12:00:00.000Z'));
+    expect(member?.validUntilDisplay).toBe(picoDisplayDate('2027-06-01T12:00:00.000Z'));
     // And the name a person reads is not the name the ending call needs.
     expect(member?.picoIdentityDisplay).toBe('cdcdcdcd…cdcdcdcd');
     expect(member?.picoIdentityFingerprintHex).toBe('cd'.repeat(32));

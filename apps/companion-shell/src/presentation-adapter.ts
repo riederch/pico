@@ -1,4 +1,5 @@
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
+import { picoDisplayInstant } from '@pico/protocol/when-display';
 import {
   type PicoCompanionClockDivergenceAlarm,
   type PicoCompanionDueEntriesTold,
@@ -184,10 +185,10 @@ export function createPicoCompanionPresentationAdapter(
           ? (named ?? 'Something you asked for is due')
           : `${count} entries are due`,
         body: named === undefined
-          ? `The oldest was due at ${oldest.dueAt}. Open your Pico Home to see `
+          ? `The oldest was due at ${picoDisplayInstant(oldest.dueAt)}. Open your Pico Home to see `
             + 'what it is - this device was not given the words, only that an '
             + 'entry is waiting.'
-          : `Due at ${oldest.dueAt}.${count === 1 ? '' : ` ${count - 1} more waiting.`}`,
+          : `Due at ${picoDisplayInstant(oldest.dueAt)}.${count === 1 ? '' : ` ${count - 1} more waiting.`}`,
         observedAt: now().toISOString(),
       }, true);
       /**
@@ -264,7 +265,7 @@ export function createPicoCompanionPresentationAdapter(
         symbol: '!',
         decision: 'none',
         title: 'Pico recovery is waiting for the time lock',
-        body: `Recovery ${pending.recoveryId} for identity ${picoDisplayFingerprint(picoIdentityFingerprintHex)} becomes effective at ${pending.effectiveAt}. Nothing can hurry this wait. Completion will revoke every other device of this identity.`,
+        body: `Recovery ${pending.recoveryId} for identity ${picoDisplayFingerprint(picoIdentityFingerprintHex)} becomes effective at ${picoDisplayInstant(pending.effectiveAt)}. Nothing can hurry this wait. Completion will revoke every other device of this identity.`,
         observedAt: now().toISOString(),
       }, false);
     },
@@ -275,7 +276,7 @@ export function createPicoCompanionPresentationAdapter(
         symbol: '●',
         decision: 'none',
         title: 'Pico recovery completed',
-        body: `Recovery ${receipt.recoveryId} for identity ${picoDisplayFingerprint(picoIdentityFingerprintHex)} completed at ${receipt.completedAt}. Exactly one active device remains: ${picoDisplayFingerprint(receipt.targetDeviceSigningKeyFingerprintHex)}. Every other device was revoked and surviving hardware must re-enroll.`,
+        body: `Recovery ${receipt.recoveryId} for identity ${picoDisplayFingerprint(picoIdentityFingerprintHex)} completed at ${picoDisplayInstant(receipt.completedAt)}. Exactly one active device remains: ${picoDisplayFingerprint(receipt.targetDeviceSigningKeyFingerprintHex)}. Every other device was revoked and surviving hardware must re-enroll.`,
         observedAt: now().toISOString(),
       }, true);
     },

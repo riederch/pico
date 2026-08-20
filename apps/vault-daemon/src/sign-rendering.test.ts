@@ -24,6 +24,7 @@ import {
   renderPicoVaultApprovalStatement,
 } from './sign-rendering.js';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
+import { picoDisplayDate } from '@pico/protocol/when-display';
 import { picoVaultCanSignLabel } from '@pico/vault';
 import {
   picoVaultDaemonSignatureNeedsApproval,
@@ -53,7 +54,12 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
     )).toBe(
       'Create device authority: delegate surface_session, decrypt_domain '
       + 'to device keys 22222222…22222222 and 33333333…33333333 '
-      + 'from 2026-07-30T12:00:00.000Z until 2027-07-30T12:00:00.000Z.',
+      // Asserted through the rule rather than as a literal, because the answer
+      // is the reader's own day: a fixture pinned to `2027-07-30` passes in
+      // Vienna and fails in Auckland, which would make this test a statement
+      // about the machine running it.
+      + `from ${picoDisplayDate(delegation.validFrom)} `
+      + `until ${picoDisplayDate(delegation.validUntil)}.`,
     );
   });
 
@@ -289,5 +295,46 @@ describe('ADR 0079 I5 - the sentence names a key the way the rest of Pico does',
       picoHomeSignatureInputLabels.membership,
       membership(forged),
     ));
+  });
+});
+
+describe('ADR 0106 - a deadline in the sentence is in the reader\'s own day', () => {
+  it('renders validity through the product rule, not as the ISO string', () => {
+    /**
+     * Eleven instants reached a person raw until 2026-08-20, five of them in
+     * this file. `until 2027-08-01T10:00:00.000Z` is a timezone, a precision
+     * and a punctuation style nobody asked for, in the one string somebody is
+     * supposed to check - and the companion window that confirms the same
+     * ceremony afterwards had already been saying `2027-08-01` for a day.
+     *
+     * Neither call can throw: the builder runs first and refuses anything
+     * that is not a canonical instant, which is pinned in the second
+     * assertion so that the guarantee is a test rather than a belief.
+     */
+    const membership: PicoHomeMembershipSignatureInput = {
+      suite: picoIdentitySuite,
+      credentialId: 'membership_render_0002',
+      homeId: 'home_render_membership_0002',
+      issuerPicoIdentityFingerprintHex: '11'.repeat(32),
+      subjectPicoIdentityFingerprintHex: '22'.repeat(32),
+      hostSigningKeyFingerprintHex: '33'.repeat(32),
+      role: 'home_member',
+      scopes: ['host.use'],
+      validFrom: '2026-08-01T10:00:00.000Z',
+      validUntil: '2027-08-01T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000005',
+    };
+    const statement = renderPicoVaultApprovalStatement(
+      picoHomeSignatureInputLabels.membership,
+      membership,
+    );
+
+    expect(statement).toContain(picoDisplayDate(membership.validUntil));
+    expect(statement).not.toContain(membership.validUntil);
+
+    expect(() => buildPicoVaultSignatureInputFromFields(
+      picoHomeSignatureInputLabels.membership,
+      { ...membership, validUntil: '2027-08-01T10:00:00Z' },
+    )).toThrow();
   });
 });

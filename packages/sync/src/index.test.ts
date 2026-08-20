@@ -1375,6 +1375,27 @@ describe('authenticated reader sync and local presentation (ADRs 0089/0094/0095/
       evaluatedAt: batch1.batchRecord.expiresAt,
     })).toThrow('invalid_reader_sync_batch');
 
+    /**
+     * The same expired batch, evaluated at the farthest instant a `Date` can
+     * hold - and it must still refuse.
+     *
+     * Expiry here is a *string* comparison, which the protocol pins to one
+     * fixed-width form for exactly this reason. `@pico/vault` carried a second
+     * spelling of "is this a canonical instant" until 2026-08-20 that checked
+     * only whether the value round-tripped through `toISOString`, and the
+     * extended-year form does: `+275760-09-13T00:00:00.000Z` is a real Date
+     * and re-serializes to itself. But `+` is 0x2B, below every digit, so as a
+     * string it sorts *before* every ordinary year - the farthest future
+     * reading as earlier than any deadline, and an expired batch opening. The
+     * rule is the protocol's now, asked rather than restated.
+     */
+    expect(() => openPicoReaderCustodySyncBatch(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      batchRecord: page.batches[0]!,
+      evaluatedAt: '+275760-09-13T00:00:00.000Z',
+    })).toThrow('invalid_reader_sync_batch');
+    expect('+275760-09-13T00:00:00.000Z' < batch1.batchRecord.expiresAt).toBe(true);
+
     const payload1 = openPicoReaderCustodySyncBatch(sodium, {
       readerKeyAgreementSession: readerAgreementSession,
       batchRecord: page.batches[0]!,

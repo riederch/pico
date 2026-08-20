@@ -2,6 +2,7 @@ import {
   buildPicoRecoveryCardScanTransport,
   picoRecoveryCardScanPrefix,
 } from '@pico/protocol';
+import { picoDisplayDate } from '@pico/protocol/when-display';
 import type { PicoVaultRecoveryCard } from '@pico/vault';
 import {
   assertPicoRecoveryCard,
@@ -319,7 +320,11 @@ function drawFront(
       color: PALE,
     },
   );
-  page.drawText(payload.issuedAt.slice(0, 10), {
+  // The day the person printing it was on, not the UTC day - a card stamped
+  // `2027-01-01` by somebody who printed it at 00:30 on the second names a
+  // date they never experienced. Found by `check-instant-display.mjs` on its
+  // first run, in the one place this cut had survived outside the window.
+  page.drawText(picoDisplayDate(payload.issuedAt), {
     x: width - mm(35),
     y: mm(7),
     font: mono,

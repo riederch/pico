@@ -29,6 +29,7 @@ import {
   picoRecoveryCardSchema,
 } from '@pico/protocol';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
+import { picoDisplayDate } from '@pico/protocol/when-display';
 import {
   buildPicoVaultSignatureInputFromFields,
   renderPicoVaultApprovalStatement,
@@ -628,7 +629,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             accessMode: request.accessMode,
             historicalVersions: request.rotationRecords.length,
           },
-          statement: `Grant reader ${picoDisplayFingerprint(request.readerIdentityKeyFingerprintHex)} access to domain ${String((request.domainRecord as { domain?: { domainId?: unknown } }).domain?.domainId ?? '')} (${request.accessMode}, ${request.rotationRecords.length} historical version(s)) until ${request.validUntil}.`,
+          statement: `Grant reader ${picoDisplayFingerprint(request.readerIdentityKeyFingerprintHex)} access to domain ${String((request.domainRecord as { domain?: { domainId?: unknown } }).domain?.domainId ?? '')} (${request.accessMode}, ${request.rotationRecords.length} historical version(s)) until ${picoDisplayDate(request.validUntil)}.`,
           requires: [{
             keyFingerprintHex: request.agreementKeyFingerprintHex,
             keyRole: 'device_key_agreement',

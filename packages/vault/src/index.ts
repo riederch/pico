@@ -20,6 +20,7 @@ import {
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoVaultKeyfileHeaderAad,
   buildPicoRecoveryCardPayload,
+  isPicoInstant,
   picoMemoryContentSuite,
   picoReaderCustodyCanonicalLabels,
   picoReaderCustodyDomainRecordSchema,
@@ -3143,12 +3144,26 @@ function verifyDetached(
   }
 }
 
+/**
+ * The protocol's rule, asked rather than restated.
+ *
+ * **This was a second spelling until 2026-08-20, and the two disagreed where
+ * it mattered.** Round-tripping through `toISOString` alone accepts the
+ * extended-year form - `+275760-09-13T00:00:00.000Z` is a real Date that
+ * round-trips exactly - while the protocol also pins the fixed width
+ * `YYYY-MM-DDTHH:mm:ss.sssZ`, and says why: every consumer of one of these
+ * compares it *as a string*, which is only sound while all writers use one
+ * fixed-width form.
+ *
+ * The extended form breaks precisely that. `+` is 0x2B and `-` is 0x2D, both
+ * below `0`, so `'+275760-09-13T00:00:00.000Z'` - the farthest future a Date
+ * can hold - sorts *before* every ordinary year. An `evaluatedAt` in that
+ * form therefore reads as earlier than any `expiresAt` here, and an expired
+ * sealed batch opens. Fail-open, from a validator that was only checking
+ * whether the string was a date.
+ */
 function isCanonicalInstant(value: string): boolean {
-  if (typeof value !== 'string') {
-    return false;
-  }
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+  return isPicoInstant(value);
 }
 
 function generateKeypairForRole(

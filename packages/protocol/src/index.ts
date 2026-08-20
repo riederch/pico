@@ -5148,9 +5148,26 @@ function assertAsciiToken(value: string): void {
  */
 function assertInstant(value: string): void {
   assertAsciiToken(value);
-  if (!canonicalInstantPattern.test(value) || !isRoundTripInstant(value)) {
+  if (!isPicoInstant(value)) {
     throw new Error('invalid_instant');
   }
+}
+
+/**
+ * The same question, asked by a surface rather than by the canonicalizer.
+ *
+ * Exported because a surface that renders an instant has to know it has one
+ * first: `picoDisplayInstant` refuses a string it cannot parse rather than
+ * printing "Invalid Date" into a sentence somebody is being asked to act on,
+ * and a field that reaches it unchecked turns that refusal into a crash one
+ * layer too late. Whoever accepts the value should be the one to refuse it,
+ * with the exact word - and that has to be this rule, not a second one, or
+ * the two will disagree about which instants exist.
+ */
+export function isPicoInstant(value: unknown): value is string {
+  return typeof value === 'string'
+    && canonicalInstantPattern.test(value)
+    && isRoundTripInstant(value);
 }
 
 /**

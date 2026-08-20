@@ -133,6 +133,21 @@ The positive manifest vector is 502 bytes:
 - **S9.5 — replay and revocation safety: Done.** Idempotent replay,
   rollback/gap/fork rejection, persisted-floor restore input, expiry and
   revocation-during-sync tests.
+  **Expiry was fail-open for one shape of instant, found 2026-08-20.** The
+  comparison is a string comparison — which the protocol pins to one
+  fixed-width UTC form precisely because every consumer compares these that
+  way. `@pico/vault` carried a second spelling of "is this a canonical
+  instant" that checked only whether the value round-tripped through
+  `toISOString`, and the extended-year form does:
+  `+275760-09-13T00:00:00.000Z` is a real `Date` and re-serializes to itself.
+  But `+` is 0x2B, below every digit, so as a string the farthest future a
+  `Date` can hold sorts *before* every ordinary year — an `evaluatedAt` in
+  that form reads as earlier than any `expiresAt`, and an otherwise valid
+  expired batch opens. The rule is the protocol's own now (`isPicoInstant`),
+  asked rather than restated, and the test lives on a real sealed batch in
+  `@pico/sync` so that removing the fix opens it again rather than merely
+  changing an error string.
+
 - **S9.6 — bounded scope: Done.** No new Foundation endpoint, database table or
   migration; no draft Pico Link packet promoted into runtime.
 

@@ -1,4 +1,4 @@
-import { picoCompanionDisplayInstant } from './when.js';
+import { picoDisplayInstant } from '@pico/protocol/when-display';
 import { tmpdir } from 'node:os';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -71,7 +71,7 @@ describe('Linux notify-send alarm adapter (ADR 0113 C1)', () => {
      * have to convert a Z-suffixed string in their head to find out whether
      * that is tonight.
      */
-    expect(body).toContain(picoCompanionDisplayInstant('2026-08-02T10:00:00.000Z'));
+    expect(body).toContain(picoDisplayInstant('2026-08-02T10:00:00.000Z'));
     expect(body).not.toContain('2026-08-02T10:00:00.000Z');
     expect(body).toContain('every other device is revoked');
     expect(body).toContain('veto');

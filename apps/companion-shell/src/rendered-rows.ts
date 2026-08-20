@@ -1,8 +1,8 @@
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
-  picoCompanionCalendarDaysUntil,
-  picoCompanionDisplayDate,
-} from '@pico/companion/when';
+  picoCalendarDaysUntil,
+  picoDisplayDate,
+} from '@pico/protocol/when-display';
 import type { PicoCompanionDeviceView } from '@pico/companion/presence';
 import type { PicoCompanionDeviceAuthorityView } from '@pico/companion/device-lifecycle';
 import type { PicoCompanionHomeMember as PicoCompanionCoreHomeMember }
@@ -35,7 +35,7 @@ export function picoCompanionRenderedDevices(
 ): readonly PicoCompanionDevice[] {
   return devices.map((device) => ({
     ...device,
-    lastSeenDisplay: picoCompanionDisplayDate(device.lastSeenAt),
+    lastSeenDisplay: picoDisplayDate(device.lastSeenAt),
   }));
 }
 
@@ -46,7 +46,7 @@ export function picoCompanionRenderedDeviceAuthority(
     ...view,
     devices: view.devices.map((device) => ({
       ...device,
-      validUntilDisplay: picoCompanionDisplayDate(device.validUntil),
+      validUntilDisplay: picoDisplayDate(device.validUntil),
       /**
        * Counted here rather than in the window, for the reason the day is
        * rendered here: the window cannot reach the rule, and counting
@@ -54,7 +54,7 @@ export function picoCompanionRenderedDeviceAuthority(
        * 2027-01-02". It is as fresh as the read that carried it, which is
        * also true of the date beside it and of every other word in the row.
        */
-      daysRemaining: picoCompanionCalendarDaysUntil(device.validUntil),
+      daysRemaining: picoCalendarDaysUntil(device.validUntil),
     })),
   };
 }
@@ -69,7 +69,7 @@ export function picoCompanionRenderedHomeMembers(
     // an empty string here would render as a sentence with a hole in it.
     validUntilDisplay: member.validUntil === null
       ? null
-      : picoCompanionDisplayDate(member.validUntil),
+      : picoDisplayDate(member.validUntil),
   }));
 }
 
@@ -78,6 +78,6 @@ export function picoCompanionRenderedProviders(
 ): readonly PicoCompanionModelProvider[] {
   return providers.map((provider) => ({
     ...provider,
-    measuredDisplay: picoCompanionDisplayDate(provider.measuredAt),
+    measuredDisplay: picoDisplayDate(provider.measuredAt),
   }));
 }

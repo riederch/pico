@@ -1042,6 +1042,37 @@ local-first product's most security-critical moment.
   again went down by one, and the one it went down by was the only one that
   two *processes* had to agree on.
 
+
+  **The same question asked of time, and the same answer** (2026-08-20, the
+  hour after). `@pico/companion/when` had closed three answers inside this
+  client; it had not closed the ones outside it. Measured across every app and
+  package rather than guessed: **eleven** instants reached a person raw - five
+  in the Vault daemon's approval statements, one in the daemon itself, four in
+  the Electron presentation adapter, one in the shell. `until
+  2027-08-01T10:00:00.000Z` is a timezone, a precision and a punctuation style
+  nobody asked for, in the one string somebody is supposed to check, while the
+  window confirming the same ceremony said `2027-08-01`.
+
+  So the rule is `@pico/protocol/when-display` -
+  `picoDisplayDate`, `picoDisplayInstant`, `picoCalendarDaysUntil` - for the
+  reason and by the route the fingerprint rule took an hour earlier, and it
+  lands in the one package `check-runtime-floor.mjs` already refuses `Intl` in,
+  which is where an ICU-free rendering rule ought to be enforced rather than
+  promised.
+
+  `check-instant-display.mjs` reads every app and package for all three shapes
+  of this defect - the raw instant, the ten-character UTC cut, the day counted
+  in blocks - and found one on its first run that no companion-scoped check
+  could have: the Recovery Card PDF stamped the UTC day, so a card printed at
+  00:30 on the second names a date its owner never experienced.
+
+  `check-companion-boundary.mjs` is back to its own subject - what the tray may
+  reach, what the core may reach, and that both sides name the same IPC
+  channels. **The lesson is the placement, not the two rules.** Both were found
+  by one client and fixed inside it, and both were still wrong an hour later,
+  because a check named after one of two surfaces that share a reader has its
+  blind spot exactly where the reader is.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

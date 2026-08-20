@@ -1,4 +1,5 @@
 import {
+  isPicoInstant,
   picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeV2SignatureInputLabels,
@@ -972,7 +973,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         accessMode: requireBoundedString(parsed, 'accessMode'),
         firstKekVersion: firstKekVersion as number,
         validFrom: requireBoundedString(parsed, 'validFrom'),
-        validUntil: requireBoundedString(parsed, 'validUntil'),
+        validUntil: requireInstant(parsed, 'validUntil'),
         lifecycleOrder: requireBoundedString(parsed, 'lifecycleOrder'),
         ...(parsed.receivedAt === undefined
           ? {}
@@ -1193,6 +1194,26 @@ function assertExactKeysWithOptional(
       throw new Error('invalid_request');
     }
   }
+}
+
+/**
+ * A deadline a person will be shown, checked where it arrives.
+ *
+ * `validUntil` reaches the approval statement, which renders it in the
+ * reader's own day - and `picoDisplayDate` refuses a string that is not an
+ * instant rather than printing "Invalid Date" into a sentence somebody is
+ * being asked to approve. Bounded-string was the only check here until
+ * 2026-08-20, so that refusal would have arrived as a throw inside the
+ * request handler instead of as a refusal of the request. The rule is the
+ * protocol's own, so the daemon and the canonicalizer cannot come to disagree
+ * about which instants exist.
+ */
+function requireInstant(parsed: Record<string, unknown>, key: string): string {
+  const value = requireBoundedString(parsed, key);
+  if (!isPicoInstant(value)) {
+    throw new Error('invalid_request');
+  }
+  return value;
 }
 
 function requireBoundedString(parsed: Record<string, unknown>, key: string): string {

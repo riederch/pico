@@ -1,23 +1,23 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  picoCompanionCalendarDaysUntil,
-  picoCompanionDisplayDate,
-  picoCompanionDisplayInstant,
-} from './when.js';
+  picoCalendarDaysUntil,
+  picoDisplayDate,
+  picoDisplayInstant,
+} from './when-display.js';
 
 const original = process.env.TZ;
 afterEach(() => {
   process.env.TZ = original;
 });
 
-describe('ADR 0112 with ADR 0131 A5 - how this client says when', () => {
+describe('ADR 0112 with ADR 0131 A5 - how Pico says when', () => {
   it('answers in the reader’s own day, which a UTC cut does not', () => {
     const instant = '2027-01-01T23:30:00.000Z';
 
     process.env.TZ = 'Pacific/Kiritimati';
-    expect(picoCompanionDisplayDate(instant)).toBe('2027-01-02');
+    expect(picoDisplayDate(instant)).toBe('2027-01-02');
     process.env.TZ = 'Pacific/Niue';
-    expect(picoCompanionDisplayDate(instant)).toBe('2027-01-01');
+    expect(picoDisplayDate(instant)).toBe('2027-01-01');
 
     /**
      * The defect this replaces, stated as a test rather than as prose: the
@@ -34,7 +34,7 @@ describe('ADR 0112 with ADR 0131 A5 - how this client says when', () => {
     process.env.TZ = 'Europe/Vienna';
     // 23:30Z on the first is 00:30 on the second in Vienna - the day the cut
     // gets wrong, and the hour a person needs to know they are already past.
-    expect(picoCompanionDisplayInstant('2027-01-01T23:30:45.123Z'))
+    expect(picoDisplayInstant('2027-01-01T23:30:45.123Z'))
       .toBe('2027-01-02 00:30');
   });
 
@@ -47,9 +47,9 @@ describe('ADR 0112 with ADR 0131 A5 - how this client says when', () => {
   it('refuses a string that is not an instant rather than printing one', () => {
     // `new Date('later today')` is a Date, and it renders as "Invalid Date"
     // in the middle of a sentence a person is being asked to act on.
-    expect(() => picoCompanionDisplayDate('later today'))
-      .toThrow('invalid_pico_companion_instant');
-    expect(() => picoCompanionDisplayInstant('')).toThrow('invalid_pico_companion_instant');
+    expect(() => picoDisplayDate('later today'))
+      .toThrow('invalid_pico_instant');
+    expect(() => picoDisplayInstant('')).toThrow('invalid_pico_instant');
   });
 
 });
@@ -67,16 +67,16 @@ describe('ADR 0104 - days counted the way a calendar counts them', () => {
      * "That is today" under a line that said "until 2027-01-02".
      */
     expect(Math.floor((Date.parse(endsAt) - now.getTime()) / (24 * 60 * 60 * 1_000))).toBe(0);
-    expect(picoCompanionCalendarDaysUntil(endsAt, now)).toBe(1);
-    expect(picoCompanionDisplayDate(endsAt)).toBe('2027-01-02');
+    expect(picoCalendarDaysUntil(endsAt, now)).toBe(1);
+    expect(picoDisplayDate(endsAt)).toBe('2027-01-02');
   });
 
   it('says nought on the day itself and counts backwards after it', () => {
     process.env.TZ = 'Europe/Vienna';
-    expect(picoCompanionCalendarDaysUntil(
+    expect(picoCalendarDaysUntil(
       '2027-03-01T08:00:00.000Z', new Date('2027-03-01T20:00:00.000Z'),
     )).toBe(0);
-    expect(picoCompanionCalendarDaysUntil(
+    expect(picoCalendarDaysUntil(
       '2027-02-27T08:00:00.000Z', new Date('2027-03-01T08:00:00.000Z'),
     )).toBe(-2);
   });
@@ -85,7 +85,7 @@ describe('ADR 0104 - days counted the way a calendar counts them', () => {
     // 2027-03-28 is when Vienna springs forward; that day is 23 hours, and a
     // block count would drift by one across it.
     process.env.TZ = 'Europe/Vienna';
-    expect(picoCompanionCalendarDaysUntil(
+    expect(picoCalendarDaysUntil(
       '2027-03-29T10:00:00.000Z', new Date('2027-03-27T10:00:00.000Z'),
     )).toBe(2);
   });

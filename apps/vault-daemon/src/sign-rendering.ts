@@ -1,4 +1,5 @@
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
+import { picoDisplayDate } from '@pico/protocol/when-display';
 import {
   buildPicoHomeContinuitySignatureInput,
   buildPicoHomeDeviceActivationSignatureInput,
@@ -155,6 +156,14 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
  * appended by the shell - so one identity was named twice, in two alphabets,
  * in the one string a person reads before consenting.
  *
+ * Deadlines are rendered by `picoDisplayDate` for the same reason and by the
+ * same move: `until 2027-08-01T10:00:00.000Z` is a timezone, a precision and a
+ * punctuation style nobody asked for, in the one string a person is supposed
+ * to check - and the companion window that confirms the same ceremony
+ * afterwards has said `2027-08-01` since the day before. Neither call can
+ * throw here: the builder ran first and refuses anything that is not a
+ * canonical instant, so the renderer only ever sees fields it accepted.
+ *
  * The approval stays bound to the BLAKE2b digest of the exact bytes, so the
  * display never carries the integrity burden alone. That is what makes
  * shortening safe at all; it is not what makes two spellings safe.
@@ -174,7 +183,7 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   },
   [picoIdentitySignatureInputLabels.delegation]: (f) => {
     const v = f as PicoIdentityDelegationSignatureInput;
-    return `Create device authority: delegate ${v.scopes.join(', ')} to device keys ${picoDisplayFingerprint(v.subjectSigningKeyFingerprintHex)} and ${picoDisplayFingerprint(v.subjectKeyAgreementKeyFingerprintHex)} from ${v.validFrom} until ${v.validUntil}.`;
+    return `Create device authority: delegate ${v.scopes.join(', ')} to device keys ${picoDisplayFingerprint(v.subjectSigningKeyFingerprintHex)} and ${picoDisplayFingerprint(v.subjectKeyAgreementKeyFingerprintHex)} from ${picoDisplayDate(v.validFrom)} until ${picoDisplayDate(v.validUntil)}.`;
   },
   [picoIdentitySignatureInputLabels.revocation]: (f) => {
     const v = f as PicoIdentityRevocationSignatureInput;
@@ -207,7 +216,7 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   },
   [picoHomeSignatureInputLabels.membership]: (f) => {
     const v = f as PicoHomeMembershipSignatureInput;
-    return `Admit ${picoDisplayFingerprint(v.subjectPicoIdentityFingerprintHex)} to Home ${v.homeId} as ${v.role} (${v.scopes.join(', ')}) until ${v.validUntil}.`;
+    return `Admit ${picoDisplayFingerprint(v.subjectPicoIdentityFingerprintHex)} to Home ${v.homeId} as ${v.role} (${v.scopes.join(', ')}) until ${picoDisplayDate(v.validUntil)}.`;
   },
   [picoHomeSignatureInputLabels.membershipLifecycle]: (f) => {
     const v = f as PicoHomeMembershipLifecycleSignatureInput;
@@ -223,7 +232,7 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   },
   [picoReaderCustodyCanonicalLabels.readerGrant]: (f) => {
     const v = f as PicoReaderCustodyReaderGrantSignatureInput;
-    return `Grant reader ${picoDisplayFingerprint(v.readerIdentityKeyFingerprintHex)} access to domain ${v.domainId} from KEK v${v.firstKekVersion} (${v.accessMode}) until ${v.validUntil}.`;
+    return `Grant reader ${picoDisplayFingerprint(v.readerIdentityKeyFingerprintHex)} access to domain ${v.domainId} from KEK v${v.firstKekVersion} (${v.accessMode}) until ${picoDisplayDate(v.validUntil)}.`;
   },
   [picoReaderCustodyCanonicalLabels.readerGrantLifecycle]: (f) => {
     const v = f as PicoReaderCustodyReaderGrantLifecycleSignatureInput;
@@ -231,7 +240,7 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   },
   [picoReaderCustodyCanonicalLabels.writerGrant]: (f) => {
     const v = f as PicoReaderCustodyWriterGrantSignatureInput;
-    return `Authorize writer ${picoDisplayFingerprint(v.writerIdentityKeyFingerprintHex)} to write domain ${v.domainId} at KEK v${v.kekVersion} until ${v.validUntil}.`;
+    return `Authorize writer ${picoDisplayFingerprint(v.writerIdentityKeyFingerprintHex)} to write domain ${v.domainId} at KEK v${v.kekVersion} until ${picoDisplayDate(v.validUntil)}.`;
   },
   [picoReaderCustodyCanonicalLabels.writerGrantLifecycle]: (f) => {
     const v = f as PicoReaderCustodyWriterGrantLifecycleSignatureInput;

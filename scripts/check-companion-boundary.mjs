@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { rendererReachableFiles } from './companion-window.mjs';
 
 /**
  * ADR 0113: the companion service core is shell-free, and the boundary is
@@ -318,83 +317,27 @@ for (const { file, why } of trayForbidden) {
 }
 
 /**
- * How a key fingerprint is shown to a person used to be checked here, and the
- * fact that it was is what let the case that mattered through.
+ * Two rules used to live here, and both have moved for the same reason.
  *
- * This check found three spellings inside one client on 2026-08-20 and could
- * see no further, because its roots are `apps/companion` and
- * `apps/companion-shell`. A fourth sat in the Vault daemon, which renders the
- * sentence a person approves - and the two met inside one approval body, the
- * statement from the daemon with the signing key appended by the shell. So the
- * rule became `@pico/protocol/fingerprint-display` and its check became
- * `check-fingerprint-display.mjs`, over every app and package.
+ * How a key fingerprint is shown to a person, and how an instant is, were
+ * checked over `apps/companion` and `apps/companion-shell` - so on 2026-08-20
+ * this check found three spellings of the first and could see no further. The
+ * Vault daemon renders the sentence a person actually approves (ADR 0106),
+ * right beside what the companion shows them, and it held a fourth spelling
+ * of the fingerprint rule and eleven raw instants. A check named after one of
+ * two surfaces that share a reader is a check with a blind spot where the
+ * reader is.
  *
- * What stays here is the half that really is this client's: a person's own
- * calendar day, which the companion renders with `@pico/companion/when`.
+ * They are `check-fingerprint-display.mjs` and `check-instant-display.mjs`
+ * now, over every app and package, and the rules they guard are
+ * `@pico/protocol/fingerprint-display` and `@pico/protocol/when-display`. The
+ * list of renderer-reachable files all three needed is stated once, in
+ * `companion-window.mjs`.
+ *
+ * What stays here is what was always this check's own subject: what the tray
+ * start may reach, what the shell-free core may reach, and that both sides of
+ * the IPC boundary name the same channels.
  */
-/**
- * And the same defect one field over: an instant cut to ten characters.
- *
- * `'2027-01-01T23:30:00.000Z'.slice(0, 10)` is the *UTC* calendar day wearing
- * no label, which is the wrong day for every reader east of UTC after their
- * evening - roughly one row in twelve for Vienna, and a day and a half out on
- * Kiritimati. The window did it in six places and the core printed the raw
- * instant into an alarm a person has forty-eight hours to act on. One rule
- * now, `picoCompanionDisplayDate` and `picoCompanionDisplayInstant` in
- * `@pico/companion/when`, ICU-free because the runtime Android uses has no
- * `Intl` at all (ADR 0131 A1).
- */
-const instantSlice = /(\w*(?:At|Until))\s*(?:\}\s*)?\.slice\s*\(0,\s*10\)/g;
-/**
- * And the arithmetic behind it, which the window also did.
- *
- * "That is today", printed under a row whose own date said tomorrow: the
- * expiry warning divided the difference by twenty-four hours, and an
- * authority ending at 00:30 the next night is an hour and a half away at
- * 23:00. Days a person counts are midnights, not blocks, and a day is not
- * always twenty-four hours anyway - Vienna has one of twenty-three every
- * March. The count crosses IPC now, from `picoCompanionCalendarDaysUntil`.
- *
- * Only the window is asked about this: a day-length constant in the main
- * process or the core is ordinary (`first-run.ts` builds a year from one),
- * and it is the *rendering* side doing calendar arithmetic that has been
- * wrong twice.
- */
-const dayArithmetic = /(?:24\s*\*\s*60\s*\*\s*60|86_?400_?000)/g;
-let dayRuleFiles = 0;
-for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
-  for (const file of listSourceFiles(root)) {
-    const path = relative(repoRoot, file);
-    if (path.endsWith('.test.ts')) {
-      continue;
-    }
-    const content = readFileSync(file, 'utf8');
-    if (rendererReachableFiles.has(path)) {
-      for (const _ of content.matchAll(dayArithmetic)) {
-        dayRuleFiles += 1;
-        errors.push(
-          `${path}: counts days from a length in milliseconds, in the window. `
-          + 'Days a person counts are midnights - a day is twenty-three hours once a year - and '
-          + 'this is how "That is today" came to sit under a date that said tomorrow. '
-          + '`picoCompanionCalendarDaysUntil` counts them, in the main process, and the number '
-          + 'crosses with the row.',
-        );
-      }
-    }
-    for (const [, symbol] of content.matchAll(instantSlice)) {
-      dayRuleFiles += 1;
-      errors.push(
-        `${path}: cuts \`${symbol}\` to ten characters. That is the UTC `
-        + 'calendar day with nothing saying so, and it is the wrong day for a reader whose '
-        + 'evening is past midnight in UTC. `picoCompanionDisplayDate` in `@pico/companion/when` '
-        + `answers in the reader's own day${rendererReachableFiles.has(path)
-          ? ', and this file runs in the window - so the main process has to render it and send '
-            + 'it across (ADR 0113 C2).'
-          : '.'}`,
-      );
-    }
-  }
-}
 
 if (errors.length > 0) {
   console.error('Companion shell-boundary check failed:');
@@ -409,8 +352,7 @@ console.log(
   + ` (tray start reaches ${trayReached.size} modules,`
   + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides;`
-  + `${dayRuleFiles === 0 ? " one rule for a person's own day" : ` ${dayRuleFiles} home-made day renderings`}`
-  + ', the window included; fingerprints are checked product-wide next door).',
+  + ' fingerprints and instants are checked product-wide next door).',
 );
 
 function listSourceFiles(directory) {
