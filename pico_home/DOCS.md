@@ -37,6 +37,8 @@ The foundation app declares Home Assistant ingress metadata that points to inter
 
 Port `3100` is an internal foundation interface for the app. It is not the intended public remote-access surface for Pico Home.
 
+**No port of this add-on is ever forwarded from a router.** If you set up a port forwarding for Pico at all, it is `3200/tcp` on the machine running Pico Relay and nothing else - see [`../pico_relay/DOCS.md`](../pico_relay/DOCS.md). A Home is reached *through* a relay; that is what the relay is for.
+
 ADR 0040 makes Home Assistant ingress the preferred app browser path. ADR 0041 adds the explicit access-mode gate and closes the default direct host-port mapping. A future explicit debug port option can be considered after real Home Assistant ingress validation if operationally needed.
 
 ## Home Assistant ingress
@@ -201,7 +203,11 @@ Planned future options may include:
 | Option | Purpose |
 | --- | --- |
 | `pico_port` | Runtime port selection, if the entrypoint is changed to apply it safely. |
-| `relay_enabled` | Future opt-in outbound Pico Relay connection, if the Relay and Pico Link security model exists. |
+
+There will be no `relay_enabled` option here. Which relay account a Home holds
+is a decision about somebody's own Pico, so it is set in Pico - **Home settings
+-> Relay account** - and not in host configuration (ADR 0104 S2). Two people in
+the same Home could answer it differently, which is the test.
 
 ## Update behavior
 
@@ -263,8 +269,11 @@ worse than none, because it is the part of a document a person trusts.
   identity and not Home membership.
 - No policy engine and no action runner yet, so nothing here executes actions.
 - No automatic rollback flow for failed or reverted database updates yet.
-- Relay transport exists in the protocol and in a separate deliverable, but
-  this add-on has no relay configuration surface yet.
+- Relay transport exists in the protocol and in two deliverables. This add-on
+  does have a relay surface now: **Home settings -> Relay account** in the
+  Foundation dashboard, after the operator login. What it does not have is a
+  relay connection that carries traffic - recording the account is a decision,
+  not a transport.
 - No Meshtastic or other low-bandwidth transport adapter yet.
 - Not production-ready, and no compatibility promise: no kept identity has
   been founded, so surfaces may change under their existing version name

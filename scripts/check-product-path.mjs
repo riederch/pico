@@ -55,6 +55,9 @@ const productFacingDocuments = [
   'pico_home/README.md',
   'pico_home/DOCS.md',
   'pico_home/CHANGELOG.md',
+  'pico_relay/README.md',
+  'pico_relay/DOCS.md',
+  'pico_relay/CHANGELOG.md',
 ];
 
 const cli = 'pico-vault';

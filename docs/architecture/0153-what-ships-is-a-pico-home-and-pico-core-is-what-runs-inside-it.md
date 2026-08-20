@@ -2,6 +2,18 @@
 
 ## Status
 
+Status note, 2026-08-20: **the packaging half of the Decision was reversed and
+its argument was not.** ADR 0155 ships Pico Relay as a Home Assistant add-on
+as well as a container, from this same image, decided by the user. The
+sentence below - "Pico Relay is deliberately not a Home Assistant add-on" - no
+longer describes what ships. What it says about *why* still holds and is now
+carried as a fitness statement in `pico_relay/README.md`: a relay under the
+same Supervisor as the Home it serves shares that Home's outages. PK1-PK7 are
+unaffected and PK3 is reinforced by ADR 0155 HR6.
+
+Left as it stands rather than edited, per ADR 0128: this ADR is the record of
+a decision that was made, including the part of it that was later taken back.
+
 Accepted 2026-08-16, decided by the user, who also decided the two questions
 this could not answer for itself: one version across all deliverables, and the
 Linux client published from the build that already produces it.

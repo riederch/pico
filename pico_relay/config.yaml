@@ -1,0 +1,75 @@
+name: Pico Relay
+version: "0.2.1"
+slug: pico_relay
+description: A queue with a door on it. Forwards sealed packets and holds no authority.
+url: https://github.com/riederch/pico
+arch:
+  - amd64
+  - aarch64
+startup: services
+boot: auto
+init: false
+image: ghcr.io/riederch/pico/relay
+# No ingress, no panel and no `panel_title`. A relay has no browser surface at
+# all: it is administered from the Pico Client over the operator port, and a
+# dashboard here would be a fourth listener nobody asked for.
+#
+# ADR 0155. Running a relay under a Supervisor was decided against in ADR 0153
+# and decided for by the user on 2026-08-20. The objection did not go away and
+# is recorded where somebody meets it: an add-on's lifecycle belongs to the
+# Supervisor, so this relay is down while its Home Assistant restarts. That is
+# the right trade for a relay on a machine that is not the household's Home -
+# a small server, a VPS, a second box - and the wrong one for a relay that a
+# whole household's reachability depends on.
+
+# `operator` is deliberately absent from `options` and optional in `schema`.
+#
+# It is the hostname senders resolve to reach this relay (ADR 0147 RY3), and
+# there is no value that could stand here: a guessed one would issue addresses
+# pointing at somebody else's machine. So the add-on installs unconfigured and
+# refuses to start until the Configuration tab is filled in, and the log says
+# exactly that in the vocabulary of the tab rather than of an environment
+# variable nobody here can set.
+#
+# `scripts/check-addon-config.mjs` requires a required option to carry a
+# default, for the good reason that a fresh install should not strand somebody
+# guessing what to type. This add-on satisfies the letter of that rule with
+# `str?` and not its spirit, and the honest form of that is to say so here:
+# what closes the gap is the refusal message, not the schema.
+options:
+  operator_api_on_lan: false
+schema:
+  operator: str?
+  operator_api_on_lan: bool
+
+# **One port belongs on the internet, and it is 3200.**
+#
+# Five POST routes, and an unknown route answers exactly like a wrong method,
+# so this port carries no map of itself (ADR 0149). It is published to the host
+# by default because a relay nobody can reach is not a relay.
+#
+# 3202 is administration (ADR 0154 RO1/RO7) and is published by nobody. The
+# listener behind it sits on loopback until `operator_api_on_lan` is switched
+# on, so opening it takes two deliberate acts and neither happens by
+# installing. Claiming this relay from the Pico Client needs both, and the
+# honest posture afterwards is to close it again.
+#
+# 3201 is the health signal and is not listed at all. It binds to loopback
+# inside the container, so a mapping here would publish a port with nothing
+# behind it.
+ports:
+  3200/tcp: 3200
+  3202/tcp: null
+ports_description:
+  3200/tcp: Pico Relay mailbox port. The only port that may be forwarded from a router.
+  3202/tcp: Operator administration. Needs `operator_api_on_lan` as well, and belongs on a LAN or VPN - never on a router.
+
+# No `watchdog`, and that is a finding rather than an omission.
+#
+# The Supervisor's watchdog needs a route it can call. The public port has no
+# `/health` on purpose - it would be the one request that answered differently
+# from every unknown route, which is a map with one entry, and the entry says
+# "a Pico relay lives here" (ADR 0153 PK3). The health listener that does
+# answer binds to loopback. Pointing a watchdog at either would either undo
+# PK3 or restart a healthy relay in a loop, and a watchdog that restarts a
+# working machine is worse than none.

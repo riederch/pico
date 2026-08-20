@@ -36,6 +36,10 @@ for (const packageFile of packageFiles) {
 }
 
 assertVersion(matchRequired('pico_home/config.yaml', /^version:\s*"([^"]+)"/m, 'Home Assistant add-on version'), 'pico_home/config.yaml version');
+// ADR 0155. The second add-on is version-bearing for the same reason the first
+// one is: the Supervisor appends this number to the image name, so a config
+// that lags the release installs a tag that does not exist yet.
+assertVersion(matchRequired('pico_relay/config.yaml', /^version:\s*"([^"]+)"/m, 'relay add-on version'), 'pico_relay/config.yaml version');
 assertVersion(matchRequired('apps/core/src/app.ts', /const SERVICE_VERSION = '([^']+)'/, 'service version'), 'apps/core/src/app.ts SERVICE_VERSION');
 assertVersion(matchRequired('apps/vault-daemon/src/daemon.ts', /const DAEMON_VERSION = '([^']+)'/, 'vault daemon version'), 'apps/vault-daemon/src/daemon.ts DAEMON_VERSION');
 // The protocol version is a separate axis and is deliberately NOT compared to
@@ -51,6 +55,9 @@ assertVersion(matchRequired('ReadmeTech.md', /Current tag:\n\n```text\n([0-9]+\.
 assertVersion(currentVersionFence('pico_home/README.md'), 'pico_home/README.md current version');
 assertVersion(matchRequired('pico_home/CHANGELOG.md', /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest changelog heading'), 'pico_home/CHANGELOG.md latest heading');
 assertVersion(matchRequired('pico_home/CHANGELOG.md', /ghcr\.io\/riederch\/pico\/home:([0-9]+\.[0-9]+\.[0-9]+)/, 'current add-on image tag'), 'pico_home/CHANGELOG.md current image tag');
+assertVersion(currentVersionFence('pico_relay/README.md'), 'pico_relay/README.md current version');
+assertVersion(matchRequired('pico_relay/CHANGELOG.md', /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest relay changelog heading'), 'pico_relay/CHANGELOG.md latest heading');
+assertVersion(matchRequired('pico_relay/CHANGELOG.md', /ghcr\.io\/riederch\/pico\/relay:([0-9]+\.[0-9]+\.[0-9]+)/, 'current relay image tag'), 'pico_relay/CHANGELOG.md current image tag');
 assertAllVersions('docs/release/versioning.md', collectSemvers('docs/release/versioning.md'), 'docs/release/versioning.md version references');
 assertProtocolVersion(matchRequired('docs/protocol/public-surfaces.md', /claims compatibility with protocol version `([0-9]+\.[0-9]+\.[0-9]+)`/, 'public protocol compatibility claim version'), 'docs/protocol/public-surfaces.md compatibility claim version');
 assertProtocolVersion(matchRequired('docs/protocol/public-surfaces.md', /"protocolVersion": "([0-9]+\.[0-9]+\.[0-9]+)"/, 'public protocol claim example version'), 'docs/protocol/public-surfaces.md protocolVersion example');

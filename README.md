@@ -107,12 +107,12 @@ Current version:
 Three things are built and shipped as separate deliverables:
 
 - **Pico Home** - the place a Pico lives. Runs as a Home Assistant add-on or a container.
-- **Pico Relay** - a queue with a door on it, so a Home is reachable without opening a port into the house.
+- **Pico Relay** - a queue with a door on it, so a Home is reachable without opening a port into the house. Runs as a Home Assistant add-on or a container; the one port anybody ever forwards is this one's.
 - **Pico Client** - the desktop companion, packaged for Linux, through which a person makes the decisions that are theirs: what a model may see, what material may be here, which of their devices may do what.
 
 Underneath them: event storage with migrations, sync primitives, a local Pico Vault daemon, identity verification and lifecycle, canonical signature-input vectors, sealed Pico Link envelopes between claimed devices, the request/decide/run split for actions, a foundation diagnostics dashboard, the release gates, and the architecture notes the whole thing is argued in.
 
-Pico is **not production-ready** yet, and the reason is no longer that the pieces are missing. Of 154 architecture decisions, 35 are implemented and 84 partially - which means most paths exist end to end and few are hardened. What still needs work: production authentication and authorization beyond the local host, further desktop platforms, the mobile capture path, and turning "partially" into "fully" across the middle of that list.
+Pico is **not production-ready** yet, and the reason is no longer that the pieces are missing. Of 155 architecture decisions, 36 are implemented and 86 partially - which means most paths exist end to end and few are hardened. What still needs work: production authentication and authorization beyond the local host, further desktop platforms, the mobile capture path, and turning "partially" into "fully" across the middle of that list.
 
 A person can, today, ask their own Home a question about their own memory and get an answer; keep that answer and later forget it; attach material from a repository and decide whether Pico may fetch it; point Pico at a model host they own and decide what it may see. Each of those paths is walked end to end by a test - against a real git remote, a real model host over HTTP, and for the desktop package a real Electron process and a real Debian install, upgrade and removal.
 
@@ -167,8 +167,10 @@ The avatar communicates state and risk. For example:
 ## Documentation map
 
 - [`ReadmeTech.md`](ReadmeTech.md) - full technical README
-- [`pico_home/README.md`](pico_home/README.md) - Home Assistant add-on overview
-- [`pico_home/DOCS.md`](pico_home/DOCS.md) - Home Assistant add-on installation and operation details
+- [`pico_home/README.md`](pico_home/README.md) - Pico Home add-on overview
+- [`pico_home/DOCS.md`](pico_home/DOCS.md) - Pico Home add-on installation and operation details
+- [`pico_relay/README.md`](pico_relay/README.md) - Pico Relay add-on overview, and which shapes it fits
+- [`pico_relay/DOCS.md`](pico_relay/DOCS.md) - Pico Relay add-on operation, and the one port that may be forwarded
 - [`docs/architecture`](docs/architecture) - architecture decisions and concept notes
 - [`docs/architecture/implementation-status.md`](docs/architecture/implementation-status.md) - every numbered architecture decision, what it decided, and how much of it is built
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist

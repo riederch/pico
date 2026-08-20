@@ -167,6 +167,11 @@ describe('the relay process an operator installs', () => {
     expect(health.status).toBe(200);
     expect(await health.json()).toEqual({ status: 'ok' });
 
+    // ADR 0155 HR2. There is no `/data/options.json` on a build machine, so
+    // this is the plain container path saying so out loud. The Home Assistant
+    // half is a unit test; what belongs here is that the detection runs at all.
+    expect((await relay.waitFor('relay_listening')).platform).toBe('container');
+
     /**
      * ADR 0154. The claim code is printed once, at boot, on stdout - which is
      * where an operator reading `docker logs` will find it, and the only place

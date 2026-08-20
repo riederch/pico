@@ -26,11 +26,14 @@ When the Pico version changes, update all version-bearing files in the same comm
 | `packages/vault/package.json` | `version` | Vault package version | Yes |
 | `apps/core/src/app.ts` | `SERVICE_VERSION` | Version served by the Foundation API | Yes |
 | `apps/vault-daemon/src/daemon.ts` | `DAEMON_VERSION` | Version reported by the Vault daemon | Yes |
-| `pico_home/config.yaml` | `version` | Active Home Assistant add-on version shown by HA | Yes |
+| `pico_home/config.yaml` | `version` | Pico Home add-on version shown by HA | Yes |
+| `pico_relay/config.yaml` | `version` | Pico Relay add-on version shown by HA | Yes |
 | `README.md` | Current version text | Non-technical documentation | Yes |
 | `ReadmeTech.md` | Current version and Home Assistant add-on tag/version text | Technical documentation | Yes |
 | `pico_home/README.md` | Current version text | Add-on documentation | Yes |
 | `pico_home/CHANGELOG.md` | version heading and image tag | Home Assistant-facing update notes | Yes |
+| `pico_relay/README.md` | Current version text | Relay add-on documentation | Yes |
+| `pico_relay/CHANGELOG.md` | version heading and image tag | Home Assistant-facing update notes | Yes |
 | `docs/release/versioning.md` | every version reference | This checklist | Yes |
 
 `scripts/check-version.mjs` enforces this table. If a version-bearing location
@@ -43,9 +46,13 @@ ADR 0153 PK4. A tag publishes all three at the same number:
 ```text
 v0.2.1
 ├── ghcr.io/riederch/pico/home:0.2.1     Pico Home, the Home Assistant add-on
-├── ghcr.io/riederch/pico/relay:0.2.1    Pico Relay, a standalone container
+├── ghcr.io/riederch/pico/relay:0.2.1    Pico Relay, an add-on and a container
 └── pico-companion_0.2.1_amd64.deb       Pico Client, attached to the release
 ```
+
+Two add-on directories now carry that number - `pico_home/` and `pico_relay/`
+(ADR 0155) - because the Supervisor appends the add-on version to the image
+name. A config that lags the release installs a tag that does not exist.
 
 The cost is recorded rather than discovered: a client-only fix raises the
 Home's version too, and Home Assistant offers an update containing nothing for

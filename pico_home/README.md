@@ -117,11 +117,17 @@ Pico ships three things, and this is one of them (ADR 0153):
 | Deliverable | What it is |
 |---|---|
 | **Pico Home** | this add-on |
-| **Pico Relay** | a container that forwards encrypted packets and holds no authority |
+| **Pico Relay** | forwards encrypted packets and holds no authority; an add-on or a container |
 | **Pico Client** | the desktop companion, a Debian package for Linux |
 
-A relay is deliberately not a Home Assistant add-on: it has to stay reachable
-when one household's Supervisor is restarting.
+ADR 0153 kept the relay out of Home Assistant deliberately, and ADR 0155
+reversed that packaging decision without reversing its argument: a relay under
+a Supervisor is down while that Supervisor restarts. So a relay beside the Home
+it serves shares that Home's outages, and `pico_relay/README.md` says which
+shapes fit rather than leaving it to be found out.
+
+If you run both here, exactly one port is ever forwarded from a router and it
+is the relay's `3200`. Pico Home's `3100` never is.
 
 ## Design principles
 

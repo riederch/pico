@@ -19,46 +19,90 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const configPath = 'pico_home/config.yaml';
+/**
+ * Every add-on in this repository, not the one this file was written for.
+ * ADR 0155 added a second one, and a gate that guarded the first only would
+ * have left the new config unchecked on the day it was written - which is the
+ * day it is most likely to be wrong. The same reasoning as the Dockerfile list
+ * below, which ADR 0153 taught this file once already.
+ */
+const configPaths = ['pico_home/config.yaml', 'pico_relay/config.yaml'];
 const errors = [];
 
-const config = readFileSync(join(repoRoot, configPath), 'utf8');
-const options = readTopLevelMapping(config, 'options');
-const schema = readTopLevelMapping(config, 'schema');
+for (const configPath of configPaths) {
+  const config = readFileSync(join(repoRoot, configPath), 'utf8');
+  const options = readTopLevelMapping(config, 'options');
+  const schema = readTopLevelMapping(config, 'schema');
 
-if (options === undefined) {
-  errors.push(`${configPath}: missing an \`options\` mapping.`);
-}
-if (schema === undefined) {
-  errors.push(`${configPath}: missing a \`schema\` mapping.`);
-}
+  if (options === undefined) {
+    errors.push(`${configPath}: missing an \`options\` mapping.`);
+  }
+  if (schema === undefined) {
+    errors.push(`${configPath}: missing a \`schema\` mapping.`);
+  }
 
-if (options !== undefined && schema !== undefined) {
-  for (const [key, value] of options) {
-    // The failure this gate exists for. The Supervisor reads a null default
-    // back as an absent value and rejects the add-on, optional schema or not.
-    if (value === 'null' || value === '~' || value === '') {
-      errors.push(
-        `${configPath}: option \`${key}\` has a null default. `
-        + 'An option with no real default belongs in `schema` alone; the Supervisor '
-        + 'reads a null default as a missing value and refuses to start the add-on.',
-      );
+  if (options !== undefined && schema !== undefined) {
+    for (const [key, value] of options) {
+      // The failure this gate exists for. The Supervisor reads a null default
+      // back as an absent value and rejects the add-on, optional schema or not.
+      if (value === 'null' || value === '~' || value === '') {
+        errors.push(
+          `${configPath}: option \`${key}\` has a null default. `
+          + 'An option with no real default belongs in `schema` alone; the Supervisor '
+          + 'reads a null default as a missing value and refuses to start the add-on.',
+        );
+      }
+
+      if (!schema.has(key)) {
+        errors.push(`${configPath}: option \`${key}\` has no \`schema\` entry, so it cannot be validated.`);
+      }
     }
 
-    if (!schema.has(key)) {
-      errors.push(`${configPath}: option \`${key}\` has no \`schema\` entry, so it cannot be validated.`);
+    // A required schema entry with no default leaves a fresh install unstartable
+    // until the person guesses what to type.
+    for (const [key, type] of schema) {
+      if (!type.endsWith('?') && !options.has(key)) {
+        errors.push(
+          `${configPath}: schema entry \`${key}\` is required (\`${type}\`) but has no default in \`options\`, `
+          + 'so a fresh install cannot start until someone fills it in. Give it a default or mark it optional.',
+        );
+      }
     }
   }
 
-  // A required schema entry with no default leaves a fresh install unstartable
-  // until the person guesses what to type.
-  for (const [key, type] of schema) {
-    if (!type.endsWith('?') && !options.has(key)) {
-      errors.push(
-        `${configPath}: schema entry \`${key}\` is required (\`${type}\`) but has no default in \`options\`, `
-        + 'so a fresh install cannot start until someone fills it in. Give it a default or mark it optional.',
-      );
-    }
+  /**
+   * ADR 0153 PK1. Home Assistant identifies an add-on by its slug and finds it
+   * by its directory, so the two disagreeing is a rename that stopped halfway.
+   * The Supervisor's own failure for this is obscure and arrives on an install.
+   */
+  const slug = /^slug:\s*(\S+)/mu.exec(config)?.[1];
+  const directory = configPath.split('/')[0];
+  if (slug === undefined) {
+    errors.push(`${configPath}: no \`slug\` declared.`);
+  } else if (slug !== directory) {
+    errors.push(
+      `${configPath}: slug \`${slug}\` does not match its directory \`${directory}\`. `
+      + 'Home Assistant finds an add-on by directory and identifies it by slug; '
+      + 'a mismatch is a half-finished rename.',
+    );
+  }
+
+  /**
+   * The image name carries no tag, because the version does.
+   *
+   * The Supervisor appends `:${version}` from this same file. A literal tag
+   * here would produce `image:0.2.1:0.2.1` or, worse, a pin that quietly
+   * stopped following the version line and kept installing an old release
+   * while every version-bearing document in the tree said otherwise.
+   */
+  const image = /^image:\s*(\S+)/mu.exec(config)?.[1];
+  if (image === undefined) {
+    errors.push(`${configPath}: no \`image\` declared.`);
+  } else if (/:[^/]+$/u.test(image)) {
+    errors.push(
+      `${configPath}: image \`${image}\` carries a literal tag. The Supervisor appends `
+      + 'the add-on version, so the tag belongs to `version:` and nowhere else.',
+    );
   }
 }
 
@@ -111,23 +155,6 @@ for (const dockerfilePath of dockerfilePaths) {
   }
 }
 
-/**
- * ADR 0153 PK1. Home Assistant identifies an add-on by its slug and finds it
- * by its directory, so the two disagreeing is a rename that stopped halfway.
- * The Supervisor's own failure for this is obscure and arrives on an install.
- */
-const slug = /^slug:\s*(\S+)/mu.exec(config)?.[1];
-const directory = configPath.split('/')[0];
-if (slug === undefined) {
-  errors.push(`${configPath}: no \`slug\` declared.`);
-} else if (slug !== directory) {
-  errors.push(
-    `${configPath}: slug \`${slug}\` does not match its directory \`${directory}\`. `
-    + 'Home Assistant finds an add-on by directory and identifies it by slug; '
-    + 'a mismatch is a half-finished rename.',
-  );
-}
-
 if (errors.length > 0) {
   console.error('Home Assistant add-on config check failed:');
   for (const error of errors) {
@@ -136,7 +163,7 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('Home Assistant add-on config check passed.');
+console.log(`Home Assistant add-on config check passed for ${configPaths.length} add-ons.`);
 
 /**
  * Reads a flat top-level `key:` block. The add-on options and schema are both

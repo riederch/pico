@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadPicoRelayConfig } from './config.js';
+import { applyPicoRelayHomeAssistantOptions } from './home-assistant-options.js';
 import { startPicoRelayHealthListener, type PicoRelayHealthListener } from './health.js';
 import { PicoRelayClaimCode } from './operator-claim.js';
 import { startPicoRelayOperatorListener, type PicoRelayOperatorListener } from './operator.js';
@@ -38,6 +39,13 @@ const log = (line: Record<string, unknown>): void => {
   process.stdout.write(`${JSON.stringify({ time: new Date().toISOString(), ...line })}\n`);
 };
 
+/**
+ * ADR 0155 HR2. Which host this process decided it is running on, kept out
+ * here because the startup failure needs it as much as the success does: an
+ * add-on that cannot start must be told what to fill in where it can fill it
+ * in, and `PICO_RELAY_OPERATOR` is not a thing a Supervisor lets anybody set.
+ */
+let onHomeAssistant = false;
 let store: PicoRelayStore | undefined;
 let server: PicoRelayServer | undefined;
 let health: PicoRelayHealthListener | undefined;
@@ -89,6 +97,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 }
 
 try {
+  onHomeAssistant = applyPicoRelayHomeAssistantOptions(process.env);
   const config = loadPicoRelayConfig();
   // The directory rather than the file: a mounted empty volume is the normal
   // first start, and better-sqlite3 creates the database but not its parent.
@@ -143,6 +152,7 @@ try {
     operatorHost: operator.host,
     operatorPort: operator.port,
     databasePath: config.databasePath,
+    platform: onHomeAssistant ? 'home-assistant' : 'container',
   });
 
   if (!store.isClaimed()) {
@@ -173,6 +183,23 @@ try {
   }
 } catch (error) {
   log({ event: 'relay_startup_failed', error: String(error) });
+  if (onHomeAssistant && String(error).includes('PICO_RELAY_OPERATOR')) {
+    // The same fault, said in the vocabulary of the surface the reader has.
+    // A Supervisor log that names an environment variable sends somebody
+    // looking for a field that does not exist in Home Assistant.
+    //
+    // Narrowed to the operator fault on purpose: a disk error that answered
+    // "fill in the operator field" would send somebody to correct the one
+    // thing that was already right.
+    log({
+      event: 'relay_startup_needs_configuration',
+      message:
+        'Open this add-on\'s Configuration tab and set `operator` to the hostname '
+        + 'senders will resolve to reach this relay, then start it again. There is no '
+        + 'default: a guessed hostname would issue addresses pointing at somebody '
+        + 'else\'s machine.',
+    });
+  }
   try {
     await closeRuntime();
   } catch (closeError) {

@@ -17,10 +17,16 @@ renewing a second device by holding two screens up to each other, ending a
 device's authority or a membership from the window that granted it, and
 rotating the Home's host keys with the Recovery Card warning said out loud.
 
-The Pico Relay remains **deliberately not an add-on** (ADR 0153): a relay has
-to stay reachable while a household's Supervisor restarts, so it ships as a
-standalone container (`ghcr.io/riederch/pico/relay:0.2.1`) you run beside
-Home Assistant, not inside it.
+**Pico Relay is now an add-on too** (ADR 0155). The same release adds a second
+add-on to this repository, `pico_relay`, running the image you could previously
+only start by hand (`ghcr.io/riederch/pico/relay:0.2.1`). ADR 0153's reason for
+keeping it out is unchanged and worth reading before you install it beside this
+Home: a relay under a Supervisor is down while that Supervisor restarts, so it
+belongs on a machine that is not the household's Home.
+
+One port may be forwarded from a router, and it is the relay's `3200`. Pico
+Home's `3100` is not a public endpoint under any arrangement - it is reached
+*through* a relay, which is the whole point of having one.
 
 ## 0.2.0
 

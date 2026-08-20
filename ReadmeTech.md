@@ -304,7 +304,8 @@ Details are documented in:
 │   ├── protocol          # shared event and payload types
 │   ├── sync              # Lamport clock and version-vector helpers
 │   └── vault             # minimal person-role keyfile runtime
-├── pico_home             # active Home Assistant add-on metadata
+├── pico_home             # Pico Home add-on metadata
+├── pico_relay            # Pico Relay add-on metadata
 ├── scripts               # the release gates
 ├── tools                 # measurement instruments that are not shipped
 ├── repository.yaml       # Home Assistant add-on repository metadata
@@ -331,7 +332,7 @@ Three deliverables, named after what a person gets (ADR 0153):
 | Deliverable | What it is | How it updates |
 |---|---|---|
 | Pico Home | Home Assistant add-on `pico_home`, image `ghcr.io/riederch/pico/home` | Home Assistant Supervisor |
-| Pico Relay | OCI container `ghcr.io/riederch/pico/relay` | container management |
+| Pico Relay | Home Assistant add-on `pico_relay` **or** OCI container, both `ghcr.io/riederch/pico/relay` | Supervisor, or container management |
 | Pico Client | `pico-companion_<version>_amd64.deb`, attached to the GitHub release | package management |
 
 All three carry the repository version and ship from one tag. The wire contract
@@ -343,8 +344,12 @@ Core is the process inside it.
 
 ## Pico Relay as a deliverable
 
-Deliberately not a Home Assistant add-on: a relay has to stay reachable when
-one household's Supervisor is restarting.
+**One image, two packagings** (ADR 0155). The container below is the shape for
+a relay that has to outlive one household's restart; `pico_relay/` is the same
+image under a Supervisor, for a Home Assistant box that is not the household's
+own Home. ADR 0153 forbade the second shape and ADR 0155 reversed that without
+reversing the argument: an add-on's lifecycle belongs to its Supervisor, so a
+relay serving the Home it lives beside shares that Home's outages.
 
 ```bash
 docker run -d \
@@ -428,20 +433,26 @@ code; the accounts stay, because losing the administration credential is not a
 reason to cut off every customer. Anybody with file access to the host can do
 this - operator administration protects a network surface, not the host.
 
-## Home Assistant add-on
+## Home Assistant add-ons
 
-Pico currently ships a foundation add-on definition under:
+Pico ships two add-on definitions from this repository, which is also the
+Home Assistant add-on repository:
 
 ```text
 pico_home/
+pico_relay/
 ```
 
-`pico_home/` is the single source of truth for the Home Assistant add-on metadata.
+Each directory is the single source of truth for its own add-on metadata. The
+second one was added by ADR 0155 and is the packaging half of Pico Relay; the
+sections below describe Pico Home unless they say otherwise, and
+`pico_relay/DOCS.md` carries the relay's own operation notes.
 
-The add-on uses the prebuilt container image:
+Both use prebuilt container images:
 
 ```text
 ghcr.io/riederch/pico/home
+ghcr.io/riederch/pico/relay
 ```
 
 `pico_home/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.2.1` is:
@@ -467,6 +478,35 @@ The add-on exposes Pico Home Core on port `3100`, serves the foundation dashboar
 Port `3100` is a trusted local foundation interface for the current add-on. It is not the intended public remote-access surface. Future remote reachability should use Pico Link transports and Pico Relay instead of router port forwarding into the Pico Home API.
 
 The current container keeps the platform default user so the Home Assistant `/data` mount stays writable for SQLite. This is a foundation-stage packaging constraint, not a security claim. A later hardening step should prepare `/data` ownership and drop privileges through a tested entrypoint or platform-specific setup.
+
+The Pico Relay add-on declares no watchdog and no ingress. It has no browser
+surface at all, and the two routes a watchdog could call are both refused on
+purpose: the public port answers an unknown route exactly like a wrong method,
+and the health listener binds to loopback (ADR 0153 PK3, ADR 0155 HR6).
+
+### Which port a port forwarding is for
+
+Exactly one, and it belongs to a relay:
+
+```text
+TCP 3200  ->  <the machine running Pico Relay>:3200
+```
+
+| Port | Component | Forwarded from a router |
+|---|---|---|
+| `3200/tcp` | Pico Relay mailbox port | **yes - this one only** |
+| `3202/tcp` | Pico Relay operator administration | no; LAN or VPN, and only with `operator_api_on_lan` set |
+| `3201/tcp` | Pico Relay health listener | no; it binds to loopback |
+| `3100/tcp` | **Pico Home** foundation API, dashboard and WebSocket | **never** |
+
+Pico Home is reached *through* a relay and is never a public endpoint - that
+is what Pico Link is for, and forwarding `3100` puts the foundation surface on
+the internet. A relay used only inside a LAN or a VPN needs no forward at all.
+
+Forwarding `3200` into the same machine that hosts the household's own Pico
+Home is possible and is not the recommended arrangement: it recreates the
+public home port the design exists to remove. `pico_relay/README.md` states
+which shapes fit and which does not.
 
 ## Current API surface
 
