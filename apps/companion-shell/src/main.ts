@@ -32,6 +32,8 @@ import {
   isPicoHomeCoreUrl,
   maxPicoHomeCoreUrlLength,
 } from '@pico/protocol/home-address';
+import { maxPicoDeviceEnrolmentTransportLength } from '@pico/protocol/device-enrolment';
+import { isPicoCompanionMembershipSubject } from '@pico/companion/home-authority';
 import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
 import { picoCompanionDisplayDate } from '@pico/companion/when';
 import {
@@ -1397,8 +1399,11 @@ function registerIpc(): void {
             + 'own Pico. It is public, it names nobody, and they do not have to agree to '
             + 'anything - a membership is given rather than accepted.',
           refusal: 'An identity fingerprint is 64 hexadecimal characters.',
-          maximumLength: 128,
-          validate: (value: string) => /^[0-9a-f]{64}$/u.test(value.trim()),
+          // Sixty-four, because that is what a fingerprint is. It said 128
+          // and carried its own copy of the ceremony's expression, which
+          // agreed with it by coincidence rather than by construction.
+          maximumLength: 64,
+          validate: (value: string) => isPicoCompanionMembershipSubject(value.trim()),
         });
         const admitted = await runtime.admitHomeMember({
           picoIdentityFingerprintHex: picoIdentityFingerprintHex.trim(),
@@ -1941,7 +1946,10 @@ async function readDeviceCode(
   return await captureSecret({
     title: line.title,
     instruction: `${line.body} Paste it, or use a scanner, then press Enter.`,
-    maximumLength: 8_192,
+    // The protocol's own limit, not a round number: a field that stops three
+    // thousand characters past anything the parser accepts hands the refusal
+    // to the parser, which can only say the code is malformed.
+    maximumLength: maxPicoDeviceEnrolmentTransportLength,
     refusal: `That code begins with ${prefix} - it is the one the other device is showing `
       + 'you now, not one from an earlier step.',
     validate: (value: string) => value.startsWith(prefix),

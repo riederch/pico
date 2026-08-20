@@ -7,6 +7,8 @@ import {
   parsePicoDeviceEnrolmentAcceptance,
   parsePicoDeviceEnrolmentGrant,
   parsePicoDeviceEnrolmentOffer,
+  maxPicoDeviceEnrolmentTransportLength,
+  picoDeviceEnrolmentAcceptancePrefix,
   picoDeviceEnrolmentGrantPrefix,
   picoDeviceEnrolmentOfferPrefix,
 } from './device-enrolment.js';
@@ -228,5 +230,27 @@ describe('ADR 0130 E3 - the codes two devices show each other', () => {
       activationId: activation.activationId,
       targetSignatureHex: 'ab'.repeat(64),
     }).length).toBeLessThan(250);
+  });
+});
+
+describe('ADR 0130 E3 - how long a code can be where a person meets it', () => {
+  it('is the protocol’s own limit, so a field can stop at it', () => {
+    /**
+     * The desktop's typed-entry field carried 8,192 until 2026-08-20 - a
+     * round number belonging to nobody, three thousand characters past
+     * anything this parser accepts. A field that stops here refuses while
+     * the person is still typing; one that stops later hands the refusal to
+     * the parser, which can only say the code is malformed.
+     */
+    expect(maxPicoDeviceEnrolmentTransportLength).toBe(5_488);
+
+    const longest = `${picoDeviceEnrolmentAcceptancePrefix}${'A'.repeat(
+      maxPicoDeviceEnrolmentTransportLength - picoDeviceEnrolmentAcceptancePrefix.length,
+    )}`;
+    expect(longest).toHaveLength(maxPicoDeviceEnrolmentTransportLength);
+    // Long enough for anything the parser will read, and refused for what it
+    // says rather than for its length.
+    expect(() => parsePicoDeviceEnrolmentAcceptance(longest))
+      .toThrow('invalid_pico_device_enrolment_acceptance_body');
   });
 });

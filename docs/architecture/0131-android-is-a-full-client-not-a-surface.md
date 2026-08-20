@@ -697,6 +697,27 @@ local-first product's most security-critical moment.
   both rules, and it tells the window something different from the rest,
   because the window cannot reach either of them.
 
+  **Then the sweep moved from what the shell *shows* to what it *checks*, and
+  found more** (2026-08-20). Every prompt in `main.ts` carries a `validate`
+  and a length, and each of those is a rule a second client re-decides.
+
+  Three were rules with an owner elsewhere. What a Home's address is had four
+  disagreeing answers and is now one, recorded in ADR 0130's E2 note. What a
+  Pico may be admitted by was the ceremony's own expression, copied into the
+  field beside a cap of 128 - twice a fingerprint - so field and ceremony
+  agreed by coincidence; `isPicoCompanionMembershipSubject` is exported now
+  and both ask it. And how long a code may be was 8,192 in the field against
+  a parser that stops at 5,488: three thousand characters in which a person
+  keeps typing and the refusal, when it comes, can only say the code is
+  malformed.
+
+  One was already right and is worth naming as such: the announcement line's
+  check is `startsWith('{')` and deliberately no more, because a stricter
+  version once made `founding.ts`'s own refusals unreachable - the parser had
+  the exact words ready and the field was answering with a character count. A
+  loose check in front of a parser that speaks is not the same defect as a
+  loose check in front of one that does not.
+
   **One thing was in the wrong place, and it was the dangerous kind.** The
   pairing of each exchange step with the prefix a read must accept lived as
   six string literals in `apps/companion-shell/src/main.ts`, and the

@@ -213,6 +213,24 @@ export interface PicoCompanionMembership {
  * profile: the profile pins who the Home answers as, and a second copy of its
  * name would be one more thing to be stale.
  */
+/**
+ * What a Pico may be admitted by: its identity fingerprint, whole.
+ *
+ * Exported so the field a person pastes into can ask the same question. It
+ * had its own copy of this expression until 2026-08-20 - the same expression,
+ * which is the point: the field and the ceremony agreeing by coincidence is
+ * not the same as their agreeing by construction, and ADR 0131 A5 puts a
+ * second client next to this one.
+ *
+ * Not a *fingerprint* predicate in general. Eight other places in the tree
+ * test the same shape for content hashes, model digests and peer keys, and
+ * they are different facts that happen to look alike; one shared constant
+ * would tie a Home's membership to a library pin.
+ */
+export function isPicoCompanionMembershipSubject(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/u.test(value);
+}
+
 export async function issuePicoCompanionMembership(input: {
   profile: PicoCompanionProfile;
   daemonClient: PicoVaultDaemonClient;
@@ -222,7 +240,7 @@ export async function issuePicoCompanionMembership(input: {
   validUntil: string;
   now?: () => Date;
 }): Promise<PicoCompanionMembership> {
-  if (!/^[0-9a-f]{64}$/u.test(input.subjectPicoIdentityFingerprintHex)) {
+  if (!isPicoCompanionMembershipSubject(input.subjectPicoIdentityFingerprintHex)) {
     throw new Error('invalid_pico_companion_membership_subject');
   }
   if (input.subjectPicoIdentityFingerprintHex

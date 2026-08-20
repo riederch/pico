@@ -52,6 +52,20 @@ export const picoDeviceEnrolmentAcceptancePrefix = 'pico-device-acceptance-v1:' 
 /** The Recovery Card's budget, for the same reason: a camera has to read it. */
 const maxPicoDeviceEnrolmentBytes = 4_096;
 
+/**
+ * The longest a code can be as a person meets it: prefix plus base64url.
+ *
+ * Exported because whoever *reads* one needs a cap, and until 2026-08-20 the
+ * desktop's typed-entry field carried 8,192 - a round number belonging to
+ * nobody, three thousand characters past anything this parser would accept.
+ * A field that stops at the protocol's own limit refuses while the person is
+ * still typing; one that stops later hands the refusal to the parser, which
+ * can only say the code is malformed.
+ */
+export const maxPicoDeviceEnrolmentTransportLength =
+  picoDeviceEnrolmentAcceptancePrefix.length
+  + Math.ceil((maxPicoDeviceEnrolmentBytes * 4) / 3);
+
 const hex64 = /^[0-9a-f]{64}$/u;
 const hex128 = /^[0-9a-f]{128}$/u;
 const asciiToken = /^[A-Za-z0-9_.:-]{1,128}$/u;
