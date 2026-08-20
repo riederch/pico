@@ -766,7 +766,18 @@ local-first product's most security-critical moment.
   statements that share an order (`conflicting_lifecycle_order_statement`),
   and a revocation reference matches exactly one of a delegation's keys. So
   a phone and a desktop cannot disagree there, and the calls were left
-  alone rather than changed for tidiness. Recorded because the next reader
+  alone rather than changed for tidiness.
+
+  Three more sit in `@pico/sync`, ordering a reader-custody catalogue, and
+  those are *not* guarded by a refusal - they are the primary order. They
+  were left for a different measured reason: that order feeds descriptors
+  handed to a consumer, not bytes anybody signs. Worth knowing that the
+  divergence is real where it would matter - with ICU `'mem_01…'` sorts
+  *after* `'mem__1…'` and without it before, ten disagreements in a hundred
+  pairs of realistic ids - so an ordering that ever becomes canonical must
+  not be built this way.
+
+  Recorded because the next reader
   who finds them, knowing about the missing ICU, would otherwise spend the
   same hour deciding they are harmless.
 
