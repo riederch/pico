@@ -212,10 +212,11 @@ const adrNumbers = readdirSync(join(repoRoot, 'docs', 'architecture'))
  * reported 154 of 154 tracked while one was not.
  */
 const exemptionSection = /### Deliberately without a row\n([\s\S]*?)\n## /u.exec(matrix);
+const trackedRows = exemptionSection === null
+  ? matrix
+  : matrix.replace(exemptionSection[0], '');
 const rowed = new Set(
-  [...(exemptionSection === null
-    ? matrix
-    : matrix.replace(exemptionSection[0], '')).matchAll(/^\| \[(\d{4})\]/gmu)]
+  [...trackedRows.matchAll(/^\| \[(\d{4})\]/gmu)]
     .map(([, number]) => number),
 );
 const withoutRow = new Set(
@@ -371,6 +372,54 @@ for (const [, symbol] of matrix.matchAll(absenceClaim)) {
   }
 }
 
+/**
+ * Rows that say nothing is built, against the column that says what is.
+ *
+ * **Written 2026-08-20 after finding four of these in one file.** ADR 0131's
+ * row opened "Nothing here is built and no Android artifact exists" while its
+ * own appended notes below described an APK on a Galaxy A55, a two-process
+ * custody split and four measured gates. ADR 0132's said it while
+ * `recovery-card-content.ts` existed; ADR 0135's said it under a status
+ * column reading `implemented`; ADR 0130's fifth note said renewing another
+ * device "is not built" and its sixth, the same day, named the function that
+ * does it.
+ *
+ * Every one was true when written, and that is the point the check above
+ * already makes about prose. This one needs no knowledge of the tree at all:
+ * a cell that claims *nothing* is built contradicts its own status column,
+ * and the contradiction is visible inside one row.
+ *
+ * **What this deliberately cannot see.** The claim has to be about the whole
+ * row - "nothing is built" - because a partially implemented ADR may say
+ * truthfully that some named half is not, and telling those apart is reading,
+ * not matching. ADR 0130's was found by hand and would still pass here. The
+ * cure for a claim that outlives its truth is the past tense, which is what
+ * those four now use; history is not a claim about now.
+ */
+const builtNothingClaim = /\bnothing (?:here )?(?:is|has been) built\b/iu;
+const mayClaimNothingBuilt = new Set(['concept-only', 'not implemented', 'reserved']);
+let statusClaimsChecked = 0;
+for (const row of trackedRows.split('\n')) {
+  if (!/^\| \[\d{4}\]/u.test(row)) {
+    continue;
+  }
+  const cells = row.split('|').map((cell) => cell.trim());
+  const [, number, , , status = ''] = cells;
+  const narrative = cells.slice(5).join('|');
+  if (!builtNothingClaim.test(narrative)) {
+    continue;
+  }
+  statusClaimsChecked += 1;
+  if (!mayClaimNothingBuilt.has(status)) {
+    errors.push(
+      `${matrixPath}: ADR ${number.slice(1, 5)} says nothing is built and its status column says `
+      + `\`${status}\`. One of the two is out of date, and a reader who skims the first sentence `
+      + 'of a cell never reaches the notes that correct it. Past tense ("was not built when this '
+      + 'row was written") keeps the history without claiming the present.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Documentation structure check failed:');
   for (const error of errors) {
@@ -389,5 +438,6 @@ console.log(
     : `${rootFiles.length} tracked root files`}, `
   + `${named.size} entries named, each real; ${adrNumbers.length} ADRs, `
   + `${rowed.size} with a row and ${withoutRow.size} deliberately without one; `
-  + `${claimsChecked} present-tense absence claims, each still true).`,
+  + `${claimsChecked} present-tense absence claims and `
+  + `${statusClaimsChecked} nothing-is-built claims, each still true).`,
 );

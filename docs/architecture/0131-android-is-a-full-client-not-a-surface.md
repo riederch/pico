@@ -429,7 +429,8 @@ local-first product's most security-critical moment.
   scene init in the other. `run-on-device.sh` therefore targets whatever
   `adb` sees, and a real phone over USB is the better evidence anyway: an
   x86_64 guest's argon2id timing says nothing about a phone.
-- **A2 - Process and authority boundary (open):** separate custody process
+- **A2 - Process and authority boundary (decided 2026-08-18, and the shape
+  measured on the device 2026-08-19):** separate custody process
   over an app-private AF_UNIX socket, or an in-process seam over the same
   request families; decided with A1, with the ADR 0099 approval binding
   preserved either way.
@@ -476,8 +477,8 @@ local-first product's most security-critical moment.
   live where the Linux one lives: the shell-free core never sees a
   `KeyInfo`, so on Android the platform code judges and what crosses into the
   core is a verdict with its evidence, not a backend name to be judged there.
-- **A4 - Reachability contract measured (measured 2026-08-19, one item
-  outstanding):** foreground service, periodic check interval, alarm
+- **A4 - Reachability contract measured (measured 2026-08-19, all four
+  questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and
   behaviour under battery optimisation and at least one manufacturer
   task-killer, measured on real hardware before any ADR 0112 claim is made
