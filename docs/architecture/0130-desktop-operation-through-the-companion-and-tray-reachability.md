@@ -257,6 +257,32 @@ inherits the verifier's descriptors and outlives the companion, and a piped
 answered. It arrives as `ETIMEDOUT` and reads exactly like a companion that
 hung. The probe's output goes through a file now.
 
+Status note, 2026-08-20: **what a Home's address is had four answers, and
+they disagreed.** Found while sweeping the shell for rules a second client
+would decide again (ADR 0131 A5). The founding prompt tested
+`/^https?:\/\/\S+$/` and allowed 2,048 characters; the profile parsed with
+`new URL` and allowed 2,048; the enrolment grant's parser checked a lowercase
+prefix and allowed 512; and `founding.ts` - the one place an address is first
+written down - checked nothing.
+
+| address | prompt | profile | grant |
+| --- | --- | --- | --- |
+| `HTTP://192.168.1.20:3000` | no | **yes** | no |
+| a 612-character `http://…` | yes | **yes** | no |
+| `http://exa mple:3000` | no | no | **yes** |
+
+The middle row is the one a person reaches. Found a Home at a long address
+and the founding works; adding a second device later fails with
+`invalid_pico_device_enrolment_grant_core_url`, which reads as a bad code and
+is nothing of the kind - the address was accepted by the door it came through
+and refused by a door three ceremonies away.
+
+One rule now, `@pico/protocol/home-address`, bounded by what a grant can
+carry rather than by what a URL may be, and asked at the door: `founding.ts`
+refuses before a key is made. The scheme is required in lowercase rather than
+normalised, because `new URL('HTTP://x:3000').href` also grows a trailing
+slash, and rewriting an address somebody chose is not a repair.
+
 Status note, 2026-08-18: **E2 is closed. A Home can be founded from the Pico
 Client, and the Client is the only place a person is sent.**
 

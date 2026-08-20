@@ -28,6 +28,10 @@ import {
   runPicoCompanionAskingDeviceExchange,
   type PicoCompanionEnrolmentSurface,
 } from '@pico/companion/enrolment-steps';
+import {
+  isPicoHomeCoreUrl,
+  maxPicoHomeCoreUrlLength,
+} from '@pico/protocol/home-address';
 import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
 import { picoCompanionDisplayDate } from '@pico/companion/when';
 import {
@@ -1817,9 +1821,12 @@ async function runFounding(): Promise<void> {
     title: 'Where is your Pico Home?',
     instruction: 'Type the address it is reachable at, then press Enter. '
       + 'For a Home on this machine that is usually http://127.0.0.1:3100.',
-    maximumLength: 2_048,
-    refusal: 'An address starts with http:// or https:// and has no spaces in it.',
-    validate: (value: string) => /^https?:\/\/\S+$/u.test(value.trim()),
+    maximumLength: maxPicoHomeCoreUrlLength,
+    refusal: 'An address starts with a lowercase http:// or https://, has no spaces, '
+      + 'and fits in a line.',
+    // The same rule the profile and the enrolment grant use. It had its own
+    // regex and its own length until 2026-08-20, and the three disagreed.
+    validate: (value: string) => isPicoHomeCoreUrl(value.trim()),
   });
   const announcementLine = await captureSecret({
     title: 'Paste the line your Home printed when it started',

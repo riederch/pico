@@ -2,6 +2,7 @@ import {
   buildPicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceActivationSignatureInput,
 } from './index.js';
+import { isPicoHomeCoreUrl } from './home-address.js';
 import {
   decodeBase64Url,
   decodeCanonicalElements,
@@ -406,9 +407,11 @@ function assertGrant(grant: PicoDeviceEnrolmentGrant): PicoDeviceEnrolmentGrant 
   }
   assertExactKeys(home as unknown as Record<string, unknown>,
     ['coreUrl', 'homeHostPicoIdentityFingerprintHex', 'host', 'identity'], 'grant');
-  if (typeof home.coreUrl !== 'string'
-    || !(home.coreUrl.startsWith('http://') || home.coreUrl.startsWith('https://'))
-    || home.coreUrl.length > 512) {
+  // The rule lives in `home-address.ts` since 2026-08-20, because this was
+  // the strictest of four and the only one a person met three ceremonies
+  // after typing the address. It refused `http://exa mple:3000` nowhere - a
+  // prefix check cannot see a space - and refuses it here now.
+  if (!isPicoHomeCoreUrl(home.coreUrl)) {
     throw new Error('invalid_pico_device_enrolment_grant_core_url');
   }
   assertExactKeys(home.host as unknown as Record<string, unknown>, [

@@ -83,6 +83,10 @@
       "types": "./dist/link-relay-operator.d.ts",
       "import": "./dist/link-relay-operator.js"
     },
+    "./home-address": {
+      "types": "./dist/home-address.d.ts",
+      "import": "./dist/home-address.js"
+    },
     "./home-assistant": {
       "types": "./dist/home-assistant.d.ts",
       "import": "./dist/home-assistant.js"

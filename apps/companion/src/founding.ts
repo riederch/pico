@@ -1,3 +1,4 @@
+import { assertPicoHomeCoreUrl } from '@pico/protocol/home-address';
 import type { VaultSodium } from '@pico/vault';
 import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import {
@@ -153,6 +154,14 @@ export async function foundPicoCompanionHome(
   input: PicoCompanionFoundingInput,
 ): Promise<PicoCompanionFoundingOutcome> {
   const connect = input.connect ?? connectPicoVaultDaemonClient;
+  /**
+   * Before anything is created, because this is where a Home address is first
+   * written down and the shell's own prompt check is a courtesy rather than
+   * the rule. Until 2026-08-20 nothing here looked at it at all: an address
+   * the profile accepted and a grant could never carry produced a founded
+   * Home that could not add a second device, and said so about the code.
+   */
+  assertPicoHomeCoreUrl(input.coreUrl, 'invalid_companion_core_url');
   const delegationId = `delegation_${Buffer.from(
     input.sodium.randombytes_buf(16),
   ).toString('hex')}`;

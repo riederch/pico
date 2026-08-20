@@ -1,3 +1,4 @@
+import { assertPicoHomeCoreUrl } from '@pico/protocol/home-address';
 import {
   chmodSync,
   closeSync,
@@ -198,17 +199,13 @@ function assertAsciiToken(value: unknown, reason: string): void {
   }
 }
 
+/**
+ * One rule, in `@pico/protocol/home-address`.
+ *
+ * This used to allow 2,048 characters and accept `HTTP://` - `new URL`
+ * normalises the scheme, the grant parser reads bytes and does not - so a
+ * profile could hold an address that no second device could ever be granted.
+ */
 function assertCoreUrl(value: unknown): void {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 2048) {
-    throw new Error('invalid_companion_core_url');
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error('invalid_companion_core_url');
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('invalid_companion_core_url');
-  }
+  assertPicoHomeCoreUrl(value, 'invalid_companion_core_url');
 }
