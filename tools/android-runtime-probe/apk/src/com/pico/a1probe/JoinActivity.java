@@ -62,13 +62,15 @@ public final class JoinActivity extends Activity {
 
   @Override protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    // Custody first, in its own process (ADR 0131 A2), then this process's
-    // own Node instance running the shell side of the ceremony.
+    /**
+     * Two services, then a view. Custody in its own process (ADR 0131 A2)
+     * and the ceremony in a foreground service of this one - this Activity
+     * only draws it and carries answers back. Running the walk here is what
+     * made Back end a ceremony that another device was waiting on.
+     */
     startForegroundService(new Intent(this, CustodyService.class));
+    startForegroundService(new Intent(this, JoinService.class));
     setContentView(buildView());
-    NodeRuntime.runScript(
-      new File(getFilesDir(), "stage/join.mjs").getAbsolutePath(),
-      new File(getFilesDir(), "join.log").getAbsolutePath());
     new Thread(this::connect, "pico-ui-bridge").start();
   }
 

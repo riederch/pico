@@ -791,10 +791,27 @@ local-first product's most security-critical moment.
   lines: a refusal that names nothing is a refusal nobody can act on, and the
   one thing worth keeping out of a timeout is what kept happening.
 
-  A third, smaller one, worth naming for the product client: **the walk lives
-  in the Activity's process**, so pressing Back ended the ceremony and a
-  restart began it again from the passphrase. Custody already lives in its
-  own foreground service; the ceremony should too.
+  **A third was found by a person pressing Back, and then fixed.** The walk
+  lived in the Activity's process, so leaving the screen ended a ceremony
+  another device was waiting on: the process had nothing left to keep it
+  alive, Android reclaimed it, and the next launch began again at "choose a
+  passphrase" - after the person had chosen one and shown a code.
+
+  It has its own foreground service now (`JoinService`), beside the custody
+  one and for the same reason: what is in flight is not a screen, it is a
+  ceremony somebody else is waiting on. Two things had to follow. The
+  Activity became a view - it starts the two services, draws what arrives
+  and carries answers back, and hosts nothing. And the surface socket now
+  lets the **newest** connection take over rather than refusing it: a view
+  Android destroyed can leave its socket open for seconds, and refusing on
+  that basis left a person watching "starting" while the walk waited for an
+  answer nobody could give it.
+
+  Measured after the change: pressing Back mid-ceremony leaves both
+  processes alive, and reopening shows the step the walk is actually on -
+  "type what your other device shows", with the offer still on screen - not
+  the beginning. The ceremony then completed, both sides agreeing on
+  `delegation_ed5512b7fecf7e140837ae7cedd332cd`.
 
   Two more findings came out of the lab that no amount of reading would have
   produced.

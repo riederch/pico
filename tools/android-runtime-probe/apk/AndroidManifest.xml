@@ -32,6 +32,15 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
     </service>
+    <!-- ADR 0131 A5: the walk itself, so that closing the view does not end
+         a ceremony another device is waiting on. Same process as the
+         Activity - one Node instance per process is nodejs-mobile's rule -
+         but its own component, which is what keeps the process alive. -->
+    <service android:name=".JoinService"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a5_enrolment_walk" />
+    </service>
     <!-- ADR 0131 A5, first vertical: this phone asking to be let in. Plain
          views, typed path only - no camera, because that would mean a
          dependency this machine has no build system for. -->

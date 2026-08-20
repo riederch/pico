@@ -143,9 +143,18 @@ const surface = {
 };
 
 createServer((connection) => {
+  /**
+   * The newest surface wins, and the previous one is let go.
+   *
+   * Refusing the second connection was the first version, on the grounds
+   * that a ceremony has one person. It is still one person - but on Android
+   * their view is destroyed and rebuilt whenever the system feels like it,
+   * and a socket from a view that no longer exists can outlive it by
+   * seconds. Refusing on that basis left the person looking at "starting"
+   * while the walk sat waiting for an answer nobody could give it.
+   */
   if (speak !== null) {
-    connection.end();
-    return;
+    speak.end();
   }
   speak = connection;
   let buffered = '';
@@ -205,7 +214,11 @@ createServer((connection) => {
     }
   });
   connection.on('close', () => {
-    speak = null;
+    // Only if this is still the current surface: a replaced connection
+    // closing must not blank the one that replaced it.
+    if (speak === connection) {
+      speak = null;
+    }
   });
 }).listen(socketPath, () => {
   process.stdout.write(JSON.stringify({ step: 'ui_socket_listening', socketPath }) + '\n');
