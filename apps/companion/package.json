@@ -38,10 +38,6 @@
       "types": "./dist/enrolment-steps.d.ts",
       "import": "./dist/enrolment-steps.js"
     },
-    "./fingerprint": {
-      "types": "./dist/fingerprint.d.ts",
-      "import": "./dist/fingerprint.js"
-    },
     "./first-run": {
       "types": "./dist/first-run.d.ts",
       "import": "./dist/first-run.js"

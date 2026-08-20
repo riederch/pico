@@ -1,5 +1,5 @@
 import { picoCompanionDisplayDate } from '@pico/companion/when';
-import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -923,7 +923,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
     picoIdentityFingerprintHex: 'ab'.repeat(32),
     // Shortened in the main process before it crosses, by the rule the core
     // owns - the window can no longer decide this for itself.
-    picoIdentityDisplay: picoCompanionDisplayFingerprint('ab'.repeat(32)),
+    picoIdentityDisplay: picoDisplayFingerprint('ab'.repeat(32)),
     role: 'home_member',
     status: 'active',
     validUntil: '2027-01-01T00:00:00.000Z',
@@ -954,14 +954,14 @@ describe('ADR 0130 E4 - the Home itself', () => {
       // Already shortened by the caller, and by the one rule the core owns -
       // this window and the notification about the same rotation used to
       // spell one key two ways.
-      hostSigningKeyDisplay: picoCompanionDisplayFingerprint('cd'.repeat(32)),
+      hostSigningKeyDisplay: picoDisplayFingerprint('cd'.repeat(32)),
       retiredHostSigningKeyFingerprintHex: 'ef'.repeat(32),
       repinned: true,
     });
     expect(followed.body).toContain('cdcdcdcd…cdcdcdcd');
     expect(followed.body).toContain('Recovery Card');
     const stranded = picoCompanionHostRotationLine({
-      hostSigningKeyDisplay: picoCompanionDisplayFingerprint('ef'.repeat(32)),
+      hostSigningKeyDisplay: picoDisplayFingerprint('ef'.repeat(32)),
       retiredHostSigningKeyFingerprintHex: 'ef'.repeat(32),
       repinned: false,
     });
@@ -978,7 +978,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
     ]);
     expect(lines[0]?.headline).toBe('You');
     expect(lines[0]?.detail).toContain('does not end');
-    expect(lines[1]?.headline).toBe(`Another Pico (${picoCompanionDisplayFingerprint('ab'.repeat(32))})`);
+    expect(lines[1]?.headline).toBe(`Another Pico (${picoDisplayFingerprint('ab'.repeat(32))})`);
     expect(lines[1]?.detail).toBe('Lives here until 2027-01-01.');
     // Five of the six statuses mean the same thing to somebody reading a list.
     expect(lines[2]?.detail).toContain('No longer lives here');
@@ -1039,7 +1039,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
      * confirmation that is never coming.
      */
     const line = picoCompanionHomeMemberAdmittedLine({
-      picoIdentityDisplay: picoCompanionDisplayFingerprint('ab'.repeat(32)),
+      picoIdentityDisplay: picoDisplayFingerprint('ab'.repeat(32)),
       validUntilDisplay: picoCompanionDisplayDate('2027-01-01T12:00:00.000Z'),
     });
     expect(line).toContain('Nothing was sent to them');
@@ -1060,7 +1060,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
     expect(() => parsePicoCompanionHomeMembers([withoutTheName]))
       .toThrow('invalid_pico_companion_home_member');
     expect(parsePicoCompanionHomeMembers([member()])[0]?.picoIdentityDisplay)
-      .toBe(picoCompanionDisplayFingerprint('ab'.repeat(32)));
+      .toBe(picoDisplayFingerprint('ab'.repeat(32)));
   });
 
   it('reads a Home\u2019s own place in itself as endless, not as missing', () => {

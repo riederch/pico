@@ -21,6 +21,7 @@ import type {
 } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
   connectPicoVaultDaemonClient,
   encodePicoVaultDaemonFrame,
@@ -375,8 +376,7 @@ describe('Daemon-side KEK ceremony families (ADR 0101 K2/K3/K4)', () => {
     expect(pending!.summary).toEqual({
       picoName: 'Mira',
       homeNameOrId: 'Alpengasse 7',
-      identityKeyFingerprint:
-        ownerIdentity.keyFingerprintHex.slice(0, 12),
+      identityKeyFingerprint: picoDisplayFingerprint(ownerIdentity.keyFingerprintHex),
       pinProtected: 'yes',
     });
     expect(pending!.statement).toContain(

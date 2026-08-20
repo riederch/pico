@@ -1012,6 +1012,36 @@ local-first product's most security-critical moment.
   loopback is reachable by every app on the device, which is fine for a lab
   and wrong for a deployment. A deployment publishes the intake on a LAN
   both devices are actually on.
+
+  **The fingerprint rule moved, and the reason is that it was still one
+  client's** (2026-08-20). `@pico/companion/fingerprint` closed three
+  spellings inside this client. It did not close the fourth: the Vault daemon
+  renders the sentence a person actually approves (ADR 0106, from the same
+  validated fields the signed bytes are built from), and it shortened to a
+  twelve-character prefix of its own. The two meet in one string -
+  `main.ts` builds the approval body as the daemon's statement with the
+  signing key appended - so a single dialogue could say *Admit 9f8e7d6c5b4a…*
+  and *Signing key a1b2c3d4…7f8e9d0c* about keys a person is being asked to
+  compare, and the membership the window confirms afterwards shares no
+  visible characters with the one they approved beyond the first eight.
+
+  So the decision now lives in `@pico/protocol/fingerprint-display`, the one
+  package both already depend on and the only direction available -
+  `@pico/companion` depends on `@pico/vault-daemon`, so a Vault reaching back
+  is a cycle. ADR 0079's open question on display encoding is closed there
+  rather than here, since the answer is the product's and not this gate's.
+
+  Its check moved with it: `scripts/check-fingerprint-display.mjs` reads
+  every app and package, and `check-companion-boundary.mjs` keeps only the
+  half that really is this client's, a person's own calendar day. The list of
+  renderer-reachable files both need is now stated once, in
+  `scripts/companion-window.mjs` - two checks holding their own copy of one
+  list is the same defect these checks exist to catch.
+
+  What A5 keeps from this: the count of things a second client would decide
+  again went down by one, and the one it went down by was the only one that
+  two *processes* had to agree on.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

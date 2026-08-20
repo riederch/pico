@@ -28,6 +28,7 @@ import {
   parsePicoRecoveryCardPayload,
   picoRecoveryCardSchema,
 } from '@pico/protocol';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
   buildPicoVaultSignatureInputFromFields,
   renderPicoVaultApprovalStatement,
@@ -567,7 +568,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             picoName: request.picoName,
             homeNameOrId: request.homeNameOrId,
             identityKeyFingerprint:
-              request.signerKeyFingerprintHex.slice(0, 12),
+              picoDisplayFingerprint(request.signerKeyFingerprintHex),
             pinProtected: 'yes',
           },
           statement: `Issue a Recovery Card for Pico ${request.picoName} in ${request.homeNameOrId}. This exports the identity-root recovery material once for printing; PIN protection is mandatory and enabled.`,
@@ -627,7 +628,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             accessMode: request.accessMode,
             historicalVersions: request.rotationRecords.length,
           },
-          statement: `Grant reader ${request.readerIdentityKeyFingerprintHex.slice(0, 12)}… access to domain ${String((request.domainRecord as { domain?: { domainId?: unknown } }).domain?.domainId ?? '')} (${request.accessMode}, ${request.rotationRecords.length} historical version(s)) until ${request.validUntil}.`,
+          statement: `Grant reader ${picoDisplayFingerprint(request.readerIdentityKeyFingerprintHex)} access to domain ${String((request.domainRecord as { domain?: { domainId?: unknown } }).domain?.domainId ?? '')} (${request.accessMode}, ${request.rotationRecords.length} historical version(s)) until ${request.validUntil}.`,
           requires: [{
             keyFingerprintHex: request.agreementKeyFingerprintHex,
             keyRole: 'device_key_agreement',

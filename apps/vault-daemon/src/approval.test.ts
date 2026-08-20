@@ -15,6 +15,7 @@ import {
 } from '@pico/vault';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
   connectPicoVaultDaemonClient,
   encodePicoVaultDaemonFrame,
@@ -391,7 +392,7 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     // were built from - and the digest still binds those exact bytes, built
     // here independently.
     expect(pending!.statement).toBe(
-      `Certify a pico_identity key record (${identityFixture.publicKeyHex.slice(0, 12)}\u2026).`,
+      `Certify a pico_identity key record (${picoDisplayFingerprint(identityFixture.publicKeyHex)}).`,
     );
     expect(pending!.signatureInputDigestHex).toBe(digestOfHex(gatedInputHex()));
 

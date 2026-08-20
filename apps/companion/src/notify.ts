@@ -4,7 +4,7 @@ import type {
   PicoCompanionNotificationAdapter,
   PicoCompanionPendingRecoveryAlarm,
 } from './alarm-carrier.js';
-import { picoCompanionDisplayFingerprint } from './fingerprint.js';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoCompanionDisplayInstant } from './when.js';
 import type {
   PicoCompanionHostContinuityAlarm,
@@ -41,9 +41,9 @@ export function renderPicoCompanionPendingRecoveryAlarm(
     // identity, which target device, and when it becomes effective. A person
     // with more than one Pico cannot act on an alarm that does not say whose
     // it is.
-    body: `Identity ${picoCompanionDisplayFingerprint(alarm.picoIdentityFingerprintHex)} `
+    body: `Identity ${picoDisplayFingerprint(alarm.picoIdentityFingerprintHex)} `
       + 'is being recovered onto another device. '
-      + `Target device ${picoCompanionDisplayFingerprint(pending.targetDeviceSigningKeyFingerprintHex)} `
+      + `Target device ${picoDisplayFingerprint(pending.targetDeviceSigningKeyFingerprintHex)} `
       + `becomes that identity's only device at ${picoCompanionDisplayInstant(pending.effectiveAt)} `
       + 'and every other device is revoked then. '
       + 'If this is not you, veto now from any active device '
@@ -60,8 +60,8 @@ export function renderPicoCompanionHostRotationNotice(
     // the chain was proven from this device's own pin, and every Recovery
     // Card printed for the old keys is stale (ADR 0110/0115).
     body: 'Your Pico Home rotated its host keys from '
-      + `${picoCompanionDisplayFingerprint(notice.previousHostSigningKeyFingerprintHex)} to `
-      + `${picoCompanionDisplayFingerprint(notice.hostSigningKeyFingerprintHex)}. `
+      + `${picoDisplayFingerprint(notice.previousHostSigningKeyFingerprintHex)} to `
+      + `${picoDisplayFingerprint(notice.hostSigningKeyFingerprintHex)}. `
       + 'This device verified the signed continuity chain against its own '
       + 'pins and follows the new keys. '
       + 'Recovery Cards printed before this rotation are stale - re-issue '

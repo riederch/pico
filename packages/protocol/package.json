@@ -83,6 +83,10 @@
       "types": "./dist/link-relay-operator.d.ts",
       "import": "./dist/link-relay-operator.js"
     },
+    "./fingerprint-display": {
+      "types": "./dist/fingerprint-display.d.ts",
+      "import": "./dist/fingerprint-display.js"
+    },
     "./home-address": {
       "types": "./dist/home-address.d.ts",
       "import": "./dist/home-address.js"

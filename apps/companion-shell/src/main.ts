@@ -34,7 +34,7 @@ import {
 } from '@pico/protocol/home-address';
 import { maxPicoDeviceEnrolmentTransportLength } from '@pico/protocol/device-enrolment';
 import { isPicoCompanionMembershipSubject } from '@pico/companion/home-authority';
-import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoCompanionDisplayDate } from '@pico/companion/when';
 import {
   picoCompanionRenderedDeviceAuthority,
@@ -1411,7 +1411,7 @@ function registerIpc(): void {
         return {
           ...admitted,
           picoIdentityDisplay:
-            picoCompanionDisplayFingerprint(admitted.picoIdentityFingerprintHex),
+            picoDisplayFingerprint(admitted.picoIdentityFingerprintHex),
           validUntilDisplay: picoCompanionDisplayDate(admitted.validUntil),
         };
       } finally {
@@ -1462,7 +1462,7 @@ function registerIpc(): void {
         const line = picoCompanionHostRotationLine({
           ...rotated,
           hostSigningKeyDisplay:
-            picoCompanionDisplayFingerprint(rotated.hostSigningKeyFingerprintHex),
+            picoDisplayFingerprint(rotated.hostSigningKeyFingerprintHex),
         });
         await presentationPort.present(parsePicoCompanionPresentation({
           kind: 'host_keys_rotated',
@@ -2039,7 +2039,7 @@ async function runEnrolment(
      * string is here so a later list can be recognised by it.
      */
     body: `${line.body} It is known by ${
-      picoCompanionDisplayFingerprint(enrolled.targetSigningKeyFingerprintHex)
+      picoDisplayFingerprint(enrolled.targetSigningKeyFingerprintHex)
     }, the same name your Home now keeps for it.`,
     observedAt: new Date().toISOString(),
   }));
@@ -2284,7 +2284,7 @@ const approvalDecisionPort: PicoCompanionApprovalDecisionPort = {
       symbol: '!',
       decision: 'approve_or_deny',
       title: 'Pico needs your approval',
-      body: `${approval.statement} Signing key ${picoCompanionDisplayFingerprint(approval.keyFingerprintHex)}; exact request digest ${picoCompanionDisplayFingerprint(approval.signatureInputDigestHex)}.`,
+      body: `${approval.statement} Signing key ${picoDisplayFingerprint(approval.keyFingerprintHex)}; exact request digest ${picoDisplayFingerprint(approval.signatureInputDigestHex)}.`,
       observedAt: new Date().toISOString(),
     }));
     showWindow();

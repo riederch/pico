@@ -14,6 +14,7 @@ import {
   type PicoHomeDeviceRecoveryClaimSignatureInput,
   type PicoHomeDeviceRecoveryPrepareSignatureInput,
   type PicoHomeContinuitySignatureInput,
+  type PicoHomeMembershipSignatureInput,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityRevocationSignatureInput,
 } from '@pico/protocol';
@@ -22,6 +23,7 @@ import {
   buildPicoVaultSignatureInputFromFields,
   renderPicoVaultApprovalStatement,
 } from './sign-rendering.js';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoVaultCanSignLabel } from '@pico/vault';
 import {
   picoVaultDaemonSignatureNeedsApproval,
@@ -50,7 +52,7 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       delegation,
     )).toBe(
       'Create device authority: delegate surface_session, decrypt_domain '
-      + 'to device keys 222222222222… and 333333333333… '
+      + 'to device keys 22222222…22222222 and 33333333…33333333 '
       + 'from 2026-07-30T12:00:00.000Z until 2027-07-30T12:00:00.000Z.',
     );
   });
@@ -106,7 +108,7 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       continuity,
     )).toBe(
       'Rotate the host keys of Home home_render_0001 (host_key_rotated): '
-      + 'retire 444444444444… and accept 666666666666… as the only host key. '
+      + 'retire 44444444…44444444 and accept 66666666…66666666 as the only host key. '
       + 'Every printed Recovery Card becomes stale and must be re-issued.',
     );
   });
@@ -181,8 +183,8 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       picoHomeDeviceRecoveryCanonicalLabels.prepare,
       prepare,
     )).toBe(
-      'Prepare recovery of identity 333333333333… in Home '
-      + 'home_render_recovery_0001 for target 444444444444… by reading '
+      'Prepare recovery of identity 33333333…33333333 in Home '
+      + 'home_render_recovery_0001 for target 44444444…44444444 by reading '
       + 'the current device-replacement head. This does not start the '
       + '48-hour veto delay.',
     );
@@ -209,9 +211,9 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       picoHomeDeviceRecoveryCanonicalLabels.claim,
       claim,
     )).toBe(
-      'Recover identity 333333333333… into Home '
+      'Recover identity 33333333…33333333 into Home '
       + 'home_render_recovery_0001 by replacing the complete device set '
-      + 'with target 444444444444…. The 48-hour veto delay starts only '
+      + 'with target 44444444…44444444. The 48-hour veto delay starts only '
       + 'after the Home accepts this claim.',
     );
     expect(picoVaultCanSignLabel(
@@ -230,5 +232,62 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       picoHomeDeviceRecoveryCanonicalLabels.claim,
       'device_signing',
     )).toBe(false);
+  });
+});
+
+describe('ADR 0079 I5 - the sentence names a key the way the rest of Pico does', () => {
+  const membership = (subject: string): PicoHomeMembershipSignatureInput => ({
+    suite: picoIdentitySuite,
+    credentialId: 'membership_render_0001',
+    homeId: 'home_render_membership_0001',
+    issuerPicoIdentityFingerprintHex: '11'.repeat(32),
+    subjectPicoIdentityFingerprintHex: subject,
+    hostSigningKeyFingerprintHex: '22'.repeat(32),
+    role: 'home_member',
+    scopes: ['host.use'],
+    validFrom: '2026-08-01T10:00:00.000Z',
+    validUntil: '2027-08-01T10:00:00.000Z',
+    lifecycleOrder: 'seq:0000000000000004',
+  });
+
+  it('spells the subject with the shared rule, not one of its own', () => {
+    /**
+     * Asserted against the imported rule rather than a literal, deliberately.
+     * A literal here would pass just as well if this file grew a private
+     * `short()` again - which is exactly what it had until 2026-08-20, and
+     * what made one identity arrive under two names in a single approval
+     * body: the sentence from here, and the signing key the companion shell
+     * appends to it before showing the two together.
+     */
+    const subject = `${'9f8e7d6c'}${'0'.repeat(48)}${'5b4a3c2d'}`;
+    const statement = renderPicoVaultApprovalStatement(
+      picoHomeSignatureInputLabels.membership,
+      membership(subject),
+    );
+
+    expect(statement).toContain(picoDisplayFingerprint(subject));
+    expect(statement).not.toContain(subject.slice(0, 12));
+  });
+
+  it('keeps two ground-prefix keys apart in the sentence a person approves', () => {
+    /**
+     * The property the twelve-character prefix did not have. ADR 0079's own
+     * threat table names grinding a key whose truncated fingerprint matches a
+     * target's *display prefix*; under the old rule the two statements below
+     * were character-identical, so approving the wrong one looked exactly
+     * like approving the right one.
+     */
+    const ground = '9f8e7d6c';
+    const genuine = `${ground}${'0'.repeat(48)}${'5b4a3c2d'}`;
+    const forged = `${ground}${'0'.repeat(48)}${'11223344'}`;
+
+    expect(genuine.slice(0, 12)).toBe(forged.slice(0, 12));
+    expect(renderPicoVaultApprovalStatement(
+      picoHomeSignatureInputLabels.membership,
+      membership(genuine),
+    )).not.toBe(renderPicoVaultApprovalStatement(
+      picoHomeSignatureInputLabels.membership,
+      membership(forged),
+    ));
   });
 });

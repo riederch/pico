@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rendererReachableFiles } from './companion-window.mjs';
 
 /**
  * ADR 0113: the companion service core is shell-free, and the boundary is
@@ -317,49 +318,20 @@ for (const { file, why } of trayForbidden) {
 }
 
 /**
- * One rule for how a key fingerprint is shown to a person.
+ * How a key fingerprint is shown to a person used to be checked here, and the
+ * fact that it was is what let the case that mattered through.
  *
- * **Written 2026-08-20 after finding three spellings in one client.** The
- * shell-free core shortened head-and-tail; the Electron main process carried
- * a byte-identical private copy of that rule; the renderer contract took a
- * bare twelve-character prefix. A host-key rotation therefore reached one
- * person as `a1b2c3d4…7f8e9d0c` in the notification and `a1b2c3d4e5f6` in the
- * window - one key, one event, two names.
+ * This check found three spellings inside one client on 2026-08-20 and could
+ * see no further, because its roots are `apps/companion` and
+ * `apps/companion-shell`. A fourth sat in the Vault daemon, which renders the
+ * sentence a person approves - and the two met inside one approval body, the
+ * statement from the daemon with the signing key appended by the shell. So the
+ * rule became `@pico/protocol/fingerprint-display` and its check became
+ * `check-fingerprint-display.mjs`, over every app and package.
  *
- * ADR 0079 I5 leaves the display form to "the surfaces that show them", so
- * this is that decision for this surface, made once in
- * `@pico/companion/fingerprint` and checked here because ADR 0131 A5 makes
- * Android the second client that will show these strings.
- *
- * **The renderer is checked too, and told something different.** Renderer-
- * reachable files resolve relative paths only - the window loads plain ESM
- * under a `script-src 'self'` policy - so a bare `@pico/companion/...`
- * specifier there compiles, passes every test and breaks the window. For a
- * few hours on 2026-08-20 that was an exemption and two sites kept their own
- * slice; then the records started crossing IPC with the rendered string
- * beside the hex, which is what ADR 0113 C2 asks for anyway, and the
- * exemption became a worse answer than the fix. What is left is the advice:
- * a window that shortens is a window deciding a rendering, and the main
- * process is where that decision belongs.
+ * What stays here is the half that really is this client's: a person's own
+ * calendar day, which the companion renders with `@pico/companion/when`.
  */
-const rendererReachable = new Set(['contract.ts', 'renderer.ts', 'model-provider-views.ts']);
-/**
- * Two files shorten a fingerprint and are right to.
- *
- * An id derived from a fingerprint is not a fingerprint shown to a person: it
- * is a key in a record, never read aloud, never compared by eye, and changing
- * its length would rename every row that already exists. Both are already
- * one derivation with one caller each, argued in their own doc comments, and
- * the check found the second of them on its first run - which is the useful
- * kind of false positive, because it made the distinction explicit instead of
- * leaving it in somebody's head. A third one appearing here should be argued
- * the same way rather than appended.
- */
-const derivesAnIdentifier = new Map([
-  ['presence.ts', 'picoPresenceIdForDeviceSigningKey - the row a device is joined on'],
-  ['domain-read-grant.ts', 'the grant id a privacy domain is recorded under'],
-]);
-const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.slice\s*\(/g;
 /**
  * And the same defect one field over: an instant cut to ten characters.
  *
@@ -389,19 +361,19 @@ const instantSlice = /(\w*(?:At|Until))\s*(?:\}\s*)?\.slice\s*\(0,\s*10\)/g;
  * wrong twice.
  */
 const dayArithmetic = /(?:24\s*\*\s*60\s*\*\s*60|86_?400_?000)/g;
-let fingerprintRuleFiles = 0;
+let dayRuleFiles = 0;
 for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
   for (const file of listSourceFiles(root)) {
-    const name = file.slice(file.lastIndexOf('/') + 1);
-    if (name.endsWith('.test.ts') || name === 'fingerprint.ts' || derivesAnIdentifier.has(name)) {
+    const path = relative(repoRoot, file);
+    if (path.endsWith('.test.ts')) {
       continue;
     }
     const content = readFileSync(file, 'utf8');
-    if (rendererReachable.has(name)) {
+    if (rendererReachableFiles.has(path)) {
       for (const _ of content.matchAll(dayArithmetic)) {
-        fingerprintRuleFiles += 1;
+        dayRuleFiles += 1;
         errors.push(
-          `${relative(repoRoot, file)}: counts days from a length in milliseconds, in the window. `
+          `${path}: counts days from a length in milliseconds, in the window. `
           + 'Days a person counts are midnights - a day is twenty-three hours once a year - and '
           + 'this is how "That is today" came to sit under a date that said tomorrow. '
           + '`picoCompanionCalendarDaysUntil` counts them, in the main process, and the number '
@@ -410,29 +382,16 @@ for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
       }
     }
     for (const [, symbol] of content.matchAll(instantSlice)) {
-      fingerprintRuleFiles += 1;
+      dayRuleFiles += 1;
       errors.push(
-        `${relative(repoRoot, file)}: cuts \`${symbol}\` to ten characters. That is the UTC `
+        `${path}: cuts \`${symbol}\` to ten characters. That is the UTC `
         + 'calendar day with nothing saying so, and it is the wrong day for a reader whose '
         + 'evening is past midnight in UTC. `picoCompanionDisplayDate` in `@pico/companion/when` '
-        + `answers in the reader's own day${rendererReachable.has(name)
+        + `answers in the reader's own day${rendererReachableFiles.has(path)
           ? ', and this file runs in the window - so the main process has to render it and send '
             + 'it across (ADR 0113 C2).'
           : '.'}`,
       );
-    }
-    for (const [, symbol] of content.matchAll(fingerprintSlice)) {
-      fingerprintRuleFiles += 1;
-      errors.push(rendererReachable.has(name)
-        ? `${relative(repoRoot, file)}: shortens \`${symbol}\` in the window. This file runs in `
-          + 'the renderer, where a bare `@pico/companion/...` import breaks at runtime and passes '
-          + 'every test - so it cannot reach the one rule, and it must not invent a second. Send '
-          + 'the shortened string across IPC beside the hex, rendered in the main process (ADR '
-          + '0113 C2).'
-        : `${relative(repoRoot, file)}: shortens \`${symbol}\` with its own slice. How a key is `
-          + 'shown to a person is one decision for this client - `picoCompanionDisplayFingerprint` '
-          + 'in `@pico/companion/fingerprint` - because a second spelling means one key reaches one '
-          + 'person under two names, which is how this check came to exist.');
     }
   }
 }
@@ -450,8 +409,8 @@ console.log(
   + ` (tray start reaches ${trayReached.size} modules,`
   + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides;`
-  + `${fingerprintRuleFiles === 0 ? ' one rule each for showing a fingerprint and a day' : ` ${fingerprintRuleFiles} home-made renderings`}`
-  + ', the window included).',
+  + `${dayRuleFiles === 0 ? " one rule for a person's own day" : ` ${dayRuleFiles} home-made day renderings`}`
+  + ', the window included; fingerprints are checked product-wide next door).',
 );
 
 function listSourceFiles(directory) {

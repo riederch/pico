@@ -1,4 +1,4 @@
-import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
   picoCompanionCalendarDaysUntil,
   picoCompanionDisplayDate,
@@ -64,7 +64,7 @@ export function picoCompanionRenderedHomeMembers(
 ): readonly PicoCompanionHomeMember[] {
   return members.map((member) => ({
     ...member,
-    picoIdentityDisplay: picoCompanionDisplayFingerprint(member.picoIdentityFingerprintHex),
+    picoIdentityDisplay: picoDisplayFingerprint(member.picoIdentityFingerprintHex),
     // `null` stays `null`: a place that does not end has no day to show, and
     // an empty string here would render as a sentence with a hole in it.
     validUntilDisplay: member.validUntil === null

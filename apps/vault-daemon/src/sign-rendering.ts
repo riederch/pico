@@ -1,3 +1,4 @@
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
   buildPicoHomeContinuitySignatureInput,
   buildPicoHomeDeviceActivationSignatureInput,
@@ -146,26 +147,34 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
  * fields. Exempt labels (possession, freshness, sync manifest, item) have no
  * renderer on purpose: they raise no approval, so nobody is shown anything.
  *
- * Fingerprints are shortened for the eye; the approval stays bound to the
- * BLAKE2b digest of the exact bytes, so the display never carries the
- * integrity burden alone.
+ * Fingerprints are shortened for the eye by `picoDisplayFingerprint`, the
+ * product's one answer to ADR 0079 I5, and not by a rule of this file's own.
+ * Until 2026-08-20 it was: a twelve-character prefix, while the companion
+ * window that confirms these same ceremonies showed head-and-tail. The two met
+ * inside a single approval body - the sentence from here, the signing key
+ * appended by the shell - so one identity was named twice, in two alphabets,
+ * in the one string a person reads before consenting.
+ *
+ * The approval stays bound to the BLAKE2b digest of the exact bytes, so the
+ * display never carries the integrity burden alone. That is what makes
+ * shortening safe at all; it is not what makes two spellings safe.
  */
 const renderersByLabel: Record<string, (fields: object) => string> = {
   [picoHomeDeviceRecoveryCanonicalLabels.prepare]: (f) => {
     const v = f as PicoHomeDeviceRecoveryPrepareSignatureInput;
-    return `Prepare recovery of identity ${short(v.picoIdentityFingerprintHex)} in Home ${v.homeId} for target ${short(v.targetDeviceSigningKeyFingerprintHex)} by reading the current device-replacement head. This does not start the 48-hour veto delay.`;
+    return `Prepare recovery of identity ${picoDisplayFingerprint(v.picoIdentityFingerprintHex)} in Home ${v.homeId} for target ${picoDisplayFingerprint(v.targetDeviceSigningKeyFingerprintHex)} by reading the current device-replacement head. This does not start the 48-hour veto delay.`;
   },
   [picoHomeDeviceRecoveryCanonicalLabels.claim]: (f) => {
     const v = f as PicoHomeDeviceRecoveryClaimSignatureInput;
-    return `Recover identity ${short(v.picoIdentityFingerprintHex)} into Home ${v.homeId} by replacing the complete device set with target ${short(v.targetDeviceSigningKeyFingerprintHex)}. The 48-hour veto delay starts only after the Home accepts this claim.`;
+    return `Recover identity ${picoDisplayFingerprint(v.picoIdentityFingerprintHex)} into Home ${v.homeId} by replacing the complete device set with target ${picoDisplayFingerprint(v.targetDeviceSigningKeyFingerprintHex)}. The 48-hour veto delay starts only after the Home accepts this claim.`;
   },
   [picoIdentitySignatureInputLabels.keyrecord]: (f) => {
     const v = f as PicoIdentityKeyRecordSignatureInput;
-    return `Certify a ${v.keyRole} key record (${short(v.publicKeyHex)}).`;
+    return `Certify a ${v.keyRole} key record (${picoDisplayFingerprint(v.publicKeyHex)}).`;
   },
   [picoIdentitySignatureInputLabels.delegation]: (f) => {
     const v = f as PicoIdentityDelegationSignatureInput;
-    return `Create device authority: delegate ${v.scopes.join(', ')} to device keys ${short(v.subjectSigningKeyFingerprintHex)} and ${short(v.subjectKeyAgreementKeyFingerprintHex)} from ${v.validFrom} until ${v.validUntil}.`;
+    return `Create device authority: delegate ${v.scopes.join(', ')} to device keys ${picoDisplayFingerprint(v.subjectSigningKeyFingerprintHex)} and ${picoDisplayFingerprint(v.subjectKeyAgreementKeyFingerprintHex)} from ${v.validFrom} until ${v.validUntil}.`;
   },
   [picoIdentitySignatureInputLabels.revocation]: (f) => {
     const v = f as PicoIdentityRevocationSignatureInput;
@@ -173,11 +182,11 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   },
   [picoHomeSignatureInputLabels.claim]: (f) => {
     const v = f as PicoHomeClaimSignatureInput;
-    return `Claim the Pico Home whose host key is ${short(v.hostSigningKeyFingerprintHex)} for identity ${short(v.claimantIdentityKeyFingerprintHex)}.`;
+    return `Claim the Pico Home whose host key is ${picoDisplayFingerprint(v.hostSigningKeyFingerprintHex)} for identity ${picoDisplayFingerprint(v.claimantIdentityKeyFingerprintHex)}.`;
   },
   [picoHomeV2SignatureInputLabels.claim]: (f) => {
     const v = f as PicoHomeClaimSignatureInput;
-    return `Claim the Pico Home whose host key is ${short(v.hostSigningKeyFingerprintHex)} for identity ${short(v.claimantIdentityKeyFingerprintHex)} with first device ${short(v.firstDeviceSigningKeyFingerprintHex)}.`;
+    return `Claim the Pico Home whose host key is ${picoDisplayFingerprint(v.hostSigningKeyFingerprintHex)} for identity ${picoDisplayFingerprint(v.claimantIdentityKeyFingerprintHex)} with first device ${picoDisplayFingerprint(v.firstDeviceSigningKeyFingerprintHex)}.`;
   },
   [picoHomeSignatureInputLabels.founding]: (f) => {
     const v = f as PicoHomeFoundingSignatureInput;
@@ -185,55 +194,51 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   },
   [picoHomeV2SignatureInputLabels.founding]: (f) => {
     const v = f as PicoHomeFoundingSignatureInput;
-    return `Found Pico Home ${v.homeId} and bind first device ${short(v.firstDeviceSigningKeyFingerprintHex)} as Home Host authority.`;
+    return `Found Pico Home ${v.homeId} and bind first device ${picoDisplayFingerprint(v.firstDeviceSigningKeyFingerprintHex)} as Home Host authority.`;
   },
   [picoHomeSignatureInputLabels.continuity]: (f) => {
     const v = f as PicoHomeContinuitySignatureInput;
     // The whole consequence, not just the swap: acceptance retires every
     // trust pin the old key carries, including the printed Recovery Cards.
     return `Rotate the host keys of Home ${v.homeId} (${v.reasonCategory}): `
-      + `retire ${short(v.outgoingHostSigningKeyFingerprintHex)} and accept `
-      + `${short(v.incomingHostSigningKeyFingerprintHex)} as the only host key. `
+      + `retire ${picoDisplayFingerprint(v.outgoingHostSigningKeyFingerprintHex)} and accept `
+      + `${picoDisplayFingerprint(v.incomingHostSigningKeyFingerprintHex)} as the only host key. `
       + 'Every printed Recovery Card becomes stale and must be re-issued.';
   },
   [picoHomeSignatureInputLabels.membership]: (f) => {
     const v = f as PicoHomeMembershipSignatureInput;
-    return `Admit ${short(v.subjectPicoIdentityFingerprintHex)} to Home ${v.homeId} as ${v.role} (${v.scopes.join(', ')}) until ${v.validUntil}.`;
+    return `Admit ${picoDisplayFingerprint(v.subjectPicoIdentityFingerprintHex)} to Home ${v.homeId} as ${v.role} (${v.scopes.join(', ')}) until ${v.validUntil}.`;
   },
   [picoHomeSignatureInputLabels.membershipLifecycle]: (f) => {
     const v = f as PicoHomeMembershipLifecycleSignatureInput;
-    return `Set the membership of ${short(v.subjectPicoIdentityFingerprintHex)} in Home ${v.homeId} to ${v.status} (${v.reasonCategory}).`;
+    return `Set the membership of ${picoDisplayFingerprint(v.subjectPicoIdentityFingerprintHex)} in Home ${v.homeId} to ${v.status} (${v.reasonCategory}).`;
   },
   [picoShareCanonicalLabels.envelope]: (f) => {
     const v = f as PicoShareEnvelopeSignatureInput;
-    return `Issue the domain key of ${v.domainId} (KEK v${v.kekVersion}) to reader key ${short(v.readerKeyFingerprintHex)}.`;
+    return `Issue the domain key of ${v.domainId} (KEK v${v.kekVersion}) to reader key ${picoDisplayFingerprint(v.readerKeyFingerprintHex)}.`;
   },
   [picoReaderCustodyCanonicalLabels.domain]: (f) => {
     const v = f as PicoReaderCustodyDomainSignatureInput;
-    return `Create encrypted domain ${v.domainId} in Home ${v.homeId} with your reader key ${short(v.ownerReaderKeyFingerprintHex)}.`;
+    return `Create encrypted domain ${v.domainId} in Home ${v.homeId} with your reader key ${picoDisplayFingerprint(v.ownerReaderKeyFingerprintHex)}.`;
   },
   [picoReaderCustodyCanonicalLabels.readerGrant]: (f) => {
     const v = f as PicoReaderCustodyReaderGrantSignatureInput;
-    return `Grant reader ${short(v.readerIdentityKeyFingerprintHex)} access to domain ${v.domainId} from KEK v${v.firstKekVersion} (${v.accessMode}) until ${v.validUntil}.`;
+    return `Grant reader ${picoDisplayFingerprint(v.readerIdentityKeyFingerprintHex)} access to domain ${v.domainId} from KEK v${v.firstKekVersion} (${v.accessMode}) until ${v.validUntil}.`;
   },
   [picoReaderCustodyCanonicalLabels.readerGrantLifecycle]: (f) => {
     const v = f as PicoReaderCustodyReaderGrantLifecycleSignatureInput;
-    return `Set the reader grant of ${short(v.readerIdentityKeyFingerprintHex)} on domain ${v.domainId} to ${v.status} (${v.reasonCategory}).`;
+    return `Set the reader grant of ${picoDisplayFingerprint(v.readerIdentityKeyFingerprintHex)} on domain ${v.domainId} to ${v.status} (${v.reasonCategory}).`;
   },
   [picoReaderCustodyCanonicalLabels.writerGrant]: (f) => {
     const v = f as PicoReaderCustodyWriterGrantSignatureInput;
-    return `Authorize writer ${short(v.writerIdentityKeyFingerprintHex)} to write domain ${v.domainId} at KEK v${v.kekVersion} until ${v.validUntil}.`;
+    return `Authorize writer ${picoDisplayFingerprint(v.writerIdentityKeyFingerprintHex)} to write domain ${v.domainId} at KEK v${v.kekVersion} until ${v.validUntil}.`;
   },
   [picoReaderCustodyCanonicalLabels.writerGrantLifecycle]: (f) => {
     const v = f as PicoReaderCustodyWriterGrantLifecycleSignatureInput;
-    return `Set the writer grant of ${short(v.writerIdentityKeyFingerprintHex)} on domain ${v.domainId} to ${v.status} (${v.reasonCategory}).`;
+    return `Set the writer grant of ${picoDisplayFingerprint(v.writerIdentityKeyFingerprintHex)} on domain ${v.domainId} to ${v.status} (${v.reasonCategory}).`;
   },
   [picoReaderCustodyCanonicalLabels.kekRotation]: (f) => {
     const v = f as PicoReaderCustodyKekRotationSignatureInput;
     return `Rotate domain ${v.domainId} from KEK v${v.previousKekVersion} to v${v.kekVersion}; ${v.remainingReaderGrantIds.length} reader(s) keep access.`;
   },
 };
-
-function short(fingerprintHex: string): string {
-  return fingerprintHex.length <= 12 ? fingerprintHex : `${fingerprintHex.slice(0, 12)}…`;
-}

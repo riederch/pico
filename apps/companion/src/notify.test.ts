@@ -5,8 +5,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createLinuxNotifySendAdapter,
+  renderPicoCompanionHostRotationNotice,
   renderPicoCompanionPendingRecoveryAlarm,
 } from './notify.js';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import type { PicoHomeDeviceRecoveryPendingView } from '@pico/protocol';
 import type { PicoCompanionPendingRecoveryAlarm } from './alarm-carrier.js';
 
@@ -94,5 +96,36 @@ describe('Linux notify-send alarm adapter (ADR 0113 C1)', () => {
     const adapter = createLinuxNotifySendAdapter({ command: fake.command });
     await expect(adapter.notifyPendingRecovery(alarm()))
       .rejects.toThrow('notify_send_failed');
+  });
+});
+
+describe('ADR 0079 I5 - the alarms speak the product rule, not one of their own', () => {
+  it('names a rotating host key the way every other surface names it', () => {
+    /**
+     * The point of the shared module, pinned from the side that reads it.
+     *
+     * Until 2026-08-20 this exact rule existed three times inside one client
+     * - here, as a private helper in the Electron main process, and as a bare
+     * twelve-character prefix in the renderer contract - so one host-key
+     * rotation reached one person as `a1b2c3d4…7f8e9d0c` in the notification
+     * and `a1b2c3d4e5f6` in the window. A fourth lived in the Vault daemon,
+     * which renders the sentence the same person approves, and that one met
+     * this one inside a single approval body.
+     *
+     * The rule is `@pico/protocol/fingerprint-display` now, because the two
+     * apps that must agree cannot reach each other - `@pico/companion`
+     * depends on `@pico/vault-daemon`. This test is what says the alarms
+     * still read it from there rather than growing a fifth.
+     */
+    const previous = `${'11223344'}${'5'.repeat(48)}${'66778899'}`;
+    const current = `${'aabbccdd'}${'e'.repeat(48)}${'ff001122'}`;
+    const notice = renderPicoCompanionHostRotationNotice({
+      previousHostSigningKeyFingerprintHex: previous,
+      hostSigningKeyFingerprintHex: current,
+    } as never);
+
+    expect(notice.body).toContain(picoDisplayFingerprint(previous));
+    expect(notice.body).toContain(picoDisplayFingerprint(current));
+    expect(notice.body).not.toContain(current.slice(0, 12));
   });
 });
