@@ -37,7 +37,12 @@ if [ ! -f "$work/lib/arm64-v8a/libpiconode.so" ]; then
   cp "$njm/bin/arm64-v8a/libnode.so" "$work/lib/arm64-v8a/"
   cp "$(dirname "$clang")/../sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" \
     "$work/lib/arm64-v8a/"
+  # 16 KB-aligned segments. Android 16 warns that nodejs-mobile's
+  # libraries are not, and a device with 16 KB pages will not load them
+  # at all; this shim is one flag away from being ready, libnode.so is a
+  # rebuild away, and the NDK's libc++ is an NDK upgrade away.
   "$clang" -fPIC -shared -std=c++17 -I "$njm/include/node" \
+    -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 \
     -o "$work/lib/arm64-v8a/libpiconode.so" "$work/pico_node_jni.cpp" \
     -L "$njm/bin/arm64-v8a" -lnode -llog
 fi

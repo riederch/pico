@@ -31,7 +31,9 @@ cp "$njm/bin/arm64-v8a/libnode.so" "$work/lib/arm64-v8a/"
 cp "$(dirname "$clang")/../sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$work/lib/arm64-v8a/"
 
 echo "== JNI shim"
+# 16 KB-aligned segments; see the note in the ADR 0131 A5 gate.
 "$clang" -fPIC -shared -std=c++17 -I "$njm/include/node" \
+  -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 \
   -o "$work/lib/arm64-v8a/libpiconode.so" "$work/pico_node_jni.cpp" \
   -L "$njm/bin/arm64-v8a" -lnode -llog
 

@@ -757,6 +757,19 @@ local-first product's most security-critical moment.
   Both parsers use it now. Planting the round-trip away, and planting
   `fatal: true` back, each fail the new tests.
 
+  **The absence of ICU was then audited for anything else it touches, and
+  nothing else needed changing.** Six calls to `localeCompare` sit in the
+  identity core, deciding which lifecycle statement is freshest and ordering
+  delegations, revocations and revocation references - answers that travel,
+  since `apps/core`'s event store records them. Every one of them is a
+  *tie-break*, and every tie is unreachable: the lifecycle index refuses two
+  statements that share an order (`conflicting_lifecycle_order_statement`),
+  and a revocation reference matches exactly one of a delegation's keys. So
+  a phone and a desktop cannot disagree there, and the calls were left
+  alone rather than changed for tidiness. Recorded because the next reader
+  who finds them, knowing about the missing ICU, would otherwise spend the
+  same hour deciding they are harmless.
+
   **This is what A1's "fixture suites green on-device" did not cover, and
   the gap is worth naming.** Those suites ran under Termux's Node, which has
   full ICU. The product runs under the embedded one, which does not. A suite
@@ -820,11 +833,16 @@ local-first product's most security-critical moment.
   dialog covers the app on first launch and names all three libraries -
   `libnode.so`, `libc++_shared.so` and this project's own JNI shim - as
   having mismatched LOAD segments. This phone uses 4 KB pages, so it runs;
-  devices that use 16 KB pages will not load them at all. The shim is a
-  linker flag away (`-Wl,-z,max-page-size=16384`); `libnode.so` comes from
-  nodejs-mobile's release and would have to be rebuilt. That is a shipping
+  devices that use 16 KB pages will not load them at all. That is a shipping
   constraint for A1's runtime choice, found on the first launch of the first
   surface.
+
+  Measured per library on 2026-08-20, because "not compatible" names three
+  different amounts of work: the shim was a linker flag away and is now
+  aligned at `0x4000`; `libc++_shared.so` ships from NDK r26 at `0x1000` and
+  is an NDK upgrade away (r27 aligns it); `libnode.so` is `0x1000` from
+  nodejs-mobile's own release and is the one that needs a rebuild. So the
+  runtime choice carries a build obligation, not a blocker.
 
   **The phone could not reach the laptop, and the reason was not a
   firewall.** It had no default route at all - two on-link subnets and
