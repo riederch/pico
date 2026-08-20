@@ -109,6 +109,7 @@ declare global {
         picoIdentityFingerprintHex: string;
         picoIdentityDisplay: string;
         validUntil: string;
+        validUntilDisplay: string;
       }>;
       endHomeMembership(
         credentialId: string,
@@ -121,6 +122,7 @@ declare global {
         delegationId: string;
         replacedDelegationId: string;
         validUntil: string;
+        validUntilDisplay: string;
       }>;
       renewOtherDevice(source: string): Promise<void>;
       renewFromOtherDevice(source: string): Promise<void>;

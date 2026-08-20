@@ -58,6 +58,7 @@ import {
   forgetPicoCompanionDevice,
   readPicoCompanionDevices,
   switchPicoCompanionDevice,
+  type PicoCompanionDeviceView,
   type PicoCompanionPresenceProbe,
 } from '@pico/companion/presence';
 import {
@@ -213,7 +214,13 @@ export interface PicoCompanionShellRuntime {
   readModuleConsent(): Promise<readonly unknown[]>;
   recordModuleConsent(identifier: string): Promise<void>;
   /** ADR 0126 P2/P6. The person's own devices, as their Home knows them. */
-  readDevices(): Promise<readonly unknown[]>;
+  /**
+   * The core's own rows. This said `unknown` until 2026-08-20, which was
+   * true of nothing: the main process has to reach `lastSeenAt` to render
+   * the day a person reads, and a boundary that hides the shape it hands on
+   * makes the window the first place anybody finds out what is in it.
+   */
+  readDevices(): Promise<readonly PicoCompanionDeviceView[]>;
   switchDevice(input: {
     presenceId: string;
     affordance?: string;

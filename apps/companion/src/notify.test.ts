@@ -1,3 +1,4 @@
+import { picoCompanionDisplayInstant } from './when.js';
 import { tmpdir } from 'node:os';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -62,7 +63,14 @@ describe('Linux notify-send alarm adapter (ADR 0113 C1)', () => {
     // ADR 0112 pins "which identity" as part of the statement.
     expect(body).toContain('ab999999…999999cd');
     expect(body).toContain('bb111111…111111cc');
-    expect(body).toContain('2026-08-02T10:00:00.000Z');
+    /**
+     * The deadline in the reader's own day and minute, not the raw instant
+     * it used to print. A person with forty-eight hours to veto should not
+     * have to convert a Z-suffixed string in their head to find out whether
+     * that is tonight.
+     */
+    expect(body).toContain(picoCompanionDisplayInstant('2026-08-02T10:00:00.000Z'));
+    expect(body).not.toContain('2026-08-02T10:00:00.000Z');
     expect(body).toContain('every other device is revoked');
     expect(body).toContain('veto');
     expect(body).toContain('recovery_notify_0001');

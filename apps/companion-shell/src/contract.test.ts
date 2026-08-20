@@ -1,3 +1,4 @@
+import { picoCompanionDisplayDate } from '@pico/companion/when';
 import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
@@ -262,6 +263,9 @@ describe('ADR 0126 P2/P6 - the words for a person\'s own devices', () => {
     enabled: true,
     connected: true,
     lastSeenAt: '2026-08-16T12:00:00.000Z',
+    // Rendered in the main process, in the reader's own day. The window used
+    // to cut the ISO string, which is the UTC day wearing no label.
+    lastSeenDisplay: picoCompanionDisplayDate('2026-08-16T12:00:00.000Z'),
   };
 
   it('turns a machine fact into what would happen', () => {
@@ -553,6 +557,9 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
       deviceSigningKeyFingerprintHex: `${index}`.repeat(64),
       status: device.status,
       validUntil: device.validUntil ?? '2027-01-01T00:00:00.000Z',
+      validUntilDisplay: picoCompanionDisplayDate(
+        device.validUntil ?? '2027-01-01T00:00:00.000Z',
+      ),
       isThisDevice: device.isThisDevice ?? false,
     })),
   });
@@ -687,8 +694,9 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
     expect(picoCompanionDeviceAuthorityLines(view([
       { delegationId: 'a', status: 'active', isThisDevice: true },
     ], false))[0]?.renewLabel).toBeNull();
-    expect(picoCompanionDeviceAuthorityRenewedLine({ validUntil: '2028-01-01T00:00:00.000Z' }))
-      .toContain('2028-01-01');
+    expect(picoCompanionDeviceAuthorityRenewedLine({
+      validUntilDisplay: picoCompanionDisplayDate('2028-01-01T12:00:00.000Z'),
+    })).toContain(picoCompanionDisplayDate('2028-01-01T12:00:00.000Z'));
   });
 
   it('warns on the two rows that lock somebody out, and on no others', () => {
@@ -770,6 +778,7 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
         deviceSigningKeyFingerprintHex: 'ff',
         status: 'retired',
         validUntil: '2027-01-01T00:00:00.000Z',
+        validUntilDisplay: picoCompanionDisplayDate('2027-01-01T00:00:00.000Z'),
         isThisDevice: false,
       }],
     })).toThrow('invalid_pico_companion_device_authority_row');
@@ -781,6 +790,7 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
         deviceSigningKeyFingerprintHex: 'ff',
         status: 'active',
         validUntil: '2027-01-01T00:00:00.000Z',
+        validUntilDisplay: picoCompanionDisplayDate('2027-01-01T00:00:00.000Z'),
         isThisDevice: true,
       }],
     }).devices).toHaveLength(1);
@@ -873,6 +883,20 @@ describe('ADR 0130 E3 - the words two devices are held up by', () => {
 });
 
 describe('ADR 0130 E4 - the Home itself', () => {
+  /**
+   * What the main process does before a row crosses: the day a person reads
+   * is derived from the instant, by the one rule, after any override the test
+   * made. Deriving it in the literal above would let a test set `validUntil`
+   * to one day and leave the display on another - a fixture that cannot
+   * happen in the product is a test of nothing.
+   */
+  const rendered = <T extends { validUntil: string | null }>(row: T) => ({
+    ...row,
+    validUntilDisplay: row.validUntil === null
+      ? null
+      : picoCompanionDisplayDate(row.validUntil),
+  });
+
   const member = (over: Partial<{
     membershipId: string;
     credentialId: string | null;
@@ -882,7 +906,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
     status: string;
     validUntil: string | null;
     isThisIdentity: boolean;
-  }> = {}) => ({
+  }> = {}) => rendered({
     membershipId: 'member:home_1:ab',
     credentialId: `membership_${'a'.repeat(32)}`,
     picoIdentityFingerprintHex: 'ab'.repeat(32),
@@ -1005,11 +1029,11 @@ describe('ADR 0130 E4 - the Home itself', () => {
      */
     const line = picoCompanionHomeMemberAdmittedLine({
       picoIdentityDisplay: picoCompanionDisplayFingerprint('ab'.repeat(32)),
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntilDisplay: picoCompanionDisplayDate('2027-01-01T12:00:00.000Z'),
     });
     expect(line).toContain('Nothing was sent to them');
     expect(line).toContain('tell them yourself');
-    expect(line).toContain('2027-01-01');
+    expect(line).toContain(picoCompanionDisplayDate('2027-01-01T12:00:00.000Z'));
   });
 
   it('refuses a member row that arrives without its rendered name', () => {

@@ -29,6 +29,13 @@ import {
   type PicoCompanionEnrolmentSurface,
 } from '@pico/companion/enrolment-steps';
 import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
+import { picoCompanionDisplayDate } from '@pico/companion/when';
+import {
+  picoCompanionRenderedDeviceAuthority,
+  picoCompanionRenderedDevices,
+  picoCompanionRenderedHomeMembers,
+  picoCompanionRenderedProviders,
+} from './rendered-rows.js';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
@@ -738,7 +745,7 @@ function registerIpc(): void {
         return [];
       }
       try {
-        return await runtime.readModelProviders();
+        return picoCompanionRenderedProviders(await runtime.readModelProviders());
       } catch {
         return [];
       }
@@ -1197,7 +1204,7 @@ function registerIpc(): void {
         return [];
       }
       try {
-        return await runtime.readDevices();
+        return picoCompanionRenderedDevices(await runtime.readDevices());
       } catch {
         return [];
       }
@@ -1252,7 +1259,7 @@ function registerIpc(): void {
       if (runtime === null) {
         throw new Error('companion_service_unavailable');
       }
-      return await runtime.readDeviceAuthority();
+      return picoCompanionRenderedDeviceAuthority(await runtime.readDeviceAuthority());
     },
   );
   ipcMain.handle(
@@ -1267,7 +1274,11 @@ function registerIpc(): void {
       }
       try {
         productOperationActive = true;
-        return await runtime.renewDeviceAuthority();
+        const renewed = await runtime.renewDeviceAuthority();
+        return {
+          ...renewed,
+          validUntilDisplay: picoCompanionDisplayDate(renewed.validUntil),
+        };
       } finally {
         productOperationActive = false;
       }
@@ -1361,11 +1372,7 @@ function registerIpc(): void {
       // Rendered here, in the process that may reach the rule, because the
       // window may not: renderer-reachable files resolve relative paths only
       // (ADR 0131 A5).
-      return (await runtime.readHomeMembers()).map((member) => ({
-        ...member,
-        picoIdentityDisplay:
-          picoCompanionDisplayFingerprint(member.picoIdentityFingerprintHex),
-      }));
+      return picoCompanionRenderedHomeMembers(await runtime.readHomeMembers());
     },
   );
   ipcMain.handle(
@@ -1396,6 +1403,7 @@ function registerIpc(): void {
           ...admitted,
           picoIdentityDisplay:
             picoCompanionDisplayFingerprint(admitted.picoIdentityFingerprintHex),
+          validUntilDisplay: picoCompanionDisplayDate(admitted.validUntil),
         };
       } finally {
         productOperationActive = false;

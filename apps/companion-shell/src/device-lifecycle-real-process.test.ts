@@ -1,3 +1,7 @@
+// The window never sees the core's rows: the main process renders them on
+// their way across (ADR 0113 C2), and a test that skipped that step would be
+// checking a shape nobody is shown.
+import { picoCompanionRenderedDeviceAuthority } from './rendered-rows.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -257,14 +261,14 @@ describe('ADR 0130 E3 - the device lifecycle from the Client', () => {
     // an authority possible from here at all.
     expect(view.mayEndAuthority).toBe(true);
 
-    const [line] = picoCompanionDeviceAuthorityLines(view);
+    const [line] = picoCompanionDeviceAuthorityLines(picoCompanionRenderedDeviceAuthority(view));
     expect(line?.headline).toBe('This device');
     expect(line?.detail).toContain('2027-01-01');
     expect(line?.endLabel).not.toBeNull();
     // One device, and the sentence says what ending it costs before it is
     // ended rather than afterwards.
     expect(line?.endWarning).toContain('only device');
-    expect(picoCompanionDeviceAuthoritySummary(view))
+    expect(picoCompanionDeviceAuthoritySummary(picoCompanionRenderedDeviceAuthority(view)))
       .toBe('Your Home answers to one device.');
   }, 180_000);
 

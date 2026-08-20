@@ -5,6 +5,7 @@ import type {
   PicoCompanionPendingRecoveryAlarm,
 } from './alarm-carrier.js';
 import { picoCompanionDisplayFingerprint } from './fingerprint.js';
+import { picoCompanionDisplayInstant } from './when.js';
 import type {
   PicoCompanionHostContinuityAlarm,
   PicoCompanionHostContinuityNotifications,
@@ -43,7 +44,7 @@ export function renderPicoCompanionPendingRecoveryAlarm(
     body: `Identity ${picoCompanionDisplayFingerprint(alarm.picoIdentityFingerprintHex)} `
       + 'is being recovered onto another device. '
       + `Target device ${picoCompanionDisplayFingerprint(pending.targetDeviceSigningKeyFingerprintHex)} `
-      + `becomes that identity's only device at ${pending.effectiveAt} `
+      + `becomes that identity's only device at ${picoCompanionDisplayInstant(pending.effectiveAt)} `
       + 'and every other device is revoked then. '
       + 'If this is not you, veto now from any active device '
       + `(recovery ${pending.recoveryId}).`,

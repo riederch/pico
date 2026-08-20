@@ -1050,6 +1050,8 @@ export interface PicoCompanionModelProvider {
   providerClass: string;
   contextTokens: number;
   measuredAt: string;
+  /** The measurement's day, in the reader's own (rendered in main). */
+  measuredDisplay: string;
   decided: boolean;
   sees: string;
   needsCredentialToSeeMore: boolean;
@@ -1203,6 +1205,7 @@ export function parsePicoCompanionModelProviders(
       || typeof record.providerClass !== 'string'
       || typeof record.contextTokens !== 'number'
       || typeof record.measuredAt !== 'string'
+      || typeof record.measuredDisplay !== 'string'
       || typeof record.decided !== 'boolean'
       || typeof record.sees !== 'string'
       || typeof record.needsCredentialToSeeMore !== 'boolean') {
@@ -1221,6 +1224,7 @@ export function parsePicoCompanionModelProviders(
       providerClass: record.providerClass,
       contextTokens: record.contextTokens,
       measuredAt: record.measuredAt,
+      measuredDisplay: record.measuredDisplay,
       decided: record.decided,
       sees: record.sees,
       needsCredentialToSeeMore: record.needsCredentialToSeeMore,
@@ -1629,6 +1633,13 @@ export interface PicoCompanionDevice {
   enabled: boolean;
   connected: boolean;
   lastSeenAt: string;
+  /**
+   * The day the reader is on when that instant falls, rendered in the main
+   * process. The window used to cut ten characters off the ISO string, which
+   * is the UTC day wearing no label - the wrong one for anybody east of it
+   * after their evening (ADR 0131 A5).
+   */
+  lastSeenDisplay: string;
 }
 
 export interface PicoCompanionDeviceLine {
@@ -1731,7 +1742,7 @@ function picoCompanionDeviceDetail(device: PicoCompanionDevice): string {
    * sentences: one ends by itself and the other needs somebody. A device that
    * is asleep is not a device that is lost, and the list keeps it either way.
    */
-  return `Not answering right now. It was last here on ${device.lastSeenAt.slice(0, 10)}.`;
+  return `Not answering right now. It was last here on ${device.lastSeenDisplay}.`;
 }
 
 export function parsePicoCompanionDevices(value: unknown): readonly PicoCompanionDevice[] {
@@ -1746,6 +1757,7 @@ export function parsePicoCompanionDevices(value: unknown): readonly PicoCompanio
     if (typeof record.presenceId !== 'string'
       || typeof record.presenceType !== 'string'
       || typeof record.lastSeenAt !== 'string'
+      || typeof record.lastSeenDisplay !== 'string'
       || typeof record.enabled !== 'boolean'
       || typeof record.connected !== 'boolean'
       || !Array.isArray(record.affordances)
@@ -1760,6 +1772,7 @@ export function parsePicoCompanionDevices(value: unknown): readonly PicoCompanio
       enabled: record.enabled,
       connected: record.connected,
       lastSeenAt: record.lastSeenAt,
+      lastSeenDisplay: record.lastSeenDisplay,
     });
   }));
 }
@@ -1783,7 +1796,13 @@ export interface PicoCompanionDeviceAuthority {
   presenceId: string;
   deviceSigningKeyFingerprintHex: string;
   status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
+  /**
+   * The instant is kept because the row counts days from it (ADR 0104's
+   * year); what a person reads is `validUntilDisplay`, rendered in the main
+   * process in the reader's own day.
+   */
   validUntil: string;
+  validUntilDisplay: string;
   isThisDevice: boolean;
 }
 
@@ -1959,12 +1978,12 @@ function picoCompanionDeviceAuthorityDetail(device: PicoCompanionDeviceAuthority
     case 'active':
       // The date is the fact a person acts on: an authority nobody renews
       // stops working on a day, and that day is worth seeing before it.
-      return `It can act as you until ${device.validUntil.slice(0, 10)}.`;
+      return `It can act as you until ${device.validUntilDisplay}.`;
     case 'not_yet_valid':
       return 'It cannot act as you yet. Its authority starts later.';
     case 'expired':
       return `It can no longer act as you. Its authority ran out on `
-        + `${device.validUntil.slice(0, 10)}.`;
+        + `${device.validUntilDisplay}.`;
     case 'revoked':
     default:
       return 'It can no longer act as you. You ended its authority.';
@@ -2014,9 +2033,9 @@ export function picoCompanionDeviceAuthorityEndedLine(ended: {
 }
 
 export function picoCompanionDeviceAuthorityRenewedLine(renewed: {
-  validUntil: string;
+  validUntilDisplay: string;
 }): string {
-  return `Renewed. This device can act as you until ${renewed.validUntil.slice(0, 10)}, and `
+  return `Renewed. This device can act as you until ${renewed.validUntilDisplay}, and `
     + 'the authority it had before is retired.';
 }
 
@@ -2041,6 +2060,7 @@ export function parsePicoCompanionDeviceAuthority(
         || typeof device.presenceId !== 'string'
         || typeof device.deviceSigningKeyFingerprintHex !== 'string'
         || typeof device.validUntil !== 'string'
+        || typeof device.validUntilDisplay !== 'string'
         || typeof device.isThisDevice !== 'boolean'
         || (device.status !== 'active'
           && device.status !== 'not_yet_valid'
@@ -2054,6 +2074,7 @@ export function parsePicoCompanionDeviceAuthority(
         deviceSigningKeyFingerprintHex: device.deviceSigningKeyFingerprintHex,
         status: device.status,
         validUntil: device.validUntil,
+        validUntilDisplay: device.validUntilDisplay,
         isThisDevice: device.isThisDevice,
       });
     })),
@@ -2148,6 +2169,8 @@ export interface PicoCompanionHomeMember {
   role: string;
   status: string;
   validUntil: string | null;
+  /** `null` exactly where `validUntil` is: a place that does not end. */
+  validUntilDisplay: string | null;
   isThisIdentity: boolean;
 }
 
@@ -2238,7 +2261,7 @@ function picoCompanionHomeMemberDetail(member: PicoCompanionHomeMember): string 
       ? 'This is your Home. Your place in it does not end.'
       : 'Lives here, with no end date.';
   }
-  return `Lives here until ${member.validUntil.slice(0, 10)}.`;
+  return `Lives here until ${member.validUntilDisplay}.`;
 }
 
 export function picoCompanionHomeMembersSummary(
@@ -2265,10 +2288,10 @@ export function picoCompanionHomeMembersSummary(
  */
 export function picoCompanionHomeMemberAdmittedLine(member: {
   picoIdentityDisplay: string;
-  validUntil: string;
+  validUntilDisplay: string;
 }): string {
   return `Admitted ${member.picoIdentityDisplay} until `
-    + `${member.validUntil.slice(0, 10)}. Nothing was sent to them - a membership is `
+    + `${member.validUntilDisplay}. Nothing was sent to them - a membership is `
     + 'given, not accepted, so tell them yourself that they can point their Pico here.';
 }
 
@@ -2290,7 +2313,9 @@ export function parsePicoCompanionHomeMembers(
       || typeof record.role !== 'string'
       || typeof record.status !== 'string'
       || typeof record.isThisIdentity !== 'boolean'
-      || (record.validUntil !== null && typeof record.validUntil !== 'string')) {
+      || (record.validUntil !== null && typeof record.validUntil !== 'string')
+      || (record.validUntilDisplay !== null && typeof record.validUntilDisplay !== 'string')
+      || (record.validUntil === null) !== (record.validUntilDisplay === null)) {
       throw new Error('invalid_pico_companion_home_member');
     }
     return Object.freeze({
@@ -2301,6 +2326,7 @@ export function parsePicoCompanionHomeMembers(
       role: record.role,
       status: record.status,
       validUntil: record.validUntil as string | null,
+      validUntilDisplay: record.validUntilDisplay as string | null,
       isThisIdentity: record.isThisIdentity,
     });
   }));

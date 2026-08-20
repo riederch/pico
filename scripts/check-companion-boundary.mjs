@@ -360,6 +360,19 @@ const derivesAnIdentifier = new Map([
   ['domain-read-grant.ts', 'the grant id a privacy domain is recorded under'],
 ]);
 const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.slice\s*\(/g;
+/**
+ * And the same defect one field over: an instant cut to ten characters.
+ *
+ * `'2027-01-01T23:30:00.000Z'.slice(0, 10)` is the *UTC* calendar day wearing
+ * no label, which is the wrong day for every reader east of UTC after their
+ * evening - roughly one row in twelve for Vienna, and a day and a half out on
+ * Kiritimati. The window did it in six places and the core printed the raw
+ * instant into an alarm a person has forty-eight hours to act on. One rule
+ * now, `picoCompanionDisplayDate` and `picoCompanionDisplayInstant` in
+ * `@pico/companion/when`, ICU-free because the runtime Android uses has no
+ * `Intl` at all (ADR 0131 A1).
+ */
+const instantSlice = /(\w*(?:At|Until))\s*(?:\}\s*)?\.slice\s*\(0,\s*10\)/g;
 let fingerprintRuleFiles = 0;
 for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
   for (const file of listSourceFiles(root)) {
@@ -368,6 +381,18 @@ for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
       continue;
     }
     const content = readFileSync(file, 'utf8');
+    for (const [, symbol] of content.matchAll(instantSlice)) {
+      fingerprintRuleFiles += 1;
+      errors.push(
+        `${relative(repoRoot, file)}: cuts \`${symbol}\` to ten characters. That is the UTC `
+        + 'calendar day with nothing saying so, and it is the wrong day for a reader whose '
+        + 'evening is past midnight in UTC. `picoCompanionDisplayDate` in `@pico/companion/when` '
+        + `answers in the reader's own day${rendererReachable.has(name)
+          ? ', and this file runs in the window - so the main process has to render it and send '
+            + 'it across (ADR 0113 C2).'
+          : '.'}`,
+      );
+    }
     for (const [, symbol] of content.matchAll(fingerprintSlice)) {
       fingerprintRuleFiles += 1;
       errors.push(rendererReachable.has(name)
@@ -397,8 +422,8 @@ console.log(
   + ` (tray start reaches ${trayReached.size} modules,`
   + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides;`
-  + ` ${fingerprintRuleFiles === 0 ? 'one' : fingerprintRuleFiles} rule for showing a`
-  + ' fingerprint, the window included).',
+  + `${fingerprintRuleFiles === 0 ? ' one rule each for showing a fingerprint and a day' : ` ${fingerprintRuleFiles} home-made renderings`}`
+  + ', the window included).',
 );
 
 function listSourceFiles(directory) {

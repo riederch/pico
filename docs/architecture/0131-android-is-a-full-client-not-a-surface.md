@@ -651,6 +651,38 @@ local-first product's most security-critical moment.
   three verbs a platform owes into three-plus-a-value, and is not worth that
   on this evidence.
 
+  **Asking the same question of time found the same shape, one field over**
+  (2026-08-20). Nothing had decided how this client says *when*, and three
+  answers had grown: the ADR 0112 recovery alarm printed the instant raw
+  ("becomes that identity's only device at 2027-01-01T23:30:00.000Z"), the
+  window cut ten characters off the same kind of string in six places, and
+  Android's Java formatter would have answered a third way.
+
+  The cut is the one worth naming, because it looks right. Ten characters of
+  an ISO instant is the *UTC* calendar day with nothing saying so. For an
+  instant at 23:30Z a reader in Vienna is already on the next day and the row
+  says the previous one; on Kiritimati the same row is a day and a half out.
+  A ceremony is held whenever it is held, so the band that lands wrong is the
+  reader's own offset - two hours in twenty-four for Vienna.
+
+  One rule now, in `@pico/companion/when`, ICU-free for the reason A1
+  measured: `Intl` is absent from the embedded runtime, so
+  `toLocaleDateString` was never a fallback this could take. `getFullYear`
+  and its siblings are ECMA-262 core and read the host's timezone, which is
+  why the phone can run the desktop's rule rather than the nearest thing it
+  can build. The Home's own web UI already formats with
+  `Intl.DateTimeFormat(undefined, …)` - the reader's locale and zone - so
+  local is the house answer, and the companion was the surface disagreeing
+  with it.
+
+  With the rows now crossing rendered, the seam has a name:
+  `apps/companion-shell/src/rendered-rows.ts`. It exists as a module rather
+  than four expressions inside the IPC handlers because the real-process
+  tests read the same core views, and a test that re-implements the mapping
+  it is checking measures its own copy. `check-companion-boundary.mjs` holds
+  both rules, and it tells the window something different from the rest,
+  because the window cannot reach either of them.
+
   **One thing was in the wrong place, and it was the dangerous kind.** The
   pairing of each exchange step with the prefix a read must accept lived as
   six string literals in `apps/companion-shell/src/main.ts`, and the

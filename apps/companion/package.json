@@ -133,6 +133,10 @@
     "./vault-product-session": {
       "types": "./dist/vault-product-session.d.ts",
       "import": "./dist/vault-product-session.js"
+    },
+    "./when": {
+      "types": "./dist/when.d.ts",
+      "import": "./dist/when.js"
     }
   },
   "scripts": {

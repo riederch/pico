@@ -1,3 +1,4 @@
+import { picoCompanionDisplayDate } from '@pico/companion/when';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,6 +38,7 @@ function provider(overrides: Partial<PicoCompanionModelProvider> = {}): PicoComp
     providerClass: 'declared_own_host',
     contextTokens: 40960,
     measuredAt: '2026-08-13T17:43:04.923Z',
+    measuredDisplay: picoCompanionDisplayDate('2026-08-13T17:43:04.923Z'),
     decided: false,
     sees: 'nothing yet - you have not decided about this one',
     needsCredentialToSeeMore: true,
@@ -319,6 +321,7 @@ describe('ADR 0152 SE5 - loading and gone are told apart in the simple layer', (
       providerClass: 'declared_own_host',
       contextTokens: 40960,
       measuredAt: '2026-08-13T17:43:04.923Z',
+      measuredDisplay: picoCompanionDisplayDate('2026-08-13T17:43:04.923Z'),
       decided: true,
       sees: 'this conversation only',
       needsCredentialToSeeMore: false,
@@ -335,6 +338,7 @@ describe('ADR 0152 SE5 - loading and gone are told apart in the simple layer', (
       providerClass: 'declared_own_host',
       contextTokens: 40960,
       measuredAt: '2026-08-13T17:43:04.923Z',
+      measuredDisplay: picoCompanionDisplayDate('2026-08-13T17:43:04.923Z'),
       decided: true,
       sees: 'this conversation only',
       needsCredentialToSeeMore: false,
@@ -448,6 +452,7 @@ describe('ADR 0152 SE2 - the control is on the line, and it acts', () => {
       providerClass: 'declared_own_host',
       contextTokens: 40960,
       measuredAt: '2026-08-13T17:43:04.923Z',
+      measuredDisplay: picoCompanionDisplayDate('2026-08-13T17:43:04.923Z'),
       decided: false,
       sees: 'nothing yet - you have not decided about this one',
       needsCredentialToSeeMore: true,

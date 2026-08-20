@@ -100,7 +100,7 @@ export function renderPicoCompanionModelProviders(
     const measured = root.document.createElement('p');
     measured.className = 'measured';
     measured.textContent = `${providers[index]!.contextTokens} tokens of context, `
-      + `measured ${providers[index]!.measuredAt.slice(0, 10)}`;
+      + `measured ${providers[index]!.measuredDisplay}`;
 
     // ADR 0152 SE2. The decision is *here*, on the line that states its
     // consequence - not behind a menu, and never more than one thing to press.
