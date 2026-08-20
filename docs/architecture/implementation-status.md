@@ -20,6 +20,8 @@ matrix above cannot make on its own.
 | ADR | Why |
 |---|---|
 | [0146](0146-an-outside-agent-is-a-requester-and-answering-it-is-disclosure.md) | Its own status says it: "Draft sketch... Nothing here is accepted and nothing is built... No status matrix row, no `.agent-context.md` entry, no ADR 0128 status note on anything it touches - those follow acceptance, not drafting." |
+| [0156](0156-a-relay-account-should-be-a-key-it-proves-not-a-secret-it-was-handed.md) | Same shape, and it names 0146 as the precedent: "Draft sketch, 2026-08-20. Nothing here is accepted and nothing is built. AK1-AK8 are proposed gate shapes rather than decided ones, and the sketch exists to be argued with." A row would report an implementation status for a question that has not been answered. |
+| [0157](0157-a-relay-in-the-house-is-reached-inside-it-and-an-endpoint-is-bound-rather-than-guessed.md) | Same shape and the same sentence: "Draft sketch, 2026-08-20. Nothing here is accepted and nothing is built. LR1-LR6 are proposed gate shapes rather than decided ones." Written as a sibling to 0156 rather than a section inside it, because an endpoint binding and a credential shape are two decisions. |
 
 ## Status categories
 
