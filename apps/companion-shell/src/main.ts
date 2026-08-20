@@ -1358,7 +1358,14 @@ function registerIpc(): void {
       if (runtime === null) {
         throw new Error('companion_service_unavailable');
       }
-      return await runtime.readHomeMembers();
+      // Rendered here, in the process that may reach the rule, because the
+      // window may not: renderer-reachable files resolve relative paths only
+      // (ADR 0131 A5).
+      return (await runtime.readHomeMembers()).map((member) => ({
+        ...member,
+        picoIdentityDisplay:
+          picoCompanionDisplayFingerprint(member.picoIdentityFingerprintHex),
+      }));
     },
   );
   ipcMain.handle(
@@ -1382,9 +1389,14 @@ function registerIpc(): void {
           maximumLength: 128,
           validate: (value: string) => /^[0-9a-f]{64}$/u.test(value.trim()),
         });
-        return await runtime.admitHomeMember({
+        const admitted = await runtime.admitHomeMember({
           picoIdentityFingerprintHex: picoIdentityFingerprintHex.trim(),
         });
+        return {
+          ...admitted,
+          picoIdentityDisplay:
+            picoCompanionDisplayFingerprint(admitted.picoIdentityFingerprintHex),
+        };
       } finally {
         productOperationActive = false;
       }

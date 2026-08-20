@@ -2135,7 +2135,16 @@ export interface PicoCompanionHomeMember {
   membershipId: string;
   /** `null` on the founder's row, which comes from the founding record. */
   credentialId: string | null;
+  /**
+   * The full fingerprint, and it is here as a *name*, not as something to
+   * read: ending a membership names its subject, and the window has to be
+   * able to say which row it means. What a person reads is
+   * `picoIdentityDisplay` beside it - shortened once, in the main process,
+   * by the one rule this client has (ADR 0113 C2: the window receives
+   * rendered state, and a truncation is a rendering).
+   */
   picoIdentityFingerprintHex: string;
+  picoIdentityDisplay: string;
   role: string;
   status: string;
   validUntil: string | null;
@@ -2208,7 +2217,7 @@ export function picoCompanionHomeMemberLines(
     credentialId: member.credentialId,
     headline: member.isThisIdentity
       ? 'You'
-      : `Another Pico (${member.picoIdentityFingerprintHex.slice(0, 12)})`,
+      : `Another Pico (${member.picoIdentityDisplay})`,
     detail: picoCompanionHomeMemberDetail(member),
     endLabel: member.credentialId !== null
       && member.status === 'active'
@@ -2255,10 +2264,10 @@ export function picoCompanionHomeMembersSummary(
  * confirmation that is never coming.
  */
 export function picoCompanionHomeMemberAdmittedLine(member: {
-  picoIdentityFingerprintHex: string;
+  picoIdentityDisplay: string;
   validUntil: string;
 }): string {
-  return `Admitted ${member.picoIdentityFingerprintHex.slice(0, 12)} until `
+  return `Admitted ${member.picoIdentityDisplay} until `
     + `${member.validUntil.slice(0, 10)}. Nothing was sent to them - a membership is `
     + 'given, not accepted, so tell them yourself that they can point their Pico here.';
 }
@@ -2277,6 +2286,7 @@ export function parsePicoCompanionHomeMembers(
     if (typeof record.membershipId !== 'string'
       || (record.credentialId !== null && typeof record.credentialId !== 'string')
       || typeof record.picoIdentityFingerprintHex !== 'string'
+      || typeof record.picoIdentityDisplay !== 'string'
       || typeof record.role !== 'string'
       || typeof record.status !== 'string'
       || typeof record.isThisIdentity !== 'boolean'
@@ -2287,6 +2297,7 @@ export function parsePicoCompanionHomeMembers(
       membershipId: record.membershipId,
       credentialId: record.credentialId as string | null,
       picoIdentityFingerprintHex: record.picoIdentityFingerprintHex,
+      picoIdentityDisplay: record.picoIdentityDisplay,
       role: record.role,
       status: record.status,
       validUntil: record.validUntil as string | null,

@@ -331,15 +331,16 @@ for (const { file, why } of trayForbidden) {
  * `@pico/companion/fingerprint` and checked here because ADR 0131 A5 makes
  * Android the second client that will show these strings.
  *
- * **The renderer is exempt, and the exemption is the residual.** Renderer-
+ * **The renderer is checked too, and told something different.** Renderer-
  * reachable files resolve relative paths only - the window loads plain ESM
  * under a `script-src 'self'` policy - so a bare `@pico/companion/...`
- * specifier there would break at runtime and pass every test. Two sites keep
- * their own slice for that reason (the member list and the admitted line),
- * and closing it properly means those records crossing IPC already carrying
- * the rendered string, which is what ADR 0113 C2 asks for anyway. Named here
- * rather than silently allowed, so the next reader sees a decision instead of
- * an inconsistency.
+ * specifier there compiles, passes every test and breaks the window. For a
+ * few hours on 2026-08-20 that was an exemption and two sites kept their own
+ * slice; then the records started crossing IPC with the rendered string
+ * beside the hex, which is what ADR 0113 C2 asks for anyway, and the
+ * exemption became a worse answer than the fix. What is left is the advice:
+ * a window that shortens is a window deciding a rendering, and the main
+ * process is where that decision belongs.
  */
 const rendererReachable = new Set(['contract.ts', 'renderer.ts', 'model-provider-views.ts']);
 /**
@@ -363,19 +364,22 @@ let fingerprintRuleFiles = 0;
 for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
   for (const file of listSourceFiles(root)) {
     const name = file.slice(file.lastIndexOf('/') + 1);
-    if (rendererReachable.has(name) || name.endsWith('.test.ts')
-      || name === 'fingerprint.ts' || derivesAnIdentifier.has(name)) {
+    if (name.endsWith('.test.ts') || name === 'fingerprint.ts' || derivesAnIdentifier.has(name)) {
       continue;
     }
     const content = readFileSync(file, 'utf8');
     for (const [, symbol] of content.matchAll(fingerprintSlice)) {
       fingerprintRuleFiles += 1;
-      errors.push(
-        `${relative(repoRoot, file)}: shortens \`${symbol}\` with its own slice. How a key is `
-        + 'shown to a person is one decision for this client - `picoCompanionDisplayFingerprint` '
-        + 'in `@pico/companion/fingerprint` - because a second spelling means one key reaches one '
-        + 'person under two names, which is how this check came to exist.',
-      );
+      errors.push(rendererReachable.has(name)
+        ? `${relative(repoRoot, file)}: shortens \`${symbol}\` in the window. This file runs in `
+          + 'the renderer, where a bare `@pico/companion/...` import breaks at runtime and passes '
+          + 'every test - so it cannot reach the one rule, and it must not invent a second. Send '
+          + 'the shortened string across IPC beside the hex, rendered in the main process (ADR '
+          + '0113 C2).'
+        : `${relative(repoRoot, file)}: shortens \`${symbol}\` with its own slice. How a key is `
+          + 'shown to a person is one decision for this client - `picoCompanionDisplayFingerprint` '
+          + 'in `@pico/companion/fingerprint` - because a second spelling means one key reaches one '
+          + 'person under two names, which is how this check came to exist.');
     }
   }
 }
@@ -394,7 +398,7 @@ console.log(
   + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides;`
   + ` ${fingerprintRuleFiles === 0 ? 'one' : fingerprintRuleFiles} rule for showing a`
-  + ' fingerprint, outside the renderer).',
+  + ' fingerprint, the window included).',
 );
 
 function listSourceFiles(directory) {

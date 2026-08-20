@@ -624,14 +624,22 @@ local-first product's most security-critical moment.
   twelve hex characters is forty-eight bits to match where eight from each
   end is sixty-four and costs a person nothing to read.
 
-  **The renderer keeps two slices, and the reason is the residual.**
-  Renderer-reachable files resolve relative paths only - the window loads
-  plain ESM under `script-src 'self'` - so a bare `@pico/companion/...`
+  **The window was the hard half, and it took the fix the boundary already
+  wanted.** Renderer-reachable files resolve relative paths only - the window
+  loads plain ESM under `script-src 'self'` - so a bare `@pico/companion/...`
   specifier there compiles, passes every test, and breaks the window at
-  runtime. Closing it means the member records carrying the rendered string
-  across IPC instead of the raw hex, which is what ADR 0113 C2 asks for
-  anyway. `check-companion-boundary.mjs` enforces the one rule everywhere it
-  can be reached and names those two rather than allowing them quietly.
+  runtime. That was written down as a residual for a few hours, with two
+  sites keeping their own slice; it reads badly as a permanent answer,
+  because a window that shortens a fingerprint is a window deciding a
+  rendering, which is the one thing ADR 0113 C2 says it does not do.
+
+  So the member rows now cross with the rendered string beside the hex, and
+  the hex stays because ending a membership names its subject - a name, not
+  something to read. The parser refuses a row that arrives without the
+  rendered form rather than filling one in: a default would put the decision
+  back in the window, quietly. `check-companion-boundary.mjs` now covers the
+  renderer too and tells it something different from the rest - it cannot
+  reach the rule, so it must not invent a second one.
 
   **And one line was making a promise about a second screen.** After adding a
   device, the sponsor's window said the new device "is known by <twelve hex

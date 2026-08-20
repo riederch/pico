@@ -877,6 +877,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
     membershipId: string;
     credentialId: string | null;
     picoIdentityFingerprintHex: string;
+    picoIdentityDisplay: string;
     role: string;
     status: string;
     validUntil: string | null;
@@ -885,6 +886,9 @@ describe('ADR 0130 E4 - the Home itself', () => {
     membershipId: 'member:home_1:ab',
     credentialId: `membership_${'a'.repeat(32)}`,
     picoIdentityFingerprintHex: 'ab'.repeat(32),
+    // Shortened in the main process before it crosses, by the rule the core
+    // owns - the window can no longer decide this for itself.
+    picoIdentityDisplay: picoCompanionDisplayFingerprint('ab'.repeat(32)),
     role: 'home_member',
     status: 'active',
     validUntil: '2027-01-01T00:00:00.000Z',
@@ -939,7 +943,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
     ]);
     expect(lines[0]?.headline).toBe('You');
     expect(lines[0]?.detail).toContain('does not end');
-    expect(lines[1]?.headline).toContain('Another Pico (ababababab');
+    expect(lines[1]?.headline).toBe(`Another Pico (${picoCompanionDisplayFingerprint('ab'.repeat(32))})`);
     expect(lines[1]?.detail).toBe('Lives here until 2027-01-01.');
     // Five of the six statuses mean the same thing to somebody reading a list.
     expect(lines[2]?.detail).toContain('No longer lives here');
@@ -1000,12 +1004,28 @@ describe('ADR 0130 E4 - the Home itself', () => {
      * confirmation that is never coming.
      */
     const line = picoCompanionHomeMemberAdmittedLine({
-      picoIdentityFingerprintHex: 'ab'.repeat(32),
+      picoIdentityDisplay: picoCompanionDisplayFingerprint('ab'.repeat(32)),
       validUntil: '2027-01-01T00:00:00.000Z',
     });
     expect(line).toContain('Nothing was sent to them');
     expect(line).toContain('tell them yourself');
     expect(line).toContain('2027-01-01');
+  });
+
+  it('refuses a member row that arrives without its rendered name', () => {
+    /**
+     * The window cannot shorten a fingerprint - it resolves relative paths
+     * only, so it cannot reach the rule, and inventing a second one is how
+     * one key came to have two names on one desktop. So the rendered form
+     * arrives beside the hex, and a row without it is refused here rather
+     * than filled in: a default would put the decision back in the window,
+     * quietly, in the one place ADR 0113 C2 says it must not live.
+     */
+    const { picoIdentityDisplay: _omitted, ...withoutTheName } = member();
+    expect(() => parsePicoCompanionHomeMembers([withoutTheName]))
+      .toThrow('invalid_pico_companion_home_member');
+    expect(parsePicoCompanionHomeMembers([member()])[0]?.picoIdentityDisplay)
+      .toBe(picoCompanionDisplayFingerprint('ab'.repeat(32)));
   });
 
   it('reads a Home\u2019s own place in itself as endless, not as missing', () => {

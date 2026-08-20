@@ -107,6 +107,7 @@ declare global {
       admitHomeMember(): Promise<{
         credentialId: string;
         picoIdentityFingerprintHex: string;
+        picoIdentityDisplay: string;
         validUntil: string;
       }>;
       endHomeMembership(
