@@ -53,6 +53,25 @@ attestation extension. Shipping the root and reading verified-boot state,
 patch level and the challenge belongs to the implementation; a probe that
 faked it would measure its own fake.
 
+## The conformance probe (ADR 0131 A1)
+
+`apk/run-conformance.sh` asks the *embedded* runtime what it provides, and
+prints one line per fact: Node version and whether `Intl` exists at all, text
+encoding both ways, the canonical transport including a refusal of invalid
+UTF-8, an enrolment code round trip, the Recovery Card transport layer,
+libsodium signing, argon2id at the vault's own profile with a timing, and a
+unix socket.
+
+It exists because A1's "937 fixture tests green on-device" was measured under
+Termux's Node, which has full ICU. The product runs under nodejs-mobile,
+which has none, and the gap cost a day: `TextDecoder` with `fatal: true`
+throws `ERR_NO_ICU` there, so every code was refused as malformed. Planting
+that bug back makes this probe say `"fatal" option is not supported on
+Node.js compiled without ICU` in one line, in about twenty seconds.
+
+Measured 2026-08-20 on the Galaxy A55: everything green, `intl: false`
+recorded in the first line, argon2id 1,342 ms against 844 ms on the laptop.
+
 ## The reachability probe (ADR 0131 A4)
 
 `apk/run-reachability-probe.sh start` records what the device grants a first

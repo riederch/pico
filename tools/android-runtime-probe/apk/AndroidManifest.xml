@@ -32,6 +32,13 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
     </service>
+    <!-- ADR 0131 A1: what this runtime actually provides, asked in its own
+         process so it can be asked at any time. -->
+    <service android:name=".ConformanceService" android:process=":conformance"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a1_conformance" />
+    </service>
     <!-- ADR 0131 A5: the walk itself, so that closing the view does not end
          a ceremony another device is waiting on. Same process as the
          Activity - one Node instance per process is nodejs-mobile's rule -

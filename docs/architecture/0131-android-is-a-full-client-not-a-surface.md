@@ -775,6 +775,23 @@ local-first product's most security-critical moment.
   full ICU. The product runs under the embedded one, which does not. A suite
   green on a proxy runtime is evidence about the proxy.
 
+  So the gap got a check of its own (`apk/run-conformance.sh`, 2026-08-20).
+  It runs *in* the embedded runtime and exercises what a client cannot do
+  without: text encoding both ways, the canonical transport including its
+  refusal of invalid UTF-8, an enrolment code round trip, the Recovery Card
+  transport layer, libsodium signing, argon2id at the vault's own profile,
+  and a unix socket - reporting one line per fact, `intl: false` among them.
+  On the Galaxy A55 everything passes, with argon2id at 1,342 ms against 844
+  on the laptop.
+
+  Its worth was measured the only way that counts: planting `fatal: true`
+  back made it answer *`"fatal" option is not supported on Node.js compiled
+  without ICU`* in one line, twenty seconds after asking - where the same
+  fact took a stack trace, two checksums and an md5 comparison to find by
+  hand. The enrolment round trip stayed green under that plant, because
+  *building* a code decodes nothing, which is exactly how a suite can be
+  green while the runtime cannot read anything.
+
   **The ceremony then ran end to end.** The phone made its own keys through
   its own custody daemon, showed its offer, read the grant with its camera,
   parsed it, raised the ADR 0099 approval and had it answered by the person
