@@ -2,6 +2,7 @@ import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoDisplayDate } from '@pico/protocol/when-display';
 import {
   buildPicoHomeContinuitySignatureInput,
+  picoHomeDeviceRecoveryTiming,
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
@@ -168,14 +169,31 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
  * display never carries the integrity burden alone. That is what makes
  * shortening safe at all; it is not what makes two spellings safe.
  */
+/**
+ * The delay the ceremony actually enforces, said in hours.
+ *
+ * It was the literal `48` in two sentences until 2026-08-20, beside code in
+ * this same app that refuses a claim whose `effectiveAt - acceptedAt` is not
+ * exactly `picoHomeDeviceRecoveryTiming.vetoDelayMs`. The constant's own doc
+ * comment asks for this - "without copying magic numbers" - and the sentence a
+ * person approves is the last place a copy should sit: ADR 0106's whole point
+ * is that the statement is rendered from what the record says, so a number
+ * inside it that no record supplies is the one part nobody would think to
+ * check.
+ *
+ * Not rounded. A delay that stopped being a whole number of hours would say
+ * so, which is more useful than a sentence that reads well and is wrong.
+ */
+const vetoDelayHours = picoHomeDeviceRecoveryTiming.vetoDelayMs / (60 * 60 * 1_000);
+
 const renderersByLabel: Record<string, (fields: object) => string> = {
   [picoHomeDeviceRecoveryCanonicalLabels.prepare]: (f) => {
     const v = f as PicoHomeDeviceRecoveryPrepareSignatureInput;
-    return `Prepare recovery of identity ${picoDisplayFingerprint(v.picoIdentityFingerprintHex)} in Home ${v.homeId} for target ${picoDisplayFingerprint(v.targetDeviceSigningKeyFingerprintHex)} by reading the current device-replacement head. This does not start the 48-hour veto delay.`;
+    return `Prepare recovery of identity ${picoDisplayFingerprint(v.picoIdentityFingerprintHex)} in Home ${v.homeId} for target ${picoDisplayFingerprint(v.targetDeviceSigningKeyFingerprintHex)} by reading the current device-replacement head. This does not start the ${vetoDelayHours}-hour veto delay.`;
   },
   [picoHomeDeviceRecoveryCanonicalLabels.claim]: (f) => {
     const v = f as PicoHomeDeviceRecoveryClaimSignatureInput;
-    return `Recover identity ${picoDisplayFingerprint(v.picoIdentityFingerprintHex)} into Home ${v.homeId} by replacing the complete device set with target ${picoDisplayFingerprint(v.targetDeviceSigningKeyFingerprintHex)}. The 48-hour veto delay starts only after the Home accepts this claim.`;
+    return `Recover identity ${picoDisplayFingerprint(v.picoIdentityFingerprintHex)} into Home ${v.homeId} by replacing the complete device set with target ${picoDisplayFingerprint(v.targetDeviceSigningKeyFingerprintHex)}. The ${vetoDelayHours}-hour veto delay starts only after the Home accepts this claim.`;
   },
   [picoIdentitySignatureInputLabels.keyrecord]: (f) => {
     const v = f as PicoIdentityKeyRecordSignatureInput;

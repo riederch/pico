@@ -76,6 +76,29 @@ const instantSlice = /(\w*(?:At|Until))\s*(?:\}\s*)?\.slice\s*\(0,\s*10\)/g;
  */
 const dayArithmetic = /(?:24\s*\*\s*60\s*\*\s*60|86_?400_?000)/g;
 
+/**
+ * And the fourth shape, which is about how long rather than when.
+ *
+ * It lives here rather than in a script of its own because it is the same
+ * subject from a reader's side - what a person is told about time - and
+ * splitting "when it happens" from "how long it lasts" into two files would
+ * serve no reader of either.
+ *
+ * Two sentences said `48-hour veto delay` as a literal until 2026-08-20, in
+ * the same app as the code that refuses a recovery claim whose
+ * `effectiveAt - acceptedAt` is not exactly
+ * `picoHomeDeviceRecoveryTiming.vetoDelayMs`. That constant's own doc comment
+ * asks for this in so many words - clients should "enforce the same fixed
+ * bounds without copying magic numbers" - and an approval statement is the
+ * last place a copy belongs: ADR 0106's whole point is that the sentence is
+ * rendered from what the record says, so a number inside it that no record
+ * supplies is the one part nobody would think to check.
+ *
+ * Measured before it was written: two occurrences in the tree, both defects.
+ */
+const literalDuration = /`(?:[^`\\]|\\.)*`/gs;
+const spokenDuration = /\b\d+[- ](?:hour|minute|second|day|week|month)s?\b/i;
+
 let scanned = 0;
 for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'))) {
   const path = relative(repoRoot, file);
@@ -108,6 +131,18 @@ for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'
         : '.'}`);
   }
 
+  for (const template of content.matchAll(literalDuration)) {
+    const spoken = spokenDuration.exec(template[0]);
+    if (spoken === null) {
+      continue;
+    }
+    errors.push(`${path}: says "${spoken[0]}" as a literal in a sentence. If something enforces `
+      + 'that length, the sentence has to read it from there - a statement carrying a number no '
+      + 'record supplies is the part of it nobody thinks to check, and it goes on reading well '
+      + 'after the rule beneath it has changed. If nothing enforces it, the sentence is asserting '
+      + 'a duration on its own authority, which is the same problem said differently.');
+  }
+
   if (rendererReachableFiles.has(path)) {
     for (const _ of content.matchAll(dayArithmetic)) {
       errors.push(`${path}: counts days from a length in milliseconds, in the window. Days a `
@@ -130,7 +165,8 @@ if (errors.length > 0) {
 console.log(
   `Instant display check passed (${scanned} source files across apps and packages,`
   + ` ${renderers.size} renderings named with reasons, no instant reaching a person raw,`
-  + ' cut to a UTC day, or counted in blocks - the window included).',
+  + ' cut to a UTC day, or counted in blocks, and no duration spoken as a literal'
+  + ' - the window included).',
 );
 
 function* sourceFiles(...roots) {

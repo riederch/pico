@@ -88,6 +88,25 @@ list.
   signable label and one statement per gated label - fourteen sentences
   naming what changes and for whom, with fingerprints shortened for the eye
   while the digest keeps binding the exact bytes.
+  **Three things in those sentences were not rendered from anything**
+  (2026-08-20). The fingerprint shortening was this file's own rule rather
+  than the product's, so the same key arrived twice under two names in one
+  approval body - the statement from here, the signing key appended by the
+  companion shell (ADR 0079 I5, now `@pico/protocol/fingerprint-display`).
+  Deadlines went in raw, so a sentence read `until 2027-08-01T10:00:00.000Z`
+  while the window confirming that ceremony said `2027-08-01`
+  (`@pico/protocol/when-display`). And two sentences said `48-hour veto
+  delay` as a literal, in the same app as the code that refuses a claim whose
+  `effectiveAt - acceptedAt` is not exactly
+  `picoHomeDeviceRecoveryTiming.vetoDelayMs`.
+
+  The last one is the sharpest reading of what this gate is for. A statement
+  is meant to be rendered from what the record says; a number inside it that
+  no record supplies is the one part of the sentence nobody would think to
+  check, and it goes on reading correctly after the rule beneath it has
+  changed. It is derived now, and `check-instant-display.mjs` fails on the
+  next literal.
+
 - **R3 - Callers migrated: Done.** All CLI ceremonies send fields. The ADR
   0100 signer adapter turned out to be a fifth caller this ADR had not
   named: the `@pico/vault` ceremony functions sign through it, so

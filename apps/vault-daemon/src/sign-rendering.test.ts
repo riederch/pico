@@ -8,6 +8,7 @@ import {
   buildPicoIdentityRevocationSignatureInput,
   picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeDeviceRecoveryCanonicalLabels,
+  picoHomeDeviceRecoveryTiming,
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
   type PicoHomeDeviceActivationSignatureInput,
@@ -29,6 +30,14 @@ import { picoVaultCanSignLabel } from '@pico/vault';
 import {
   picoVaultDaemonSignatureNeedsApproval,
 } from './protocol.js';
+
+/**
+ * Derived here too, and that is the point of the change it pins. A literal
+ * `48` in the fixture would agree with a literal `48` in the renderer while
+ * both disagreed with the delay the ceremony enforces - which is the only one
+ * of the three a person is actually subject to.
+ */
+const vetoHours = picoHomeDeviceRecoveryTiming.vetoDelayMs / (60 * 60 * 1_000);
 
 describe('ADR 0109 device lifecycle approval rendering', () => {
   it('shows the exact device target, scopes, validity and delegation action', () => {
@@ -192,7 +201,7 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       'Prepare recovery of identity 33333333…33333333 in Home '
       + 'home_render_recovery_0001 for target 44444444…44444444 by reading '
       + 'the current device-replacement head. This does not start the '
-      + '48-hour veto delay.',
+      + `${vetoHours}-hour veto delay.`,
     );
     expect(picoVaultCanSignLabel(
       'pico_identity',
@@ -219,7 +228,7 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
     )).toBe(
       'Recover identity 33333333…33333333 into Home '
       + 'home_render_recovery_0001 by replacing the complete device set '
-      + 'with target 44444444…44444444. The 48-hour veto delay starts only '
+      + `with target 44444444…44444444. The ${vetoHours}-hour veto delay starts only `
       + 'after the Home accepts this claim.',
     );
     expect(picoVaultCanSignLabel(
@@ -336,5 +345,44 @@ describe('ADR 0106 - a deadline in the sentence is in the reader\'s own day', ()
       picoHomeSignatureInputLabels.membership,
       { ...membership, validUntil: '2027-08-01T10:00:00Z' },
     )).toThrow();
+  });
+});
+
+describe('ADR 0106 - the sentence names the delay the ceremony enforces', () => {
+  it('speaks the veto delay from the constant, not from a number beside it', () => {
+    /**
+     * Two sentences said "48-hour" as a literal until 2026-08-20, in the same
+     * app as the code that refuses a claim whose `effectiveAt - acceptedAt` is
+     * not exactly `picoHomeDeviceRecoveryTiming.vetoDelayMs`. The constant's
+     * own doc comment asks for exactly this - "without copying magic numbers"
+     * - and a number inside an approval statement that no record supplies is
+     * the one part of it nobody would think to check.
+     */
+    const claim: PicoHomeDeviceRecoveryClaimSignatureInput = {
+      suite: picoIdentitySuite,
+      recoveryId: 'recovery_render_0002',
+      homeId: 'home_render_recovery_0002',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      picoIdentityFingerprintHex: '33'.repeat(32),
+      targetDelegationId: 'delegation_render_recovery_0002',
+      targetDeviceSigningKeyFingerprintHex: '44'.repeat(32),
+      targetDeviceKeyAgreementKeyFingerprintHex: '55'.repeat(32),
+      evidenceDigestHex: '66'.repeat(32),
+      observedLifecycleOrder: 'seq:0000000000000008',
+      createdAt: '2026-07-31T10:00:00.000Z',
+      expiresAt: '2026-07-31T10:05:00.000Z',
+    };
+    const statement = renderPicoVaultApprovalStatement(
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+      claim,
+    );
+
+    expect(statement).toContain(
+      `${picoHomeDeviceRecoveryTiming.vetoDelayMs / (60 * 60 * 1_000)}-hour veto delay`,
+    );
+    // And the delay is the one the ceremony holds a person to, not a rounder
+    // number that happens to sit near it.
+    expect(picoHomeDeviceRecoveryTiming.vetoDelayMs).toBe(48 * 60 * 60 * 1_000);
   });
 });
