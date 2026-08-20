@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PicoCompanionPresentation } from './contract.js';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 
 describe('Electron presentation adapter', () => {
   it('publishes loud rendered ADR 0106 statements and only clears recovery state', async () => {
@@ -159,5 +160,45 @@ describe('ADR 0118 O1 - what the surface says it showed', () => {
     }, () => new Date('2026-08-14T12:00:00Z'));
 
     await expect(adapter.reportDueEntries({ entries, total: 2 })).rejects.toThrow('screen_unavailable');
+  });
+});
+
+describe('ADR 0079 I5 - the adapter shows a key the way the rest of Pico does', () => {
+  it('renders the waiting recovery with the shared rule, not a private one', async () => {
+    /**
+     * This file carried its own `shortFingerprint(value: string)` until
+     * 2026-08-20 - a fifth copy, found the day after the other four were
+     * closed, and missed by the first check because that one keyed on the
+     * *field* being cut and here the parameter was called `value`.
+     *
+     * It agreed with the product rule on every sixty-four character input,
+     * which is what made it the dangerous kind rather than the harmless one:
+     * it had no short-value guard, so `shortFingerprint('abcdefgh')` returned
+     * `abcdefgh…abcdefgh` - the whole string twice, with an ellipsis claiming
+     * something had been left out.
+     */
+    const presented: PicoCompanionPresentation[] = [];
+    const adapter = createPicoCompanionPresentationAdapter({
+      present: (state) => { presented.push(state); },
+      notify: () => {},
+    }, () => new Date('2026-08-02T12:00:00Z'));
+    const identity = `${'9f8e7d6c'}${'0'.repeat(48)}${'5b4a3c2d'}`;
+
+    await adapter.presentRecoveryWaiting?.({
+      picoIdentityFingerprintHex: identity,
+      pending: {
+        recoveryId: 'recovery_2',
+        claimDigestHex: 'bb'.repeat(32),
+        targetDelegationId: 'target_2',
+        targetDeviceSigningKeyFingerprintHex: 'cc'.repeat(32),
+        targetDeviceKeyAgreementKeyFingerprintHex: 'dd'.repeat(32),
+        acceptedAt: '2026-08-02T10:00:00.000Z',
+        effectiveAt: '2026-08-04T10:00:00.000Z',
+        completionExpiresAt: '2026-08-11T10:00:00.000Z',
+      },
+    });
+
+    expect(presented.at(-1)?.body).toContain(picoDisplayFingerprint(identity));
+    expect(presented.at(-1)?.body).not.toContain(identity.slice(0, 12));
   });
 });

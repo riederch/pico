@@ -1,3 +1,4 @@
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
   type PicoCompanionClockDivergenceAlarm,
   type PicoCompanionDueEntriesTold,
@@ -263,7 +264,7 @@ export function createPicoCompanionPresentationAdapter(
         symbol: '!',
         decision: 'none',
         title: 'Pico recovery is waiting for the time lock',
-        body: `Recovery ${pending.recoveryId} for identity ${shortFingerprint(picoIdentityFingerprintHex)} becomes effective at ${pending.effectiveAt}. Nothing can hurry this wait. Completion will revoke every other device of this identity.`,
+        body: `Recovery ${pending.recoveryId} for identity ${picoDisplayFingerprint(picoIdentityFingerprintHex)} becomes effective at ${pending.effectiveAt}. Nothing can hurry this wait. Completion will revoke every other device of this identity.`,
         observedAt: now().toISOString(),
       }, false);
     },
@@ -274,7 +275,7 @@ export function createPicoCompanionPresentationAdapter(
         symbol: '●',
         decision: 'none',
         title: 'Pico recovery completed',
-        body: `Recovery ${receipt.recoveryId} for identity ${shortFingerprint(picoIdentityFingerprintHex)} completed at ${receipt.completedAt}. Exactly one active device remains: ${shortFingerprint(receipt.targetDeviceSigningKeyFingerprintHex)}. Every other device was revoked and surviving hardware must re-enroll.`,
+        body: `Recovery ${receipt.recoveryId} for identity ${picoDisplayFingerprint(picoIdentityFingerprintHex)} completed at ${receipt.completedAt}. Exactly one active device remains: ${picoDisplayFingerprint(receipt.targetDeviceSigningKeyFingerprintHex)}. Every other device was revoked and surviving hardware must re-enroll.`,
         observedAt: now().toISOString(),
       }, true);
     },
@@ -304,8 +305,4 @@ function sameConditions(
   return a.length === b.length
     && a.every((condition, index) => condition.kind === b[index]?.kind
       && condition.remedy === b[index]?.remedy);
-}
-
-function shortFingerprint(value: string): string {
-  return `${value.slice(0, 8)}…${value.slice(-8)}`;
 }

@@ -54,6 +54,25 @@ const allowed = new Map([
 
 const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.slice\s*\(/g;
 
+/**
+ * And the same rule wearing a function's name instead of a field's.
+ *
+ * The rule above keys on the *field* being cut, which is why it missed a
+ * fifth copy on the first day it shipped: `presentation-adapter.ts` had a
+ * private `shortFingerprint(value: string)`, and inside it the parameter is
+ * called `value`. It rendered `8…8` and so agreed with the product rule on
+ * every sixty-four character input - and disagreed on short ones, because it
+ * had no guard: `shortFingerprint('abcdefgh')` returns
+ * `abcdefgh…abcdefgh`, the whole string twice with an ellipsis claiming
+ * something was left out.
+ *
+ * That is the more dangerous shape of this defect, not the less: a copy that
+ * matches today hides until an input changes. So the second rule keys on what
+ * the act *looks like* rather than what the value is called - a slice next to
+ * an ellipsis is somebody shortening something for a person to read.
+ */
+const ellipsisSlice = /\$\{[^{}]*\.slice\s*\([^{}]*\}\s*…|…\s*\$\{[^{}]*\.slice\s*\(/g;
+
 let scanned = 0;
 for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'))) {
   const path = relative(repoRoot, file);
@@ -67,6 +86,13 @@ for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'
   }
   scanned += 1;
   const content = readFileSync(file, 'utf8');
+  for (const _ of content.matchAll(ellipsisSlice)) {
+    errors.push(`${path}: shortens a string with a slice beside an ellipsis. That is a rendering `
+      + 'for a person, whatever the value is called here - `picoDisplayFingerprint` in '
+      + '`@pico/protocol/fingerprint-display` is the one the rest of the product shows. A private '
+      + 'copy that agrees on sixty-four hex characters is the dangerous kind: it hides until an '
+      + 'input is shorter than it expected.');
+  }
   for (const [, symbol] of content.matchAll(fingerprintSlice)) {
     errors.push(rendererReachableFiles.has(path)
       ? `${path}: shortens \`${symbol}\` in the window. This file runs in the renderer, where a `
