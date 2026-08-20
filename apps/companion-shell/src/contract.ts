@@ -2105,15 +2105,22 @@ export const picoCompanionHostRotationWarning =
   'Every Recovery Card you have printed stops working. Print a new one right '
   + 'after this - without one, nothing can put your identity on another device.';
 
+/**
+ * The new key arrives already shortened, because this file is renderer-
+ * reachable and the one rule for shortening a fingerprint lives in the
+ * shell-free core, where a second client inherits it (ADR 0131 A5). Slicing
+ * it here was how this window came to spell a key twelve characters long
+ * while the notification about the same rotation spelled it head-and-tail.
+ */
 export function picoCompanionHostRotationLine(rotated: {
-  hostSigningKeyFingerprintHex: string;
+  hostSigningKeyDisplay: string;
   retiredHostSigningKeyFingerprintHex: string;
   repinned: boolean;
 }): { title: string; body: string } {
   return {
     title: 'Your Home has new keys',
     body: rotated.repinned
-      ? `It answers as ${rotated.hostSigningKeyFingerprintHex.slice(0, 12)} now, and this `
+      ? `It answers as ${rotated.hostSigningKeyDisplay} now, and this `
         + `device followed it there. ${picoCompanionHostRotationWarning}`
       // The rotation happened either way - the Home decided that - and what
       // is missing is this device's proof of it, which is a different thing

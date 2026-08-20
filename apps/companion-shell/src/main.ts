@@ -28,6 +28,7 @@ import {
   runPicoCompanionAskingDeviceExchange,
   type PicoCompanionEnrolmentSurface,
 } from '@pico/companion/enrolment-steps';
+import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
@@ -1429,7 +1430,11 @@ function registerIpc(): void {
       try {
         productOperationActive = true;
         const rotated = await runtime.rotateHostKeys({ reason: reason.reason });
-        const line = picoCompanionHostRotationLine(rotated);
+        const line = picoCompanionHostRotationLine({
+          ...rotated,
+          hostSigningKeyDisplay:
+            picoCompanionDisplayFingerprint(rotated.hostSigningKeyFingerprintHex),
+        });
         await presentationPort.present(parsePicoCompanionPresentation({
           kind: 'host_keys_rotated',
           severity: rotated.repinned ? 'active' : 'warning',
@@ -1989,9 +1994,18 @@ async function runEnrolment(
     symbol: '●',
     decision: 'none',
     title: line.title,
+    /**
+     * It said "which is what that device showed you" until 2026-08-20, and
+     * that device shows no fingerprint at any step of the walk - not its own,
+     * not in a code, nowhere. A line that sends a person to a second screen
+     * for a string that is not on it is worse than one that says nothing: the
+     * person who looks and fails has been taught that the check is unreliable.
+     * What is true is that this is the device the codes just bound, and the
+     * string is here so a later list can be recognised by it.
+     */
     body: `${line.body} It is known by ${
-      enrolled.targetSigningKeyFingerprintHex.slice(0, 12)
-    }, which is what that device showed you.`,
+      picoCompanionDisplayFingerprint(enrolled.targetSigningKeyFingerprintHex)
+    }, the same name your Home now keeps for it.`,
     observedAt: new Date().toISOString(),
   }));
 }
@@ -2235,7 +2249,7 @@ const approvalDecisionPort: PicoCompanionApprovalDecisionPort = {
       symbol: '!',
       decision: 'approve_or_deny',
       title: 'Pico needs your approval',
-      body: `${approval.statement} Signing key ${shortFingerprint(approval.keyFingerprintHex)}; exact request digest ${shortFingerprint(approval.signatureInputDigestHex)}.`,
+      body: `${approval.statement} Signing key ${picoCompanionDisplayFingerprint(approval.keyFingerprintHex)}; exact request digest ${picoCompanionDisplayFingerprint(approval.signatureInputDigestHex)}.`,
       observedAt: new Date().toISOString(),
     }));
     showWindow();
@@ -2310,10 +2324,6 @@ async function presentRecoveryCardRetry(): Promise<void> {
     observedAt: new Date().toISOString(),
   }));
   showWindow();
-}
-
-function shortFingerprint(value: string): string {
-  return `${value.slice(0, 8)}…${value.slice(-8)}`;
 }
 
 function assertRendererSender(event: IpcMainEvent | IpcMainInvokeEvent): void {

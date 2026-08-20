@@ -4,6 +4,7 @@ import type {
   PicoCompanionNotificationAdapter,
   PicoCompanionPendingRecoveryAlarm,
 } from './alarm-carrier.js';
+import { picoCompanionDisplayFingerprint } from './fingerprint.js';
 import type {
   PicoCompanionHostContinuityAlarm,
   PicoCompanionHostContinuityNotifications,
@@ -14,7 +15,8 @@ import type {
  * ADR 0112: the alarm is loud - color, symbol and text, interrupting, never
  * a badge. On Linux that is a critical-urgency desktop notification; the
  * Electron shell supplies its own adapter at C2. Fingerprints are shortened
- * for display only (ADR 0079 I5); no security comparison happens here.
+ * for display only (ADR 0079 I5) by the one rule this client has for that,
+ * `fingerprint.ts`; no security comparison happens here.
  *
  * ADR 0115 U4 rides the same adapter: the M3 rotation notice after a
  * verified re-pin, and the continuity alarm when this device could not
@@ -38,9 +40,9 @@ export function renderPicoCompanionPendingRecoveryAlarm(
     // identity, which target device, and when it becomes effective. A person
     // with more than one Pico cannot act on an alarm that does not say whose
     // it is.
-    body: `Identity ${displayFingerprint(alarm.picoIdentityFingerprintHex)} `
+    body: `Identity ${picoCompanionDisplayFingerprint(alarm.picoIdentityFingerprintHex)} `
       + 'is being recovered onto another device. '
-      + `Target device ${displayFingerprint(pending.targetDeviceSigningKeyFingerprintHex)} `
+      + `Target device ${picoCompanionDisplayFingerprint(pending.targetDeviceSigningKeyFingerprintHex)} `
       + `becomes that identity's only device at ${pending.effectiveAt} `
       + 'and every other device is revoked then. '
       + 'If this is not you, veto now from any active device '
@@ -57,8 +59,8 @@ export function renderPicoCompanionHostRotationNotice(
     // the chain was proven from this device's own pin, and every Recovery
     // Card printed for the old keys is stale (ADR 0110/0115).
     body: 'Your Pico Home rotated its host keys from '
-      + `${displayFingerprint(notice.previousHostSigningKeyFingerprintHex)} to `
-      + `${displayFingerprint(notice.hostSigningKeyFingerprintHex)}. `
+      + `${picoCompanionDisplayFingerprint(notice.previousHostSigningKeyFingerprintHex)} to `
+      + `${picoCompanionDisplayFingerprint(notice.hostSigningKeyFingerprintHex)}. `
       + 'This device verified the signed continuity chain against its own '
       + 'pins and follows the new keys. '
       + 'Recovery Cards printed before this rotation are stale - re-issue '
@@ -146,6 +148,3 @@ export function createLinuxNotifySendAdapter(
   };
 }
 
-function displayFingerprint(fingerprintHex: string): string {
-  return `${fingerprintHex.slice(0, 8)}…${fingerprintHex.slice(-8)}`;
-}

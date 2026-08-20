@@ -1,3 +1,4 @@
+import { picoCompanionDisplayFingerprint } from '@pico/companion/fingerprint';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -911,14 +912,17 @@ describe('ADR 0130 E4 - the Home itself', () => {
     // And afterwards, in both outcomes, because a rotation this device could
     // not follow is not a rotation that did not happen.
     const followed = picoCompanionHostRotationLine({
-      hostSigningKeyFingerprintHex: 'cd'.repeat(32),
+      // Already shortened by the caller, and by the one rule the core owns -
+      // this window and the notification about the same rotation used to
+      // spell one key two ways.
+      hostSigningKeyDisplay: picoCompanionDisplayFingerprint('cd'.repeat(32)),
       retiredHostSigningKeyFingerprintHex: 'ef'.repeat(32),
       repinned: true,
     });
-    expect(followed.body).toContain('cdcdcdcdcdcd');
+    expect(followed.body).toContain('cdcdcdcd…cdcdcdcd');
     expect(followed.body).toContain('Recovery Card');
     const stranded = picoCompanionHostRotationLine({
-      hostSigningKeyFingerprintHex: 'ef'.repeat(32),
+      hostSigningKeyDisplay: picoCompanionDisplayFingerprint('ef'.repeat(32)),
       retiredHostSigningKeyFingerprintHex: 'ef'.repeat(32),
       repinned: false,
     });

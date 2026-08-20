@@ -316,6 +316,70 @@ for (const { file, why } of trayForbidden) {
   }
 }
 
+/**
+ * One rule for how a key fingerprint is shown to a person.
+ *
+ * **Written 2026-08-20 after finding three spellings in one client.** The
+ * shell-free core shortened head-and-tail; the Electron main process carried
+ * a byte-identical private copy of that rule; the renderer contract took a
+ * bare twelve-character prefix. A host-key rotation therefore reached one
+ * person as `a1b2c3d4…7f8e9d0c` in the notification and `a1b2c3d4e5f6` in the
+ * window - one key, one event, two names.
+ *
+ * ADR 0079 I5 leaves the display form to "the surfaces that show them", so
+ * this is that decision for this surface, made once in
+ * `@pico/companion/fingerprint` and checked here because ADR 0131 A5 makes
+ * Android the second client that will show these strings.
+ *
+ * **The renderer is exempt, and the exemption is the residual.** Renderer-
+ * reachable files resolve relative paths only - the window loads plain ESM
+ * under a `script-src 'self'` policy - so a bare `@pico/companion/...`
+ * specifier there would break at runtime and pass every test. Two sites keep
+ * their own slice for that reason (the member list and the admitted line),
+ * and closing it properly means those records crossing IPC already carrying
+ * the rendered string, which is what ADR 0113 C2 asks for anyway. Named here
+ * rather than silently allowed, so the next reader sees a decision instead of
+ * an inconsistency.
+ */
+const rendererReachable = new Set(['contract.ts', 'renderer.ts', 'model-provider-views.ts']);
+/**
+ * Two files shorten a fingerprint and are right to.
+ *
+ * An id derived from a fingerprint is not a fingerprint shown to a person: it
+ * is a key in a record, never read aloud, never compared by eye, and changing
+ * its length would rename every row that already exists. Both are already
+ * one derivation with one caller each, argued in their own doc comments, and
+ * the check found the second of them on its first run - which is the useful
+ * kind of false positive, because it made the distinction explicit instead of
+ * leaving it in somebody's head. A third one appearing here should be argued
+ * the same way rather than appended.
+ */
+const derivesAnIdentifier = new Map([
+  ['presence.ts', 'picoPresenceIdForDeviceSigningKey - the row a device is joined on'],
+  ['domain-read-grant.ts', 'the grant id a privacy domain is recorded under'],
+]);
+const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.slice\s*\(/g;
+let fingerprintRuleFiles = 0;
+for (const root of [join(companionRoot, 'src'), join(shellRoot, 'src')]) {
+  for (const file of listSourceFiles(root)) {
+    const name = file.slice(file.lastIndexOf('/') + 1);
+    if (rendererReachable.has(name) || name.endsWith('.test.ts')
+      || name === 'fingerprint.ts' || derivesAnIdentifier.has(name)) {
+      continue;
+    }
+    const content = readFileSync(file, 'utf8');
+    for (const [, symbol] of content.matchAll(fingerprintSlice)) {
+      fingerprintRuleFiles += 1;
+      errors.push(
+        `${relative(repoRoot, file)}: shortens \`${symbol}\` with its own slice. How a key is `
+        + 'shown to a person is one decision for this client - `picoCompanionDisplayFingerprint` '
+        + 'in `@pico/companion/fingerprint` - because a second spelling means one key reaches one '
+        + 'person under two names, which is how this check came to exist.',
+      );
+    }
+  }
+}
+
 if (errors.length > 0) {
   console.error('Companion shell-boundary check failed:');
   for (const error of errors) {
@@ -328,7 +392,9 @@ console.log(
   'Companion shell-boundary check passed'
   + ` (tray start reaches ${trayReached.size} modules,`
   + ` the shell-free core ${clientReached.size};`
-  + ` ${contractChannels.size} IPC channels, named identically on both sides).`,
+  + ` ${contractChannels.size} IPC channels, named identically on both sides;`
+  + ` ${fingerprintRuleFiles === 0 ? 'one' : fingerprintRuleFiles} rule for showing a`
+  + ' fingerprint, outside the renderer).',
 );
 
 function listSourceFiles(directory) {

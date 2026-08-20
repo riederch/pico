@@ -606,6 +606,43 @@ local-first product's most security-critical moment.
   camera from typed is exactly the shape a second client re-implements
   differently and correctly.
 
+  **A second thing was in the wrong place, found by asking what else the
+  shell decides that Android would decide again** (2026-08-20). How a key
+  fingerprint is shown to a person had three answers inside one client: the
+  shell-free core shortened it head-and-tail, the Electron main process
+  carried a byte-identical private copy of that rule, and the renderer
+  contract took a bare twelve-character prefix. So one host-key rotation
+  reached one person twice under two names - `a1b2c3d4…7f8e9d0c` in the
+  notification, `a1b2c3d4e5f6` in the window - and Android would have been
+  the fourth spelling.
+
+  ADR 0079 I5 leaves this open on purpose: display encoding "is UX and
+  decided with the surfaces that show them". This surface had never decided.
+  It has now, in `@pico/companion/fingerprint`, head and tail rather than a
+  prefix - because the attack ADR 0079's own threat table names is grinding a
+  key whose truncated fingerprint matches a target's *display prefix*, and
+  twelve hex characters is forty-eight bits to match where eight from each
+  end is sixty-four and costs a person nothing to read.
+
+  **The renderer keeps two slices, and the reason is the residual.**
+  Renderer-reachable files resolve relative paths only - the window loads
+  plain ESM under `script-src 'self'` - so a bare `@pico/companion/...`
+  specifier there compiles, passes every test, and breaks the window at
+  runtime. Closing it means the member records carrying the rendered string
+  across IPC instead of the raw hex, which is what ADR 0113 C2 asks for
+  anyway. `check-companion-boundary.mjs` enforces the one rule everywhere it
+  can be reached and names those two rather than allowing them quietly.
+
+  **And one line was making a promise about a second screen.** After adding a
+  device, the sponsor's window said the new device "is known by <twelve hex
+  characters>, which is what that device showed you". That device shows no
+  fingerprint at any step of the walk. A person who looks for it and fails
+  has learned that the check is unreliable, which is worse than not being
+  offered one; the line now says what is true, and making it checkable would
+  mean the joining screen showing the same string - which would widen the
+  three verbs a platform owes into three-plus-a-value, and is not worth that
+  on this evidence.
+
   **One thing was in the wrong place, and it was the dangerous kind.** The
   pairing of each exchange step with the prefix a read must accept lived as
   six string literals in `apps/companion-shell/src/main.ts`, and the
