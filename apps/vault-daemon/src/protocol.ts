@@ -10,6 +10,7 @@ import {
 } from '@pico/protocol';
 import {
   MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES,
+  maxPicoVaultPassphraseLength,
   picoRecoveryPinProtection,
 } from '@pico/vault';
 
@@ -131,7 +132,12 @@ export const PICO_VAULT_DAEMON_APPROVAL_WINDOW_MS = 60 * 1_000;
 export const PICO_VAULT_DAEMON_APPROVAL_WAIT_MS = 30 * 1_000;
 export const PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS = 32;
 export const MAX_PICO_VAULT_DAEMON_SIGN_LABEL_CHARS = 128;
-export const MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS = 1024;
+/**
+ * The Vault's bound, not a second one. A wire cap that refused a passphrase
+ * the Vault would have taken - or took one it would refuse - is a refusal
+ * arriving in the wrong process, one layer from the person who typed it.
+ */
+export const MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS = maxPicoVaultPassphraseLength;
 export const MAX_PICO_VAULT_DAEMON_REQUEST_ID_CHARS = 64;
 
 export const PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS = 32;

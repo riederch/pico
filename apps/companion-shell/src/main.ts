@@ -21,7 +21,10 @@ import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
 } from '@pico/companion/profile';
-import { picoRecoveryCardScanPrefix } from '@pico/protocol';
+import {
+  maxPicoRecoveryCardScanChars,
+  picoRecoveryCardScanPrefix,
+} from '@pico/protocol';
 import {
   picoCompanionEnrolmentReadPrefix,
   picoCompanionSponsorExchange,
@@ -33,7 +36,11 @@ import {
   maxPicoHomeCoreUrlLength,
 } from '@pico/protocol/home-address';
 import { maxPicoDeviceEnrolmentTransportLength } from '@pico/protocol/device-enrolment';
-import { isPicoCompanionMembershipSubject } from '@pico/companion/home-authority';
+import {
+  isPicoCompanionMembershipSubject,
+  picoCompanionMembershipSubjectLength,
+} from '@pico/companion/home-authority';
+import { maxPicoVaultPassphraseLength } from '@pico/vault';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoDisplayDate, picoDisplayInstant } from '@pico/protocol/when-display';
 import {
@@ -100,6 +107,24 @@ const rendererPath = join(import.meta.dirname, 'renderer', 'index.html');
 const rendererUrl = pathToFileURL(rendererPath).href;
 const preloadPath = join(import.meta.dirname, 'preload.cjs');
 const assetPath = join(import.meta.dirname, 'assets');
+/**
+ * Two bounds this surface owns, named rather than typed into a field.
+ *
+ * Neither has a rule elsewhere to defer to - no parser bounds a provider
+ * credential, and the announcement line is checked for its shape rather than
+ * its size - so unlike the passphrase and the move-in code these really are
+ * the field's own decision. Naming them is what makes them a decision: a bare
+ * `4_096` beside a prompt reads as a number somebody had to pick, and by the
+ * time anyone asks whether it is still right there is nothing to ask about.
+ *
+ * The credential is what a machine asks Pico to prove itself with - an API
+ * token, a long-lived key - and four thousand characters is past every shape
+ * of those. The announcement is a whole JSON object printed by a Home,
+ * carrying pinned keys, so it is the larger of the two by an order.
+ */
+const maxPicoCompanionProviderCredentialLength = 4_096;
+const maxPicoCompanionAnnouncementLineLength = 8_192;
+
 const trayPssBudgetBytes = 225_000_000;
 const trayPrivateDirtyAndHugetlbBudgetBytes = 110_000_000;
 const trayMemoryProbe = process.env.PICO_COMPANION_RELEASE_PROBE === 'tray-memory-v2';
@@ -806,7 +831,7 @@ function registerIpc(): void {
         title: 'Enter the credential for this provider',
         instruction: 'Type what this machine asks Pico to prove itself with, then press '
           + 'Enter. Your Home seals it; this device keeps no copy.',
-        maximumLength: 4_096,
+        maximumLength: maxPicoCompanionProviderCredentialLength,
         refusal: 'A credential cannot be empty.',
         validate: (value: string) => value.length > 0,
       });
@@ -1402,7 +1427,7 @@ function registerIpc(): void {
           // Sixty-four, because that is what a fingerprint is. It said 128
           // and carried its own copy of the ceremony's expression, which
           // agreed with it by coincidence rather than by construction.
-          maximumLength: 64,
+          maximumLength: picoCompanionMembershipSubjectLength,
           validate: (value: string) => isPicoCompanionMembershipSubject(value.trim()),
         });
         const admitted = await runtime.admitHomeMember({
@@ -1715,7 +1740,10 @@ async function runFirstRun(source: PicoCompanionFirstRunScanSource): Promise<voi
       // The protocol's own prefix, which is what the camera path has always
       // used: this branch demanded `pico-recovery-card-v2:` and no card
       // carries that, so a card could be photographed but never typed.
-      : await captureSecret(picoCompanionRecoveryCardEntryPrompt(picoRecoveryCardScanPrefix));
+      : await captureSecret(picoCompanionRecoveryCardEntryPrompt(
+        picoRecoveryCardScanPrefix,
+        maxPicoRecoveryCardScanChars,
+      ));
     pin = await captureSecret(picoCompanionCardPinPrompt('enter'));
   }
   const passphrase = await captureSecret({
@@ -1725,7 +1753,7 @@ async function runFirstRun(source: PicoCompanionFirstRunScanSource): Promise<voi
     instruction: need.need === 'card_and_secrets'
       ? 'This passphrase protects the keys Pico is about to create on this device. It is not the Card PIN.'
       : 'Type the Vault passphrase you chose when this device started its setup, then press Enter.',
-    maximumLength: 1_024,
+    maximumLength: maxPicoVaultPassphraseLength,
     refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   });
@@ -1838,7 +1866,7 @@ async function runFounding(): Promise<void> {
     instruction: 'It contains the one-time move-in code and the keys this device will pin '
       + 'your Home to. Pico checks it against the Home before using it, which is why it '
       + 'comes from your own log rather than from the Home itself.',
-    maximumLength: 8_192,
+    maximumLength: maxPicoCompanionAnnouncementLineLength,
     refusal: 'That line is the whole JSON object your Home printed, braces included.',
     /**
      * The transport's shape, not the protocol's. This used to check for the
@@ -1859,7 +1887,7 @@ async function runFounding(): Promise<void> {
     title: 'Choose a Vault passphrase',
     instruction: 'It protects the keys this device is about to make. Nothing can recover '
       + 'them without it, and Pico never sends it anywhere.',
-    maximumLength: 1_024,
+    maximumLength: maxPicoVaultPassphraseLength,
     refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   });
@@ -2087,7 +2115,7 @@ async function runJoinFromDevice(source: PicoCompanionFirstRunScanSource): Promi
     title: 'Choose a Vault passphrase for this device',
     instruction: 'It protects the keys this device is about to make for itself. Your other '
       + 'device keeps its own; nothing can recover either without its passphrase.',
-    maximumLength: 1_024,
+    maximumLength: maxPicoVaultPassphraseLength,
     refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   });
@@ -2202,7 +2230,7 @@ async function runRecoveryCardIssuance(
   const passphrasePrompt = {
     title: 'Enter the Vault passphrase',
     instruction: 'Type this device\'s Vault passphrase, then press Enter. It is not the Recovery Phrase or Card PIN.',
-    maximumLength: 1_024,
+    maximumLength: maxPicoVaultPassphraseLength,
     refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   };

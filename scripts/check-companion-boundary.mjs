@@ -337,7 +337,41 @@ for (const { file, why } of trayForbidden) {
  * What stays here is what was always this check's own subject: what the tray
  * start may reach, what the shell-free core may reach, and that both sides of
  * the IPC boundary name the same channels.
+ *
+ * **And one more, added the same day, which is the same subject seen from the
+ * other side.** A prompt's `maximumLength` is the boundary between a person
+ * and a parser, and the shell owns it. Seven of them were bare numbers: four
+ * passphrase fields typed `1_024` against a bound `@pico/vault` enforces, the
+ * membership field typed `64` against the rule beside it, and two more were
+ * nobody's decision at all. They all agreed, which is the point - a field and
+ * a rule holding the same number agree by coincidence, and the coincidence
+ * ends the first time one of them is revisited. Then somebody chooses a
+ * passphrase a prompt accepted and the Vault refuses, during founding, after
+ * they have committed to it.
+ *
+ * So a cap must be a name. If a rule enforces it, the name comes from there;
+ * if nothing does, naming it is what turns a number somebody picked into a
+ * decision somebody can ask about.
  */
+
+const promptCap = /maximumLength:\s*([0-9][0-9_]*)/g;
+let namedCaps = 0;
+for (const file of listSourceFiles(join(shellRoot, 'src'))) {
+  const path = relative(repoRoot, file);
+  if (path.endsWith('.test.ts')) {
+    continue;
+  }
+  const content = readFileSync(file, 'utf8');
+  namedCaps += (content.match(/maximumLength:/g) ?? []).length;
+  for (const [, literal] of content.matchAll(promptCap)) {
+    errors.push(`${path}: caps a field at the literal ${literal}. A field cap is the boundary `
+      + 'between a person and a parser: if something else enforces that length, this has to read '
+      + "it from there - a refusal that arrives one layer later, after somebody has typed and "
+      + 'committed, is the failure this rule exists for. If nothing else enforces it, name it '
+      + 'here with the reason, because a bare number beside a prompt is a decision nobody can '
+      + 'find to question.');
+  }
+}
 
 if (errors.length > 0) {
   console.error('Companion shell-boundary check failed:');
@@ -352,6 +386,7 @@ console.log(
   + ` (tray start reaches ${trayReached.size} modules,`
   + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides;`
+  + ` ${namedCaps} field caps, each a name rather than a number;`
   + ' fingerprints and instants are checked product-wide next door).',
 );
 

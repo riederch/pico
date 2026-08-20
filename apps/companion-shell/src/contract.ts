@@ -690,8 +690,19 @@ export function picoCompanionCardPinPrompt(purpose: 'choose' | 'enter' = 'choose
  * `pico-recovery-card-v2:`, a spelling no card has ever carried. The card's
  * *metadata* schema is v2; its scan transport is v1. A person restoring a
  * device without a camera typed a valid code into a box that only blinked.
+ *
+ * The length arrives the same way and for the same reason. It was `8_192`
+ * here until 2026-08-20, against a parser that refuses anything longer than
+ * `maxPicoRecoveryCardScanChars` - 5,486 - so a scanner feeding the wrong
+ * line ran two thousand seven hundred characters past the last one that could
+ * have been part of a code, and the refusal, when it finally came, could only
+ * say the code was malformed. Both values are the protocol's; neither can
+ * reach this file on its own (ADR 0113 C2).
  */
-export function picoCompanionRecoveryCardEntryPrompt(prefix: string): {
+export function picoCompanionRecoveryCardEntryPrompt(
+  prefix: string,
+  maximumLength: number,
+): {
   title: string;
   instruction: string;
   maximumLength: number;
@@ -702,7 +713,7 @@ export function picoCompanionRecoveryCardEntryPrompt(prefix: string): {
     title: 'Scan or type the Recovery Card code',
     instruction: 'Use a USB scanner, or type the code printed under the QR block, then '
       + 'press Enter.',
-    maximumLength: 8_192,
+    maximumLength,
     refusal: `A Recovery Card code begins with ${prefix} - check that you copied the whole `
       + 'line under the QR block.',
     validate: (value: string) => value.startsWith(prefix) && value.length > prefix.length,

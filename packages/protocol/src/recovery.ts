@@ -791,7 +791,19 @@ function parseCanonicalElements(
  * characters, which would give one card several accepted spellings. The rest
  * of this module has no runtime dependency either.
  */
-const maxPicoRecoveryCardScanChars = picoRecoveryCardScanPrefix.length
+/**
+ * The longest a Recovery Card code can be, derived rather than chosen.
+ *
+ * Exported because a field that asks a person to type one has to stop where
+ * this parser stops. The Electron shell's field stopped at 8,192 until
+ * 2026-08-20 - two thousand seven hundred characters past the last one that
+ * could ever be part of a code - so a scanner feeding a wrong line, or a
+ * person pasting one, ran on into a refusal that could only say the code was
+ * malformed. The same defect as the device-enrolment field, and it survived
+ * that field's repair by a few hours because it lives in the window rather
+ * than in the prompt beside the others.
+ */
+export const maxPicoRecoveryCardScanChars = picoRecoveryCardScanPrefix.length
   + Math.ceil(maxPicoRecoveryCardCanonicalBytes / 3) * 4;
 
 function decodeUtf8Element(value: Uint8Array): string {

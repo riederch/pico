@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { isPicoVaultPassphrase } from '@pico/vault';
 // The narrow subpath, not the barrel: ADR 0131 A1 measured the client's
 // closure and found the barrel dragging the CLI, the daemon *server* and
 // `reader-access` - which needs `node:worker_threads` - into everything that
@@ -377,8 +378,11 @@ function assertFingerprint(value: unknown): void {
   }
 }
 
+// The bound is `@pico/vault`'s, where a passphrase becomes a keyfile; the
+// refusal stays this surface's own, because a person who is told no should
+// hear it in the vocabulary of what they were doing.
 function assertPassphrase(value: unknown): asserts value is string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 1_024) {
+  if (!isPicoVaultPassphrase(value)) {
     throw new Error('invalid_platform_unlock_passphrase');
   }
 }

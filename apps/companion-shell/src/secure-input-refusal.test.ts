@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { picoRecoveryCardScanPrefix } from '@pico/protocol';
+import {
+  maxPicoRecoveryCardScanChars, picoRecoveryCardScanPrefix } from '@pico/protocol';
 import {
   picoCompanionCardPinPrompt,
   picoCompanionRecoveryCardEntryPrompt,
@@ -16,7 +17,10 @@ describe('ADR 0113 C2 - a refused secret says what the field wanted', () => {
      * that could drift. In each, the person did the right thing and watched a
      * counter blink.
      */
-    const prompt = picoCompanionRecoveryCardEntryPrompt(picoRecoveryCardScanPrefix);
+    const prompt = picoCompanionRecoveryCardEntryPrompt(
+      picoRecoveryCardScanPrefix,
+      maxPicoRecoveryCardScanChars,
+    );
     const refused = picoCompanionSecureInputBody(prompt, 12, true);
     const accepted = picoCompanionSecureInputBody(prompt, 12, false);
 

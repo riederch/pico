@@ -1073,6 +1073,45 @@ local-first product's most security-critical moment.
   because a check named after one of two surfaces that share a reader has its
   blind spot exactly where the reader is.
 
+
+  **The field caps were swept once and the sweep missed most of them**
+  (2026-08-20, later the same day). The first pass read the prompts in
+  `main.ts` and fixed the three whose rule lived elsewhere. Counting instead
+  of reading found seven caps that were bare numbers, and two more the count
+  itself turned up.
+
+  A passphrase may be 1,024 characters, and that was written in **seven**
+  places: three byte-identical private `assertPassphrase` helpers in three
+  packages, the daemon's wire cap, and four prompts. They all agreed - which
+  is the finding, not the reassurance. A field and a rule holding the same
+  number agree by coincidence, and the coincidence ends the first time one of
+  them is revisited; then somebody chooses a passphrase a prompt accepted and
+  the Vault refuses, during founding, after they have committed to it. The
+  bound is `@pico/vault`'s now, where a passphrase becomes a keyfile, and the
+  three surfaces keep their own refusals in their own vocabulary. Moving it to
+  512 and rebuilding one package carries the daemon's wire cap and all four
+  prompts with it, which is the property that was missing.
+
+  The membership field was the same shape one number later: `64`, typed in
+  beside a rule whose regex says `{64}` - and typed in *by the correction*
+  that removed 128 for agreeing with nothing.
+
+  **And the check found the one the first sweep could not see.** A cap must be
+  a name now, not a number, and running that against the shell turned up
+  `contract.ts` capping the Recovery Card code at 8,192 against a parser that
+  refuses anything over `maxPicoRecoveryCardScanChars` - **5,486**. Two
+  thousand seven hundred characters in which a scanner feeding the wrong line
+  keeps feeding, and the refusal, when it comes, can only say the code is
+  malformed. That is the identical defect the device-enrolment field had, and
+  it survived that field's repair by hours because it lives in the *window*,
+  where no protocol constant can be imported - so the bound arrives as an
+  argument, the way the prefix already did, for the reason ADR 0113 C2 gives.
+
+  Two caps had no rule anywhere to defer to and are named where they are used
+  with the argument for their size. That is the other half of the rule: if
+  nothing enforces a length, naming it is what turns a number somebody picked
+  into a decision somebody can find to question.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

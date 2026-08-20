@@ -3328,8 +3328,32 @@ function assertSodiumConstants(sodium: VaultSodium): void {
   }
 }
 
+/**
+ * How long a Vault passphrase may be, decided where the keyfile is made.
+ *
+ * **This number lived in seven places until 2026-08-20** and they agreed -
+ * three byte-identical private `assertPassphrase` helpers in three packages,
+ * the daemon's wire cap, and four prompts in the Electron shell that stop a
+ * person typing at exactly it. Agreement is not the property that matters:
+ * a field and a rule that happen to hold the same number agree by
+ * coincidence, and the coincidence ends the first time one of them is
+ * revisited. Then somebody chooses a passphrase a prompt accepted and the
+ * Vault refuses - during founding, after they have committed to it.
+ *
+ * It is decided here because this is where a passphrase becomes a keyfile.
+ * The three surfaces keep their own refusals, in their own vocabulary; what
+ * they stop restating is the bound.
+ */
+export const maxPicoVaultPassphraseLength = 1024;
+
+export function isPicoVaultPassphrase(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maxPicoVaultPassphraseLength;
+}
+
 function assertPassphrase(value: string): void {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 1024) {
+  if (!isPicoVaultPassphrase(value)) {
     throw new Error('invalid_passphrase');
   }
 }

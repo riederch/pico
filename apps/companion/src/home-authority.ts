@@ -227,8 +227,20 @@ export interface PicoCompanionMembership {
  * they are different facts that happen to look alike; one shared constant
  * would tie a Home's membership to a library pin.
  */
+/**
+ * The rule's own bound, so a field beside it cannot hold a different one.
+ *
+ * The prompt that asks for this carried `64` as a literal from the moment it
+ * was corrected on 2026-08-20 - the same day the cap it replaced, 128, was
+ * removed for being twice a fingerprint and agreeing with nothing. A literal
+ * that happens to match is the defect the correction was about, one number
+ * later.
+ */
+export const picoCompanionMembershipSubjectLength = 64;
+
 export function isPicoCompanionMembershipSubject(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/u.test(value);
+  return typeof value === 'string'
+    && new RegExp(`^[0-9a-f]{${picoCompanionMembershipSubjectLength}}$`, 'u').test(value);
 }
 
 export async function issuePicoCompanionMembership(input: {

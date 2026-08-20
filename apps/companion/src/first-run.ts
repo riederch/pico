@@ -3,7 +3,7 @@ import {
   parsePicoRecoveryCardScanTransport,
   type PicoHomeDeviceRecoveryPendingView,
 } from '@pico/protocol';
-import type { VaultSodium } from '@pico/vault';
+import { isPicoVaultPassphrase, type VaultSodium } from '@pico/vault';
 // Narrow subpaths for the same reason `recovery-controller.ts` uses them: the
 // barrel carries the CLI and the daemon server, and a first run needs neither.
 import {
@@ -570,8 +570,11 @@ function hex(bytes: Uint8Array): string {
     .join('');
 }
 
+// The bound is `@pico/vault`'s, where a passphrase becomes a keyfile; the
+// refusal stays this surface's own, because a person who is told no should
+// hear it in the vocabulary of what they were doing.
 function assertPassphrase(value: unknown): asserts value is string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 1_024) {
+  if (!isPicoVaultPassphrase(value)) {
     throw new Error('invalid_first_run_passphrase');
   }
 }
