@@ -43,7 +43,7 @@ import {
   isPicoCompanionMembershipSubject,
   picoCompanionMembershipSubjectLength,
 } from '@pico/companion/home-authority';
-import { maxPicoVaultPassphraseLength, picoRecoveryPinProtection } from '@pico/vault';
+import { picoRecoveryPinProtection } from '@pico/vault';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoDisplayDate, picoDisplayInstant } from '@pico/protocol/when-display';
 import {
@@ -54,6 +54,9 @@ import {
 } from './rendered-rows.js';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
+import {
+  picoCompanionVaultPassphrasePrompt,
+} from '@pico/companion/vault-passphrase-prompt';
 import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
 import {
   openPicoCompanionVaultProductSession,
@@ -1784,17 +1787,8 @@ async function runFirstRun(source: PicoCompanionFirstRunScanSource): Promise<voi
       ));
     pin = await captureSecret(picoCompanionCardPinPrompt('enter', picoRecoveryPinProtection));
   }
-  const passphrase = await captureSecret({
-    title: need.need === 'card_and_secrets'
-      ? 'Choose this device\'s Vault passphrase'
-      : 'Enter this device\'s Vault passphrase',
-    instruction: need.need === 'card_and_secrets'
-      ? 'This passphrase protects the keys Pico is about to create on this device. It is not the Card PIN.'
-      : 'Type the Vault passphrase you chose when this device started its setup, then press Enter.',
-    maximumLength: maxPicoVaultPassphraseLength,
-    refusal: 'A passphrase cannot be empty.',
-    validate: (value: string) => value.length > 0,
-  });
+  const passphrase = await captureSecret(picoCompanionVaultPassphrasePrompt(
+    need.need === 'card_and_secrets' ? 'first_run' : 'resume'));
 
   const outcome = await runPicoCompanionFirstRun({
     profilePath,
@@ -1921,14 +1915,7 @@ async function runFounding(): Promise<void> {
   // person through `presentFirstRunFailure`.
   const announcement = parsePicoHomeSetupAnnouncement(announcementLine);
 
-  const passphrase = await captureSecret({
-    title: 'Choose a Vault passphrase',
-    instruction: 'It protects the keys this device is about to make. Nothing can recover '
-      + 'them without it, and Pico never sends it anywhere.',
-    maximumLength: maxPicoVaultPassphraseLength,
-    refusal: 'A passphrase cannot be empty.',
-    validate: (value: string) => value.length > 0,
-  });
+  const passphrase = await captureSecret(picoCompanionVaultPassphrasePrompt('found'));
 
   const outcome = await foundPicoCompanionHome({
     socketPath: defaultPicoVaultDaemonSocketPath(),
@@ -2149,14 +2136,7 @@ async function runJoinFromDevice(source: PicoCompanionFirstRunScanSource): Promi
   const { acceptPicoCompanionEnrolment, offerPicoCompanionEnrolment } =
     await import('@pico/companion/enrolment');
 
-  const passphrase = await captureSecret({
-    title: 'Choose a Vault passphrase for this device',
-    instruction: 'It protects the keys this device is about to make for itself. Your other '
-      + 'device keeps its own; nothing can recover either without its passphrase.',
-    maximumLength: maxPicoVaultPassphraseLength,
-    refusal: 'A passphrase cannot be empty.',
-    validate: (value: string) => value.length > 0,
-  });
+  const passphrase = await captureSecret(picoCompanionVaultPassphrasePrompt('join'));
 
   /**
    * `confirm`, inside the walk, is what writes the profile - and it ends when
@@ -2265,13 +2245,7 @@ async function runRecoveryCardIssuance(
   // passphrase.
   const { issuePicoCompanionRecoveryCard } = await import('@pico/companion/recovery-card');
   const profile = readPicoCompanionProfile(defaultPicoCompanionProfilePath());
-  const passphrasePrompt = {
-    title: 'Enter the Vault passphrase',
-    instruction: 'Type this device\'s Vault passphrase, then press Enter. It is not the Recovery Phrase or Card PIN.',
-    maximumLength: maxPicoVaultPassphraseLength,
-    refusal: 'A passphrase cannot be empty.',
-    validate: (value: string) => value.length > 0,
-  };
+  const passphrasePrompt = picoCompanionVaultPassphrasePrompt('recovery_card');
   const passphrase = await collectPicoCompanionSecureInput({
     window,
     prompt: passphrasePrompt,

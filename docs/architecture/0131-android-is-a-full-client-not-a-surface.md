@@ -1578,6 +1578,53 @@ local-first product's most security-critical moment.
   Ablehnung -, und der Desktop hält seine für dieselben drei ebenfalls selbst.
   Ein gleicher Stand, keine Abweichung.
 
+  **Die Passphrase war der nächste Satz, und ihr Befund war ein anderer**
+  (2026-08-21). Erwartet war "zwei Clients, zwei Sätze". Gemessen wurden
+  **sechs Schreibweisen desselben Moments** - und fünf davon standen im
+  Electron-Hauptprozess allein:
+
+  | wo | Titel |
+  |---|---|
+  | `main.ts` erste Einrichtung mit Karte | Choose this device's Vault passphrase |
+  | `main.ts` fortgesetzte Einrichtung | Enter this device's Vault passphrase |
+  | `main.ts` Gründung | Choose a Vault passphrase |
+  | `main.ts` Beitritt von einem Gerät | Choose a Vault passphrase for this device |
+  | `main.ts` Recovery-Karte | Enter the Vault passphrase |
+  | `JoinActivity.java` | Choose a Vault passphrase |
+
+  Die Drift brauchte also gar keinen zweiten Client. Ein Hauptprozess mit fünf
+  Aufrufstellen genügte, und der zweite Client machte sie nur sichtbar.
+
+  **Nicht alle Unterschiede waren Zufall.** Wer ein Home gründet, hat kein
+  zweites Gerät, dessen Passphrase unberührt bleibt; wer eine Recovery-Karte in
+  der Hand hält, muss wissen, dass dies nicht die Karten-PIN ist. Deshalb ist
+  `picoCompanionVaultPassphrasePrompt` eine Funktion über fünf **Absichten**
+  und nicht ein Satz: die Varianten sind die, die eine Person auseinanderhalten
+  muss, und der Rest war Drift.
+
+  **Und das Telefon widersprach sich selbst.** Der Beitritt zeigt auf demselben
+  Gerät elf Sätze aus dem Kern, die alle "device" sagen - und dazwischen einen
+  Bildschirm, der "this phone" sagte. Nicht der Kern ist zu allgemein; der eine
+  Bildschirm war zu speziell. Ein Test hält das jetzt fest.
+
+  **Ein Fehler entstand beim Zusammenlegen und wurde gefunden, bevor er lief.**
+  `validate` war an sechs Stellen `value.length > 0`; im Kern wurde daraus
+  `isPicoVaultPassphrase`, das auch nach oben begrenzt. Die Ablehnung daneben
+  sagte weiter "A passphrase cannot be empty" - also hätte eine zu lange
+  Passphrase gehört, sie sei leer. Im Fenster fällt das nicht auf, weil
+  `maximumLength` das Tippen deckelt; **auf dem Telefon deckelt nichts**, und
+  dort hätte eine Person den falschen Satz gelesen. Die Ablehnung nennt jetzt
+  beide Enden.
+
+  `scripts/check-one-voice.mjs` bewacht beide Familien - die Passphrase-Frage
+  und die elf Schrittsätze, die bis heute **gar keinen** Wächter hatten. Drei
+  Pflanzungen, drei Risse: der Desktop schreibt wieder selbst, das Telefon
+  nimmt den Passphrase-Satz zurück, das Telefon nimmt einen Walk-Schritt
+  zurück. Was die Fläche behalten darf, ist eine Liste mit einem Eintrag:
+  `approval` - denn ADR 0106 liefert den *Satz*, den eine Person unterschreibt,
+  und was die Fläche darüber schreibt, ist die Frage, die auf einem Telefon
+  eine Schaltfläche hat und im Fenster keine.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

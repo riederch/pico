@@ -332,7 +332,7 @@ public final class JoinActivity extends Activity {
   }
 
   /**
-   * Nur noch die zwei Momente, die kein Schritt des Walks sind.
+   * Nur noch der eine Moment, der kein Schritt des Walks ist.
    *
    * Für `show_offer`, `read_grant`, `show_acceptance`, `waiting` und `joined`
    * standen hier bis zum 2026-08-21 eigene Sätze - andere als die des Kerns,
@@ -344,11 +344,16 @@ public final class JoinActivity extends Activity {
    * Sie sind entfernt statt stehengelassen: ein Rückfall, den niemand liest,
    * ist ein Rückfall, den niemand bemerkt, wenn eine Nachricht ihren Satz
    * einmal verliert.
+   *
+   * **Die Passphrase folgte am selben Tag**, und ihr Befund war ein anderer:
+   * sie war nicht nur anders als beim Desktop, sondern anders als die elf
+   * Sätze daneben. "This phone is about to make its keys" stand zwischen
+   * lauter Sätzen, die "device" sagen - im selben Beitritt, auf demselben
+   * Bildschirm nacheinander. Der Kern kennt fünf Fassungen dieser Frage, weil
+   * es fünf verschiedene Momente sind; "am Telefon" war keiner davon.
    */
   private static String titleFor(String step) {
     switch (step) {
-      case "passphrase":
-        return "Choose a Vault passphrase";
       case "approval":
         return "Sign this?";
       default:
@@ -356,15 +361,8 @@ public final class JoinActivity extends Activity {
     }
   }
 
-
   private static String bodyFor(String step) {
-    switch (step) {
-      case "passphrase":
-        return "It protects the keys this phone is about to make for itself. "
-          + "Nothing can recover them without it, and it never leaves this phone.";
-      default:
-        return "";
-    }
+    return "";
   }
 
 }

@@ -28,6 +28,9 @@ import {
   picoCompanionEnrolmentStepLine,
   runPicoCompanionAskingDeviceExchange,
 } from '@pico/companion/enrolment-steps';
+import {
+  picoCompanionVaultPassphrasePrompt,
+} from '@pico/companion/vault-passphrase-prompt';
 import { connectPicoAndroidKeystorePort } from './keystore-port.mjs';
 
 const stage = dirname(fileURLToPath(import.meta.url));
@@ -280,7 +283,17 @@ createServer((connection) => {
 
 async function walkTheJoin() {
   try {
-    const passphrase = await ask('secret', 'passphrase');
+    /**
+     * Auch dieser Satz gehört dem Kern, seit dem 2026-08-21. Bis dahin schrieb
+     * die Activity ihn selbst - und sagte "this phone", während elf Sätze
+     * daneben im selben Beitritt "this device" sagten. Nicht der Kern war zu
+     * allgemein; der eine Bildschirm war zu speziell.
+     */
+    const prompt = picoCompanionVaultPassphrasePrompt('join');
+    const passphrase = await ask('secret', 'passphrase', {
+      title: prompt.title,
+      body: prompt.instruction,
+    });
     const daemonSocketPath = join(files, 'vault', 'run', 'daemon.sock');
 
     let offered = null;
