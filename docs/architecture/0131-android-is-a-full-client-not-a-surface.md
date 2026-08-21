@@ -1325,6 +1325,26 @@ local-first product's most security-critical moment.
   Schritt noch ein Rückfall existiert. Ein Rückfall, den niemand liest, ist
   einer, den niemand bemerkt, wenn eine Nachricht ihren Satz einmal verliert.
 
+  **Der ganze Walk lief danach gegen ein echtes Home** - das Sponsor-Labor auf
+  diesem Laptop, Foundation-API auf Loopback, nur der Link-Intake über
+  `adb reverse` veröffentlicht. Drei Codes zwischen zwei Geräten, von denen
+  eines ein Telefon ist, und der Sponsor meldete am Ende die Delegation.
+
+  **Dabei fiel der letzte Satz auf, den der Vertrag gar nicht abdeckt.**
+  `join.mjs` schickt am Ende ein eigenes Verb `done`, außerhalb von
+  `PicoCompanionEnrolmentSurface`, und die Activity schrieb dafür wieder eigene
+  Worte: *"This phone is part of your Home"*. Der Kern sagt für `joined` etwas
+  anderes - *"This device is yours. Your Home answers to it now, and every
+  device you already had keeps working."* Der **letzte** Bildschirm, den eine
+  Person sieht, war also weiter der des zweiten Clients, während alle Schritte
+  davor schon stimmten.
+
+  Behoben und am Gerät nachgewiesen: derselbe Walk, dasselbe Telefon, und der
+  Schlussbildschirm zeigt jetzt den Satz des Kerns. Was bleibt, sind drei
+  Momente mit eigenen Worten - Passphrase, ADR-0106-Zustimmung und die
+  Ablehnung -, und der Desktop hält seine für dieselben drei ebenfalls selbst.
+  Ein gleicher Stand, keine Abweichung.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

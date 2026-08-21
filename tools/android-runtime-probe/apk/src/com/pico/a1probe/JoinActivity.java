@@ -207,14 +207,19 @@ public final class JoinActivity extends Activity {
         scan.setVisibility(View.GONE);
         break;
       case "done":
-        title.setText("This phone is part of your Home");
-        body.setText("It has its own keys and its own Vault passphrase. "
-          + "Your other device keeps its own.");
+        title.setText(titleOf(message, step));
+        body.setText(bodyOf(message, step));
         code.setVisibility(View.GONE);
         answer.setVisibility(View.GONE);
         send.setVisibility(View.GONE);
         status.setText("");
         break;
+      /**
+       * Bleibt hier, und der Desktop hält seine Ablehnungssätze ebenfalls
+       * selbst (`contract.ts` übersetzt dort die Fehlerwörter). Ein gleicher
+       * Stand auf beiden Seiten, kein Nachzügler - und der nächste, der
+       * umzieht, wenn jemand die Ablehnungen anfasst.
+       */
       case "failed":
         title.setText("This phone was not added");
         body.setText("Nothing was changed at your Home.");

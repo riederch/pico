@@ -338,7 +338,10 @@ async function walkTheJoin() {
       },
       outcome: 'joined',
     });
-    send({ v: 'done', step: 'joined' });
+    // Der letzte Bildschirm gehört zum selben Walk wie die davor: `done` ist
+    // eine Anzeigeform, kein zweiter Moment. Bis zum 2026-08-21 schrieb die
+    // Activity hier eigene Sätze, obwohl `joined` im Kern längst welche hat.
+    send({ v: 'done', step: 'joined', ...line('joined') });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     // To the log as well as to the surface: a failure a person sees and a
