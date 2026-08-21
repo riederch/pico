@@ -15,4 +15,10 @@ package com.pico.a1probe;
 public final class JoinService extends ProbeService {
   @Override protected String script() { return "stage/join.mjs"; }
   @Override protected String log() { return "join.log"; }
+
+  /**
+   * ADR 0131 A3: hier entsteht die Passphrase, also hier steht der Keystore
+   * offen. Der einzige Dienst, für den das gilt.
+   */
+  @Override protected boolean offersKeystorePort() { return true; }
 }

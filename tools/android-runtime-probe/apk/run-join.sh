@@ -76,7 +76,8 @@ rm -rf "$stage"
 # resolves a cache of its own and has been seen to land somewhere unwritable.
 (cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir /tmp/pico-pnpm-store \
   deploy --prod --frozen-lockfile "$stage")
-cp "$here/join.mjs" "$here/daemon.mjs" "$here/preload.cjs" "$here/conformance.mjs" "$stage/"
+cp "$here/join.mjs" "$here/keystore-port.mjs" "$here/daemon.mjs" "$here/preload.cjs" \
+  "$here/conformance.mjs" "$stage/"
 tar -C "$repo/.pico-stage" -c --hard-dereference -f "$work/probe-stage.tar" probe-stage
 
 adb install -r "$work/pico-a1-probe.apk"
@@ -86,7 +87,7 @@ adb push "$work/probe-stage.tar" /data/local/tmp/probe-stage.tar > /dev/null
 # refuses a vault that already has keyfiles, which is the rule, not a nuisance.
 # `files` does not exist until the app has run once, and a fresh install has
 # not. Making it here keeps the first join from needing a rehearsal.
-adb shell "run-as $pkg sh -c 'mkdir -p files && cd files && rm -rf stage vault fdata fbackup ui.sock profile.json join.log daemon.log && /system/bin/tar -xf /data/local/tmp/probe-stage.tar && mv probe-stage stage'"
+adb shell "run-as $pkg sh -c 'mkdir -p files && cd files && rm -rf stage vault fdata fbackup ui.sock keystore.sock profile.json platform-unlock.json join.log daemon.log keystore-port.log && /system/bin/tar -xf /data/local/tmp/probe-stage.tar && mv probe-stage stage'"
 # The lab's port, so the runtime self-test can try to reach the Home before
 # anybody scans anything. Lab-only: a real client learns its address from the
 # grant.

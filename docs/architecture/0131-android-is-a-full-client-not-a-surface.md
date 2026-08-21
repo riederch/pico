@@ -665,6 +665,55 @@ local-first product's most security-critical moment.
   noch nicht - und der Rundlauf selbst ist gemessen: 32 Bytes hinein, 48
   versiegelt, identisch zurück, Alias überlebt den Prozesstod.
 
+  **Die Java-Hälfte ist geschrieben und übersetzt, aber noch nicht auf einem
+  Gerät gelaufen** (2026-08-21; das Telefon war beim Abschluss nicht
+  angesteckt). Was steht:
+
+  - `KeystorePort.java` hält einen AES-256-GCM-Schlüssel unter
+    `pico_unlock_secret_v1`, der den Prozesstod überlebt, und antwortet über
+    einen AF_UNIX-Socket im privaten App-Verzeichnis auf drei Verben:
+    `evidence`, `seal`, `open`. Kein Loopback-Port - auf Android erreicht jede
+    App `127.0.0.1`, und ein Port würde dieses Versiegeln jeder anderen App
+    auf dem Telefon anbieten. Umgekehrt zur Oberfläche ist hier Java der
+    Server, weil hier Java die Auskunft hat.
+  - **Zwei Schlüssel, nicht einer.** Für symmetrische Schlüssel gibt der
+    Keystore keine Attestierungskette heraus. Also entsteht neben dem
+    Siegelschlüssel ein EC-Schlüssel als *Zeuge* - selber Keystore, selber
+    Moment, selbe Eigenschaften -, dessen Kette beweist, was dieser Keystore
+    ist. Der Beleg nennt darum beides getrennt: was der Keystore über den
+    Siegelschlüssel **sagt** (`KeyInfo`), und was eine Unterschrift, die das
+    Gerät nicht fälschen kann, über denselben Keystore **beweist**.
+  - **`setUnlockedDeviceRequired` statt eines biometrischen Prompts.** Der
+    Desktop fragt auch nicht bei jedem Entsperren; sein Schlüsselbund hängt an
+    der angemeldeten Sitzung. Das genaue Gegenstück ist ein Schlüssel, der nur
+    bei entsperrtem Gerät arbeitet. Ein Prompt wäre eine *andere* Entscheidung
+    als die des Desktops, und diese ADR sagt, dass zwei Clients derselben
+    Person nicht zwei verschiedene Dinge tun.
+  - Der Beitritt reicht den Anschluss als `platformSecrets` in
+    `acceptPicoCompanionEnrolment` - **der Kern versiegelt, nicht die Fläche**.
+    Dass eine Passphrase nach dem Beitritt in den Plattform-Keystore geht, ist
+    eine Regel des Produkts; was Android beisteuert, ist der Anschluss.
+  - Fehlt der Anschluss, läuft der Beitritt trotzdem. Ohne ihn tippt die
+    Person ihre Passphrase beim nächsten Mal wieder ein - unbequem, nicht
+    unsicher, und der Desktop hält es genauso. Was nicht passiert, ist das
+    stille Weitergehen: die Ablehnung geht mit dem Java-Klassennamen ins
+    Protokoll, weil `UserNotAuthenticatedException` und
+    `KeyPermanentlyInvalidatedException` zwei verschiedene Dinge zu tun
+    bedeuten.
+
+  **Nebenbei zog das die Belegregel aus der Sonde heraus.** Sie lag in
+  `KeystoreProbeService`, was richtig war, solange nur ein Laborlauf sie las;
+  sobald der Beitritt denselben Beleg braucht, wäre eine zweite Kopie
+  entstanden. Sie liegt jetzt in `KeystoreEvidence.java`, und in der Sonde
+  blieb, was Messung ist: Kettenlänge, Wurzelsubjekt, ob die Signaturen
+  durchlinken. **Das Gate meldete die Verschiebung selbst**, statt still
+  durchzugehen - elf Abweichungen, weil es noch auf die alte Datei zeigte.
+
+  Was der Gerätelauf noch beweisen muss: dass `LocalServerSocket` über
+  `Namespace.FILESYSTEM` für Node erreichbar ist, dass der Siegelschlüssel
+  einen Neustart übersteht, und dass der Kern den Belegsatz dieses Anschlusses
+  - nicht den der Sonde - annimmt.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and

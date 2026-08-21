@@ -28,7 +28,7 @@ import {
 import {
   defaultPicoCompanionPlatformUnlockPath,
   writePicoCompanionPlatformUnlock,
-  type PicoCompanionPlatformSecretPort,
+  type PicoCompanionSecretPort,
 } from './platform-unlock.js';
 import {
   readPicoCompanionProfile,
@@ -130,7 +130,12 @@ export interface RunPicoCompanionFirstRunInput extends PicoCompanionFirstRunPath
    * Absent means the Platform Keystore stays unused, which is a supported
    * outcome rather than a failure: the person simply unlocks manually.
    */
-  platformSecrets?: PicoCompanionPlatformSecretPort;
+  /**
+   * ADR 0131 A3: beide Plattformen, seit Android einen Keystore hat, den
+   * dieses Produkt beurteilen kann. Der Unterschied liegt allein in der
+   * Frage, was als Keystore zählt - was danach geschieht, ist dasselbe.
+   */
+  platformSecrets?: PicoCompanionSecretPort;
   platformUnlockPath?: string;
   delegationValidityMs?: number;
   fetch?: typeof fetch;

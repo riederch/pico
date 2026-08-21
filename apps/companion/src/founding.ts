@@ -14,7 +14,7 @@ import {
   defaultPicoCompanionPlatformUnlockPath,
   writePicoCompanionPlatformUnlock,
 } from './platform-unlock.js';
-import type { PicoCompanionPlatformSecretPort } from './platform-secrets.js';
+import type { PicoCompanionSecretPort } from './platform-unlock.js';
 import { openPicoCompanionVaultProductSession } from './vault-product-session.js';
 import type { PicoCompanionApprovalDecisionPort } from './approval-carrier.js';
 
@@ -128,7 +128,12 @@ export interface PicoCompanionFoundingInput {
    * way onto a device that asks for its passphrase forever - the same person,
    * two behaviours, decided by which door they came through.
    */
-  platformSecrets?: PicoCompanionPlatformSecretPort;
+  /**
+   * ADR 0131 A3: beide Plattformen, seit Android einen Keystore hat, den
+   * dieses Produkt beurteilen kann. Der Unterschied liegt allein in der
+   * Frage, was als Keystore zählt - was danach geschieht, ist dasselbe.
+   */
+  platformSecrets?: PicoCompanionSecretPort;
   platformUnlockPath?: string;
   connect?: typeof connectPicoVaultDaemonClient;
 }

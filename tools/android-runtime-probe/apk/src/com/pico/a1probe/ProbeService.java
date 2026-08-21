@@ -20,6 +20,16 @@ public abstract class ProbeService extends Service {
   protected abstract String script();
   protected abstract String log();
 
+  /**
+   * ADR 0131 A3. Ob dieser Dienst den Plattform-Keystore anbietet.
+   *
+   * Nur der Beitritt braucht ihn, weil nur dort eine Passphrase entsteht. Ein
+   * Anschluss, den ein Dienst öffnet, ohne dass jemand ihn benutzt, ist eine
+   * Tür mehr in einem Prozess - und die Sonden, die hier sonst laufen, messen
+   * Erreichbarkeit und Konformität und haben nichts zu versiegeln.
+   */
+  protected boolean offersKeystorePort() { return false; }
+
   @Override public int onStartCommand(Intent intent, int flags, int startId) {
     if (!started) {
       started = true;
@@ -33,6 +43,13 @@ public abstract class ProbeService extends Service {
           .setContentTitle(getClass().getSimpleName())
           .build());
       File files = getFilesDir();
+      if (offersKeystorePort()) {
+        // Vor Node, nicht danach: der Anschluss muss stehen, bevor der erste
+        // Frager kommt. Node wartet zwar, aber ein Warten, das nur meistens
+        // reicht, ist ein Wettlauf mit gutem Ausgang.
+        KeystorePort.serve(new File(files, "keystore.sock"),
+          new File(files, "keystore-port.log"));
+      }
       NodeRuntime.runScript(
         new File(files, script()).getAbsolutePath(),
         new File(files, log()).getAbsolutePath());

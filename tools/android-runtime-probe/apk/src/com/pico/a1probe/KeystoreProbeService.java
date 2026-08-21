@@ -213,240 +213,8 @@ public final class KeystoreProbeService extends Service {
     return info.isInsideSecureHardware() ? "secure_hardware_pre_31" : "software";
   }
 
-  /**
-   * The chain, not the claim. A software-only keystore signs its attestation
-   * with "Android Keystore Software Attestation Root"; a hardware-backed one
-   * chains to Google's hardware attestation root, which it cannot mint.
-   */
-  /**
-   * Google's published hardware attestation roots, shipped rather than trusted
-   * on sight.
-   *
-   * **Two, and pinning one would refuse real phones.** The RSA root
-   * (`SERIALNUMBER=f92009e853b6b045`, valid to 2042) signed every chain until
-   * Google's EC root began signing on 2026-02-01; this Galaxy A55 on a
-   * 2026-07-05 patch already chains to the EC one. A pin that knew only the
-   * older root would refuse this device, and a pin that knew only the newer
-   * would refuse every phone that has not moved.
-   *
-   * Verified before shipping rather than copied: the EC root's DER is
-   * byte-identical to the certificate this device produced as the last link of
-   * its own chain (SHA-256 `6d9db4ce…4bcc0`), and the device cannot mint it.
-   * Google serves the authoritative list as JSON at
-   * `https://android.googleapis.com/attestation/root`, which is where a
-   * refreshed pin comes from - not from a device.
-   */
-  private static final String[] PINNED_ATTESTATION_ROOTS = {
-    // CN=Key Attestation CA1, OU=Android, O=Google LLC, C=US - P-384, 2025-07-17 .. 2035-07-15
-    "MIICIjCCAaigAwIBAgIRAISp0Cl7DrWK5/8OgN52BgUwCgYIKoZIzj0EAwMwUjEc"
-      + "MBoGA1UEAwwTS2V5IEF0dGVzdGF0aW9uIENBMTEQMA4GA1UECwwHQW5kcm9pZDET"
-      + "MBEGA1UECgwKR29vZ2xlIExMQzELMAkGA1UEBhMCVVMwHhcNMjUwNzE3MjIzMjE4"
-      + "WhcNMzUwNzE1MjIzMjE4WjBSMRwwGgYDVQQDDBNLZXkgQXR0ZXN0YXRpb24gQ0Ex"
-      + "MRAwDgYDVQQLDAdBbmRyb2lkMRMwEQYDVQQKDApHb29nbGUgTExDMQswCQYDVQQG"
-      + "EwJVUzB2MBAGByqGSM49AgEGBSuBBAAiA2IABCPaI3FO3z5bBQo8cuiEas4HjqCt"
-      + "G/mLFfRT0MsIssPBEEU5Cfbt6sH5yOAxqEi5QagpU1yX4HwnGb7OtBYpDTB57uH5"
-      + "Eczm34A5FNijV3s0/f0UPl7zbJcTx6xwqMIRq6NCMEAwDwYDVR0TAQH/BAUwAwEB"
-      + "/zAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFFIyuyz7RkOb3NaBqQ5lZuA0QepA"
-      + "MAoGCCqGSM49BAMDA2gAMGUCMETfjPO/HwqReR2CS7p0ZWoD/LHs6hDi422opifH"
-      + "EUaYLxwGlT9SLdjkVpz0UUOR5wIxAIoGyxGKRHVTpqpGRFiJtQEOOTp/+s1GcxeY"
-      + "uR2zh/80lQyu9vAFCj6E4AXc+osmRg==",
-    // SERIALNUMBER=f92009e853b6b045 - RSA 4096, 2022-03-20 .. 2042-03-15
-    "MIIFHDCCAwSgAwIBAgIJAPHBcqaZ6vUdMA0GCSqGSIb3DQEBCwUAMBsxGTAXBgNV"
-      + "BAUTEGY5MjAwOWU4NTNiNmIwNDUwHhcNMjIwMzIwMTgwNzQ4WhcNNDIwMzE1MTgw"
-      + "NzQ4WjAbMRkwFwYDVQQFExBmOTIwMDllODUzYjZiMDQ1MIICIjANBgkqhkiG9w0B"
-      + "AQEFAAOCAg8AMIICCgKCAgEAr7bHgiuxpwHsK7Qui8xUFmOr75gvMsd/dTEDDJdS"
-      + "Sxtf6An7xyqpRR90PL2abxM1dEqlXnf2tqw1Ne4Xwl5jlRfdnJLmN0pTy/4lj4/7"
-      + "tv0Sk3iiKkypnEUtR6WfMgH0QZfKHM1+di+y9TFRtv6y//0rb+T+W8a9nsNL/ggj"
-      + "nar86461qO0rOs2cXjp3kOG1FEJ5MVmFmBGtnrKpa73XpXyTqRxB/M0n1n/W9nGq"
-      + "C4FSYa04T6N5RIZGBN2z2MT5IKGbFlbC8UrW0DxW7AYImQQcHtGl/m00QLVWutHQ"
-      + "oVJYnFPlXTcHYvASLu+RhhsbDmxMgJJ0mcDpvsC4PjvB+TxywElgS70vE0XmLD+O"
-      + "JtvsBslHZvPBKCOdT0MS+tgSOIfga+z1Z1g7+DVagf7quvmag8jfPioyKvxnK/Eg"
-      + "sTUVi2ghzq8wm27ud/mIM7AY2qEORR8Go3TVB4HzWQgpZrt3i5MIlCaY504LzSRi"
-      + "igHCzAPlHws+W0rB5N+er5/2pJKnfBSDiCiFAVtCLOZ7gLiMm0jhO2B6tUXHI/+M"
-      + "RPjy02i59lINMRRev56GKtcd9qO/0kUJWdZTdA2XoS82ixPvZtXQpUpuL12ab+9E"
-      + "aDK8Z4RHJYYfCT3Q5vNAXaiWQ+8PTWm2QgBR/bkwSWc+NpUFgNPN9PvQi8WEg5Um"
-      + "AGMCAwEAAaNjMGEwHQYDVR0OBBYEFDZh4QB8iAUJUYtEbEf/GkzJ6k8SMB8GA1Ud"
-      + "IwQYMBaAFDZh4QB8iAUJUYtEbEf/GkzJ6k8SMA8GA1UdEwEB/wQFMAMBAf8wDgYD"
-      + "VR0PAQH/BAQDAgIEMA0GCSqGSIb3DQEBCwUAA4ICAQB8cMqTllHc8U+qCrOlg3H7"
-      + "174lmaCsbo/bJ0C17JEgMLb4kvrqsXZs01U3mB/qABg/1t5Pd5AORHARs1hhqGIC"
-      + "W/nKMav574f9rZN4PC2ZlufGXb7sIdJpGiO9ctRhiLuYuly10JccUZGEHpHSYM2G"
-      + "tkgYbZba6lsCPYAAP83cyDV+1aOkTf1RCp/lM0PKvmxYN10RYsK631jrleGdcdkx"
-      + "oSK//mSQbgcWnmAEZrzHoF1/0gso1HZgIn0YLzVhLSA/iXCX4QT2h3J5z3znluKG"
-      + "1nv8NQdxei2DIIhASWfu804CA96cQKTTlaae2fweqXjdN1/v2nqOhngNyz1361mF"
-      + "mr4XmaKH/ItTwOe72NI9ZcwS1lVaCvsIkTDCEXdm9rCNPAY10iTunIHFXRh+7KPz"
-      + "lHGewCq/8TOohBRn0/NNfh7uRslOSZ/xKbN9tMBtw37Z8d2vvnXq/YWdsm1+JLVw"
-      + "n6yYD/yacNJBlwpddla8eaVMjsF6nBnIgQOf9zKSe06nSTqvgwUHosgOECZJZ1Eu"
-      + "zbH4yswbt02tKtKEFhx+v+OTge/06V+jGsqTWLsfrOCNLuA8H++z+pUENmpqnnHo"
-      + "vaI47gC+TNpkgYGkkBT6B/m/U01BuOBBTzhIlMEZq9qkDWuM2cA5kW5V3FJUcfHn"
-      + "w1IdYIg2Wxg7yHcQZemFQg==",
-  };
-
   /** The key attestation extension, and the only OID this parser knows. */
   private static final String ATTEST_CHALLENGE = "pico-a3-probe";
-
-  private static final String ATTESTATION_EXTENSION_OID = "1.3.6.1.4.1.11129.2.1.17";
-
-  /**
-   * Is the chain's last certificate one of the roots we ship?
-   *
-   * Compared as **bytes**, not by subject. A subject string is what a
-   * certificate calls itself, and a software keystore can call itself
-   * anything; the encoded certificate is the thing that would have to be
-   * forged.
-   */
-  private static String pinnedRootVerdict(Certificate root) {
-    try {
-      byte[] encoded = root.getEncoded();
-      for (int i = 0; i < PINNED_ATTESTATION_ROOTS.length; i++) {
-        byte[] pinned = android.util.Base64.decode(
-          PINNED_ATTESTATION_ROOTS[i], android.util.Base64.DEFAULT);
-        if (java.util.Arrays.equals(encoded, pinned)) {
-          // Die Namen stehen im Kern, in `picoCompanionAndroidAttestationRoots`.
-          // Hier stehen sie ein zweites Mal, weil Java und TypeScript keine
-          // Konstante teilen können - und deshalb bewacht
-          // `scripts/check-android-keystore-names.mjs` die Gleichheit.
-          return i == 0
-            ? "google_ec_key_attestation_ca1"
-            : "google_rsa_f92009e853b6b045";
-        }
-      }
-      return "none";
-    } catch (Throwable unreadable) {
-      return "unreadable";
-    }
-  }
-
-  /**
-   * A hand-rolled DER walk, because the alternative is worse.
-   *
-   * Android ships no public ASN.1 API, and the platform's BouncyCastle copy is
-   * `com.android.org.bouncycastle` - internal and off-limits to an app. Adding
-   * a parser dependency to read five fields out of one extension would put a
-   * library between this measurement and the thing measured. This reads tag,
-   * length and contents and nothing else; it does not validate, because the
-   * signature chain above it already did.
-   *
-   * The one thing it must get right is the **long-form tag**: the
-   * AuthorizationList entries this needs are `[704]`, `[706]` and `[719]`, all
-   * above 30, so they arrive as a high-tag-number form and a parser that
-   * assumes one tag byte walks straight off the end of the structure.
-   */
-  private static final class Der {
-    private final byte[] bytes;
-    private int at;
-    private final int end;
-
-    Der(byte[] bytes, int at, int end) {
-      this.bytes = bytes;
-      this.at = at;
-      this.end = end;
-    }
-
-    boolean more() {
-      return at < end;
-    }
-
-    /** The tag number at the cursor, high-tag-number form included. */
-    long tagNumber() {
-      int p = at;
-      int first = bytes[p++] & 0xff;
-      long number = first & 0x1f;
-      if (number == 0x1f) {
-        number = 0;
-        int part;
-        do {
-          part = bytes[p++] & 0xff;
-          number = (number << 7) | (part & 0x7f);
-        } while ((part & 0x80) != 0);
-      }
-      return number;
-    }
-
-    /** Steps over one element and returns a cursor over its contents. */
-    Der into() {
-      int p = at;
-      int first = bytes[p++] & 0xff;
-      if ((first & 0x1f) == 0x1f) {
-        int part;
-        do {
-          part = bytes[p++] & 0xff;
-        } while ((part & 0x80) != 0);
-      }
-      int firstLength = bytes[p++] & 0xff;
-      int length;
-      if ((firstLength & 0x80) == 0) {
-        length = firstLength;
-      } else {
-        int count = firstLength & 0x7f;
-        length = 0;
-        for (int i = 0; i < count; i++) {
-          length = (length << 8) | (bytes[p++] & 0xff);
-        }
-      }
-      Der contents = new Der(bytes, p, p + length);
-      at = p + length;
-      return contents;
-    }
-
-    byte[] contentBytes() {
-      byte[] out = new byte[end - at];
-      System.arraycopy(bytes, at, out, 0, out.length);
-      at = end;
-      return out;
-    }
-
-    long asLong() {
-      long value = 0;
-      for (int i = at; i < end; i++) {
-        value = (value << 8) | (bytes[i] & 0xff);
-      }
-      at = end;
-      return value;
-    }
-
-    boolean asBoolean() {
-      boolean value = at < end && bytes[at] != 0;
-      at = end;
-      return value;
-    }
-  }
-
-  private static String hexOf(byte[] bytes) {
-    StringBuilder hex = new StringBuilder();
-    for (byte b : bytes) {
-      hex.append(String.format("%02x", b));
-    }
-    return hex.toString();
-  }
-
-  private static String securityLevelName(long value) {
-    if (value == 0) {
-      return "software";
-    }
-    if (value == 1) {
-      return "trusted_environment";
-    }
-    if (value == 2) {
-      return "strongbox";
-    }
-    return "unknown_" + value;
-  }
-
-  private static String verifiedBootStateName(long value) {
-    if (value == 0) {
-      return "verified";
-    }
-    if (value == 1) {
-      return "self_signed";
-    }
-    if (value == 2) {
-      return "unverified";
-    }
-    if (value == 3) {
-      return "failed";
-    }
-    return "unknown_" + value;
-  }
 
   /**
    * What the extension says, as opposed to what the platform says about itself.
@@ -463,83 +231,37 @@ public final class KeystoreProbeService extends Service {
    */
   private String keyInfoLevel = "absent";
   private String attestationRoot = "none";
-  private String attestedKeyLevel = "absent";
-  private String attestationLevel = "absent";
-  private String attestedVerifiedBootState = "absent";
-  private boolean attestedDeviceLocked = false;
-  private boolean attestedChallengeMatches = false;
-  private String attestedOsPatchLevel = "absent";
-  private String attestedBootPatchLevel = "absent";
+  private KeystoreEvidence.Attested attested = new KeystoreEvidence.Attested();
 
+  /**
+   * Die Messnotiz - dieselbe Erweiterung, nur ausführlicher gelesen.
+   *
+   * Der DER-Lauf liegt seit dem 2026-08-21 in `KeystoreEvidence`, weil der
+   * Beitritt ihn ebenfalls braucht. Hier stehen die Zahlen, die ein Mensch
+   * beim Messen sehen will und nach denen kein Produkt entscheidet:
+   * Versionsnummern, die Länge des Verified-Boot-Schlüssels, und die
+   * Ablehnung mit Namen, falls der Lauf abbricht.
+   */
   private String attestationExtensionFindings(X509Certificate leaf, String challenge) {
-    byte[] wrapped = leaf.getExtensionValue(ATTESTATION_EXTENSION_OID);
-    if (wrapped == null) {
+    this.attested = KeystoreEvidence.read(leaf, challenge);
+    if (!attested.extensionPresent) {
       return "\"extensionPresent\":false";
     }
-    try {
-      // The extension value is an OCTET STRING wrapping the KeyDescription.
-      byte[] inner = new Der(wrapped, 0, wrapped.length).into().contentBytes();
-      Der description = new Der(inner, 0, inner.length).into();
-
-      long attestationVersion = description.into().asLong();
-      long attestationSecurityLevel = description.into().asLong();
-      long keyMintVersion = description.into().asLong();
-      long keyMintSecurityLevel = description.into().asLong();
-      byte[] attestedChallenge = description.into().contentBytes();
-      description.into();                     // uniqueId - deliberately unread
-      description.into();                     // softwareEnforced - not the hardware claim
-      Der hardwareEnforced = description.into();
-
-      String verifiedBootState = "absent";
-      String deviceLocked = "absent";
-      int verifiedBootKeyBytes = -1;
-      long osPatchLevel = -1;
-      long bootPatchLevel = -1;
-      while (hardwareEnforced.more()) {
-        long tag = hardwareEnforced.tagNumber();
-        Der value = hardwareEnforced.into();
-        if (tag == 704) {
-          Der rootOfTrust = value.into();
-          verifiedBootKeyBytes = rootOfTrust.into().contentBytes().length;
-          deviceLocked = String.valueOf(rootOfTrust.into().asBoolean());
-          verifiedBootState = verifiedBootStateName(rootOfTrust.into().asLong());
-        } else if (tag == 706) {
-          osPatchLevel = value.into().asLong();
-        } else if (tag == 719) {
-          bootPatchLevel = value.into().asLong();
-        }
-      }
-
-      boolean challengeMatches =
-        new String(attestedChallenge, "UTF-8").equals(challenge);
-
-      // Dieselben Werte einzeln, für den Beleg, der in den Kern geht. Der
-      // Fließtext oben bleibt, weil er noch anderes enthält - aber er ist
-      // eine Messnotiz und kein Datensatz, und ihn zu parsen hieße, eine
-      // Prosazeile zur Schnittstelle zu erklären.
-      this.attestationLevel = securityLevelName(attestationSecurityLevel);
-      this.attestedKeyLevel = securityLevelName(keyMintSecurityLevel);
-      this.attestedChallengeMatches = challengeMatches;
-      this.attestedVerifiedBootState = verifiedBootState;
-      this.attestedDeviceLocked = "true".equals(deviceLocked);
-      this.attestedOsPatchLevel = osPatchLevel < 0 ? "absent" : String.valueOf(osPatchLevel);
-      this.attestedBootPatchLevel = bootPatchLevel < 0 ? "absent" : String.valueOf(bootPatchLevel);
-
-      return "\"extensionPresent\":true"
-        + ",\"attestationVersion\":" + attestationVersion
-        + ",\"attestationSecurityLevel\":\"" + securityLevelName(attestationSecurityLevel) + "\""
-        + ",\"keyMintVersion\":" + keyMintVersion
-        + ",\"keyMintSecurityLevel\":\"" + securityLevelName(keyMintSecurityLevel) + "\""
-        + ",\"challengeMatches\":" + challengeMatches
-        + ",\"verifiedBootState\":\"" + verifiedBootState + "\""
-        + ",\"deviceLocked\":" + deviceLocked
-        + ",\"verifiedBootKeyBytes\":" + verifiedBootKeyBytes
-        + ",\"osPatchLevel\":" + osPatchLevel
-        + ",\"bootPatchLevel\":" + bootPatchLevel;
-    } catch (Throwable unparsable) {
+    if (!"none".equals(attested.refusal)) {
       return "\"extensionPresent\":true,\"parsed\":false,\"refusal\":\""
-        + unparsable.getClass().getSimpleName() + "\"";
+        + attested.refusal + "\"";
     }
+    return "\"extensionPresent\":true"
+      + ",\"attestationVersion\":" + attested.attestationVersion
+      + ",\"attestationSecurityLevel\":\"" + attested.attestationLevel + "\""
+      + ",\"keyMintVersion\":" + attested.keyMintVersion
+      + ",\"keyMintSecurityLevel\":\"" + attested.attestedKeyLevel + "\""
+      + ",\"challengeMatches\":" + attested.challengeMatches
+      + ",\"verifiedBootState\":\"" + attested.verifiedBootState + "\""
+      + ",\"deviceLocked\":" + attested.deviceLockedText
+      + ",\"verifiedBootKeyBytes\":" + attested.verifiedBootKeyBytes
+      + ",\"osPatchLevel\":" + attested.osPatchLevel
+      + ",\"bootPatchLevel\":" + attested.bootPatchLevel;
   }
 
   /**
@@ -558,17 +280,9 @@ public final class KeystoreProbeService extends Service {
    * ein erfundenes `trusted_environment` nicht.
    */
   private String picoKeystoreEvidence() {
-    return "\"platform\":\"android\""
-      + ",\"keyInfoLevel\":\"" + keyInfoLevel + "\""
-      + ",\"attestedKeyLevel\":\"" + attestedKeyLevel + "\""
-      + ",\"attestationLevel\":\"" + attestationLevel + "\""
-      + ",\"attestationRoot\":\"" + attestationRoot + "\""
-      + ",\"challengeMatches\":" + attestedChallengeMatches
-      + ",\"verifiedBootState\":\"" + attestedVerifiedBootState + "\""
-      + ",\"deviceLocked\":" + attestedDeviceLocked
-      + ",\"osPatchLevel\":\"" + attestedOsPatchLevel + "\""
-      + ",\"bootPatchLevel\":\"" + attestedBootPatchLevel + "\"";
+    return KeystoreEvidence.json(keyInfoLevel, attestationRoot, attested);
   }
+
 
   private String attestationFindings() {
     try {
@@ -600,7 +314,7 @@ public final class KeystoreProbeService extends Service {
       // `unknown_-1` - sichere Hardware, die nicht sagt welche, und der Kern
       // lehnt sie ab, weil eine geschlossene Liste sonst keine wäre.
       String level = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        ? securityLevelName(info.getSecurityLevel()) : "pre_31";
+        ? KeystoreEvidence.securityLevelName(info.getSecurityLevel()) : "pre_31";
 
       /**
        * Each certificate against the next one's key. Reading the last
@@ -626,14 +340,14 @@ public final class KeystoreProbeService extends Service {
         }
       }
       this.keyInfoLevel = level;
-      this.attestationRoot = pinnedRootVerdict(chain[chain.length - 1]);
+      this.attestationRoot = KeystoreEvidence.pinnedRootVerdict(chain[chain.length - 1]);
 
       return "\"chainLength\":" + chain.length
         + ",\"rootSubject\":\"" + root.replace('"', '\'') + "\""
         + ",\"softwareAttestationRoot\":" + softwareRoot
         + ",\"signaturesLinkToRoot\":" + linked
         + ",\"linkFailure\":\"" + linkFailure + "\""
-        + ",\"pinnedRoot\":\"" + pinnedRootVerdict(chain[chain.length - 1]) + "\""
+        + ",\"pinnedRoot\":\"" + KeystoreEvidence.pinnedRootVerdict(chain[chain.length - 1]) + "\""
         + ",\"keyInfoSecurityLevel\":\"" + level + "\""
         + "," + attestationExtensionFindings((X509Certificate) chain[0], ATTEST_CHALLENGE);
     } catch (Throwable error) {

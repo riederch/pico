@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
  * ADR 0131 A3 verlangt, dass der Plattformcode urteilt und ein **Verdikt mit
  * seinen Belegen** in den schalenfreien Kern gibt. Das heißt zwangsläufig,
  * dass die Namen zweimal geschrieben stehen - einmal in
- * `KeystoreProbeService.java`, einmal in `apps/companion/src/platform-secrets.ts`
+ * `KeystoreEvidence.java`, einmal in `apps/companion/src/platform-secrets.ts`
  * -, denn Java und TypeScript teilen keine Konstante. Eine Wahrheit, die
  * zweimal geschrieben steht, driftet, und diese hier driftete bereits, bevor
  * sie zum ersten Mal zusammengeführt wurde: die Sonde nannte die EC-Wurzel
@@ -32,7 +32,7 @@ const root = dirname(here);
 const core = readFileSync(
   join(root, 'apps/companion/src/platform-secrets.ts'), 'utf8');
 const probe = readFileSync(
-  join(root, 'tools/android-runtime-probe/apk/src/com/pico/a1probe/KeystoreProbeService.java'),
+  join(root, 'tools/android-runtime-probe/apk/src/com/pico/a1probe/KeystoreEvidence.java'),
   'utf8');
 
 const failures = [];
@@ -54,9 +54,9 @@ const coreList = (name) => {
  */
 const probeRoots = () => {
   const body = probe.match(
-    /private static String pinnedRootVerdict\(Certificate root\) \{([\s\S]*?)\n  \}/);
+    /static String pinnedRootVerdict\(Certificate root\) \{([\s\S]*?)\n  \}/);
   if (body === null) {
-    failures.push('pinnedRootVerdict steht nicht mehr in KeystoreProbeService.java');
+    failures.push('pinnedRootVerdict steht nicht mehr in KeystoreEvidence.java');
     return null;
   }
   return new Set([...body[1].matchAll(/"([a-z0-9_]+)"/g)]
@@ -67,9 +67,9 @@ const probeRoots = () => {
 /** Die Namen, die `securityLevelName` vergibt - ohne den `unknown_`-Zweig. */
 const probeLevels = () => {
   const body = probe.match(
-    /private static String securityLevelName\(long value\) \{([\s\S]*?)\n  \}/);
+    /static String securityLevelName\(long value\) \{([\s\S]*?)\n  \}/);
   if (body === null) {
-    failures.push('securityLevelName steht nicht mehr in KeystoreProbeService.java');
+    failures.push('securityLevelName steht nicht mehr in KeystoreEvidence.java');
     return null;
   }
   return new Set([...body[1].matchAll(/return "([a-z_]+)";/g)].map((m) => m[1]));
@@ -111,9 +111,9 @@ if (evidenceFields.length === 0) {
   failures.push('parsePicoCompanionAndroidKeystoreEvidence liest keine Felder mehr');
 }
 const written = probe.match(
-  /private String picoKeystoreEvidence\(\) \{([\s\S]*?)\n  \}/);
+  /public static String json\(String keyInfoLevel[^)]*\) \{([\s\S]*?)\n  \}/);
 if (written === null) {
-  failures.push('picoKeystoreEvidence steht nicht mehr in KeystoreProbeService.java');
+  failures.push('KeystoreEvidence.json steht nicht mehr in KeystoreEvidence.java');
 } else {
   for (const field of evidenceFields) {
     if (!written[1].includes(`\\"${field}\\"`)) {

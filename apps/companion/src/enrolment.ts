@@ -27,7 +27,7 @@ import type { PicoCompanionApprovalDecisionPort } from './approval-carrier.js';
 import {
   defaultPicoCompanionPlatformUnlockPath,
   writePicoCompanionPlatformUnlock,
-  type PicoCompanionPlatformSecretPort,
+  type PicoCompanionSecretPort,
 } from './platform-unlock.js';
 import {
   picoCompanionProfileSchema,
@@ -427,7 +427,12 @@ export async function acceptPicoCompanionEnrolment(input: {
    */
   decisions?: PicoCompanionApprovalDecisionPort;
   device: PicoCompanionEnrolmentOffer['device'];
-  platformSecrets?: PicoCompanionPlatformSecretPort;
+  /**
+   * ADR 0131 A3: beide Plattformen, seit Android einen Keystore hat, den
+   * dieses Produkt beurteilen kann. Der Unterschied liegt allein in der
+   * Frage, was als Keystore zählt - was danach geschieht, ist dasselbe.
+   */
+  platformSecrets?: PicoCompanionSecretPort;
   platformUnlockPath?: string;
   now?: () => Date;
   fetch?: typeof fetch;

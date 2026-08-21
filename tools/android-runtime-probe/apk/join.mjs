@@ -28,6 +28,7 @@ import {
   picoCompanionEnrolmentStepLine,
   runPicoCompanionAskingDeviceExchange,
 } from '@pico/companion/enrolment-steps';
+import { connectPicoAndroidKeystorePort } from './keystore-port.mjs';
 
 const stage = dirname(fileURLToPath(import.meta.url));
 const files = dirname(stage);
@@ -90,6 +91,30 @@ await sodium.ready;
     plainDecoder: attempt(() => new TextDecoder().decode(view)),
     bufferToString: attempt(() => Buffer.from(view).toString('utf8')),
   })}\n`);
+}
+
+/**
+ * ADR 0131 A3 / ADR 0081 P3. Der Plattform-Keystore, wenn dieses Gerät einen
+ * hat, den der Kern gelten lässt.
+ *
+ * **Kein Grund, den Beitritt scheitern zu lassen.** Ohne ihn tippt die Person
+ * ihre Passphrase beim nächsten Mal wieder ein - unbequem, nicht unsicher.
+ * Der Desktop hält es genauso: `platformSecrets` ist dort optional, und ein
+ * Gerät ohne Schlüsselbund richtet sich trotzdem ein. Was nicht passieren
+ * darf, ist das stille Weitergehen: die Ablehnung geht ins Protokoll, mit dem
+ * Namen, den Java ihr gegeben hat.
+ */
+let keystore = undefined;
+try {
+  keystore = await connectPicoAndroidKeystorePort(join(files, 'keystore.sock'));
+  const evidence = await keystore.keystoreEvidence();
+  process.stdout.write(`${JSON.stringify({ step: 'keystore_evidence', ...evidence })}\n`);
+} catch (noKeystore) {
+  process.stdout.write(`${JSON.stringify({
+    step: 'keystore_absent',
+    reason: String(noKeystore && noKeystore.message),
+  })}\n`);
+  keystore = undefined;
 }
 
 const socketPath = join(files, 'ui.sock');
@@ -321,6 +346,11 @@ async function walkTheJoin() {
         grantCode,
         profilePath: join(files, 'profile.json'),
         sodium,
+        // Der Kern versiegelt, nicht diese Datei: dass eine Passphrase nach
+        // dem Beitritt in den Plattform-Keystore geht, ist eine Regel des
+        // Produkts und keine Geste dieses Clients. Was Android beisteuert,
+        // ist der Anschluss.
+        ...(keystore === undefined ? {} : { platformSecrets: keystore }),
         /**
          * ADR 0099, and the reason this is not a stub. The signature this
          * ceremony raises must be answered by the person on the device that
@@ -342,6 +372,13 @@ async function walkTheJoin() {
     // eine Anzeigeform, kein zweiter Moment. Bis zum 2026-08-21 schrieb die
     // Activity hier eigene Sätze, obwohl `joined` im Kern längst welche hat.
     send({ v: 'done', step: 'joined', ...line('joined') });
+    if (keystore !== undefined) {
+      const unlockPath = join(files, 'platform-unlock.json');
+      process.stdout.write(`${JSON.stringify({
+        step: 'platform_unlock',
+        written: existsSync(unlockPath),
+      })}\n`);
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     // To the log as well as to the surface: a failure a person sees and a
