@@ -243,3 +243,39 @@ export function requirePicoCompanionAndroidKeystoreLevel(
   }
   return attested;
 }
+
+
+/**
+ * Der Android-Port: dieselbe Aufgabe wie oben, eine Tür weniger.
+ *
+ * Auf Linux fragt der Kern zweimal - `isEncryptionAvailable()` und dann
+ * `selectedBackend()` -, weil Electron beide Auskünfte einzeln gibt. Auf
+ * Android gibt es nur eine Frage, und ihre Antwort ist der Beleg: wer
+ * `keystoreEvidence()` nicht beantworten kann, hat keinen Keystore, den
+ * dieses Produkt benutzen würde. Zwei Türen, von denen die zweite alles
+ * entscheidet, wären hier nur eine Stelle mehr, an der jemand nur die erste
+ * abfragt.
+ *
+ * `unknown` als Rückgabetyp ist Absicht. Der Wert kommt aus Java über eine
+ * Prozessgrenze, und `parsePicoCompanionAndroidKeystoreEvidence` ist die
+ * Stelle, an der er eine Form bekommt - ein deklarierter Typ hier wäre ein
+ * Versprechen, das der Kern nicht halten kann.
+ */
+export interface PicoCompanionAndroidSecretPort {
+  platform: 'android';
+  keystoreEvidence(): unknown;
+  encryptString(plainText: string): Uint8Array;
+  decryptString(encrypted: Uint8Array): string;
+}
+
+/**
+ * Das Niveau, unter dem dieses Gerät ein Geheimnis versiegeln darf - oder
+ * die Ablehnung des Belegs, die schon sagt, woran es lag.
+ */
+export function requirePicoCompanionAndroidKeystore(
+  secrets: PicoCompanionAndroidSecretPort,
+): PicoCompanionAndroidKeystoreLevel {
+  return requirePicoCompanionAndroidKeystoreLevel(
+    parsePicoCompanionAndroidKeystoreEvidence(secrets.keystoreEvidence()),
+  );
+}

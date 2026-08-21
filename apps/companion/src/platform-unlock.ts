@@ -21,8 +21,15 @@ import {
   type PicoVaultDaemonClient,
 } from '@pico/vault-daemon/client';
 import {
+  picoCompanionAndroidAttestationRoots,
+  picoCompanionAndroidKeystoreLevels,
   picoCompanionLinuxKeystoreBackends,
+  parsePicoCompanionAndroidKeystoreEvidence,
+  requirePicoCompanionAndroidKeystore,
+  requirePicoCompanionAndroidKeystoreLevel,
   requirePicoCompanionKeystoreBackend,
+  type PicoCompanionAndroidKeystoreLevel,
+  type PicoCompanionAndroidSecretPort,
   type PicoCompanionLinuxKeystoreBackend,
   type PicoCompanionPlatformSecretPort,
 } from './platform-secrets.js';
@@ -39,9 +46,24 @@ export const picoCompanionPlatformUnlockSchema =
  */
 export {
   picoCompanionLinuxKeystoreBackends,
+  type PicoCompanionAndroidSecretPort,
   type PicoCompanionLinuxKeystoreBackend,
   type PicoCompanionPlatformSecretPort,
 } from './platform-secrets.js';
+
+/**
+ * Beide Ports, wo dieses Modul einen entgegennimmt.
+ *
+ * ADR 0131: Android ist ein vollwertiger Client. Der Satz hat hier eine
+ * konkrete Folge - der automatische Unlock ist **eine** Maschine mit zwei
+ * Anschlüssen und nicht zwei Maschinen, die sich ähneln. Was sich zwischen
+ * den Plattformen unterscheidet, ist die Frage, was als Keystore zählt; alles
+ * danach - Bindung an das Profil, versiegelte Passphrase, die zwei
+ * Gerätesitzungen, die wieder aufgemacht werden - ist dasselbe.
+ */
+export type PicoCompanionSecretPort =
+  | PicoCompanionPlatformSecretPort
+  | PicoCompanionAndroidSecretPort;
 
 export interface PicoCompanionAutomaticVaultUnlock {
   ensureUnlocked(): Promise<void>;
@@ -49,19 +71,52 @@ export interface PicoCompanionAutomaticVaultUnlock {
   close(): Promise<void>;
 }
 
-interface PicoCompanionPlatformUnlockRecord {
+interface PicoCompanionPlatformUnlockBinding {
+  homeHostPicoIdentityFingerprintHex: string;
+  identityKeyFingerprintHex: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  delegationId: string;
+}
+
+interface PicoCompanionLinuxUnlockRecord {
   schema: typeof picoCompanionPlatformUnlockSchema;
   platform: 'linux';
   backend: PicoCompanionLinuxKeystoreBackend;
-  binding: {
-    homeHostPicoIdentityFingerprintHex: string;
-    identityKeyFingerprintHex: string;
-    deviceSigningKeyFingerprintHex: string;
-    deviceKeyAgreementKeyFingerprintHex: string;
-    delegationId: string;
-  };
+  binding: PicoCompanionPlatformUnlockBinding;
   encryptedPassphraseBase64: string;
 }
+
+/**
+ * Dasselbe für Android, mit einem Unterschied, der die ganze A3-Messung ist:
+ * hier steht kein Backend-Name, den der Kern nachschlagen könnte, sondern das
+ * **Niveau**, auf das sich zwei unabhängige Quellen geeinigt haben.
+ *
+ * `sealedWith` wird aufgeschrieben und **nicht verglichen**, und das ist eine
+ * Entscheidung. Wurzel und Patchstände ändern sich unter einem Telefon, das
+ * genau das Richtige tut - es wird gepatcht, und Google rotiert seine
+ * Attestierungswurzeln. Ein Vergleich hätte also die Geräte bestraft, die
+ * gepflegt werden. Was sie sind: das Protokoll des Moments, in dem versiegelt
+ * wurde, und die einzige Stelle, an der man später sehen kann, dass sich die
+ * Pin-Liste unter einem installierten Client bewegt hat - die offene
+ * ADR-0134-Frage aus ADR 0131 A3.
+ */
+interface PicoCompanionAndroidUnlockRecord {
+  schema: typeof picoCompanionPlatformUnlockSchema;
+  platform: 'android';
+  keystoreLevel: PicoCompanionAndroidKeystoreLevel;
+  sealedWith: {
+    attestationRoot: string;
+    osPatchLevel: string;
+    bootPatchLevel: string;
+  };
+  binding: PicoCompanionPlatformUnlockBinding;
+  encryptedPassphraseBase64: string;
+}
+
+type PicoCompanionPlatformUnlockRecord =
+  | PicoCompanionLinuxUnlockRecord
+  | PicoCompanionAndroidUnlockRecord;
 
 export function defaultPicoCompanionPlatformUnlockPath(
   profilePath: string,
@@ -79,10 +134,15 @@ export function writePicoCompanionPlatformUnlock(input: {
   path: string;
   profile: PicoCompanionProfile;
   passphrase: string;
-  secrets: PicoCompanionPlatformSecretPort;
+  secrets: PicoCompanionSecretPort;
 }): void {
   assertPassphrase(input.passphrase);
-  const backend = requireUsableBackend(input.secrets);
+  // **Zuerst** urteilen, dann versiegeln. Ein Keystore, den dieses Produkt
+  // ablehnt, darf die Passphrase nicht einmal kurz gesehen haben; die
+  // Reihenfolge ist derselbe Gedanke wie die Wurzel vor der Erweiterung.
+  const header = input.secrets.platform === 'android'
+    ? androidHeader(input.secrets)
+    : ({ platform: 'linux', backend: requireUsableBackend(input.secrets) } as const);
   const encrypted = input.secrets.encryptString(input.passphrase);
   if (!(encrypted instanceof Uint8Array)
     || encrypted.byteLength === 0
@@ -91,8 +151,7 @@ export function writePicoCompanionPlatformUnlock(input: {
   }
   const record: PicoCompanionPlatformUnlockRecord = {
     schema: picoCompanionPlatformUnlockSchema,
-    platform: 'linux',
-    backend,
+    ...header,
     binding: profileBinding(input.profile),
     encryptedPassphraseBase64: Buffer.from(encrypted).toString('base64'),
   };
@@ -122,7 +181,7 @@ export function createPicoCompanionAutomaticVaultUnlock(input: {
   path: string;
   profile: PicoCompanionProfile;
   socketPath: string;
-  secrets: PicoCompanionPlatformSecretPort;
+  secrets: PicoCompanionSecretPort;
   connect?: typeof connectPicoVaultDaemonClient;
 }): PicoCompanionAutomaticVaultUnlock {
   const connect = input.connect ?? connectPicoVaultDaemonClient;
@@ -200,16 +259,13 @@ async function withPlatformPassphrase(
   input: {
     path: string;
     profile: PicoCompanionProfile;
-    secrets: PicoCompanionPlatformSecretPort;
+    secrets: PicoCompanionSecretPort;
   },
   use: (passphrase: string) => Promise<void>,
 ): Promise<void> {
   const record = readPicoCompanionPlatformUnlock(input.path);
   assertBinding(record, input.profile);
-  const backend = requireUsableBackend(input.secrets);
-  if (record.backend !== backend) {
-    throw new Error('platform_unlock_backend_changed');
-  }
+  assertSameKeystore(record, input.secrets);
   let passphrase = input.secrets.decryptString(
     Buffer.from(record.encryptedPassphraseBase64, 'base64'),
   );
@@ -235,9 +291,27 @@ function readPicoCompanionPlatformUnlock(
   }
 }
 
+/**
+ * Welche der beiden Formen es ist, entscheidet `platform` - und nur dieses
+ * Feld wird vorher angefasst.
+ *
+ * Der Grund ist die Feldliste selbst: `exactRecord` verlangt genau die Namen,
+ * die zu einer Plattform gehören, und ein Android-Satz durch die Linux-Liste
+ * gelesen fiele mit "unbekanntes Feld" durch statt mit "falsche Plattform".
+ * Die zweite Auskunft ist die, mit der jemand etwas anfangen kann.
+ */
 function parsePicoCompanionPlatformUnlock(
   value: unknown,
 ): PicoCompanionPlatformUnlockRecord {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('invalid_platform_unlock_record');
+  }
+  return (value as Record<string, unknown>).platform === 'android'
+    ? parseAndroidUnlock(value)
+    : parseLinuxUnlock(value);
+}
+
+function parseLinuxUnlock(value: unknown): PicoCompanionLinuxUnlockRecord {
   const record = exactRecord(value, [
     'schema',
     'platform',
@@ -252,7 +326,65 @@ function parsePicoCompanionPlatformUnlock(
     )) {
     throw new Error('invalid_platform_unlock_header');
   }
-  const binding = exactRecord(record.binding, [
+  return Object.freeze({
+    schema: picoCompanionPlatformUnlockSchema,
+    platform: 'linux',
+    backend: record.backend as PicoCompanionLinuxKeystoreBackend,
+    binding: parseBinding(record.binding),
+    encryptedPassphraseBase64: parseCiphertext(record.encryptedPassphraseBase64),
+  }) as PicoCompanionLinuxUnlockRecord;
+}
+
+function parseAndroidUnlock(value: unknown): PicoCompanionAndroidUnlockRecord {
+  const record = exactRecord(value, [
+    'schema',
+    'platform',
+    'keystoreLevel',
+    'sealedWith',
+    'binding',
+    'encryptedPassphraseBase64',
+  ], 'invalid_platform_unlock_record');
+  if (record.schema !== picoCompanionPlatformUnlockSchema
+    || !picoCompanionAndroidKeystoreLevels.includes(
+      record.keystoreLevel as PicoCompanionAndroidKeystoreLevel,
+    )) {
+    throw new Error('invalid_platform_unlock_header');
+  }
+  const sealed = exactRecord(record.sealedWith, [
+    'attestationRoot',
+    'osPatchLevel',
+    'bootPatchLevel',
+  ], 'invalid_platform_unlock_sealed_with');
+  if (!picoCompanionAndroidAttestationRoots.includes(
+    sealed.attestationRoot as typeof picoCompanionAndroidAttestationRoots[number],
+  )) {
+    throw new Error('invalid_platform_unlock_sealed_with');
+  }
+  for (const field of ['osPatchLevel', 'bootPatchLevel'] as const) {
+    // `absent` gehört dazu: eine Erweiterung ohne Patchstand ist ein
+    // ehrlicher Befund, und ihn als leeres Feld zu schreiben hieße, ihn mit
+    // einem Fehler zu verwechseln.
+    if (typeof sealed[field] !== 'string'
+      || !/^(?:\d{6,8}|absent)$/u.test(sealed[field] as string)) {
+      throw new Error('invalid_platform_unlock_sealed_with');
+    }
+  }
+  return Object.freeze({
+    schema: picoCompanionPlatformUnlockSchema,
+    platform: 'android',
+    keystoreLevel: record.keystoreLevel as PicoCompanionAndroidKeystoreLevel,
+    sealedWith: Object.freeze({
+      attestationRoot: sealed.attestationRoot as string,
+      osPatchLevel: sealed.osPatchLevel as string,
+      bootPatchLevel: sealed.bootPatchLevel as string,
+    }),
+    binding: parseBinding(record.binding),
+    encryptedPassphraseBase64: parseCiphertext(record.encryptedPassphraseBase64),
+  }) as PicoCompanionAndroidUnlockRecord;
+}
+
+function parseBinding(value: unknown): PicoCompanionPlatformUnlockBinding {
+  const binding = exactRecord(value, [
     'homeHostPicoIdentityFingerprintHex',
     'identityKeyFingerprintHex',
     'deviceSigningKeyFingerprintHex',
@@ -271,24 +403,83 @@ function parsePicoCompanionPlatformUnlock(
     || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(binding.delegationId)) {
     throw new Error('invalid_platform_unlock_delegation');
   }
-  if (typeof record.encryptedPassphraseBase64 !== 'string'
+  // Feld für Feld statt Spread: `exactRecord` hat die Namen schon geprüft,
+  // aber ein Spread trägt den Typ `unknown` weiter, und ein Cast darüber wäre
+  // genau die Zusicherung, die diese Funktion eigentlich erarbeitet.
+  return Object.freeze({
+    homeHostPicoIdentityFingerprintHex:
+      binding.homeHostPicoIdentityFingerprintHex as string,
+    identityKeyFingerprintHex: binding.identityKeyFingerprintHex as string,
+    deviceSigningKeyFingerprintHex:
+      binding.deviceSigningKeyFingerprintHex as string,
+    deviceKeyAgreementKeyFingerprintHex:
+      binding.deviceKeyAgreementKeyFingerprintHex as string,
+    delegationId: binding.delegationId,
+  });
+}
+
+function parseCiphertext(value: unknown): string {
+  if (typeof value !== 'string'
     || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u
-      .test(record.encryptedPassphraseBase64)
-    || Buffer.from(record.encryptedPassphraseBase64, 'base64').byteLength === 0
-    || Buffer.from(record.encryptedPassphraseBase64, 'base64').byteLength
-      > 16 * 1_024) {
+      .test(value)
+    || Buffer.from(value, 'base64').byteLength === 0
+    || Buffer.from(value, 'base64').byteLength > 16 * 1_024) {
     throw new Error('invalid_platform_unlock_ciphertext');
   }
-  return Object.freeze({
-    schema: picoCompanionPlatformUnlockSchema,
-    platform: 'linux',
-    backend: record.backend,
-    binding: Object.freeze({ ...binding }),
-    encryptedPassphraseBase64: record.encryptedPassphraseBase64,
-  }) as PicoCompanionPlatformUnlockRecord;
+  return value;
 }
 
 const requireUsableBackend = requirePicoCompanionKeystoreBackend;
+
+function androidHeader(secrets: PicoCompanionAndroidSecretPort): {
+  platform: 'android';
+  keystoreLevel: PicoCompanionAndroidKeystoreLevel;
+  sealedWith: PicoCompanionAndroidUnlockRecord['sealedWith'];
+} {
+  const evidence = parsePicoCompanionAndroidKeystoreEvidence(
+    secrets.keystoreEvidence(),
+  );
+  return {
+    platform: 'android',
+    keystoreLevel: requirePicoCompanionAndroidKeystoreLevel(evidence),
+    sealedWith: {
+      attestationRoot: evidence.attestationRoot,
+      osPatchLevel: evidence.osPatchLevel,
+      bootPatchLevel: evidence.bootPatchLevel,
+    },
+  };
+}
+
+/**
+ * Derselbe Keystore wie beim Versiegeln, oder gar keiner.
+ *
+ * Auf Linux ist das der Backend-Name; auf Android das Niveau. Beide werden
+ * auf **Gleichheit** geprüft, nicht auf "mindestens so gut": ein Gerät, dessen
+ * Schlüssel eben noch im sicheren Element lagen und heute im TEE, hat etwas
+ * getan, das eine Erklärung braucht - und die versiegelten Bytes ließen sich
+ * ohnehin nicht mehr öffnen, weil sie an den alten Schlüssel gebunden sind.
+ * Die Ablehnung ist also die ehrliche Auskunft und keine Härte.
+ */
+function assertSameKeystore(
+  record: PicoCompanionPlatformUnlockRecord,
+  secrets: PicoCompanionSecretPort,
+): void {
+  if (record.platform !== secrets.platform) {
+    throw new Error('platform_unlock_platform_changed');
+  }
+  if (record.platform === 'android') {
+    if (record.keystoreLevel
+      !== requirePicoCompanionAndroidKeystore(
+        secrets as PicoCompanionAndroidSecretPort)) {
+      throw new Error('platform_unlock_level_changed');
+    }
+    return;
+  }
+  if (record.backend
+    !== requireUsableBackend(secrets as PicoCompanionPlatformSecretPort)) {
+    throw new Error('platform_unlock_backend_changed');
+  }
+}
 
 function profileBinding(
   profile: PicoCompanionProfile,

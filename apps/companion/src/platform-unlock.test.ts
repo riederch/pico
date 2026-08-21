@@ -4,6 +4,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type {
@@ -15,6 +16,7 @@ import type { PicoCompanionProfile } from './profile.js';
 import {
   createPicoCompanionAutomaticVaultUnlock,
   writePicoCompanionPlatformUnlock,
+  type PicoCompanionAndroidSecretPort,
   type PicoCompanionPlatformSecretPort,
 } from './platform-unlock.js';
 
@@ -103,6 +105,209 @@ describe('Linux Platform Keystore unlock path (ADR 0081 P3)', () => {
     await automatic.close();
   });
 });
+
+/**
+ * ADR 0131 A3 / ADR 0081 P3. Dieselbe Maschine, anderer Anschluss.
+ *
+ * Die Belege stammen aus der Messung auf einem Galaxy A55 (Android 16,
+ * Patchstand 2026-07-05, EC-Wurzel) - dieselben Werte, die
+ * `KeystoreProbeService` am 2026-08-21 in der Form des Kerns geschrieben hat.
+ */
+describe('Android Keystore unlock path (ADR 0131 A3)', () => {
+  it('seals against the level two sources agreed on, and reopens the same sessions', async () => {
+    const path = temporaryPath();
+    const secrets = androidPort('vault passphrase');
+    writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets,
+    });
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    const persisted = JSON.parse(readFileSync(path, 'utf8'));
+    expect(persisted.platform).toBe('android');
+    expect(persisted.keystoreLevel).toBe('trusted_environment');
+    expect(persisted.backend).toBeUndefined();
+    expect(readFileSync(path, 'utf8')).not.toContain('vault passphrase');
+    // Das Protokoll des Moments: gegen welche Wurzel und welchen Patchstand
+    // versiegelt wurde. Aufgeschrieben, nicht verglichen.
+    expect(persisted.sealedWith).toEqual({
+      attestationRoot: 'google_ec_key_attestation_ca1',
+      osPatchLevel: '202607',
+      bootPatchLevel: '20260705',
+    });
+
+    const daemon = fakeDaemon();
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      secrets,
+      connect: daemon.connect,
+    });
+    await automatic.ensureUnlocked();
+    expect(daemon.unlocks.map((unlock) => unlock.keyRole))
+      .toEqual(['device_signing', 'device_key_agreement']);
+    await automatic.close();
+  });
+
+  it('judges the keystore before the passphrase is ever handed to it', () => {
+    // Die Reihenfolge ist die Aussage: ein Keystore, den dieses Produkt
+    // ablehnt, darf die Passphrase nicht einmal kurz gesehen haben.
+    const secrets = androidPort('vault passphrase', {
+      keyInfoLevel: 'software',
+      attestedKeyLevel: 'software',
+      attestationLevel: 'software',
+    });
+    expect(() => writePicoCompanionPlatformUnlock({
+      path: temporaryPath(),
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets,
+    })).toThrow('platform_keystore_software_refused');
+    expect(secrets.encryptString).not.toHaveBeenCalled();
+  });
+
+  it('refuses a chain that reached no pinned root, at sealing time', () => {
+    expect(() => writePicoCompanionPlatformUnlock({
+      path: temporaryPath(),
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets: androidPort('vault passphrase', { attestationRoot: 'none' }),
+    })).toThrow('platform_keystore_attestation_unrooted');
+  });
+
+  it('refuses to open what a different keystore level sealed', async () => {
+    const path = temporaryPath();
+    writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets: androidPort('vault passphrase'),
+    });
+    const daemon = fakeDaemon();
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      // Dasselbe Telefon, das heute StrongBox meldet. Die versiegelten Bytes
+      // hängen am alten Schlüssel und ließen sich ohnehin nicht öffnen; die
+      // Ablehnung sagt nur, was ohne sie erst der Entschlüsselungsfehler
+      // gesagt hätte - und der sagt es nicht so deutlich.
+      secrets: androidPort('vault passphrase', {
+        keyInfoLevel: 'strongbox',
+        attestedKeyLevel: 'strongbox',
+        attestationLevel: 'strongbox',
+      }),
+      connect: daemon.connect,
+    });
+    await expect(automatic.ensureUnlocked())
+      .rejects.toThrow('platform_unlock_level_changed');
+    expect(daemon.unlocks).toHaveLength(0);
+    await automatic.close();
+  });
+
+  it('refuses to read one platform\'s record with the other platform\'s port', async () => {
+    const path = temporaryPath();
+    writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets: secretPort('vault passphrase'),
+    });
+    const daemon = fakeDaemon();
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      secrets: androidPort('vault passphrase'),
+      connect: daemon.connect,
+    });
+    await expect(automatic.ensureUnlocked())
+      .rejects.toThrow('platform_unlock_platform_changed');
+    await automatic.close();
+  });
+
+  it('opens after the phone was patched, which is the point of not comparing', async () => {
+    const path = temporaryPath();
+    writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets: androidPort('vault passphrase'),
+    });
+    const daemon = fakeDaemon();
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      // Ein Telefon, das getan hat, was es soll: neuer Patchstand, und Google
+      // hat die Wurzel gewechselt. Beides würde ein Vergleich bestrafen.
+      secrets: androidPort('vault passphrase', {
+        attestationRoot: 'google_rsa_f92009e853b6b045',
+        osPatchLevel: '202612',
+        bootPatchLevel: '20261205',
+      }),
+      connect: daemon.connect,
+    });
+    await automatic.ensureUnlocked();
+    expect(daemon.unlocks).toHaveLength(2);
+    await automatic.close();
+  });
+
+  it('refuses a record whose sealing note was tampered with', async () => {
+    const path = temporaryPath();
+    const secrets = androidPort('vault passphrase');
+    writePicoCompanionPlatformUnlock({
+      path, profile: profile(), passphrase: 'vault passphrase', secrets,
+    });
+    const record = JSON.parse(readFileSync(path, 'utf8'));
+    record.sealedWith.attestationRoot = 'google_ec_ca1';
+    writeFileSync(path, JSON.stringify(record));
+    const daemon = fakeDaemon();
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      secrets,
+      connect: daemon.connect,
+    });
+    await expect(automatic.ensureUnlocked())
+      .rejects.toThrow('invalid_platform_unlock_sealed_with');
+    await automatic.close();
+  });
+});
+
+/**
+ * Der Belegsatz vom Galaxy A55, mit je einer Stelle veränderbar.
+ *
+ * Die Vorgabe ist gemessen und nicht erfunden: ein ausgedachter Satz würde
+ * dieselben Prüfungen bestehen und nichts darüber sagen, ob die Form zu dem
+ * passt, was ein Telefon tatsächlich schreibt.
+ */
+function androidPort(
+  passphrase: string,
+  evidence: Record<string, unknown> = {},
+): PicoCompanionAndroidSecretPort & { encryptString: ReturnType<typeof vi.fn> } {
+  return {
+    platform: 'android',
+    keystoreEvidence: () => ({
+      platform: 'android',
+      keyInfoLevel: 'trusted_environment',
+      attestedKeyLevel: 'trusted_environment',
+      attestationLevel: 'trusted_environment',
+      attestationRoot: 'google_ec_key_attestation_ca1',
+      challengeMatches: true,
+      verifiedBootState: 'verified',
+      deviceLocked: true,
+      osPatchLevel: '202607',
+      bootPatchLevel: '20260705',
+      ...evidence,
+    }),
+    encryptString: vi.fn(() => Uint8Array.from([0xa1, 0xb2, 0xc3])),
+    decryptString: vi.fn(() => passphrase),
+  };
+}
 
 function temporaryPath(): string {
   const directory = mkdtempSync(join(tmpdir(), 'pico-platform-unlock-'));

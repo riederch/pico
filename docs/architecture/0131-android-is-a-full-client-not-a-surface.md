@@ -595,6 +595,52 @@ local-first product's most security-critical moment.
   keine Antwort: was passiert, wenn sich die Pin-Liste unter einem bereits
   installierten Client ändert.
 
+  **Der automatische Unlock nimmt den Beleg jetzt an** (2026-08-21). Und zwar
+  als *eine* Maschine mit zwei Anschlüssen, nicht als zweite Maschine, die der
+  ersten ähnelt: `platform-unlock.ts` unterscheidet die Plattformen nur an der
+  Frage, was als Keystore zählt. Alles danach - die Bindung an Profil und
+  Delegation, die versiegelte Passphrase, die zwei Gerätesitzungen, die wieder
+  geöffnet werden, die Dateirechte - ist dasselbe. Das ist die praktische
+  Bedeutung des Satzes, der über dieser ADR steht.
+
+  Der Android-Port hat **eine Tür weniger** als der Linux-Port. Electron gibt
+  zwei Auskünfte einzeln (`isEncryptionAvailable`, dann `selectedBackend`);
+  hier gibt es nur `keystoreEvidence()`, und wer die nicht beantworten kann,
+  hat keinen Keystore, den dieses Produkt benutzt. Zwei Türen, von denen die
+  zweite alles entscheidet, wären nur eine Stelle mehr, an der jemand nur die
+  erste abfragt.
+
+  Zwei Regeln, die der Linux-Pfad so nicht hat:
+
+  - **Geurteilt wird, bevor versiegelt wird.** Ein Keystore, den dieses
+    Produkt ablehnt, darf die Passphrase nicht einmal kurz gesehen haben.
+    Derselbe Gedanke wie die Wurzel vor der Erweiterung, eine Ebene höher.
+  - **`sealedWith` wird aufgeschrieben und nicht verglichen.** Wurzel und
+    Patchstände ändern sich unter einem Telefon, das genau das Richtige tut -
+    es wird gepatcht, und Google rotiert seine Wurzeln. Ein Vergleich hätte
+    die gepflegten Geräte bestraft. Was der Eintrag ist: das Protokoll des
+    Moments, in dem versiegelt wurde, und die einzige Stelle, an der später
+    sichtbar wird, dass sich die Pin-Liste unter einem installierten Client
+    bewegt hat. Die ADR-0134-Frage bekommt damit keine Antwort, aber zum
+    ersten Mal einen Zeugen.
+
+  Das **Niveau** dagegen wird auf Gleichheit geprüft, nicht auf "mindestens so
+  gut". Ein Gerät, dessen Schlüssel eben noch im sicheren Element lagen und
+  heute im TEE, hat etwas getan, das eine Erklärung braucht - und die
+  versiegelten Bytes ließen sich ohnehin nicht mehr öffnen. Die Ablehnung sagt
+  nur früher und deutlicher, was sonst ein Entschlüsselungsfehler gesagt
+  hätte.
+
+  Neun Tests am Belegsatz des Galaxy A55, vier Pflanzungen, vier passende
+  Risse: erst versiegeln statt erst urteilen, "mindestens so gut" statt
+  gleich, `sealedWith` doch verglichen, Plattformwechsel ungeprüft.
+
+  Was jetzt noch fehlt, ist Java: ein Dienst, der einen TEE-Schlüssel hält,
+  die Passphrase damit versiegelt und den Beleg über dieselbe Socket-Grenze
+  reicht, über die der Beitritt schon spricht. Der Kern ist bereit, das Gerät
+  noch nicht - und der Rundlauf selbst ist gemessen: 32 Bytes hinein, 48
+  versiegelt, identisch zurück, Alias überlebt den Prozesstod.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and
