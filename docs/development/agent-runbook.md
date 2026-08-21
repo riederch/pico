@@ -57,10 +57,43 @@ Enthalten sind:
 
 ```text
 license:check -> version:check -> addon:check -> product:check ->
-surface:check -> design-system:check -> companion:check -> runtime:check ->
-wire:check -> browser:check -> time:check -> offline:check -> supply:check ->
-build -> module:check -> companion:release-check -> check -> test
+settings:check -> surface:check -> design-system:check -> companion:check ->
+fingerprint:check -> instant:check -> link:check -> relay:check ->
+push:check -> runtime:check -> wire:check -> browser:check -> time:check ->
+offline:check -> supply:check -> build -> module:check -> presence:check ->
+docs:check -> supplier:check -> store:check -> reach:check ->
+companion:release-check -> check -> test
 ```
+
+Diese Liste ist eine Kopie und veraltet entsprechend; sie stand am
+2026-08-21 auf 18 Schritten, waehrend die Kette 29 hatte. Die Quelle ist
+`package.json`:
+
+```bash
+node -p "require('./package.json').scripts['release:verify']"
+```
+
+### Jedes Gate hat einmal gebissen (Stand 2026-08-21)
+
+Jede Pruefung der Kette wurde einzeln widerlegt: das, was sie verbietet,
+wurde gepflanzt, der Exit-Code gelesen, die Datei zurueckgesetzt. Vier
+Pruefungen bewachten dabei weniger, als ihre Erfolgsmeldung behauptete, und
+sind seitdem korrigiert:
+
+- `license:check` zaehlte zehn Paket-Manifeste auf, der Workspace hatte
+  siebzehn. Die Globs kommen jetzt aus `pnpm-workspace.yaml`.
+- `time:check` las sechs Korrektheits-Wurzeln und fuenf ihrer Manifeste;
+  `@pico/identity` und `@pico/vault` waren ohne Abhaengigkeitspruefung. Die
+  Manifeste leiten sich jetzt aus den Wurzeln ab.
+- `wire:check` bewachte 72 von 119 Labels, weil es nur skalare Exporte las
+  und die meisten Familien in Objekt-Literalen liegen.
+- `relay:check` strich Zeichenketten mitsamt den Kommentaren, obwohl sein
+  eigener Kommentar nur die Kommentare begruendete.
+
+Vier weitere Pruefungen tragen ihre Sonden im Skript
+(`offline:check`, `supplier:check`, `surface:check`, `product:check`); die
+uebrigen sind nur hier belegt. Eine Pruefung, die nie widerlegt wurde, kann
+gruen sein, weil sie nichts ansieht.
 
 Fokussierte Beispiele:
 
