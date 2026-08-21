@@ -228,6 +228,17 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {
     // Tray process remains alive; windows are interaction/alarm surfaces only.
   });
+  /**
+   * `.then(start)`, nicht `await app.whenReady()` - und das ist kein Stil.
+   *
+   * Diese Datei ist ein ESM-Modul, und ein `await` auf oberster Ebene hält
+   * seine Auswertung an. Electron macht die App aber erst bereit, *nachdem*
+   * der Modulgraph fertig ausgewertet ist: das Versprechen wartet auf das
+   * Modul, das Modul wartet auf das Versprechen, und der Prozess steht ohne
+   * Fehlermeldung. Innerhalb einer `async`-Funktion ist dasselbe `await`
+   * harmlos - `electron-smoke.ts` tut genau das -, weshalb die Falle beim
+   * Vereinheitlichen zuschnappt und nicht beim Schreiben.
+   */
   app.whenReady().then(start).catch((error: unknown) => {
     if (trayMemoryProbe || reachabilityProbe) {
       // Both probes are driven by a verifier that waits on their report. An
