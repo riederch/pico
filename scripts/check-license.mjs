@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,18 +11,46 @@ const requiredFiles = [
   'TRADEMARK.md',
   'CONTRIBUTING.md',
 ];
-const packageFiles = [
-  'package.json',
-  'apps/companion/package.json',
-  'apps/companion-shell/package.json',
-  'apps/core/package.json',
-  'apps/vault-daemon/package.json',
-  'apps/web/package.json',
-  'packages/identity/package.json',
-  'packages/protocol/package.json',
-  'packages/sync/package.json',
-  'packages/vault/package.json',
-];
+/**
+ * Every workspace member, discovered rather than listed.
+ *
+ * It was a list of ten until 2026-08-21, and the workspace had grown to
+ * seventeen: `apps/relay` - which ships as a published container and a Home
+ * Assistant add-on - four modules, and three packages including one written
+ * the same week. All eight declared the right licence, so nothing was wrong;
+ * what was wrong is that nothing would have said so. Changing one of them to
+ * `MIT` passed this check, which is how the gap was found.
+ *
+ * The globs come from `pnpm-workspace.yaml`, the file the package manager
+ * already reads, so a new member is covered the moment it is a member and a
+ * stray `package.json` in a build directory never is. `bridges/` is
+ * deliberately not a workspace member (ADR 0136 BR2), and `check-suppliers`
+ * fails if it becomes one.
+ */
+function workspacePackageFiles() {
+  const config = readFileSync(join(repoRoot, 'pnpm-workspace.yaml'), 'utf8');
+  const globs = [...config.matchAll(/^\s*-\s*["']?([^"'\s]+)["']?\s*$/gmu)]
+    .map((match) => match[1])
+    .filter((glob) => glob.endsWith('/*'));
+  const files = ['package.json'];
+  for (const glob of globs) {
+    const parent = join(repoRoot, glob.slice(0, -2));
+    let entries;
+    try {
+      entries = readdirSync(parent);
+    } catch {
+      errors.push(`pnpm-workspace.yaml lists ${glob}, which does not exist.`);
+      continue;
+    }
+    for (const entry of entries) {
+      const file = join(parent, entry, 'package.json');
+      if (existsSync(file)) {
+        files.push(relative(repoRoot, file));
+      }
+    }
+  }
+  return files.sort();
+}
 const ignoredDirs = new Set(['.git', 'node_modules', 'dist', 'coverage', '.turbo']);
 const ignoredFiles = new Set([
   'scripts/check-license.mjs',
@@ -55,6 +83,12 @@ for (const file of requiredFiles) {
   }
 }
 
+const packageFiles = workspacePackageFiles();
+if (packageFiles.length < 2) {
+  // A discovery that finds nothing must not read as a licence that is right
+  // everywhere, which is precisely how the list this replaced went stale.
+  errors.push('No workspace package.json files were discovered; the check looked at nothing.');
+}
 for (const file of packageFiles) {
   const parsed = JSON.parse(readFileSync(join(repoRoot, file), 'utf8'));
   if (parsed.license !== 'SEE LICENSE IN LICENSE') {
@@ -81,7 +115,10 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('License consistency check passed.');
+console.log(
+  `License consistency check passed (${packageFiles.length} workspace manifests,`
+  + ` ${requiredFiles.length} governance files, ${forbiddenPatterns.length} refused phrasings).`,
+);
 
 function listTextFiles(directory) {
   const files = [];

@@ -20,13 +20,19 @@ const errors = [];
 // --- Workflows: every action pinned to a full commit SHA --------------------
 
 const workflowDir = join(repoRoot, '.github', 'workflows');
+/** Counted so a pass states its own scope rather than only its verdict. */
+let workflowsRead = 0;
+let actionsPinned = 0;
+let dockerFilesRead = 0;
 for (const entry of readdirSync(workflowDir)) {
   if (!entry.endsWith('.yml') && !entry.endsWith('.yaml')) {
     continue;
   }
   const path = join(workflowDir, entry);
   const content = readFileSync(path, 'utf8');
+  workflowsRead += 1;
   for (const match of content.matchAll(/uses:\s*([^\s#]+)/gu)) {
+    actionsPinned += 1;
     const reference = match[1];
     // A local or reusable-workflow path has no registry to move under it.
     if (reference.startsWith('./') || reference.startsWith('docker://')) {
@@ -50,6 +56,7 @@ for (const entry of readdirSync(dockerDir)) {
   if (!entry.endsWith('.Dockerfile') && entry !== 'Dockerfile') {
     continue;
   }
+  dockerFilesRead += 1;
   const path = join(dockerDir, entry);
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     const match = /^FROM\s+(\S+)/u.exec(line.trim());
@@ -219,4 +226,7 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('Workflow pinning check passed.');
+console.log(
+  `Workflow pinning check passed (${workflowsRead} workflows, ${actionsPinned} action`
+  + ` references, ${dockerFilesRead} docker files; every reference a commit SHA).`,
+);

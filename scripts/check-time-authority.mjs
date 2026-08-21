@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -41,8 +41,10 @@ const timeServicePattern =
 
 const errors = [];
 
+let scanned = 0;
 for (const root of correctnessRoots) {
   for (const file of listSourceFiles(root)) {
+    scanned += 1;
     const content = readFileSync(file, 'utf8');
     const where = relative(repoRoot, file);
     for (const match of content.matchAll(importPattern)) {
@@ -57,13 +59,21 @@ for (const root of correctnessRoots) {
   }
 }
 
-for (const manifest of [
+/**
+ * The manifests of the same roots, derived rather than listed.
+ *
+ * It was a list of five beside six scanned roots until 2026-08-21, so
+ * `@pico/identity` and `@pico/vault` had their source read and their
+ * dependencies not: a network-time package added to either would have been
+ * installed into a correctness path with nothing saying so. Two lists of the
+ * same thing, and the shorter one was the one nobody re-read.
+ */
+const correctnessManifests = [
   join(repoRoot, 'package.json'),
-  join(repoRoot, 'apps', 'core', 'package.json'),
-  join(repoRoot, 'apps', 'vault-daemon', 'package.json'),
-  join(repoRoot, 'apps', 'companion', 'package.json'),
-  join(repoRoot, 'packages', 'protocol', 'package.json'),
-]) {
+  ...correctnessRoots.map((root) => join(dirname(root), 'package.json')),
+];
+
+for (const manifest of correctnessManifests) {
   const packageJson = JSON.parse(readFileSync(manifest, 'utf8'));
   for (const section of [
     'dependencies',
@@ -86,7 +96,11 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-process.stdout.write('Time-authority check passed.\n');
+process.stdout.write(
+  `Time-authority check passed (${scanned} correctness sources across `
+  + `${correctnessRoots.length} roots, ${correctnessManifests.length} manifests, `
+  + 'none reaching the network for the time).\n',
+);
 
 function listSourceFiles(directory) {
   const files = [];

@@ -24,6 +24,8 @@ import { fileURLToPath } from 'node:url';
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
+/** What each browser entry actually pulls in, so a pass states its own scope. */
+const reached = new Map();
 
 /**
  * Each entry names where the browser is told to start, so a changed `src`
@@ -94,6 +96,7 @@ for (const surface of surfaces) {
   }
 
   const seen = new Set();
+  reached.set(surface.name ?? relative(repoRoot, surface.entry), seen);
   const queue = [surface.entry];
   while (queue.length > 0) {
     const file = queue.pop();
@@ -128,4 +131,8 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('Browser module check passed.');
+console.log(
+  'Browser module check passed ('
+  + [...reached].map(([name, seen]) => `${name} reaches ${seen.size} modules`).join(', ')
+  + '; every one of them by a relative path).',
+);
