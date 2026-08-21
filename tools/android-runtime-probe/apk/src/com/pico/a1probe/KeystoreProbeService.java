@@ -119,6 +119,9 @@ public final class KeystoreProbeService extends Service {
       // 1c. Attestation: the platform's claim about itself, checked against a
       // chain it would have to forge a hardware root to fake.
       report("attestation", attestationFindings());
+      // Nach der Messung, weil sie die Felder füllt: der Beleg ist eine
+      // Sicht auf das Gemessene, keine zweite Messung.
+      report("pico_keystore_evidence", picoKeystoreEvidence());
 
       // 2. Fail-closed. The cipher must refuse without a fresh authentication.
       String failClosed;
@@ -298,7 +301,13 @@ public final class KeystoreProbeService extends Service {
         byte[] pinned = android.util.Base64.decode(
           PINNED_ATTESTATION_ROOTS[i], android.util.Base64.DEFAULT);
         if (java.util.Arrays.equals(encoded, pinned)) {
-          return i == 0 ? "google_ec_ca1" : "google_rsa_f92009e853b6b045";
+          // Die Namen stehen im Kern, in `picoCompanionAndroidAttestationRoots`.
+          // Hier stehen sie ein zweites Mal, weil Java und TypeScript keine
+          // Konstante teilen können - und deshalb bewacht
+          // `scripts/check-android-keystore-names.mjs` die Gleichheit.
+          return i == 0
+            ? "google_ec_key_attestation_ca1"
+            : "google_rsa_f92009e853b6b045";
         }
       }
       return "none";
@@ -452,7 +461,17 @@ public final class KeystoreProbeService extends Service {
    * a replayed certificate chain from some other, genuinely hardware-backed
    * phone would attest just as well.
    */
-  private static String attestationExtensionFindings(X509Certificate leaf, String challenge) {
+  private String keyInfoLevel = "absent";
+  private String attestationRoot = "none";
+  private String attestedKeyLevel = "absent";
+  private String attestationLevel = "absent";
+  private String attestedVerifiedBootState = "absent";
+  private boolean attestedDeviceLocked = false;
+  private boolean attestedChallengeMatches = false;
+  private String attestedOsPatchLevel = "absent";
+  private String attestedBootPatchLevel = "absent";
+
+  private String attestationExtensionFindings(X509Certificate leaf, String challenge) {
     byte[] wrapped = leaf.getExtensionValue(ATTESTATION_EXTENSION_OID);
     if (wrapped == null) {
       return "\"extensionPresent\":false";
@@ -493,6 +512,19 @@ public final class KeystoreProbeService extends Service {
 
       boolean challengeMatches =
         new String(attestedChallenge, "UTF-8").equals(challenge);
+
+      // Dieselben Werte einzeln, für den Beleg, der in den Kern geht. Der
+      // Fließtext oben bleibt, weil er noch anderes enthält - aber er ist
+      // eine Messnotiz und kein Datensatz, und ihn zu parsen hieße, eine
+      // Prosazeile zur Schnittstelle zu erklären.
+      this.attestationLevel = securityLevelName(attestationSecurityLevel);
+      this.attestedKeyLevel = securityLevelName(keyMintSecurityLevel);
+      this.attestedChallengeMatches = challengeMatches;
+      this.attestedVerifiedBootState = verifiedBootState;
+      this.attestedDeviceLocked = "true".equals(deviceLocked);
+      this.attestedOsPatchLevel = osPatchLevel < 0 ? "absent" : String.valueOf(osPatchLevel);
+      this.attestedBootPatchLevel = bootPatchLevel < 0 ? "absent" : String.valueOf(bootPatchLevel);
+
       return "\"extensionPresent\":true"
         + ",\"attestationVersion\":" + attestationVersion
         + ",\"attestationSecurityLevel\":\"" + securityLevelName(attestationSecurityLevel) + "\""
@@ -508,6 +540,34 @@ public final class KeystoreProbeService extends Service {
       return "\"extensionPresent\":true,\"parsed\":false,\"refusal\":\""
         + unparsable.getClass().getSimpleName() + "\"";
     }
+  }
+
+  /**
+   * Derselbe Befund noch einmal, aber in der Form, die der Kern liest -
+   * `PicoCompanionAndroidKeystoreEvidence` in `apps/companion`.
+   *
+   * ADR 0131 A3 sagt, warum das hier entsteht und nicht dort: das Urteil
+   * hängt an einem `KeyInfo` und an einer Zertifikatskette, und der
+   * schalenfreie Kern sieht keins von beidem. Was übergeht, ist ein Verdikt
+   * **mit seinen Belegen**, und der Kern prüft nicht, ob der Schlüssel im TEE
+   * liegt - das kann er nicht -, sondern ob die Belege zusammenpassen.
+   *
+   * Deshalb steht hier auch nichts drin, was diese Klasse nicht gemessen hat.
+   * Ein Feld mit einem plausiblen Vorgabewert wäre genau die Lüge, gegen die
+   * die zweite Quelle überhaupt gelesen wird - `absent` fällt im Kern durch,
+   * ein erfundenes `trusted_environment` nicht.
+   */
+  private String picoKeystoreEvidence() {
+    return "\"platform\":\"android\""
+      + ",\"keyInfoLevel\":\"" + keyInfoLevel + "\""
+      + ",\"attestedKeyLevel\":\"" + attestedKeyLevel + "\""
+      + ",\"attestationLevel\":\"" + attestationLevel + "\""
+      + ",\"attestationRoot\":\"" + attestationRoot + "\""
+      + ",\"challengeMatches\":" + attestedChallengeMatches
+      + ",\"verifiedBootState\":\"" + attestedVerifiedBootState + "\""
+      + ",\"deviceLocked\":" + attestedDeviceLocked
+      + ",\"osPatchLevel\":\"" + attestedOsPatchLevel + "\""
+      + ",\"bootPatchLevel\":\"" + attestedBootPatchLevel + "\"";
   }
 
   private String attestationFindings() {
@@ -532,8 +592,15 @@ public final class KeystoreProbeService extends Service {
       String root = ((X509Certificate) chain[chain.length - 1])
         .getSubjectX500Principal().getName();
       boolean softwareRoot = root.toLowerCase().contains("software");
+      // Als **Name**, nicht als Zahl. `String.valueOf(1)` war hier bis zum
+      // 2026-08-21 richtig für einen Messwert und falsch für einen Beleg:
+      // die Attestierung nennt dasselbe Niveau `trusted_environment`, und
+      // zwei Quellen, die dasselbe verschieden schreiben, kann niemand
+      // vergleichen. `SECURITY_LEVEL_UNKNOWN_SECURE` (-1) wird dabei zu
+      // `unknown_-1` - sichere Hardware, die nicht sagt welche, und der Kern
+      // lehnt sie ab, weil eine geschlossene Liste sonst keine wäre.
       String level = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        ? String.valueOf(info.getSecurityLevel()) : "pre_31";
+        ? securityLevelName(info.getSecurityLevel()) : "pre_31";
 
       /**
        * Each certificate against the next one's key. Reading the last
@@ -558,6 +625,9 @@ public final class KeystoreProbeService extends Service {
           break;
         }
       }
+      this.keyInfoLevel = level;
+      this.attestationRoot = pinnedRootVerdict(chain[chain.length - 1]);
+
       return "\"chainLength\":" + chain.length
         + ",\"rootSubject\":\"" + root.replace('"', '\'') + "\""
         + ",\"softwareAttestationRoot\":" + softwareRoot

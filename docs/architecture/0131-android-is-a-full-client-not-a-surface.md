@@ -525,6 +525,76 @@ local-first product's most security-critical moment.
   when the pin list changes under a client that is already installed has no
   answer yet. A pin is a list, and lists that ship become things that expire.
 
+  **Die Verdiktform ist geschrieben** (2026-08-21), in
+  `apps/companion/src/platform-secrets.ts`, direkt neben der Linux-Regel - und
+  sie funktioniert absichtlich anders als diese. Auf Linux nennt die Schale
+  einen Backend-Namen und der Kern schlägt ihn nach. Auf Android geht das
+  nicht: das Urteil hängt an einem `KeyInfo` und an einer Zertifikatskette,
+  und der schalenfreie Kern sieht keins von beidem. Also urteilt der
+  Plattformcode, und was übergeht, ist ein Verdikt **mit seinen Belegen**.
+
+  Das klingt nach weniger Regel und ist mehr davon. Der Kern prüft nicht, ob
+  der Schlüssel im TEE liegt - das kann er nicht -, sondern ob die Belege
+  zusammenpassen: erst die gepinnte Wurzel, dann die Challenge, dann erst der
+  Inhalt der Erweiterung. Die Reihenfolge ist die Aussage. Eine Erweiterung
+  ohne geprüfte Kette ist unsignierter Text, und ihr Sicherheitsniveau zu
+  lesen, bevor man weiß, wer sie unterschrieben hat, hieße dem Text zu
+  glauben, weil er das Richtige sagt. Ein Beleg mit **einer** Quelle wird
+  abgelehnt statt mit halber Sicherheit angenommen - das ist die direkte Folge
+  des Satzes weiter oben, dass auf einem Keystore, der durchgehend Software
+  ist, jeder einzelne Aufruf genauso gelingt.
+
+  `attestationLevel` und `attestedKeyLevel` sind dabei getrennte Felder, weil
+  sie verschiedene Fragen beantworten: wo die Attestierung entstand, und wo
+  der Schlüssel lebt. Eine in Software erzeugte Attestierung über einen
+  angeblichen TEE-Schlüssel ist kein Beleg, sondern eine Behauptung mit einer
+  Unterschrift darunter.
+
+  **Beim Zusammenführen fielen zwei Abweichungen auf, bevor die Hälften sich
+  je begegnet waren.** Die Sonde nannte die EC-Wurzel `google_ec_ca1`, der
+  Kern `google_ec_key_attestation_ca1`; und die Sonde gab
+  `KeyInfo.getSecurityLevel()` als *Zahl* aus, wo die Attestierung dasselbe
+  Niveau `trusted_environment` nennt. Beides ist die Art Bruch, die nicht
+  knallt: ein Telefon mit einwandfreier Hardware bekäme
+  `platform_keystore_attestation_unrooted` - "die Kette erreichte keine
+  gepinnte Wurzel" -, obwohl sie sie erreicht hat, und niemand käme auf den
+  Namen als Ursache. Am echten Belegsatz nachgestellt, mit dem alten Namen:
+  genau diese Ablehnung.
+
+  Java und TypeScript teilen keine Konstante, also steht diese Wahrheit
+  zwangsläufig zweimal - und eine Wahrheit, die zweimal steht, driftet.
+  `scripts/check-android-keystore-names.mjs` hält beide Listen und die neun
+  Belegfelder gleich, in beide Richtungen: ein Name, den nur der Kern kennt,
+  ist eine Regel ohne Anwender; einer, den nur die Sonde vergibt, ist ein
+  Gerät, das durchfällt, obwohl es bestanden hat. Vier Pflanzungen, vier
+  passende Risse: Wurzel umbenannt in der Sonde, Wurzel verschrieben im Kern,
+  StrongBox umgetauft, ein Belegfeld weggelassen.
+
+  **Am Gerät nachgewiesen**, derselbe Galaxy A55: die Sonde schreibt den
+  Belegsatz in der Form des Kerns, der Kern liest ihn und urteilt
+  `trusted_environment`. Am echten Satz gedreht, je ein Feld: fremde Wurzel →
+  `unrooted`, Challenge falsch → `challenge_mismatch`, `software` → namentlich
+  abgelehnt, zwei Quellen uneins → `evidence_disagrees`. Dreizehn Regeln,
+  einunddreißig Tests, und vier Pflanzungen in der Regel selbst, jede an der
+  Stelle, die sie treffen sollte.
+
+  **Verified Boot und der Sperrzustand werden mitgeführt und nicht
+  beurteilt**, und das ist eine Entscheidung, keine Lücke. Ein entsperrter
+  Bootloader macht die Attestierung nicht unecht - sie sagt dann ehrlich
+  `unverified`. Ob pico auf solchen Geräten läuft, hat Folgen für jeden
+  Entwickler und jedes umgebaute Telefon und lässt sich nicht nebenbei in
+  einer Prüffunktion entscheiden. Ein Test hält fest, welche Antwort heute
+  gilt, damit ein Wechsel auffällt statt zu passieren. **Offene Frage, wer
+  sie trifft: noch niemand.**
+
+  Was weiter offen bleibt, ist die Hälfte, die ein Mensch bemerkt: **kein
+  Gerät schützt seine Vault-Passphrase heute mit diesem Keystore.** Die Form
+  des Urteils steht, die Funktion nicht - der Beitritt legt seine Schlüssel
+  weiter über libsodium ab, und ADR 0081 P3 will, dass die Plattform das
+  *Entsperrgeheimnis* hält. Und die ADR-0134-Frage von oben hat weiterhin
+  keine Antwort: was passiert, wenn sich die Pin-Liste unter einem bereits
+  installierten Client ändert.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and
