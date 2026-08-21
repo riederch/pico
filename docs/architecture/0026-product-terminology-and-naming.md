@@ -4,6 +4,43 @@
 
 Accepted as a product and code naming direction.
 
+Status note, 2026-08-21: **the vocabulary named a topology, and the product
+grew a third name for one of its roles.** The table below maps ADR 0015's
+`Full Client` to **Pico Vault**, and that was written before anything shipped.
+What ships is `pico-companion_<version>_amd64.deb`, the README calls it **Pico
+Client**, and ADR 0105 calls the way it runs a **background companion**. Three
+names for one object, and a reader of the product documents met two of them
+four sections apart.
+
+Decided by the owner on 2026-08-21, and the direction is to let the vocabulary
+follow the tree rather than the other way around:
+
+- **Pico Vault is key custody** - `packages/vault`, `apps/vault-daemon`, the
+  six ADRs with the word in their title, and the `pico-vault` binary. That is
+  what the name means in nineteen source files, and it is precise there.
+- **Pico Client is the full client** - the trusted device that holds knowledge,
+  keys, sync state and backups, packaged as `pico-companion`. A Vault is the
+  custody *inside* a Client, not the Client itself.
+- **Companion is how it runs**, not a third thing it is: a background service
+  with a window, per ADR 0105 and ADR 0113.
+
+The `pico-vault` binary keeps its name deliberately. It is honestly named - it
+is the custody tool - and ADR 0105 with `check-product-path.mjs` exists to keep
+people *away* from it. Renaming it toward "companion" would give the thing
+nobody should be routed to the name of the thing they should use, which is the
+confusion the gate was built to prevent.
+
+The table and the design rules below are **not** rewritten; they are the record
+of what was decided in the foundation phase, and ADR 0128 keeps them. `README.md`
+and `ReadmeTech.md` are living documents and were corrected. Two occurrences of
+`Pico Vaults` survive there on purpose: one says private keys stay under the
+control of Pico Vaults, which the narrowing makes *more* accurate, and one cites
+ADR 0015's own title.
+
+Found by building on ADR 0131 A7 and asking what a second client would inherit -
+recorded as B7 in `Roadmap.md`, including why that morning's derivation review
+missed it.
+
 Status note, 2026-08-10: ADR 0139 AC5 removed two reserved action event
 names - `action.completed` as a duplicate, and `action_history.event_created`
 because ADR 0141 makes Action History a view over the event log and the

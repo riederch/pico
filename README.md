@@ -28,7 +28,7 @@ Pico should eventually be able to:
 - run locally where practical
 - run Pico Home on multiple host platforms, with Home Assistant as the first packaging path
 - support a future Pico Home Image for dedicated local appliance-style hosts
-- sync between trusted Pico Vaults
+- sync between trusted Pico Clients
 - support Pico Surfaces such as watches or small displays
 - communicate through transport-neutral Pico Link packets
 - reach Pico Homes remotely through Pico Relay instead of public home ports
@@ -73,7 +73,7 @@ That means the companion can feel helpful and present, but risky actions still n
 Pico's current concept work defines several important boundaries:
 
 - Pico can act as a digital companion and technical digital twin for a user-chosen subject
-- Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
+- Pico Clients own knowledge and backups; Pico Surfaces are interaction surfaces. A Pico Vault is the key custody inside a Client, not the Client itself
 - Pico Homes provide infrastructure, but hosting is not ownership over resident Pico identities or private data
 - a freshly installed Pico Home starts empty; a one-time Move-In Code lets the first Pico become the Home Host Pico
 - the Home Host Pico may invite or remove Home Member Picos from that Pico Home, but must not decrypt, impersonate, rewrite or own them
@@ -189,7 +189,7 @@ The avatar communicates state and risk. For example:
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
 - Pico can be a digital companion and technical digital twin of a user-chosen subject
-- Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
+- Pico Clients own knowledge and backups; Pico Surfaces are interaction surfaces. A Pico Vault is the key custody inside a Client, not the Client itself
 - Pico Homes provide infrastructure; hosting is not ownership
 - Pico Homes are local endpoints in the Pico Link / Relay network, not public inbound API servers
 - Pico Relays provide transport, not authority

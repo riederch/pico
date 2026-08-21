@@ -672,6 +672,27 @@ Das ist derselbe Handgriff, mit dem am Vortag die Gates widerlegt wurden, und
 dieselbe Lehre: **ein Dokument, das niemand von der falschen Seite gelesen hat,
 kann vollständig aussehen, weil es nur von der richtigen gelesen wurde.**
 
+**B7 — Ein Produktbegriff hatte drei Namen, und die Prüfung sah keinen davon.**
+ADR 0026 bildet ADR 0015s `Full Client` auf **Pico Vault** ab; das ausgelieferte
+Artefakt heißt `pico-companion_<version>_amd64.deb`; das README nennt es **Pico
+Client**; ADR 0105 nennt die Betriebsart **Companion**. Drei Namen für ein
+Objekt, und ein Leser des README trifft zwei davon vier Abschnitte auseinander.
+Das ist Befundart 4 in Reinform — zwei Dokumente, die dieselbe Frage verschieden
+beantworten — und es steht seit dem ersten ausgelieferten Paket so da.
+
+Gefunden hat es nicht die Prüfung, sondern eine Frage des Eigentümers, gestellt
+während an ADR 0131 A7 gebaut wurde. **Warum die Prüfung es nicht fand, ist der
+eigentliche Befund über den Baum:** ADR 0015 und ADR 0026 wurden in Gruppen
+einsortiert — „Was ein Pico und ein Home überhaupt sind" —, und eine Gruppe wird
+als Ganzes gegen ihre Anforderung gehalten, nicht Aussage für Aussage. Die
+Gruppierung, die den Baum lesbar macht, macht ihn an derselben Stelle blind. Was
+in einer Gruppe steckt, wird nicht mehr einzeln befragt.
+
+Behoben am 2026-08-21 in der Richtung „das Vokabular folgt dem Baum": Pico Vault
+ist die Schlüsselverwahrung, Pico Client der Vollclient, Companion die
+Betriebsart. Die Statusnotiz an ADR 0026 trägt die Entscheidung; die Tabelle
+darunter bleibt als Aufzeichnung stehen.
+
 **Was die Prüfung nicht fand.** Kein einziges ADR mit Status „implemented" hat
 eine leere oder dünne Evidenzspalte — 0 von 154. Befundart 3 ist damit sauber.
 Vier Zeilen mit `concept-only`/`reserved` nennen Code in der Evidenzspalte;
@@ -699,5 +720,9 @@ Wenn der Auftrag „aktualisiere die Roadmap" lautet:
 6. Ein Ast ohne ADR ist zulässig, wenn er sagt, warum keine
    Architekturentscheidung nötig war, und Datei und Evidenzblatt benennt.
 7. Mehr als etwa sieben Geschwister auf einer Ebene werden gruppiert; keine
-   Gruppe von eins; höchstens eine Verschachtelungsebene.
+   Gruppe von eins; höchstens eine Verschachtelungsebene. **Eine Gruppe wird als
+   Ganzes gegen ihre Anforderung gehalten** — was in einer steckt, wird nicht
+   mehr einzeln befragt. Das ist der Preis der Lesbarkeit und der Grund für
+   Befund B7; wo eine Gruppe Begriffe oder Verträge enthält, lohnt der
+   Einzelblick trotzdem.
 8. Aspirative Wurzelaussagen werden benannt, nicht in Anforderungen übersetzt.

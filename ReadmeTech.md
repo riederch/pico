@@ -122,7 +122,7 @@ Pico separates suggestion, decision, execution, and audit:
 
 The companion layer may feel helpful and present. Risky actions still need rules, approval and traceability.
 
-## Pico Vaults, Pico Surfaces, Pico Relays and Pico Homes
+## Pico Clients, Pico Surfaces, Pico Relays and Pico Homes
 
 Pico distinguishes these roles:
 
@@ -142,7 +142,7 @@ Pico also distinguishes these roles from a Pico Home:
 
 Design rules:
 
-> Pico Vaults own knowledge and backups. Pico Surfaces present and capture interaction. Pico Relays transport encrypted packets but do not own Pico identity, memory, relationships, actions or authority.
+> Pico Clients own knowledge and backups. Pico Surfaces present and capture interaction. Pico Relays transport encrypted packets but do not own Pico identity, memory, relationships, actions or authority.
 
 > A Pico Home provides infrastructure and acts as a local endpoint. Hosting is not ownership.
 
@@ -805,7 +805,7 @@ The demo must not become the path for production remote access. If it starts for
 - PICO Character Design v3.2.1 is the highest visual authority; UI, product and generated assets derive from it and never reinterpret it
 - Pico can be a digital companion and technical twin of a user-chosen subject
 - Use reviewed cryptographic primitives; do not invent cryptography
-- Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
+- Pico Clients own knowledge and backups; Pico Surfaces are interaction surfaces
 - Pico Homes provide infrastructure; hosting is not ownership
 - Pico Homes are local endpoints in the Pico Link / Relay network, not public inbound API servers
 - Pico Relays provide transport, not authority
@@ -826,7 +826,7 @@ The demo must not become the path for production remote access. If it starts for
 - Compatibility does not grant commercial hosting permission
 - Capabilities are evaluated above connector protocols; MCP is not an authority layer
 - Proactive delegation must remain bounded by user-owned preferences, policy decisions, confirmation and Action History
-- Stronger Pico Homes or Pico Vaults may provide model capability, but they do not become memory owners, policy authorities or action executors
+- Stronger Pico Homes or Pico Clients may provide model capability, but they do not become memory owners, policy authorities or action executors
 - Model provider registry entries are not trust grants, and model job envelopes are not durable access
 - Draft model-delegation fixtures may prove shape and unsafe-claim rejection only, not model behaviour or provider trust
 - Context Signals are contextual evidence, not global human scores
