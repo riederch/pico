@@ -758,6 +758,52 @@ local-first product's most security-critical moment.
   nur im erzeugenden Prozess aufgeht, ist keins, und im selben Prozess zu
   prüfen hieße, den Cache zu messen statt den Keystore.
 
+  **Der Start war die eine Operation, die nicht gefragt hat** (2026-08-21,
+  Parallelarbeit am selben Baum). Jede Operation der Companion-Runtime ruft
+  `ensureUnlocked()`, bevor sie den Geräteschlüssel braucht - der Startpfad
+  nicht. Er ging direkt an den Lifecycle-Reader, der Reader baut einen
+  Link-Client, der Client signiert, und ein Geräteschlüssel in einem
+  gesperrten Vault verweigert. Eine Person sah dann *"the local companion
+  service could not start"* auf einem Gerät, dessen automatischer Unlock
+  eingerichtet war, funktionierte und nie gefragt wurde.
+
+  Der kalte Vault ist der Normalzustand eines Laptops am Morgen; jeder Lauf,
+  der auf einen entsperrten folgte, sah gesund aus. Von Hand entsperrt und
+  fünfzehn Sekunden später gestartet half nicht - **die Entsperrung hängt an
+  der Verbindung, die sie geöffnet hat, nicht an einer Uhr.**
+
+  **Nachgemessen, nachdem der Fund behoben war** - denn "die eine, die es
+  vergaß" ist eine Behauptung über eine Menge: einundfünfzig Operationen,
+  zweiundvierzig fragen selbst, neun nicht, und die neun zu Recht. Fünf
+  Relay-Operationen brauchen den Keystore und nicht den Vault (ADR 0154),
+  `lockVault` und `stop` tun das Gegenteil, `status` liest nur, und `checkNow`
+  reicht an einen Carrier weiter, dessen fünf Ports jeder selbst fragen. Der
+  Start war der letzte, der fehlte.
+
+  Die Regel steht jetzt in `check-companion-boundary.mjs`, und sie ist enger
+  als der Fund: nicht "jede Operation fragt", sondern **jeder Aufruf, der einen
+  Link-Client erreicht, steht hinter einem `ensureUnlocked()`**. Welche
+  Kern-Ausfuhren einen erreichen, wird ausgerechnet statt genannt - sechs, über
+  `createPicoLinkDirectClient` und den Abschluss darüber -, und in der Runtime
+  sind es achtundvierzig Aufrufstellen.
+
+  **Zwei Fassungen dieser Regel gingen durch, ohne den Fund zu fangen**, und
+  beide gehören ins Protokoll, weil sie dieselbe Klasse sind, die diese Woche
+  schon vier andere Gates traf:
+
+  - Die erste suchte `createPicoCompanionLinkClient(`. Der Startpfad baut aber
+    gar keinen - er baut einen `createPicoCompanionLifecycleReader`, und **der**
+    baut ihn eine Datei weiter. Deshalb wird die Menge jetzt gerechnet.
+  - Die zweite las den **Doc-Kommentar** des Fixes als Erfüllung: er
+    beschreibt den Aufruf und schreibt dabei buchstäblich `ensureUnlocked()`.
+    Ein Gate, das seine eigene Begründung als Erfüllung liest, ist die Sorte,
+    die man nie wieder anfasst und die nichts mehr hält.
+
+  Erst die dritte Fassung fällt, wenn man den Fund zurückpflanzt. Vier
+  Pflanzungen insgesamt: der Start ohne Frage, eine Operation ohne Frage, ein
+  direkter Link-Client ohne Frage, und ein Kern, der keinen Link-Client mehr
+  baut - worauf das Gate meldet, dass es nichts mehr bewacht.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and

@@ -373,6 +373,158 @@ for (const file of listSourceFiles(join(shellRoot, 'src'))) {
   }
 }
 
+/**
+ * ADR 0131 A3. Ein Link-Client signiert, und Signieren braucht einen offenen
+ * Vault.
+ *
+ * **Am 2026-08-21 gefunden, von Hand, an der einzigen Stelle, die es vergaß.**
+ * Jede Operation der Runtime ruft `ensureUnlocked()`, bevor sie den
+ * Geräteschlüssel braucht - der *Startpfad* nicht. Er ging direkt an den
+ * Lifecycle-Reader, der Reader baut einen Link-Client, der Client signiert,
+ * und ein Geräteschlüssel in einem gesperrten Vault verweigert. Die Person
+ * sah "the local companion service could not start" auf einem Gerät, dessen
+ * automatischer Unlock eingerichtet war, funktionierte und nie gefragt wurde.
+ *
+ * Der kalte Vault ist der Normalzustand eines Laptops am Morgen. Jeder Lauf,
+ * der auf einen entsperrten folgte, sah gesund aus - deshalb überlebte das so
+ * lange.
+ *
+ * Nachgemessen, nachdem der Fund behoben war: **einundfünfzig Operationen,
+ * zweiundvierzig fragen selbst, neun nicht** - und die neun zu Recht. Fünf
+ * Relay-Operationen brauchen den Keystore und nicht den Vault (ADR 0154),
+ * `lockVault` und `stop` tun das Gegenteil, `status` liest nur, und `checkNow`
+ * reicht an einen Carrier weiter, dessen fünf Ports jeder selbst fragen. Der
+ * Start war der letzte, der fehlte.
+ *
+ * Diese Regel ist die engere Fassung des Fundes: nicht "jede Operation fragt",
+ * sondern **jeder Link-Client steht hinter einem `ensureUnlocked()`**. Das ist
+ * die Bedingung, an der es tatsächlich hing, und sie hält auch für die
+ * zweiundfünfzigste Operation, die jemand dazuschreibt.
+ *
+ * **Was sie nicht bewacht:** nur `runtime.ts`. Die Zeremonien im
+ * schalenfreien Kern - Gründung, Beitritt, erste Einrichtung - bauen ebenfalls
+ * Link-Clients, aber dort hält der Aufrufer die Passphrase gerade in der Hand
+ * und es gibt noch keinen automatischen Unlock, den man fragen könnte.
+ */
+/**
+ * **Der erste Entwurf dieser Regel fing den Fehler nicht, für den er
+ * geschrieben war** - und das ist der Grund, warum sie so aussieht, wie sie
+ * aussieht.
+ *
+ * Er suchte `createPicoCompanionLinkClient(` und verlangte ein
+ * `ensureUnlocked()` davor. Zurückgepflanzt fiel der ursprüngliche Fund
+ * *nicht* durch: der Startpfad baut gar keinen Link-Client, er baut einen
+ * `createPicoCompanionLifecycleReader`, und **der** baut ihn eine Datei
+ * weiter. Ein Gate, das weniger bewacht, als es behauptet, ist schlimmer als
+ * keins - dieselbe Klasse, die diese Woche schon vier andere Gates traf.
+ *
+ * Also wird die Menge ausgerechnet statt genannt: welche Ausfuhren des
+ * schalenfreien Kerns erreichen `createPicoLinkDirectClient`, direkt oder über
+ * eine andere? Das ist die Bedingung, an der es hängt - ein Link-Client
+ * signiert mit dem Geräteschlüssel, ganz gleich, wer ihn baut.
+ */
+const signingEntryPoints = (() => {
+  const bodies = new Map();
+  for (const file of listSourceFiles(join(repoRoot, 'apps', 'companion', 'src'))) {
+    if (file.endsWith('.test.ts')) {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    // Oberste Ebene: `export function x(`, `export async function x(` und
+    // `const x = async (`. Verschachtelte Helfer zählen über ihren Modulnamen
+    // mit, weil ihr Aufrufer im selben Modul steht.
+    for (const found of source.matchAll(
+      /^(?:export )?(?:async )?function (\w+)|^(?:export )?const (\w+)\s*=\s*(?:async\s*)?[(<]/gmu)) {
+      const name = found[1] ?? found[2];
+      const from = found.index ?? 0;
+      const next = source.indexOf('\n}\n', from);
+      bodies.set(name, source.slice(from, next < 0 ? source.length : next));
+    }
+  }
+  const reaching = new Set();
+  for (const [name, body] of bodies) {
+    if (body.includes('createPicoLinkDirectClient(')) {
+      reaching.add(name);
+    }
+  }
+  // Abschluss: wer eine erreichende Funktion ruft, erreicht sie auch.
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [name, body] of bodies) {
+      if (reaching.has(name)) {
+        continue;
+      }
+      for (const reached of reaching) {
+        if (new RegExp(`(?:^|[^\\w.])${reached}\\s*\\(`, 'u').test(body)) {
+          reaching.add(name);
+          grew = true;
+          break;
+        }
+      }
+    }
+  }
+  return reaching;
+})();
+if (signingEntryPoints.size === 0) {
+  errors.push('the set of core entry points that reach a Link client came out empty, '
+    + 'which means this rule is guarding nothing');
+}
+
+const runtimeSource = readFileSync(join(shellRoot, 'src', 'runtime.ts'), 'utf8')
+  .split('\n');
+const signingCall = new RegExp(
+  `(?:^|[^\\w.])(?:${[...signingEntryPoints].join('|')})\\s*\\(`, 'u');
+let guardedClients = 0;
+for (let index = 0; index < runtimeSource.length; index += 1) {
+  if (!signingCall.test(runtimeSource[index])) {
+    continue;
+  }
+  guardedClients += 1;
+  const indent = runtimeSource[index].search(/\S/);
+  /**
+   * Zurück bis zum Beginn der umschließenden **Funktion**, nicht bis zum
+   * nächstbesten Blockanfang.
+   *
+   * Der erste Entwurf nahm jede Zeile, die einen Block öffnet, und meldete
+   * darauf achtunddreißig Fehlalarme: unmittelbar vor dem Aufruf steht oft ein
+   * Geschwisterausdruck wie `return await readPicoCompanionModelProviders({`,
+   * der ebenfalls eine Klammer öffnet und niedriger eingerückt ist. Er ist
+   * kein Rumpf, sondern ein Nachbar - und der Rumpf, in dem das
+   * `ensureUnlocked()` steht, lag davor.
+   */
+  let start = index;
+  while (start > 0) {
+    start -= 1;
+    const line = runtimeSource[start];
+    if (line.trim() === '') {
+      continue;
+    }
+    if (line.search(/\S/) < indent && /(?:=>|function\b[^(]*\([^)]*\))\s*\{\s*$/.test(line)) {
+      break;
+    }
+  }
+  /**
+   * **Ohne Kommentare**, und das ist keine Feinheit.
+   *
+   * Der zweite Entwurf ging durch, als der ursprüngliche Fund zurückgepflanzt
+   * wurde - weil der Doc-Kommentar, den der Fix mitbrachte, den Aufruf
+   * *beschreibt* und dabei buchstäblich `ensureUnlocked()` schreibt. Ein Gate,
+   * das seine eigene Begründung als Erfüllung liest, ist genau die Sorte,
+   * die man nie wieder anfassen muss und die nichts mehr hält.
+   */
+  const body = runtimeSource.slice(start, index)
+    .filter((line) => !/^\s*(?:\*|\/\/|\/\*)/.test(line))
+    .join('\n');
+  if (!body.includes('ensureUnlocked()')) {
+    errors.push(`apps/companion-shell/src/runtime.ts:${index + 1}: reaches a Link client `
+      + 'without asking the automatic unlock first. A Link client signs with the device key, '
+      + 'and a device key in a locked vault refuses - so this reads to a person as "the local '
+      + 'companion service could not start" on a device whose automatic unlock is configured, '
+      + 'working, and never asked. A cold vault is the normal state of a laptop in the '
+      + 'morning.');
+  }
+}
+
 if (errors.length > 0) {
   console.error('Companion shell-boundary check failed:');
   for (const error of errors) {
@@ -387,6 +539,8 @@ console.log(
   + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides;`
   + ` ${namedCaps} field caps, each a name rather than a number;`
+  + ` ${guardedClients} calls that reach a Link client`
+  + ` through ${signingEntryPoints.size} core entry points, each behind an unlock;`
   + ' fingerprints and instants are checked product-wide next door).',
 );
 
