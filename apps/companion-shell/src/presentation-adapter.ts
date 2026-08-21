@@ -21,9 +21,9 @@ import {
   type PicoCompanionRecoveryNotifications,
 } from '@pico/companion/recovery-controller';
 import type { PicoHomeDueEntriesView } from '@pico/protocol/time-bound-entry';
+import { picoCompanionConditionsFor } from '@pico/companion/conditions';
 import {
   parsePicoCompanionPresentation,
-  picoCompanionConditionsFor,
   picoCompanionIdlePresentation,
   type PicoCompanionCondition,
   type PicoCompanionPresentation,

@@ -1225,6 +1225,36 @@ local-first product's most security-critical moment.
   on. The condition and its wording are in the shell-free core and the
   contract, so that surface inherits them rather than reinventing them.
 
+  **That last sentence was half wrong, and it was found by going to build on
+  it** (2026-08-21). The condition *kind* was in the core's carrier, which
+  reports `reportHomeReachable`. Everything a person actually reads was not:
+  `picoCompanionConditionsFor` and its remedy sentences were in
+  `apps/companion-shell/src/contract.ts`, and the short labels - "Home not
+  reached" and its four siblings - were in `renderer.ts`. In the *window*,
+  which under ADR 0113 C2 decides no rendering at all.
+
+  So an Android surface would have inherited a boolean and written the words
+  again, and two clients would have told one person two different things about
+  the same silence. That is the defect ADR 0131 A5 spent two days removing, and
+  this gate asserted the opposite was already true.
+
+  The words are `@pico/companion/conditions` now: kinds, labels, remedies and
+  the derivation, in the package both a desktop and a phone can read. Label and
+  remedy cross to the window already rendered, the parser requires them rather
+  than filling them in, and the window keeps exactly one copy - the set of
+  names - because a parser needs its vocabulary *before* anything arrives and
+  that file resolves relative paths only. `condition-vocabulary.test.ts` binds
+  that copy to the core's.
+
+  **The device half is written and has not run.** A step in the conformance
+  probe asks the moved rule, on the embedded runtime, for the two cases that
+  decide whether it is worth anything: a Home that does not answer over a link
+  that works, and a link that is itself down - where it must stay silent,
+  because a refusal must not be an inventory. The phone went to `offline` mid
+  block before it ran, so what is proven today is the rule on the host and the
+  boundary that keeps it reachable from both sides. The Android statement is
+  still owed.
+
 ## Consequences
 
 Positive:

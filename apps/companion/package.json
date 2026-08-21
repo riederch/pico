@@ -22,6 +22,10 @@
       "types": "./dist/approval-carrier.d.ts",
       "import": "./dist/approval-carrier.js"
     },
+    "./conditions": {
+      "types": "./dist/conditions.d.ts",
+      "import": "./dist/conditions.js"
+    },
     "./device-lifecycle": {
       "types": "./dist/device-lifecycle.d.ts",
       "import": "./dist/device-lifecycle.js"

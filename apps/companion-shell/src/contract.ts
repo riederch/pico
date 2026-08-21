@@ -140,6 +140,17 @@ export type PicoCompanionPresentationSeverity = 'active' | 'warning' | 'blocked'
  * follow from each, and any of them may hold while the others do not - so this
  * is a list, and a shape that cannot collapse them back into one.
  */
+/**
+ * The window's own copy of the vocabulary, and the one copy in this file that
+ * cannot be an import.
+ *
+ * The words moved to `@pico/companion/conditions` on 2026-08-21 so a second
+ * client inherits them; this list stayed, because a parser needs its
+ * vocabulary *before* anything arrives and this file loads in the renderer,
+ * where a bare specifier does not resolve. The label and the remedy cross
+ * already rendered - only the set of names is restated, and
+ * `condition-vocabulary.test.ts` binds it to the core's.
+ */
 export const picoCompanionConditionKinds = [
   'no_network',
   'home_unreachable',
@@ -178,6 +189,8 @@ export const picoCompanionModelProviderStates = [
 
 export interface PicoCompanionCondition {
   kind: PicoCompanionConditionKind;
+  /** The name of the state. Rendered in the main process (ADR 0113 C2). */
+  label: string;
   /** What the person can do about it. Short, and never a mystery refusal. */
   remedy: string;
 }
@@ -788,55 +801,6 @@ export function picoCompanionFirstRunFailureBody(
     + 'your Home.';
 }
 
-export function picoCompanionConditionsFor(input: {
-  online?: boolean;
-  homeReachable?: boolean;
-  modelReachable?: boolean;
-  storage?: 'normal' | 'reserved' | 'exhausted';
-}): readonly PicoCompanionCondition[] {
-  const conditions: PicoCompanionCondition[] = [];
-  if (input.online === false) {
-    conditions.push({
-      kind: 'no_network',
-      remedy: 'Already approved sends wait for a route. Nothing else is affected.',
-    });
-  }
-  /**
-   * ADR 0131 A7. Only when the link itself is not the explanation: with no
-   * network this is the same fact told twice, and a refusal must not be an
-   * inventory (ADR 0077 C4).
-   *
-   * This is the condition a phone lives in. ADR 0107 carries envelopes to
-   * the person's own Home directly, so away from the home network there is
-   * no Home to reach - and the rule this ADR family keeps restating is that
-   * an unreachable Home must never look like a quiet one.
-   */
-  if (input.homeReachable === false && input.online !== false) {
-    conditions.push({
-      kind: 'home_unreachable',
-      remedy: 'Your Home is not answering, so this is not a report that nothing is waiting. '
-        + 'Recall, entry and capture continue here.',
-    });
-  }
-  if (input.modelReachable === false) {
-    conditions.push({
-      kind: 'no_model',
-      remedy: 'Summaries and suggestions wait. Capture, entry, recall and decide do not.',
-    });
-  }
-  if (input.storage === 'reserved') {
-    conditions.push({
-      kind: 'storage_reserved',
-      remedy: 'Export, migrate or shred a domain to make room, or provision more space.',
-    });
-  } else if (input.storage === 'exhausted') {
-    conditions.push({
-      kind: 'storage_exhausted',
-      remedy: 'Free space now. Removing data still works; adding it does not.',
-    });
-  }
-  return Object.freeze(conditions);
-}
 
 /**
  * What a builder supplies. `conditions` is optional here and always present on
@@ -966,7 +930,7 @@ function parseConditions(value: unknown): readonly PicoCompanionCondition[] {
     }
     const record = entry as Record<string, unknown>;
     const keys = Object.keys(record).sort();
-    if (keys.length !== 2 || keys[0] !== 'kind' || keys[1] !== 'remedy') {
+    if (keys.length !== 3 || keys[0] !== 'kind' || keys[1] !== 'label' || keys[2] !== 'remedy') {
       throw new Error('invalid_companion_presentation_conditions');
     }
     const kind = record.kind as PicoCompanionConditionKind;
@@ -979,8 +943,13 @@ function parseConditions(value: unknown): readonly PicoCompanionCondition[] {
       throw new Error('duplicate_companion_presentation_condition');
     }
     seen.add(kind);
+    assertDisplayText(record.label, 64);
     assertDisplayText(record.remedy, 200);
-    parsed.push(Object.freeze({ kind, remedy: record.remedy as string }));
+    parsed.push(Object.freeze({
+      kind,
+      label: record.label as string,
+      remedy: record.remedy as string,
+    }));
   }
   if (seen.has('storage_reserved') && seen.has('storage_exhausted')) {
     // ADR 0119 Q5's states are a ladder, not a set. Showing both would leave

@@ -312,7 +312,9 @@ function renderConditions(state: PicoCompanionPresentation): void {
     row.dataset.condition = condition.kind;
     const label = document.createElement('span');
     label.className = 'condition-label';
-    label.textContent = conditionLabels[condition.kind];
+    // ADR 0113 C2: the word arrives rendered. The window used to keep its own
+    // table of these, which is the window deciding a rendering.
+    label.textContent = condition.label;
     const remedy = document.createElement('span');
     remedy.className = 'condition-remedy';
     remedy.textContent = condition.remedy;
@@ -322,13 +324,6 @@ function renderConditions(state: PicoCompanionPresentation): void {
   floorAssurance.textContent = picoCompanionFloorAssurance();
 }
 
-const conditionLabels: Record<PicoCompanionCondition['kind'], string> = {
-  no_network: 'No network',
-  home_unreachable: 'Home not reached',
-  no_model: 'No model',
-  storage_reserved: 'Storage is running low',
-  storage_exhausted: 'Storage is full',
-};
 
 /**
  * ADR 0130 E2. The choice, rendered once from the contract's words.

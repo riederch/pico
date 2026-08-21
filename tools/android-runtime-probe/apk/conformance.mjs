@@ -177,5 +177,54 @@ await check('unix sockets', async () => {
   });
 });
 
+await check('stated conditions', async () => {
+  /**
+   * ADR 0131 A7 - the words a phone would speak, produced by the core on the
+   * runtime the phone actually has.
+   *
+   * A7 says the client must name an unreachable Home rather than present it
+   * as a quiet one, and that the condition and its wording live in the
+   * shell-free core so a second client inherits them. Until 2026-08-21 that
+   * was half true: the rule and its sentences were in the Electron shell's
+   * contract and the short labels were in the *window*. An Android surface
+   * would have written both again.
+   *
+   * This asks the moved rule for the two cases that decide whether it is
+   * worth anything, on the embedded runtime and not on a desktop.
+   */
+  const conditions = await import('@pico/companion/conditions');
+
+  const awayFromHome = conditions.picoCompanionConditionsFor({
+    online: true,
+    homeReachable: false,
+  });
+  if (awayFromHome.length !== 1 || awayFromHome[0].kind !== 'home_unreachable') {
+    throw new Error(`a Home that does not answer produced ${JSON.stringify(awayFromHome)}`);
+  }
+  if (!awayFromHome[0].label || awayFromHome[0].remedy.length < 20) {
+    throw new Error('the condition arrived without words');
+  }
+
+  /**
+   * And the half that keeps it honest: with the link itself down, this must
+   * stay silent, because a refusal must not be an inventory (ADR 0077 C4).
+   * Telling somebody their Home is unreachable *and* that they have no
+   * network is one fact said twice.
+   */
+  const linkDown = conditions.picoCompanionConditionsFor({
+    online: false,
+    homeReachable: false,
+  });
+  if (linkDown.length !== 1 || linkDown[0].kind !== 'no_network') {
+    throw new Error(`a dead link produced ${JSON.stringify(linkDown)}`);
+  }
+
+  return {
+    label: awayFromHome[0].label,
+    remedyChars: awayFromHome[0].remedy.length,
+    silentWhenLinkIsDown: true,
+  };
+});
+
 process.stdout.write(`${results.map((line) => JSON.stringify(line)).join('\n')}\n`);
 process.stdout.write(`CONFORMANCE ${results.every((line) => line.ok) ? 'OK' : 'FAILED'}\n`);

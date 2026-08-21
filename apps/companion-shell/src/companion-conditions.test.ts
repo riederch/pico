@@ -1,9 +1,13 @@
 import { picoOfflineFloorFamilies } from '@pico/protocol/offline-floor';
 import { describe, expect, it } from 'vitest';
 import {
+  picoCompanionCondition,
+  picoCompanionConditionsFor,
+  type PicoCompanionCondition,
+} from '@pico/companion/conditions';
+import {
   parsePicoCompanionPresentation,
   picoCompanionConditionKinds,
-  picoCompanionConditionsFor,
   picoCompanionFloorAssurance,
   picoCompanionFloorFamilies,
   picoCompanionIdlePresentation,
@@ -43,9 +47,9 @@ describe('ADR 0118 O4 / ADR 0119 Q5 stated conditions', () => {
 
   it('carries several at once, independently', () => {
     const parsed = parsePicoCompanionPresentation(presentation([
-      { kind: 'no_network', remedy: 'Sends will queue until a route returns.' },
-      { kind: 'no_model', remedy: 'Summaries wait; nothing else does.' },
-      { kind: 'storage_reserved', remedy: 'Export, migrate or shred to make room.' },
+      picoCompanionCondition('no_network'),
+      picoCompanionCondition('no_model'),
+      picoCompanionCondition('storage_reserved'),
     ]));
 
     expect(parsed.conditions.map((condition) => condition.kind))
@@ -60,8 +64,8 @@ describe('ADR 0118 O4 / ADR 0119 Q5 stated conditions', () => {
 
   it('refuses two rows saying the same thing', () => {
     expect(() => parsePicoCompanionPresentation(presentation([
-      { kind: 'no_network', remedy: 'a' },
-      { kind: 'no_network', remedy: 'b' },
+      picoCompanionCondition('no_network'),
+      picoCompanionCondition('no_network'),
     ]))).toThrow(/duplicate_companion_presentation_condition/u);
   });
 
@@ -69,17 +73,17 @@ describe('ADR 0118 O4 / ADR 0119 Q5 stated conditions', () => {
     // ADR 0119 Q5's states are a ladder, not a set; showing both would leave
     // the person to work out which one is true.
     expect(() => parsePicoCompanionPresentation(presentation([
-      { kind: 'storage_reserved', remedy: 'a' },
-      { kind: 'storage_exhausted', remedy: 'b' },
+      picoCompanionCondition('storage_reserved'),
+      picoCompanionCondition('storage_exhausted'),
     ]))).toThrow(/conflicting_companion_presentation_condition/u);
   });
 
   it('refuses an unknown kind, a missing remedy and a stray field', () => {
     for (const conditions of [
-      [{ kind: 'no_disk', remedy: 'a' }],
+      [{ kind: 'no_disk', label: 'a', remedy: 'a' }],
       [{ kind: 'no_network' }],
-      [{ kind: 'no_network', remedy: 'a', extra: 'b' }],
-      [{ kind: 'no_network', remedy: '' }],
+      [{ ...picoCompanionCondition('no_network'), extra: 'b' }],
+      [{ kind: 'no_network', label: 'No network', remedy: '' }],
       'no_network',
     ]) {
       expect(
@@ -94,7 +98,7 @@ describe('ADR 0118 O4 the floor is never rendered as blocked', () => {
   it('states what still works, for every combination of conditions', () => {
     // The load-bearing half. An avatar that reports itself broken while
     // capture works teaches the person that Pico is unreliable offline.
-    const combinations: string[][] = [
+    const combinations: PicoCompanionCondition['kind'][][] = [
       [],
       ['no_network'],
       ['no_model'],
@@ -105,7 +109,7 @@ describe('ADR 0118 O4 the floor is never rendered as blocked', () => {
 
     for (const kinds of combinations) {
       const parsed = parsePicoCompanionPresentation(presentation(
-        kinds.map((kind) => ({ kind, remedy: 'stated' })),
+        kinds.map((kind) => picoCompanionCondition(kind)),
       ));
       expect(parsed.conditions).toHaveLength(kinds.length);
       // No combination turns the state itself into a blocked one.
