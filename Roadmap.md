@@ -692,6 +692,18 @@ erfüllt der Ast Anforderung A5 nicht — „wo habe ich geparkt" funktioniert
 ausgerechnet in der Tiefgarage nicht. Kette vorhanden von der Anforderung bis
 zum ADR und vom ADR bis zum Code; unterbrochen zwischen Code und Anforderung.
 
+**Der Bruch ist bekannt und zurückgestellt, nicht übersehen** — die erste
+Fassung dieses Befunds ließ das offen und las sich damit wie ein Vorwurf.
+ADR 0126 P3 hält fest: die Übergabe existiert als Tür, beide Keeps gehen
+hindurch, und der SR2-Puffer bleibt, wo er ist, **bis eine Laufzeit mit Sensor
+existiert** — vom Nutzer so entschieden. Der Grund gilt weiter: ADR 0129s
+SR5-Port ist deklariert und leer, und Android hat bislang eine Laborfläche.
+
+Was der Baum trotzdem beiträgt, ist die Übersetzung. Matrix und ADR sagen „ein
+Gate ist halb zurückgestellt"; der Baum sagt, was die Zurückstellung **kostet**
+— eine Anforderung, die dieser Ast nicht bedient. Das sind zwei verschiedene
+Aussagen, und die zweite verschwindet in einer Statuszeile.
+
 **B5 — Fünfzehn implementierte ADRs haben kein Subjekt.**
 ADR 0078 und 0082–0096 sind implementiert und mit echten Prozesstests belegt.
 Am 2026-08-18 vor dem Bauen von ADR 0130 E5 gemessen: nichts im Produkt schreibt

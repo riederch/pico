@@ -21,6 +21,14 @@ pkg=com.pico.a1probe
 # twice differently would make two probes of two apps.
 "$here/run-join.sh" > /dev/null
 
+# The log is opened with "a" by the JNI shim, so it accumulates across runs -
+# and this script polls for the word CONFORMANCE, which a *previous* run already
+# put there. On 2026-08-21 that made it print an older block: a preserved run
+# carrying the deliberately re-planted ICU bug, read as a current regression,
+# with the new run's own answer not yet written. Its two siblings,
+# `run-keystore-probe.sh` and `run-reachability-probe.sh`, already clear their
+# log before starting; this one now does what they do.
+adb shell "run-as $pkg sh -c 'rm -f files/conformance.log'"
 adb shell am start-foreground-service -n "$pkg/.ConformanceService" > /dev/null
 for _ in $(seq 1 30); do
   if adb shell "run-as $pkg sh -c 'grep -c CONFORMANCE files/conformance.log 2>/dev/null'" \
