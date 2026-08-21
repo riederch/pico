@@ -1246,14 +1246,30 @@ local-first product's most security-critical moment.
   that file resolves relative paths only. `condition-vocabulary.test.ts` binds
   that copy to the core's.
 
-  **The device half is written and has not run.** A step in the conformance
-  probe asks the moved rule, on the embedded runtime, for the two cases that
-  decide whether it is worth anything: a Home that does not answer over a link
-  that works, and a link that is itself down - where it must stay silent,
-  because a refusal must not be an inventory. The phone went to `offline` mid
-  block before it ran, so what is proven today is the rule on the host and the
-  boundary that keeps it reachable from both sides. The Android statement is
-  still owed.
+  **The device half ran** (2026-08-21, Galaxy A55, nodejs-mobile v18.20.4 with
+  no ICU). A step in the conformance probe asks the moved rule for the two cases
+  that decide whether it is worth anything, and got both right on the phone:
+
+      {"check":"stated conditions","ok":true,"detail":{
+        "label":"Home not reached","remedyChars":117,"silentWhenLinkIsDown":true}}
+
+  So a Home that does not answer over a link that works produces the named
+  condition with its words, and a link that is itself down produces only
+  `no_network` - the Home stays unmentioned, because a refusal must not be an
+  inventory (ADR 0077 C4) and telling somebody both is one fact said twice.
+
+  **The rule was falsified rather than trusted**, though not where it was
+  measured: removing the precedence guard makes it report `no_network` *and*
+  `home_unreachable` together, which the host test catches by name. The same
+  plant on the device did not finish - the phone left the bus mid-run - so what
+  is proven on the phone is that the rule holds there, and what is proven on the
+  host is that it bites when broken. Stated rather than merged, because they are
+  different claims.
+
+  What still keeps A7 from closing is unchanged and is the product half: this
+  runs in a lab artifact, not in a shipped Android client. What changed is that
+  the client, when it comes, inherits the sentence instead of writing a second
+  one.
 
 ## Consequences
 
