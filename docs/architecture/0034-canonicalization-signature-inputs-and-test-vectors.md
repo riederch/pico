@@ -4,6 +4,13 @@
 
 Accepted as a canonicalization and conformance-fixture concept.
 
+Status note, 2026-08-21: this is no longer only a concept. Canonical signature
+inputs, their per-family layouts and authoritative positive and negative vectors
+exist and are load-bearing; ADR 0073 and ADR 0079 G1 carry the parts a reader
+usually comes here for. What is still missing is the independent compatibility
+runner this note's own Context asks for. How far it has come is the status
+matrix's answer and is not repeated here.
+
 ## Context
 
 ADR 0016 requires reviewed cryptographic building blocks and forbids Pico-specific cryptographic primitives.

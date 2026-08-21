@@ -594,7 +594,6 @@ Die Zielmarke endet hier.
   *Verweist auf Befund B1.*
 - **Eine Entscheidung über den Gestalt-Strang** — er trägt Code und Tests, ruht
   aber allein auf der Wunschliste. *Verweist auf Befund B2.*
-- **ADR 0034s Matrixzeile korrigieren.** *Verweist auf Befund B3.*
 - **Ein Schreibweg für Reader-Custody-Inhalt** — ohne ihn bleiben fünfzehn
   implementierte ADRs ein Ast ohne Subjekt. *Verweist auf Befund B5.*
 
@@ -636,8 +635,10 @@ and a compatibility runner are missing." Gemessen am selben Commit: **32
 `buildPico*SignatureInput`-Builder** im Protokoll, fünf Vektor-Testdateien, und
 `progress.md` sagt für dieselben Familien „autoritative positive und negative
 Vektoren". Genau eines der vier genannten Dinge fehlt wirklich — der
-Conformance-Runner. Der Status `concept-only` ist damit für drei Viertel der
-Zeile falsch.
+Conformance-Runner. Der Status `concept-only` war damit für drei Viertel der
+Zeile falsch. **Korrigiert am 2026-08-21**: die Zeile steht auf `partially
+implemented`, nennt die Builder und die Fixture-Familien und lässt als Lücke
+genau das übrig, was `docs/protocol/conformance-fixtures.md` selbst benennt.
 
 **B4 — Spatial Recall ist ein Ast, der in Stücken existiert.**
 ADR 0129 ist entschieden, `modules/spatial-recall` existiert mit Tests, und die
