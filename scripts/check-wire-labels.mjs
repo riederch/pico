@@ -51,13 +51,42 @@ const allowed = [
 /** A label that looks like it travels: a prefix, a schema, a family name. */
 const wireLabel = /(-v\d+:$|\.v\d+$)/u;
 const exported = /export const (\w+)\s*=\s*'([^']{6,})'/gu;
+/**
+ * A label declared as a member of a table rather than on its own.
+ *
+ * **This is where the check was blind until 2026-08-21.** It read only
+ * `export const NAME = '...'`, and the protocol keeps most of its families in
+ * object literals - `picoHomeSignatureInputLabels`,
+ * `picoHomeDeviceRecoveryCanonicalLabels`, the appearance capabilities, the
+ * supplier transport. Seventy-two labels were guarded and forty-seven were
+ * not, including the family a person's approval statement is keyed by. The
+ * summary said "72 protocol labels spelled once", which was true and read as
+ * though it were all of them.
+ */
+const tabled = /(\w+)\s*:\s*'([^']{6,})'/gu;
+/**
+ * And the backstop, for a label that is neither: the value alone, with no
+ * name to suggest importing. Reported anyway, because a copy nothing compares
+ * is the defect whether or not this check can say what to import instead.
+ */
+const anyLabel = /'(pico[^']{5,})'/gu;
 
 const labels = new Map();
 for (const file of sourceFiles(protocolRoot)) {
-  for (const match of readFileSync(file, 'utf8').matchAll(exported)) {
-    const [, name, value] = match;
+  const source = readFileSync(file, 'utf8');
+  for (const [, name, value] of source.matchAll(exported)) {
     if (wireLabel.test(value) && value.startsWith('pico')) {
       labels.set(value, name);
+    }
+  }
+  for (const [, name, value] of source.matchAll(tabled)) {
+    if (wireLabel.test(value) && value.startsWith('pico') && !labels.has(value)) {
+      labels.set(value, name);
+    }
+  }
+  for (const [, value] of source.matchAll(anyLabel)) {
+    if (wireLabel.test(value) && !labels.has(value)) {
+      labels.set(value, null);
     }
   }
 }
@@ -85,9 +114,9 @@ for (const root of ['apps', 'modules', 'packages']) {
       if (source.includes(`'${value}'`)) {
         errors.push(
           `${relative(repoRoot, file)}: spells out the protocol label '${value}'. `
-          + `Import ${name} from @pico/protocol instead - a second spelling is a copy `
-          + 'nothing compares, and the surfaces that read these values refuse a correct '
-          + 'input without saying why.',
+          + `${name === null ? 'Import it' : `Import ${name}`} from @pico/protocol instead `
+          + '- a second spelling is a copy nothing compares, and the surfaces that read '
+          + 'these values refuse a correct input without saying why.',
         );
       }
     }

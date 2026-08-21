@@ -763,6 +763,17 @@ local-first product's most security-critical moment.
   renamed label while a literal turns a rename into "ask the person". Tests
   may spell labels out: pinning exact bytes is what a fixture is for.
 
+  **It was also blind to most of what it claimed to guard, for three months**
+  (found 2026-08-21 by planting a label it should have caught). It read only
+  `export const NAME = '...'`, and the protocol keeps most of its families in
+  object literals - `picoHomeSignatureInputLabels`, the device-recovery
+  canonical labels, the appearance capabilities, the supplier transport.
+  Seventy-two labels were guarded and forty-seven were not, among them the
+  family a person's approval statement is keyed by. The summary said "72
+  protocol labels spelled once", which was true and read as though it were all
+  of them. Measured before widening - no product file spells any of the
+  forty-seven - so the fix cost nothing and the count now reads 129.
+
   The gate says what it cannot do, because a check trusted for more than it
   does is worse than none. It catches a copy, not an invention:
   `pico-recovery-card-v2:` matched no constant at all. A rule against unknown

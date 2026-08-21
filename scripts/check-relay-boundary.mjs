@@ -38,9 +38,18 @@ const forbiddenPackages = [
 ];
 
 /**
- * Vocabulary that would mean the relay had learned a Pico. Matched against
- * code rather than prose, so a comment explaining the absence does not trip
- * the check that enforces it.
+ * Vocabulary that would mean the relay had learned a Pico. Matched outside
+ * comments, so a comment explaining the absence does not trip the check that
+ * enforces it - `store.ts` says the word `delegation` while listing what a
+ * relay does not keep.
+ *
+ * **String literals count.** They were stripped alongside comments until
+ * 2026-08-21, and the doc comment here argued only for the comments: reading
+ * `packet['picoIdentityFingerprintHex']` walked straight past a check whose
+ * summary claims the relay "names no identity". Measured before tightening -
+ * no forbidden name appears in a relay string today - and a relay that comes
+ * to have one in an error message is a relay talking about memberships, which
+ * is the thing being checked rather than a false positive.
  */
 const forbiddenIdentityNames = [
   'picoIdentity',
@@ -79,13 +88,10 @@ function listSourceFiles(directory) {
 }
 
 /** Blanks comments and string contents, so prose about a rule is not the rule. */
-function codeOnly(source) {
+function outsideComments(source) {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '')
-    .replace(/'[^'\n]*'/g, "''")
-    .replace(/"[^"\n]*"/g, '""')
-    .replace(/`[^`]*`/g, '``');
+    .replace(/\/\/[^\n]*/g, '');
 }
 
 if (!existsSync(relayRoot)) {
@@ -106,7 +112,7 @@ let scanned = 0;
 for (const file of listSourceFiles(join(relayRoot, 'src'))) {
   scanned += 1;
   const source = readFileSync(file, 'utf8');
-  const code = codeOnly(source);
+  const code = outsideComments(source);
 
   for (const match of source.matchAll(importPattern)) {
     if (forbiddenPackages.some((forbidden) => match[1].startsWith(forbidden))) {
