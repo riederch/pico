@@ -1171,6 +1171,34 @@ local-first product's most security-critical moment.
   nothing enforces a length, naming it is what turns a number somebody picked
   into a decision somebody can find to question.
 
+  **The three verbs had a contract and no words** (2026-08-21, found by asking
+  what an Android surface would inherit). `PicoCompanionEnrolmentSurface` is
+  core-owned and states them exactly - `showCode`, `readCode`, `announce` - so
+  the shape a platform implements was never in doubt. But `announce(step)`
+  hands over a *step name*, and every sentence a person reads during the walk
+  lived in `apps/companion-shell/src/contract.ts`: eleven steps with a title and
+  a body, plus three founding ones. A phone implementing the same interface
+  would have received `'waiting'` and written its own sentence.
+
+  The founding lines carried an argument for staying per-caller, and it is half
+  right: the CLI says "on the terminal holding the unlock", which is true there
+  and false in a window. That difference is real between a terminal and a
+  screen and imaginary between two screens, so the argument is kept and
+  narrowed rather than dropped.
+
+  The words are `@pico/companion/enrolment-steps` now, beside the interface
+  whose steps they name. A test walks all eleven and refuses a mute one, and
+  refuses the technical vocabulary the doc comment already forbade in prose -
+  "delegation", "activation", "evidence" are true and tell a person holding two
+  screens nothing they can act on.
+
+  **The window was calling the wording function itself**, which is the other
+  half and the ADR 0113 C2 one: `openDeviceCodePanel` picked a hint by calling
+  `picoCompanionEnrolmentStepLine`. It receives both sentences over
+  `getEnrolmentHints` now and only chooses which of the two belongs to the
+  intent that was opened - choosing among finished sentences is not deciding a
+  rendering.
+
   **The Gradle question was measured on 2026-08-21, and it is the wrong
   question.** The sequencing document carried it as "a Compose surface means a
   Gradle wrapper and hundreds of megabytes next to PhpStorm and Blender on
@@ -1209,6 +1237,42 @@ local-first product's most security-critical moment.
   walk they are - the evidence says no. What would flip it is a real AndroidX
   dependency, and the two candidates that usually are one, camera and biometric
   prompt, are both answered by the framework at this `minSdkVersion`.
+
+  **Die drei Verben hatten ihren Vertrag im Kern und ihre Worte in der Schale**
+  (2026-08-21, gefunden beim Nachsehen, was eine Android-Fläche eigentlich
+  implementieren müsste). `PicoCompanionEnrolmentSurface` steht in
+  `@pico/companion/enrolment-steps` und nennt genau die drei Verben, die dieser
+  Gate-Text einer Plattform zuschreibt: `showCode`, `readCode`, `announce`. Das
+  ist die gute Hälfte - eine zweite Fläche implementiert eine Schnittstelle
+  statt eine Zeremonie.
+
+  Die schlechte: `announce(step)` reicht nur einen Schrittnamen hinüber, und
+  **jeder Satz, den eine Person im Walk liest**, stand in
+  `apps/companion-shell/src/contract.ts`. Elf Schritte mit Titel und Text, plus
+  drei Gründungsschritte. Eine Android-Fläche hätte denselben Vertrag erfüllt
+  und vierzehn eigene Sätze geschrieben - dieselbe Gestalt wie bei den
+  Bedingungen aus A7, eine Ebene weiter, im Walk, um den A5 sich dreht.
+
+  Der Doc-Kommentar der Gründungssätze argumentierte sogar dafür, und das
+  Argument stimmt zur Hälfte: die CLI sagt „on the terminal holding the
+  unlock", was dort wahr und in einem Fenster falsch ist. Zwischen CLI und
+  Bildschirm ist der Unterschied echt. **Zwischen zwei Bildschirmen ist er
+  keiner**, und genau das stand nicht da.
+
+  Die Worte liegen jetzt neben ihrem Vertrag im Kern. Ein Test läuft die elf
+  Schritte ab und verlangt für jeden Titel und Text - ein Schritt kann nicht
+  mehr stumm ankommen - und hält zugleich die Regel fest, die der Kommentar
+  aufstellte: kein Schritt nennt die Zeremonie beim technischen Namen, weil
+  „Delegation" und „Evidence" wahr sind und einer Person nichts sagen, was sie
+  tun kann.
+
+  **Und das Fenster wählte einen dieser Sätze selbst.** `renderer.ts` rief
+  `picoCompanionEnrolmentStepLine` auf, um den Hinweis der Gerätefläche zu
+  setzen - eine Wortwahl an der Stelle, die unter ADR 0113 C2 keine trifft, und
+  zugleich die Stelle, die nach dem Umzug gar nicht mehr an die Worte kommt.
+  Die zwei Sätze kommen jetzt über einen eigenen Kanal fertig herüber; was das
+  Fenster noch tut, ist auswählen, welcher zur geöffneten Absicht gehört. Unter
+  fertigen Sätzen zu wählen ist keine Darstellungsentscheidung.
 
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a

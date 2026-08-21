@@ -152,3 +152,144 @@ export async function runPicoCompanionAskingDeviceExchange<
   await input.surface.announce(input.outcome);
   return accepted;
 }
+
+/**
+ * ADR 0130 E2. What the window says while the ceremony asks for approvals.
+ *
+ * The ceremony announces a moment and the surface writes the sentence. That
+ * split is real where the surfaces differ: the CLI says "on the terminal
+ * holding the unlock", which is true there and false in a window, and getting
+ * it wrong would send a person looking for a terminal that does not exist.
+ *
+ * It is *not* real between two screens. These lived in
+ * `apps/companion-shell/src/contract.ts` until 2026-08-21, which made them the
+ * Electron window's words - so an Android surface implementing the same
+ * `PicoCompanionEnrolmentSurface` would have received a step name and written
+ * eleven sentences of its own. Two clients telling one person two different
+ * things about the same moment is what ADR 0131 A5 exists to prevent.
+ */
+export function picoCompanionFoundingStepLine(
+  step: 'device_delegation' | 'home_claim' | 'founding_acceptance',
+): { title: string; body: string } {
+  switch (step) {
+    case 'device_delegation':
+      return {
+        title: 'Approve this device',
+        body: 'Pico is asking your new identity to vouch for this device. Your Vault will '
+          + 'ask you to confirm it.',
+      };
+    case 'home_claim':
+      return {
+        title: 'Approve moving in',
+        body: 'Pico is asking your Home to let this identity move in, using the one-time '
+          + 'code from the line you pasted.',
+      };
+    default:
+      return {
+        title: 'Approve founding',
+        body: 'Your Home accepted the claim and is waiting for you to sign what it '
+          + 'founded. This is the last approval.',
+      };
+  }
+}
+
+/**
+ * ADR 0130 E3. What the window says at each of the six times two devices are
+ * held up to each other, and the two that end it.
+ *
+ * **The words never name the ceremony.** A person is holding two screens: what
+ * they need to know is which one to look at, what the thing they are showing
+ * says about them, and whether anything has happened yet. "Delegation",
+ * "activation" and "evidence" are true and would tell them nothing they can
+ * act on - the codebase already has those words in the records.
+ *
+ * The steps are split by device rather than by order, because each device only
+ * ever sees its own four: a sponsor never shows an offer and a joining device
+ * never reads one.
+ */
+export type PicoCompanionEnrolmentStep =
+  | 'read_offer'
+  | 'show_grant'
+  | 'read_acceptance'
+  | 'added'
+  | 'show_offer'
+  | 'read_grant'
+  | 'show_acceptance'
+  | 'waiting'
+  | 'joined'
+  | 'renewed'
+  | 'kept';
+
+export function picoCompanionEnrolmentStepLine(
+  step: PicoCompanionEnrolmentStep,
+): { title: string; body: string } {
+  switch (step) {
+    case 'read_offer':
+      return {
+        title: 'Read the code the other device is showing',
+        body: 'Hold it up to this device\u2019s camera, or type the code in. Nothing reaches '
+          + 'your Home until you approve what it asks for.',
+      };
+    case 'show_grant':
+      return {
+        title: 'Hold this up to the device you are adding',
+        body: 'It says which Home that device is joining and which keys it will be known '
+          + 'by. It is good for four minutes, and it is no use to anybody else.',
+      };
+    case 'read_acceptance':
+      return {
+        title: 'Now read the code it shows back',
+        body: 'The other device answered with its own key. This device carries that answer '
+          + 'to your Home.',
+      };
+    case 'added':
+      return {
+        title: 'That device is yours now',
+        body: 'Your Home answers to it as well. Nothing else changed - every device you '
+          + 'already had keeps working.',
+      };
+    case 'show_offer':
+      return {
+        title: 'Show this to the device you already have',
+        body: 'It says which keys this device just made for itself. That is all it says, '
+          + 'and none of it is a secret.',
+      };
+    case 'read_grant':
+      return {
+        title: 'Read the code your other device shows',
+        body: 'This device checks that the code is really about itself before it signs '
+          + 'anything, and it will not sign one meant for a different machine.',
+      };
+    case 'show_acceptance':
+      return {
+        title: 'Show this back',
+        body: 'This device signed with the key it just made. Your other device carries it '
+          + 'to your Home.',
+      };
+    case 'waiting':
+      return {
+        title: 'Waiting for your Home',
+        body: 'This device is not yours until your Home says so, so it is asking. If this '
+          + 'stays here, the other device has not sent it yet.',
+      };
+    case 'renewed':
+      return {
+        title: 'That device keeps working',
+        body: 'Its authority runs for another year, and the one it had before is '
+          + 'retired. Nothing else changed.',
+      };
+    case 'kept':
+      return {
+        title: 'This device keeps working',
+        body: 'Your Home answers to it for another year. It is the same device with '
+          + 'the same keys; only the authority over them is new.',
+      };
+    case 'joined':
+    default:
+      return {
+        title: 'This device is yours',
+        body: 'Your Home answers to it now, and every device you already had keeps '
+          + 'working.',
+      };
+  }
+}

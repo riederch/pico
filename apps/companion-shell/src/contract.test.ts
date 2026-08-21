@@ -1,4 +1,8 @@
 import { picoDisplayDate } from '@pico/protocol/when-display';
+import {
+  picoCompanionEnrolmentStepLine,
+  picoCompanionFoundingStepLine,
+} from '@pico/companion/enrolment-steps';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
@@ -15,7 +19,6 @@ import {
 } from '@pico/companion/device-lifecycle';
 import {
   picoCompanionFirstRunChoiceLines,
-  picoCompanionFoundingStepLine,
   picoCompanionFoundingDelegationDays,
   picoCompanionFoundingDelegationValidUntil,
   parsePicoCompanionFirstRunScanSource,
@@ -35,7 +38,6 @@ import {
   picoCompanionDeviceAuthoritySummary,
   picoCompanionDeviceAuthorityUnavailable,
   picoCompanionDeviceRevocationReasonLines,
-  picoCompanionEnrolmentStepLine,
   picoCompanionEnrolmentValidUntil,
   picoCompanionHomeMemberAdmittedLine,
   picoCompanionHomeMemberLines,

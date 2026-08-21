@@ -10,7 +10,7 @@ import {
   picoCompanionRelayRevocationLine,
   picoCompanionDeviceAuthorityEndedLine,
   picoCompanionDeviceAuthorityRenewedLine,
-  picoCompanionEnrolmentStepLine,
+  parsePicoCompanionEnrolmentHints,
   picoCompanionDeviceAuthorityUnavailable,
   picoCompanionHomeMemberAdmittedLine,
   picoCompanionMembershipEndedLine,
@@ -40,6 +40,7 @@ import {
 declare global {
   interface Window {
     picoCompanion: Readonly<{
+      getEnrolmentHints(): Promise<unknown>;
       getModelProviders(): Promise<unknown>;
       decideModelProvider(decision: {
         entryId: string;
@@ -1005,12 +1006,43 @@ function refreshDevices(): void {
 type PicoCompanionDeviceCodeIntent = 'add' | 'renew-other' | 'renew-mine';
 let deviceCodeIntent: PicoCompanionDeviceCodeIntent = 'add';
 
+/**
+ * ADR 0113 C2. Die zwei Sätze kommen fertig herüber; hier wird nur gewählt,
+ * welcher zur geöffneten Absicht gehört.
+ *
+ * Das Fenster rief bis zum 2026-08-21 selbst `picoCompanionEnrolmentStepLine`
+ * auf - eine Wortwahl an der Stelle, die unter C2 keine trifft, und zugleich
+ * die Stelle, an der eine zweite Fläche eigene Sätze erfunden hätte.
+ */
+let enrolmentHints: { add: string; renewMine: string } | null = null;
+
+function applyDeviceCodeHint(): void {
+  if (enrolmentHints === null) {
+    return;
+  }
+  deviceAddHint.textContent = deviceCodeIntent === 'renew-mine'
+    ? enrolmentHints.renewMine
+    : enrolmentHints.add;
+}
+
+void window.picoCompanion.getEnrolmentHints()
+  .then((value) => {
+    enrolmentHints = parsePicoCompanionEnrolmentHints(value);
+    // Falls die Fläche schon offen ist, während die Antwort ankommt: ein Feld,
+    // das leer bleibt, sagt "nichts anzugeben" und nicht "noch nicht geladen".
+    if (!deviceAddHow.hidden) {
+      applyDeviceCodeHint();
+    }
+  })
+  .catch(() => {
+    // Absichtlich still: der Hinweis ist eine Hilfe, kein Zustand. Eine
+    // Fehlermeldung an dieser Stelle wäre eine Meldung über die Werkstatt.
+  });
+
 function openDeviceCodePanel(intent: PicoCompanionDeviceCodeIntent): void {
   deviceCodeIntent = intent;
   deviceAddHow.dataset.intent = intent;
-  deviceAddHint.textContent = picoCompanionEnrolmentStepLine(
-    intent === 'renew-mine' ? 'show_offer' : 'read_offer',
-  ).body;
+  applyDeviceCodeHint();
   deviceAddHow.hidden = false;
 }
 

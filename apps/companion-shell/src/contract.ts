@@ -77,6 +77,19 @@ export const picoCompanionIpcChannels = Object.freeze({
    * window that merged them would have to invent an answer whenever only one
    * of the two reads came back.
    */
+  /**
+   * ADR 0113 C2 / ADR 0131 A5. Die zwei Sätze, die die Gerätefläche zeigt,
+   * gerendert im Hauptprozess.
+   *
+   * Das Fenster wählte sie bis zum 2026-08-21 selbst, indem es
+   * `picoCompanionEnrolmentStepLine` aufrief - also eine Wortwahl im Fenster,
+   * das unter C2 keine trifft. Die Worte liegen jetzt im schalenfreien Kern,
+   * den ein Renderer nicht erreichen kann, und kommen deshalb herüber. Was das
+   * Fenster noch tut, ist auswählen, welche der zwei gereichten Zeilen zur
+   * geöffneten Absicht gehört - unter fertigen Sätzen wählen ist keine
+   * Darstellungsentscheidung.
+   */
+  getEnrolmentHints: 'pico:enrolment-hints:get',
   getDeviceAuthority: 'pico:device-authority:get',
   endDeviceAuthority: 'pico:device-authority:end',
   /** ADR 0104. Another year for the device the person is holding. */
@@ -221,6 +234,35 @@ export const picoCompanionFloorFamilies = [
  * contract buys - so whenever a condition is shown, what still works is shown
  * with it, derived from the list rather than written out by hand.
  */
+export interface PicoCompanionEnrolmentHints {
+  /** Was auf dem Gerät steht, das ein weiteres aufnimmt. */
+  add: string;
+  /** Was auf dem Gerät steht, das sich selbst erneuern lässt. */
+  renewMine: string;
+}
+
+/**
+ * Geprüft statt geglaubt, wie alles, was über die Grenze kommt. Ein leerer
+ * Hinweis wäre ein Feld, das aussieht, als stünde nichts an - dieselbe
+ * Verwechslung, gegen die ADR 0118 O4 die Bedingungen erfunden hat.
+ */
+export function parsePicoCompanionEnrolmentHints(value: unknown): PicoCompanionEnrolmentHints {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('invalid_companion_enrolment_hints');
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (keys.length !== 2 || keys[0] !== 'add' || keys[1] !== 'renewMine') {
+    throw new Error('invalid_companion_enrolment_hints');
+  }
+  for (const field of [record.add, record.renewMine]) {
+    if (typeof field !== 'string' || field.trim().length === 0 || field.length > 400) {
+      throw new Error('invalid_companion_enrolment_hints');
+    }
+  }
+  return Object.freeze({ add: record.add as string, renewMine: record.renewMine as string });
+}
+
 export function picoCompanionFloorAssurance(): string {
   return `Still working: ${picoCompanionFloorFamilies.join(', ').replace(/_/gu, ' ')}.`;
 }
@@ -297,38 +339,6 @@ export function picoCompanionFirstRunChoiceLines(): readonly PicoCompanionFirstR
   ]);
 }
 
-/**
- * ADR 0130 E2. What the window says while the ceremony asks for approvals.
- *
- * The ceremony announces a moment and each caller writes the sentence; these
- * are this window's. The CLI's say "on the terminal holding the unlock", which
- * is true there and false here - and getting that wrong would send a person
- * looking for a terminal that does not exist.
- */
-export function picoCompanionFoundingStepLine(
-  step: 'device_delegation' | 'home_claim' | 'founding_acceptance',
-): { title: string; body: string } {
-  switch (step) {
-    case 'device_delegation':
-      return {
-        title: 'Approve this device',
-        body: 'Pico is asking your new identity to vouch for this device. Your Vault will '
-          + 'ask you to confirm it.',
-      };
-    case 'home_claim':
-      return {
-        title: 'Approve moving in',
-        body: 'Pico is asking your Home to let this identity move in, using the one-time '
-          + 'code from the line you pasted.',
-      };
-    default:
-      return {
-        title: 'Approve founding',
-        body: 'Your Home accepted the claim and is waiting for you to sign what it '
-          + 'founded. This is the last approval.',
-      };
-  }
-}
 
 /**
  * ADR 0104. How long this device's first delegation is good for.
@@ -340,106 +350,6 @@ export function picoCompanionFoundingStepLine(
  * grant, and one that expires during setup is a device that stops working
  * before it was used.
  */
-/**
- * ADR 0130 E3. What the window says at each of the six times two devices are
- * held up to each other, and the two that end it.
- *
- * **The words never name the ceremony.** A person is holding two screens: what
- * they need to know is which one to look at, what the thing they are showing
- * says about them, and whether anything has happened yet. "Delegation",
- * "activation" and "evidence" are true and would tell them nothing they can
- * act on - the codebase already has those words in the records.
- *
- * The steps are split by device rather than by order, because each device only
- * ever sees its own four: a sponsor never shows an offer and a joining device
- * never reads one.
- */
-export type PicoCompanionEnrolmentStep =
-  | 'read_offer'
-  | 'show_grant'
-  | 'read_acceptance'
-  | 'added'
-  | 'show_offer'
-  | 'read_grant'
-  | 'show_acceptance'
-  | 'waiting'
-  | 'joined'
-  | 'renewed'
-  | 'kept';
-
-export function picoCompanionEnrolmentStepLine(
-  step: PicoCompanionEnrolmentStep,
-): { title: string; body: string } {
-  switch (step) {
-    case 'read_offer':
-      return {
-        title: 'Read the code the other device is showing',
-        body: 'Hold it up to this device\u2019s camera, or type the code in. Nothing reaches '
-          + 'your Home until you approve what it asks for.',
-      };
-    case 'show_grant':
-      return {
-        title: 'Hold this up to the device you are adding',
-        body: 'It says which Home that device is joining and which keys it will be known '
-          + 'by. It is good for four minutes, and it is no use to anybody else.',
-      };
-    case 'read_acceptance':
-      return {
-        title: 'Now read the code it shows back',
-        body: 'The other device answered with its own key. This device carries that answer '
-          + 'to your Home.',
-      };
-    case 'added':
-      return {
-        title: 'That device is yours now',
-        body: 'Your Home answers to it as well. Nothing else changed - every device you '
-          + 'already had keeps working.',
-      };
-    case 'show_offer':
-      return {
-        title: 'Show this to the device you already have',
-        body: 'It says which keys this device just made for itself. That is all it says, '
-          + 'and none of it is a secret.',
-      };
-    case 'read_grant':
-      return {
-        title: 'Read the code your other device shows',
-        body: 'This device checks that the code is really about itself before it signs '
-          + 'anything, and it will not sign one meant for a different machine.',
-      };
-    case 'show_acceptance':
-      return {
-        title: 'Show this back',
-        body: 'This device signed with the key it just made. Your other device carries it '
-          + 'to your Home.',
-      };
-    case 'waiting':
-      return {
-        title: 'Waiting for your Home',
-        body: 'This device is not yours until your Home says so, so it is asking. If this '
-          + 'stays here, the other device has not sent it yet.',
-      };
-    case 'renewed':
-      return {
-        title: 'That device keeps working',
-        body: 'Its authority runs for another year, and the one it had before is '
-          + 'retired. Nothing else changed.',
-      };
-    case 'kept':
-      return {
-        title: 'This device keeps working',
-        body: 'Your Home answers to it for another year. It is the same device with '
-          + 'the same keys; only the authority over them is new.',
-      };
-    case 'joined':
-    default:
-      return {
-        title: 'This device is yours',
-        body: 'Your Home answers to it now, and every device you already had keeps '
-          + 'working.',
-      };
-  }
-}
 
 /**
  * ADR 0104, as ADR 0130 E2 pinned it for the first device: the same year for

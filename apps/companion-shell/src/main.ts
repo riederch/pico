@@ -26,6 +26,9 @@ import {
   picoRecoveryCardScanPrefix,
 } from '@pico/protocol';
 import {
+  picoCompanionEnrolmentStepLine,
+  picoCompanionFoundingStepLine,
+  type PicoCompanionEnrolmentStep,
   picoCompanionEnrolmentReadPrefix,
   picoCompanionSponsorExchange,
   runPicoCompanionAskingDeviceExchange,
@@ -63,11 +66,9 @@ import {
   parsePicoCompanionFirstRunScanSource,
   parsePicoCompanionRecoveryCardSetupInput,
   parsePicoCompanionPresentation,
-  picoCompanionFoundingStepLine,
   picoCompanionFoundingDelegationValidUntil,
   picoCompanionIpcChannels,
   picoCompanionDeviceRevocationReasonLines,
-  picoCompanionEnrolmentStepLine,
   picoCompanionCardPinPrompt,
   picoCompanionEnrolmentValidUntil,
   picoCompanionRecoveryCardEntryPrompt,
@@ -76,7 +77,6 @@ import {
   picoCompanionHostRotationLine,
   picoCompanionHostRotationReasonLines,
   picoCompanionMembershipEndingLines,
-  type PicoCompanionEnrolmentStep,
   type PicoCompanionFirstRunScanSource,
   type PicoCompanionDeviceCode,
   type PicoCompanionPresentation,
@@ -1283,6 +1283,22 @@ function registerIpc(): void {
    * person their Home answers to nothing, which is the one thing that can
    * never be true of a founded Home.
    */
+  /**
+   * ADR 0113 C2. Die Worte werden hier gerendert, weil das Fenster sie nicht
+   * erreichen kann: sie liegen im schalenfreien Kern, damit eine zweite
+   * Fläche sie erbt statt sie zu schreiben (ADR 0131 A5).
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getEnrolmentHints,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      return {
+        add: picoCompanionEnrolmentStepLine('read_offer').body,
+        renewMine: picoCompanionEnrolmentStepLine('show_offer').body,
+      };
+    },
+  );
+
   ipcMain.handle(
     picoCompanionIpcChannels.getDeviceAuthority,
     async (event: IpcMainInvokeEvent) => {
