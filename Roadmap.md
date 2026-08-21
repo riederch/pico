@@ -600,11 +600,28 @@ die A1 auf dem Telefon bereits ausgeführt hat. Was Android wirklich bauen muss,
 ist Plattformarbeit — Kamera- und Tipperfassung der drei Codes, Präsentation,
 Secure Input, A3-Bindung. Die Zeremonienlogik ist nicht der Preis.
 
-Praktischer Hinweis: auf dieser Maschine gibt es kein Gradle und kein AndroidX
-im Cache. Die bisherigen APKs sind von Hand gebaut
-(`tools/android-runtime-probe/apk/`). Eine Compose-Oberfläche heißt zuerst
-Gradle-Wrapper und hunderte Megabyte neben PhpStorm und Blender auf 16 GB — das
-ist eine Entscheidung, keine Nebensache.
+**Die Gradle-Frage ist am 2026-08-21 gemessen worden, und sie war falsch
+gestellt.** Hier stand, eine Compose-Oberfläche heiße Gradle-Wrapper und
+hunderte Megabyte neben PhpStorm und Blender auf 16 GB. Gemessen:
+
+- **Platte ist nicht der Engpass** — `/home` hat 123 GB frei, und SDK (3,7 GB)
+  und NDK (2,1 GB) liegen längst da. Der Satz hat Platte mit Speicher verwechselt.
+- **Speicher ist einer** — 14 GB gesamt, **2,9 GB verfügbar**, während PhpStorm
+  2,7 GB und Chromium 1,8 GB halten und Blender gar nicht läuft. Gradle und
+  Kotlin bauen als langlebige Daemons, und keiner von beiden ist installiert.
+- **Und die Frage ist für Phase 5 gegenstandslos.** Der handgebaute Pfad trägt
+  schon eine echte Zeremonie: `JoinActivity` mit 338 Zeilen einfacher
+  `android.widget`-Views, `ScanActivity` mit 442 Zeilen auf
+  `android.hardware.camera2` statt CameraX, die biometrische Bindung über
+  Framework-API — und **null** Vorkommen von `androidx` oder `kotlin` im ganzen
+  APK-Quellbaum. Die gesamte UI-Kette baut in **einer Sekunde**
+  (`javac` 0,3 s, `d8` 0,6 s).
+
+Die Entscheidung heißt also nicht „kann diese Maschine Gradle tragen", sondern
+„braucht die Android-Fläche überhaupt Compose". Für die drei Verben, die diese
+Phase schuldet, sagt der Befund: nein. Umkippen würde es eine echte
+AndroidX-Abhängigkeit — die zwei üblichen Kandidaten, Kamera und
+Biometrie-Dialog, beantwortet das Framework bei diesem `minSdkVersion` selbst.
 
 Wie ein Telefon das Home erreicht: **nicht** über den Foundation-Port, der per
 Default an `127.0.0.1` bindet. Der Weg ist der eigene Link-Intake-Listener

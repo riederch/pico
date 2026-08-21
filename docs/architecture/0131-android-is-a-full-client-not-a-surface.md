@@ -1171,6 +1171,45 @@ local-first product's most security-critical moment.
   nothing enforces a length, naming it is what turns a number somebody picked
   into a decision somebody can find to question.
 
+  **The Gradle question was measured on 2026-08-21, and it is the wrong
+  question.** The sequencing document carried it as "a Compose surface means a
+  Gradle wrapper and hundreds of megabytes next to PhpStorm and Blender on
+  16 GB - that is a decision, not a footnote". Two of those three claims do not
+  survive contact with the machine.
+
+  **Disk is not the constraint.** `/home` has 123 GB free. The Android SDK
+  (3.7 GB) and NDK (2.1 GB) are already there; a Gradle and AndroidX cache
+  would be a rounding error against that. The sentence conflated disk with
+  memory.
+
+  **Memory is a real constraint**, and it is the one worth naming: 14 GB total,
+  **2.9 GB available** with PhpStorm holding 2.7 GB and Chromium 1.8 GB -
+  Blender not even running. Gradle and Kotlin build as long-lived daemons and
+  neither is installed here, so a first build is also a first download. This
+  was not measured against an installed Gradle, deliberately: installing one to
+  price it is the thing being decided.
+
+  **And the question is moot for what A5 owes.** The hand-built path already
+  carries an interactive ceremony:
+
+  - `JoinActivity`, 338 lines, plain `android.widget` views built in code - no
+    XML layouts
+  - `ScanActivity`, 442 lines, on `android.hardware.camera2`, the *framework*
+    camera API rather than CameraX
+  - the biometric binding A3 measured uses
+    `KeyGenParameterSpec.setUserAuthenticationParameters` with
+    `AUTH_BIOMETRIC_STRONG` - framework again
+  - **zero** occurrences of `androidx` or `kotlin` anywhere in the APK source
+  - the whole UI toolchain, twelve Java files: `javac` 0.3 s, `d8` 0.6 s -
+    **one second**, against a Gradle build that starts by warming daemons
+
+  So the decision is not "can this machine afford Gradle" but "does the Android
+  surface need Compose at all", and for the three verbs this gate owes a
+  platform - put a code in front of a person, take one back, say where in the
+  walk they are - the evidence says no. What would flip it is a real AndroidX
+  dependency, and the two candidates that usually are one, camera and biometric
+  prompt, are both answered by the framework at this `minSdkVersion`.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on
