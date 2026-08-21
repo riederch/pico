@@ -137,7 +137,19 @@ export interface PicoCompanionShellRuntime {
    * Returns when the work starts, not when it ends: measuring is minutes of
    * generation against somebody's card.
    */
-  askModelProviderMeasurement(input: { reach: string; model: string }): Promise<{
+  askModelProviderMeasurement(input: {
+    reach: string;
+    model: string;
+    /**
+     * ADR 0151 PV1. The credential a host behind an authenticating proxy
+     * refuses every probe without, on a first measurement.
+     *
+     * The reference it is filed under is this file's to choose, the way a
+     * widening's is: one credential per entry per person, and the Home seals
+     * it once the entry it belongs to exists.
+     */
+    credential?: string;
+  }): Promise<{
     entryId: string;
     state: string;
   }>;
@@ -670,7 +682,15 @@ export async function startPicoCompanionShellRuntime(input: {
             sodium: input.sodium,
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
-          ...ask,
+          reach: ask.reach,
+          model: ask.model,
+          // Named here rather than in the window, like the widening's is. The
+          // Home seals it after the entry lands, so a measurement that failed
+          // leaves nobody's secret behind.
+          ...(ask.credential === undefined ? {} : {
+            credentialRef: picoCompanionModelProviderCredentialRef,
+            credential: ask.credential,
+          }),
         });
       }),
       readModelProviderMeasurements: async () => await serialized(async () => {

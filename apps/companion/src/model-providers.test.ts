@@ -9,6 +9,7 @@ import {
   askPicoCompanionRecall,
   readPicoCompanionRecalls,
   supplyPicoCompanionModelProviderCredential,
+  askPicoCompanionModelProviderMeasurement,
 } from './model-providers.js';
 
 /**
@@ -339,5 +340,82 @@ describe('ADR 0116 W1 - asking, and reading what came back', () => {
 
     expect(recall?.settledAt).toBeUndefined();
     expect(recall?.answer).toBeUndefined();
+  });
+});
+
+/**
+ * ADR 0151 PV1 - asking for a measurement of a machine that reads a credential.
+ *
+ * **The ordering this had to answer.** A credential is sealed against an entry,
+ * an entry exists only once a measurement has written one, and a measurement of
+ * a host behind an authenticating proxy needs the credential to get past its
+ * first probe. So a first measurement carries the secret and the Home seals it
+ * after the entry lands; every later one carries the name alone.
+ */
+describe('ADR 0151 PV1 - the credential a first measurement carries', () => {
+  it('asks for an open host with nothing about credentials at all', async () => {
+    const client = linkClient({ outcome: 'ok', result: { entryId: 'a-model:measured', state: 'running' } });
+
+    expect(await askPicoCompanionModelProviderMeasurement({
+      livingDeviceLinkClient: client as never,
+      reach: 'https://provider.invalid',
+      model: 'a-model:measured',
+    })).toEqual({ entryId: 'a-model:measured', state: 'running' });
+    // Saying nothing is what the narrower case looks like on the wire; an
+    // empty `credentialRef` would be a name the Home has to refuse.
+    expect(client.request).toHaveBeenCalledWith('home.model.provider.measure.ask', {
+      reach: 'https://provider.invalid',
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+    });
+  });
+
+  it('carries the secret and the name it is filed under, on a first measurement', async () => {
+    const client = linkClient({ outcome: 'ok', result: { entryId: 'a-model:measured', state: 'running' } });
+
+    await askPicoCompanionModelProviderMeasurement({
+      livingDeviceLinkClient: client as never,
+      reach: 'https://provider.invalid',
+      model: 'a-model:measured',
+      credentialRef: 'provider_credential',
+      credential: 'what-the-proxy-issued',
+    });
+
+    expect(client.request).toHaveBeenCalledWith('home.model.provider.measure.ask', {
+      reach: 'https://provider.invalid',
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+      credentialRef: 'provider_credential',
+      credential: 'what-the-proxy-issued',
+    });
+  });
+
+  it('names the secret without sending it once the Home holds one', async () => {
+    const client = linkClient({ outcome: 'ok', result: { entryId: 'a-model:measured', state: 'running' } });
+
+    await askPicoCompanionModelProviderMeasurement({
+      livingDeviceLinkClient: client as never,
+      reach: 'https://provider.invalid',
+      model: 'a-model:measured',
+      credentialRef: 'provider_credential',
+    });
+
+    const [, sent] = client.request.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(sent.credentialRef).toBe('provider_credential');
+    expect(sent).not.toHaveProperty('credential');
+  });
+
+  it('carries the Home\'s refusal as itself', async () => {
+    const client = linkClient({
+      outcome: 'invalid_arguments',
+      result: { refusal: 'pico_model_provider_credential_not_held' },
+    });
+
+    await expect(askPicoCompanionModelProviderMeasurement({
+      livingDeviceLinkClient: client as never,
+      reach: 'https://provider.invalid',
+      model: 'a-model:measured',
+      credentialRef: 'a-name-nobody-filed-anything-under',
+    })).rejects.toThrow('pico_model_provider_credential_not_held');
   });
 });

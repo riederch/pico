@@ -154,11 +154,33 @@ export async function askPicoCompanionModelProviderMeasurement(input: {
   livingDeviceLinkClient: PicoLinkDirectClient;
   reach: string;
   model: string;
+  /**
+   * ADR 0151 PV1. What the credential this measurement sends is called.
+   *
+   * A host behind an authenticating proxy refuses every probe a measurement
+   * makes, so measuring one at all means measuring it the way a job reaches
+   * it. The name is required whenever a secret is sent and sufficient on its
+   * own afterwards.
+   */
+  credentialRef?: string;
+  /**
+   * The secret itself, on a first measurement only.
+   *
+   * **Sent here because there is nowhere earlier to send it.** The Home seals
+   * a credential against an entry, and an entry exists only once a
+   * measurement has written one - so a host that has never been measured
+   * cannot have a credential filed for it in advance. The Home seals this
+   * after the entry lands; a later measurement names `credentialRef` and
+   * sends no secret, and nothing here keeps a copy to send twice.
+   */
+  credential?: string;
 }): Promise<{ entryId: string; state: string }> {
   const answer = await input.livingDeviceLinkClient.request('home.model.provider.measure.ask', {
     reach: input.reach,
     model: input.model,
     providerClass: picoCompanionMeasurableProviderClass,
+    ...(input.credentialRef === undefined ? {} : { credentialRef: input.credentialRef }),
+    ...(input.credential === undefined ? {} : { credential: input.credential }),
   });
   if (answer.outcome !== 'ok') {
     const refusal = (answer.result as { refusal?: unknown }).refusal;

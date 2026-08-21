@@ -941,12 +941,34 @@ function registerIpc(): void {
         throw new Error('companion_service_unavailable');
       }
       const record = request as Record<string, unknown> | undefined;
-      if (typeof record?.reach !== 'string' || typeof record.model !== 'string') {
+      if (typeof record?.reach !== 'string' || typeof record.model !== 'string'
+        || (record.provesItself !== undefined && typeof record.provesItself !== 'boolean')) {
         throw new Error('invalid_model_provider_measurement');
       }
+      /**
+       * ADR 0151 PV1. Asked for here, so the window never holds it.
+       *
+       * The same secure input a widening uses, for the same reason and with a
+       * different sentence: a widening spends a proof on somebody else's
+       * remembered words, while this one buys the measurement itself. A host
+       * behind an authenticating proxy refuses every probe, so without this
+       * there is nothing to observe and no entry to decide about later.
+       */
+      const credential = record.provesItself === true
+        ? await captureSecret({
+          title: 'Enter the credential this machine asks for',
+          instruction: 'Type what this machine asks Pico to prove itself with, then press '
+            + 'Enter. Nothing about it can be measured without one. Your Home seals it; '
+            + 'this device keeps no copy.',
+          maximumLength: maxPicoCompanionProviderCredentialLength,
+          refusal: 'A credential cannot be empty.',
+          validate: (value: string) => value.length > 0,
+        })
+        : undefined;
       return await runtime.askModelProviderMeasurement({
         reach: record.reach,
         model: record.model,
+        ...(credential === undefined ? {} : { credential }),
       });
     },
   );

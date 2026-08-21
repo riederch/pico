@@ -2381,6 +2381,24 @@ export const picoCompanionOwnMachineUndeclared =
   + 'knows how to describe: every other sort of provider is one Pico runs '
   + 'itself, not one you reach by address.';
 
+/**
+ * ADR 0151 PV1 - the sentence in front of a machine that will not answer
+ * without a credential.
+ *
+ * **A measurement of a secured host needs the credential a job would send.**
+ * Every probe is a request, so an unauthenticated run against an
+ * authenticating proxy observes a 401 at the first endpoint it touches and
+ * nothing else: no window, no throughput, no lanes, and therefore no entry to
+ * decide about. This is where a person says the host is one of those.
+ *
+ * It says what happens next rather than naming a mechanism, per ADR 0152: the
+ * credential is asked for in the secure input the way a widening asks for one,
+ * and it is sealed by the Home rather than kept here.
+ */
+export const picoCompanionProviderProvesItself =
+  'This machine will not answer unless Pico proves who it is. Pico asks for '
+  + 'the credential next, and your Home seals it.';
+
 export const picoCompanionWindowViews = ['now', 'settings'] as const;
 
 export type PicoCompanionWindowView = typeof picoCompanionWindowViews[number];

@@ -131,6 +131,13 @@
       <input id="measure-model" maxlength="128" autocomplete="off">
       <label id="measure-own-label" for="measure-own"></label>
       <input id="measure-own" type="checkbox">
+      <!--
+        ADR 0151 PV1. The token is not typed into this document: ticking this
+        makes the main process ask for it in the secure input, the way widening
+        an entry does, and the renderer never holds a credential.
+      -->
+      <label id="measure-proof-label" for="measure-proof"></label>
+      <input id="measure-proof" type="checkbox">
       <button id="measure-submit" type="button">Measure it</button>
       <p id="measure-status" class="detail"></p>
     </section>

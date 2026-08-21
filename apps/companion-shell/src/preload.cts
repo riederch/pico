@@ -125,8 +125,15 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   // built there too.
   grantDomainRead: async (privacyDomain: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.grantDomainRead, privacyDomain),
-  askModelProviderMeasurement: async (reach: string, model: string): Promise<unknown> =>
-    await ipcRenderer.invoke(channels.askModelProviderMeasurement, { reach, model }),
+  askModelProviderMeasurement: async (
+    reach: string,
+    model: string,
+    provesItself: boolean,
+  ): Promise<unknown> =>
+    await ipcRenderer.invoke(
+      channels.askModelProviderMeasurement,
+      { reach, model, provesItself },
+    ),
   getModelProviderMeasurements: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.getModelProviderMeasurements),
   forgetMemory: async (memoryItemId: string): Promise<void> => {

@@ -58,6 +58,7 @@ import {
   parsePicoCompanionSuppliers,
   picoCompanionDepotLines,
   parsePicoCompanionDepots,
+  picoCompanionProviderProvesItself,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -162,6 +163,50 @@ describe('the bridge and the contract are one list', () => {
     const declared = [...preload.matchAll(/^  (\w+): '(pico:[a-z:-]+)',$/gmu)]
       .map(([, name]) => name);
     expect(declared.sort()).toEqual(Object.keys(picoCompanionIpcChannels).sort());
+  });
+});
+
+/**
+ * ADR 0151 PV1 - measuring a machine that will not answer without a credential.
+ *
+ * **The drift TypeScript cannot see.** The renderer declares the bridge it
+ * expects and the preload implements one; they are two closed lists over one
+ * subject and nothing type-checks the pair, which is the same reason the
+ * channel names above are held by a text comparison rather than by memory. An
+ * argument added on one side and forgotten on the other would leave the window
+ * asking for a credential and the main process measuring without one.
+ */
+describe('ADR 0151 PV1 - the credential a measurement needs never crosses the window', () => {
+  it('forwards the decision to ask, and never the secret', () => {
+    const preload = readFileSync(join(import.meta.dirname, 'preload.cts'), 'utf8');
+    // A boolean, not a credential: what crosses is that the person said this
+    // machine asks Pico to prove itself.
+    expect(preload).toContain('{ reach, model, provesItself }');
+
+    const renderer = readFileSync(join(import.meta.dirname, 'renderer.ts'), 'utf8');
+    expect(renderer).toContain('askModelProviderMeasurement(reach, model, measureProof.checked)');
+    // **The window holds no input a credential could be typed into.** The
+    // widening's does not either, and for the same reason: a renderer is the
+    // one process here that a page could be persuaded to read.
+    expect(renderer).not.toContain("requireInput('measure-credential')");
+    expect(renderer).not.toContain("requireInput('measure-secret')");
+
+    const main = readFileSync(join(import.meta.dirname, 'main.ts'), 'utf8');
+    // Asked for in the same secure input a widening uses, one hop further in.
+    expect(main).toContain('record.provesItself === true');
+    expect(main).toContain('Nothing about it can be measured without one.');
+  });
+
+  it('says what happens next rather than naming a mechanism', () => {
+    // ADR 0152. The sentence is a consequence: what this machine does, and
+    // what Pico will do about it. A bearer, a header or a proxy are true and
+    // none of them are what somebody is agreeing to.
+    expect(picoCompanionProviderProvesItself).toContain('will not answer');
+    expect(picoCompanionProviderProvesItself).toContain('seals it');
+    for (const mechanism of ['bearer', 'header', 'proxy', 'token', 'TLS']) {
+      expect(picoCompanionProviderProvesItself.toLowerCase())
+        .not.toContain(mechanism.toLowerCase());
+    }
   });
 });
 

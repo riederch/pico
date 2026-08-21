@@ -3,6 +3,7 @@ import {
   picoCompanionFetchBlockedLine,
   picoCompanionFirstRunChoiceLines,
   picoCompanionOwnMachineDeclaration,
+  picoCompanionProviderProvesItself,
   picoCompanionOwnMachineUndeclared,
   picoCompanionFloorAssurance,
   picoCompanionPresentationTakesTheWindow,
@@ -63,7 +64,16 @@ declare global {
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
       forgetMemory(memoryItemId: string): Promise<void>;
-      askModelProviderMeasurement(reach: string, model: string): Promise<{
+      askModelProviderMeasurement(
+        reach: string,
+        model: string,
+        /**
+         * ADR 0151 PV1. Whether the main process should ask for a credential
+         * before measuring. Never the credential itself - it does not cross
+         * this window, the way a widening's does not.
+         */
+        provesItself: boolean,
+      ): Promise<{
         entryId: string;
         state: string;
       }>;
@@ -497,10 +507,13 @@ const measureReach = requireInput('measure-reach');
 const measureModel = requireInput('measure-model');
 const measureOwn = requireInput('measure-own');
 const measureOwnLabel = requireElement('measure-own-label');
+const measureProof = requireInput('measure-proof');
+const measureProofLabel = requireElement('measure-proof-label');
 const measureSubmit = requireButton('measure-submit');
 const measureStatus = requireElement('measure-status');
 
 measureOwnLabel.textContent = picoCompanionOwnMachineDeclaration;
+measureProofLabel.textContent = picoCompanionProviderProvesItself;
 
 function refreshMeasurements(): void {
   void window.picoCompanion.getModelProviderMeasurements()
@@ -541,8 +554,12 @@ measureSubmit.addEventListener('click', () => {
     measureStatus.textContent = picoCompanionOwnMachineUndeclared;
     return;
   }
-  measureStatus.textContent = 'Starting...';
-  void window.picoCompanion.askModelProviderMeasurement(reach, model)
+  measureStatus.textContent = measureProof.checked
+    // Said before the secure input appears, because a window that goes quiet
+    // and then demands a secret reads as something having gone wrong.
+    ? 'Asking you for the credential...'
+    : 'Starting...';
+  void window.picoCompanion.askModelProviderMeasurement(reach, model, measureProof.checked)
     .then(() => {
       // Said as what it will and will not do. The measurement produces a
       // finding; using it is the decision on the list below.
