@@ -326,36 +326,40 @@ public final class JoinActivity extends Activity {
     return given.isEmpty() ? bodyFor(step) : given;
   }
 
+  /**
+   * Nur noch die zwei Momente, die kein Schritt des Walks sind.
+   *
+   * Für `show_offer`, `read_grant`, `show_acceptance`, `waiting` und `joined`
+   * standen hier bis zum 2026-08-21 eigene Sätze - andere als die des Kerns,
+   * nachgewiesen am Gerät: der Bildschirm zeigte "This device checks that the
+   * code is really about itself...", während diese Datei "Your other device is
+   * showing a grant. Type it here." gesagt hätte. Zwei Clients, ein Moment,
+   * zwei Auskünfte.
+   *
+   * Sie sind entfernt statt stehengelassen: ein Rückfall, den niemand liest,
+   * ist ein Rückfall, den niemand bemerkt, wenn eine Nachricht ihren Satz
+   * einmal verliert.
+   */
   private static String titleFor(String step) {
     switch (step) {
-      case "passphrase": return "Choose a Vault passphrase";
-      case "show_offer": return "Show this to your other device";
-      case "read_grant": return "Type what your other device shows";
-      case "show_acceptance": return "Show this back";
-      case "approval": return "Sign this?";
-      default: return "Add this phone to your Home";
+      case "passphrase":
+        return "Choose a Vault passphrase";
+      case "approval":
+        return "Sign this?";
+      default:
+        return "";
     }
   }
+
 
   private static String bodyFor(String step) {
     switch (step) {
       case "passphrase":
         return "It protects the keys this phone is about to make for itself. "
           + "Nothing can recover them without it, and it never leaves this phone.";
-      case "show_offer":
-        return "These are the keys this phone made. Your other device needs them "
-          + "to write the grant.";
-      case "read_grant":
-        return "Your other device is showing a grant. Type it here.";
-      case "show_acceptance":
-        return "Your other device reads this and carries it to your Home.";
-      case "waiting":
-        return "Waiting for your Home to say yes. Your other device is carrying "
-          + "the answer.";
-      case "joined":
-        return "Done.";
       default:
         return "";
     }
   }
+
 }

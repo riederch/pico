@@ -1307,9 +1307,23 @@ local-first product's most security-critical moment.
   dafür ebenfalls selbst, **also ist das ein gleicher Stand und keine
   Abweichung** - und die nächsten zwei, die umziehen, wenn jemand sie anfasst.
 
-  Gebaut und kompiliert (19 Klassen), **nicht auf dem Gerät bewiesen**: das
-  Telefon war beim Bauen nicht angeschlossen. Was fehlt, ist ein Lauf, der die
-  fünf Schritte auf dem Bildschirm zeigt.
+  **Am Gerät bewiesen, und der Beweis brauchte keine Pflanzung.** Der Walk lief
+  auf dem A55 bis `read_grant`, und der Bildschirm zeigte:
+
+      Read the code your other device shows
+      This device checks that the code is really about itself before it signs
+      anything, and it will not sign one meant for a different machine.
+
+  Das ist wörtlich der Satz des Kerns. Die Activity hätte für denselben Schritt
+  gesagt: *„Your other device is showing a grant. Type it here."* Zwei
+  verschiedene Sätze über denselben Moment - genau der Preis, den dieses Gate
+  misst, und zugleich der Nachweis, dass der gezeigte nicht aus der Activity
+  stammen kann.
+
+  Danach wurden die fünf toten Sätze aus `titleFor`/`bodyFor` entfernt und der
+  Walk wiederholt: derselbe Bildschirm, derselbe Satz, ohne dass für diesen
+  Schritt noch ein Rückfall existiert. Ein Rückfall, den niemand liest, ist
+  einer, den niemand bemerkt, wenn eine Nachricht ihren Satz einmal verliert.
 
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
