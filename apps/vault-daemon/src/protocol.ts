@@ -146,7 +146,6 @@ const FRAME_LENGTH_PREFIX_BYTES = 4;
 const requestIdPattern = /^[A-Za-z0-9_-]+$/;
 const lowercaseHexPattern = /^(?:[0-9a-f]{2})+$/;
 const KEY_FINGERPRINT_HEX_CHARS = 64;
-const MAX_PICO_VAULT_DAEMON_INSTANT_CHARS = 64;
 
 export interface PicoVaultDaemonHelloRequest {
   family: typeof picoVaultDaemonRequestFamilies.hello;
@@ -845,14 +844,11 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
     }
     case picoVaultDaemonRequestFamilies.readerAccessOpenPayload: {
       assertExactKeys(parsed, ['family', 'requestId', 'leaseId', 'batchRecord', 'evaluatedAt']);
-      const evaluatedAt = parsed.evaluatedAt;
-      if (
-        typeof evaluatedAt !== 'string'
-        || evaluatedAt.length === 0
-        || evaluatedAt.length > MAX_PICO_VAULT_DAEMON_INSTANT_CHARS
-      ) {
-        throw new Error('invalid_request');
-      }
+      // The instant a lease evaluates expiry at, and the Vault decides that by
+      // comparing it as a string against the batch's own. A length was the
+      // whole check until 2026-08-21, which let a value that is not an instant
+      // travel two processes before anything looked at it.
+      const evaluatedAt = requireInstant(parsed, 'evaluatedAt');
       return {
         family: picoVaultDaemonRequestFamilies.readerAccessOpenPayload,
         requestId,

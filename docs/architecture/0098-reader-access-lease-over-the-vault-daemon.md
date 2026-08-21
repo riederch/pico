@@ -201,6 +201,15 @@ during an open lease".
 - **S17.4 — bounded transport: Done.** Lease-scoped frame budget derived
   from the sealed-payload ceiling, raised only while a lease is open and
   dropped on every exit path; control families stay at 128 KiB.
+  Status note, 2026-08-21: `evaluatedAt` was bounded by a length here rather
+  than checked, and that field is what the Vault compares — as a string —
+  against a batch's `expiresAt`. Sixty-four characters is a number that
+  resembles the rule without being it, so a value that is not an instant
+  travelled two processes before anything looked at it and the refusal, when
+  it came, was about the lease rather than the value. It asks
+  `isPicoInstant` where it arrives now, which also closes the extended-year
+  form the string comparison must not admit.
+
 - **S17.5 — synchronous bridge and adapter: Done.** A worker-backed bridge
   provides genuinely blocking roundtrips, and a structural adapter satisfies
   the ADR 0096 capability shape without `@pico/vault-daemon` importing

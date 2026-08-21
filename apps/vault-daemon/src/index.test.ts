@@ -413,6 +413,34 @@ describe('Pico Vault daemon wire contract (ADR 0097 D3)', () => {
     extraField.send({ family: picoVaultDaemonRequestFamilies.status, requestId: 'r2', extra: true });
     expectReason(await extraField.nextResponse(), 'invalid_request');
     await extraField.waitClose();
+
+    /**
+     * An instant-shaped field that is not an instant, refused where it
+     * arrives.
+     *
+     * `evaluatedAt` decides expiry, and the Vault decides it by comparing this
+     * value as a string against the batch's own. A length was the whole check
+     * here until 2026-08-21 - 64 characters, a number that resembles the rule
+     * without being it - so a value that is not an instant travelled two
+     * processes before anything looked at it. Both of these round-trip through
+     * `Date` and neither is one: the second is the extended-year form, which
+     * sorts before every ordinary year and is exactly what a string comparison
+     * of deadlines must not admit.
+     */
+    for (const evaluatedAt of ['later today', '+275760-09-13T00:00:00.000Z']) {
+      const badInstant = await rawConnect(daemon.socketPath);
+      badInstant.send({ family: picoVaultDaemonRequestFamilies.hello, requestId: 'r1', protocolVersion: 1 });
+      await badInstant.nextResponse();
+      badInstant.send({
+        family: picoVaultDaemonRequestFamilies.readerAccessOpenPayload,
+        requestId: 'r2',
+        leaseId: 'ab'.repeat(16),
+        batchRecord: {},
+        evaluatedAt,
+      });
+      expectReason(await badInstant.nextResponse(), 'invalid_request');
+      await badInstant.waitClose();
+    }
   });
 
   it('rejects pipelined requests written before the previous response', async () => {
