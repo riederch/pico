@@ -1,6 +1,6 @@
 {
   "schema": "pico.electron-support.v1",
-  "checkedAt": "2026-08-19",
+  "checkedAt": "2026-08-21",
   "policy": "latest-three-stable-major-versions",
   "latestStableVersion": "43.4.1",
   "supportedMajorVersions": [

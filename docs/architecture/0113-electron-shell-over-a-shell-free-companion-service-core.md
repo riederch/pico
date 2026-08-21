@@ -55,6 +55,22 @@ band this ADR already records as movement rather than growth. PSS 224,292,864,
 reported and not asserted in this mode. 44.0.0 stable has still not shipped;
 2026-08-25 holds.
 
+Status note, 2026-08-21, four days out: **re-verified, nothing moved, and one
+fact that was not visible before.** The registry still carries `latest` 43.4.1,
+so the pin is correct and the record's supported majors `[41, 42, 43]` hold.
+Electron 44 is still scheduled for 2026-08-25 - and Electron **41 reaches
+end-of-life on that same day**, so the window does not widen, it slides in one
+step to `[42, 43, 44]`. The bump is forced rather than merely allowed, because
+this check demands `pin === latestStableVersion` and not merely a pin inside the
+window.
+
+The beta advanced to `44.0.0-beta.6` and **was deliberately not re-measured**.
+The 2026-08-18 trial had to set this review record to the beta for
+`package-linux.mjs` to build at all, and the install that goes with it rewrites
+a lockfile shared with a concurrently running session. A beta patch is a poor
+trade for that, and it answers the smaller question: what is unknown is beta
+against stable, not beta.5 against beta.6.
+
 Status note, 2026-08-18: **Electron 44 was measured before it exists as a
 release, and the risk the roadmap flagged is not there.**
 
