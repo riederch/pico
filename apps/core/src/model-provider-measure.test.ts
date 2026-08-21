@@ -29,6 +29,14 @@ function modelHost(options: {
   spillsFromTokens?: number;
   /** Another model holding the accelerator when the run starts. */
   foreignResident?: string;
+  /**
+   * ADR 0151 PV1. The one bearer this host answers, if it reads any.
+   *
+   * Everything else is 401 - a wrong one, and a request carrying none - which
+   * is the deployment an authenticating proxy in front of an open runtime
+   * actually produces.
+   */
+  credential?: string;
 } = {}): { fetch: typeof globalThis.fetch; calls: string[] } {
   const calls: string[] = [];
   const evicted = new Set<string>();
@@ -45,6 +53,13 @@ function modelHost(options: {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
+
+    if (options.credential !== undefined) {
+      const sent = (init?.headers as Record<string, string> | undefined)?.authorization;
+      if (sent !== `Bearer ${options.credential}`) {
+        return new Response('{}', { status: 401 });
+      }
+    }
 
     if (path === '/api/version') {
       return json({ version: '0.32.7' });
@@ -349,14 +364,77 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
   });
 
   it('never carries the wider allowance out of a measurement', () => {
-    // ADR 0151 PV1. Nothing observable grants it; a credential does, and no
-    // credential was sent.
-    const entry = picoModelProviderEntryFromMeasurement(base, {
-      entryId: 'a-measured-host',
-      providerClass: 'declared_own_host',
-      measuredAt: '2026-08-13T12:00:00.000Z',
-    });
-    expect(entry.carries).toBe('live_turn');
-    expect(entry.credentialRef).toBeUndefined();
+    // ADR 0151 PV1. Nothing observable grants it, and that includes the best
+    // observation there is: a host that refused a credential that cannot be
+    // right and refused a request carrying none. The proof is real and
+    // spending it is somebody's decision, not a measurer's.
+    const proven = {
+      ...base,
+      answeredWithoutCredential: false,
+      refusesAWrongCredential: true,
+    } satisfies PicoModelProviderMeasurementReport;
+    for (const report of [base, proven]) {
+      const entry = picoModelProviderEntryFromMeasurement(report, {
+        entryId: 'a-measured-host',
+        providerClass: 'declared_own_host',
+        measuredAt: '2026-08-13T12:00:00.000Z',
+      });
+      expect(entry.carries).toBe('live_turn');
+      expect(entry.credentialRef).toBeUndefined();
+    }
+  });
+});
+
+/**
+ * ADR 0151 PV1, the half that was unreachable until a host was secured.
+ *
+ * The measurer sent no credential and could not have: `answeredWithoutCredential`
+ * was the constant `true`, which restated the run having got that far. Once an
+ * authenticating proxy stands in front of the runtime, that constant describes
+ * a host nobody is talking to and every probe comes back 401 - so measuring the
+ * deployment at all means measuring it the way a job reaches it.
+ */
+describe('ADR 0151 PV1 - measuring a host that reads a credential', () => {
+  it('measures the deployment when it carries the credential a job would', async () => {
+    const fake = modelHost({ credential: 'the-one-the-proxy-issued' });
+    const report = await measurer({ credential: 'the-one-the-proxy-issued' }, fake).measure();
+
+    // The whole point: capacity, not a 401.
+    expect(report.serverVersion).toBe('0.32.7');
+    expect(report.contextSteps[0]!.generationTokensPerSecond).toBeCloseTo(18.4, 1);
+    // And the two findings that a decision at ADR 0152's surface needs.
+    expect(report.answeredWithoutCredential).toBe(false);
+    expect(report.refusesAWrongCredential).toBe(true);
+    expect(report.notes.join(' ')).not.toContain('distinguishes it from nobody');
+  });
+
+  it('measures nothing at all without it, and says which probe was refused', async () => {
+    await expect(measurer({}, modelHost({ credential: 'the-one-the-proxy-issued' })).measure())
+      .rejects.toThrow('pico_model_provider_probe_failed:/api/version:401');
+  });
+
+  it('says so when the credential it sent distinguishes it from nobody', async () => {
+    // The hole ADR 0151 recorded on 2026-08-14, from the other side: a proxy
+    // that answers whatever it is handed. An entry pointed here would satisfy
+    // every rule in the tree and claim a proof nobody gave.
+    const report = await measurer({ credential: 'sent-but-never-read' }).measure();
+    expect(report.answeredWithoutCredential).toBe(true);
+    expect(report.refusesAWrongCredential).toBe(false);
+    expect(report.notes.join(' ')).toContain('distinguishes it from nobody');
+  });
+
+  it('reports a bare request it could not read as neither answered nor refused', async () => {
+    const fake = modelHost();
+    const guarded = ((url: string | URL | Request, init?: RequestInit) => {
+      const bare = (init?.headers as Record<string, string> | undefined)?.authorization;
+      if (new URL(String(url)).pathname === '/api/version' && bare === undefined) {
+        return Promise.resolve(new Response('busy', { status: 503 }));
+      }
+      return fake.fetch(url as string, init);
+    }) as typeof globalThis.fetch;
+
+    const report = await measurer({ credential: 'a-credential', fetch: guarded }).measure();
+    expect(report.answeredWithoutCredential).toBeNull();
+    expect(report.notes.join(' ')).toContain('PE5 went unmeasured');
   });
 });

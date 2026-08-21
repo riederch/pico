@@ -8,6 +8,14 @@
  *   npx tsx scripts/measure-model-provider.ts \
  *     --reach http://host:11434 --model mistral-small:latest --cold
  *
+ * A host that reads a credential is measured with it, and the secret arrives
+ * in the environment rather than in `--credential`, because an argument is
+ * readable in `ps` by every account on the machine and lands in a shell
+ * history nobody decided to keep:
+ *
+ *   PICO_MODEL_PROVIDER_CREDENTIAL=... npx tsx scripts/measure-model-provider.ts \
+ *     --reach https://host.example --model qwen3:14b --cold
+ *
  * It writes nothing. What it prints is a candidate entry that has already been
  * through `parsePicoModelProviderEntry`, so a run that prints one is a run
  * whose numbers satisfy PE1-PE6 and PV1-PV5.
@@ -36,9 +44,15 @@ const providerClass = argument('class', 'declared_own_host') as PicoModelProvide
 const entryId = argument('id', model.replace(/[^a-z0-9._:-]/gu, '-').toLowerCase());
 const steps = argument('steps', '4096,8192').split(',').map((step) => Number(step.trim()));
 
+/**
+ * ADR 0151 PV1. Never `--credential`: see the note at the top of this file.
+ */
+const credential = process.env.PICO_MODEL_PROVIDER_CREDENTIAL;
+
 const measurer = new PicoModelProviderMeasurer({
   reach,
   model,
+  ...(credential === undefined || credential === '' ? {} : { credential }),
   providerClass,
   entryId,
   contextSteps: steps,
@@ -48,6 +62,9 @@ const measurer = new PicoModelProviderMeasurer({
 });
 
 console.error(`Measuring ${model} at ${reach}`);
+console.error(credential === undefined || credential === ''
+  ? '  no credential in the environment; measuring as an unauthenticated caller'
+  : '  measuring with the credential in PICO_MODEL_PROVIDER_CREDENTIAL');
 const report = await measurer.measure();
 
 console.error('');
@@ -73,7 +90,11 @@ console.error(`  resident          ${report.residentBytes === null ? 'not report
 console.error(`  KV per token      ${report.kvBytesPerToken === null ? 'unknown' : `${(report.kvBytesPerToken / 1024).toFixed(0)} KiB (q8_0)`}`);
 console.error(`  spills from       ${report.spilledFromTokens === null ? 'no measured width' : `${report.spilledFromTokens} tokens`}`);
 console.error(`  free window       ${report.widestFreeWindowTokens === null ? 'not walked' : `${report.widestFreeWindowTokens} tokens at ${report.widestFreeWindowTokensPerSecond?.toFixed(1)} tok/s`}`);
-console.error(`  credential        ${report.answeredWithoutCredential ? 'none sent, and the host answered' : 'required'}`);
+console.error(`  bare request      ${report.answeredWithoutCredential === null
+  ? 'could not tell'
+  : report.answeredWithoutCredential
+    ? 'answered - this host requires no credential'
+    : 'refused - this host requires one'}`);
 console.error(`  checks one?       ${report.refusesAWrongCredential === null ? 'could not tell' : report.refusesAWrongCredential ? 'yes - a wrong credential was refused' : 'NO - a wrong credential was answered'}`);
 for (const note of report.notes) {
   console.error(`  note              ${note}`);

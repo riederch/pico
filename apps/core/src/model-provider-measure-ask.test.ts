@@ -308,3 +308,126 @@ describe('ADR 0142 PE2 - the Home measures a host a person named', () => {
     expect(JSON.stringify(changed)).not.toContain('tokensPerSecond');
   }, 60_000);
 });
+
+/**
+ * ADR 0151 PV1 - the Home measures a host that reads a credential.
+ *
+ * **Until one was secured, this path was unreachable by construction.** The
+ * measurer sent no credential and had no way to, so a host behind an
+ * authenticating proxy answered its first probe with 401 and nothing about the
+ * deployment could be observed at all - no window, no throughput, no lanes,
+ * and therefore no entry. Three rules closed the circle from the other side:
+ * a credential is sealed against an entry, an entry exists only once a
+ * measurement wrote one, and the measurement needed the credential.
+ */
+describe('ADR 0151 PV1 - measuring a host behind an authenticating proxy', () => {
+  it('measures it with the secret the ask carried, and holds it afterwards', async () => {
+    const host = await startPicoFakeModelHost({ credential: 'issued-by-the-house-proxy' });
+    hosts.push(host);
+    const { databasePath, send } = await claimedHome();
+
+    const asked = await send('home.model.provider.measure.ask', {
+      reach: host.reach,
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+      credentialRef: 'house-proxy',
+      credential: 'issued-by-the-house-proxy',
+    });
+    expect(asked.response.outcome).toBe('ok');
+    const finished = await settled(send as Send, 'a-model:measured');
+    expect(finished.state).toBe('settled');
+
+    const store = await EventStore.open(databasePath, {});
+    const entries = store.picoModelProviderRegistry().list();
+    store.close();
+    expect(entries).toHaveLength(1);
+    // A measurement that proved the far side reads a credential still grants
+    // nothing: PV1's proof is spent by a person, at the decision surface.
+    expect(entries[0]?.entry.carries).toBe('live_turn');
+    expect(entries[0]?.entry.credentialRef).toBeUndefined();
+
+    // The note the open host earns is exactly what this host does not: it
+    // refused a credential that cannot be right.
+    expect(finished.notes?.join(' ') ?? '').not.toContain('credential that cannot be right');
+
+    // And the secret is held now, so the second measurement needs only its
+    // name - which is the whole reason it was sealed after the entry landed.
+    const again = await send('home.model.provider.measure.ask', {
+      reach: host.reach,
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+      credentialRef: 'house-proxy',
+    });
+    expect(again.response.outcome).toBe('ok');
+    expect((await settled(send as Send, 'a-model:measured')).state).toBe('settled');
+  }, 120_000);
+
+  it('measures nothing without it, and names the probe that was refused', async () => {
+    const host = await startPicoFakeModelHost({ credential: 'issued-by-the-house-proxy' });
+    hosts.push(host);
+    const { send } = await claimedHome();
+
+    await send('home.model.provider.measure.ask', {
+      reach: host.reach,
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+    });
+
+    const finished = await settled(send as Send, 'a-model:measured');
+    expect(finished.state).toBe('failed');
+    // ADR 0118 O4's words: what the host did, not "failed".
+    expect(finished.refusal).toBe('pico_model_provider_probe_failed:/api/version:401');
+  }, 60_000);
+
+  it('refuses a name it holds no secret for rather than measuring openly', async () => {
+    /**
+     * Falling back to an unauthenticated run would answer a different question
+     * and file the answer in the same field: a report saying this host refuses
+     * everything, about a host that was never asked properly. ADR 0142 PE2 is
+     * what forbids it.
+     */
+    const host = await startPicoFakeModelHost({ credential: 'issued-by-the-house-proxy' });
+    hosts.push(host);
+    const { send } = await claimedHome();
+
+    const refused = await send('home.model.provider.measure.ask', {
+      reach: host.reach,
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+      credentialRef: 'a-name-nobody-filed-anything-under',
+    });
+    expect(refused.response.outcome).toBe('invalid_arguments');
+    expect(refused.result.refusal).toBe('pico_model_provider_credential_not_held');
+  }, 30_000);
+
+  it('still refuses to spend the proof over a transport that does not protect it', async () => {
+    /**
+     * ADR 0151 PV5, on the far side of a successful proof. This host reads a
+     * credential and refuses a wrong one - everything PV1 asks for - and its
+     * reach is plain HTTP, so the bearer is readable by everyone who could
+     * already reach the port. Securing a host over `http:` buys the live turn
+     * and nothing else, which is what the deployment note about the TLS proxy
+     * is for.
+     */
+    const host = await startPicoFakeModelHost({ credential: 'issued-by-the-house-proxy' });
+    hosts.push(host);
+    const { send } = await claimedHome();
+    await send('home.model.provider.measure.ask', {
+      reach: host.reach,
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+      credentialRef: 'house-proxy',
+      credential: 'issued-by-the-house-proxy',
+    });
+    await settled(send as Send, 'a-model:measured');
+
+    const decided = await send('home.model.provider.decision.submit', {
+      entryId: 'a-model:measured',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn_and_retrieved_memory',
+      credentialRef: 'house-proxy',
+    });
+    expect(decided.response.outcome).toBe('invalid_arguments');
+    expect(decided.result.refusal).toBe('pico_model_provider_credential_on_unprotected_transport');
+  }, 60_000);
+});

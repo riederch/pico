@@ -4868,6 +4868,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             || typeof args.reach !== 'string'
             || typeof args.model !== 'string'
             || typeof args.providerClass !== 'string'
+            || (args.credentialRef !== undefined && typeof args.credentialRef !== 'string')
+            || (args.credential !== undefined && typeof args.credential !== 'string')
             || !picoModelProviderClasses.includes(args.providerClass as never)) {
             return { outcome: 'invalid_arguments', result: {} };
           }
@@ -4882,6 +4884,91 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           } catch {
             return { outcome: 'invalid_arguments', result: { refusal: 'model_has_no_name' } };
           }
+          /**
+           * ADR 0151 PV1. A host that reads a credential is measured with one.
+           *
+           * **Nothing about a secured host is measurable without it.** Every
+           * probe the measurement makes is a request, so an unauthenticated
+           * run against an authenticating proxy observes a 401 at
+           * `/api/version` and stops - no window, no throughput, no lanes, and
+           * an entry nobody can write. The secret is opened here, from the
+           * seal this person submitted under this exact name, and lives for
+           * the length of one measurement.
+           *
+           * **A reference that names nothing refuses rather than measuring
+           * openly.** Falling back to an unauthenticated run would answer a
+           * different question than the one asked and put its answer in the
+           * same field - a report saying the host refuses everything, about a
+           * host that was never asked properly. ADR 0142 PE2 is what forbids
+           * that: an entry carries what was observed, and a measurement of the
+           * wrong path observed nothing about this one.
+           *
+           * The credential rides on the measurement and buys no allowance:
+           * PV1's proof is spent by a person at `decision.submit`, and the
+           * entry this run writes still carries `live_turn`.
+           */
+          let credential: string | undefined;
+          let credentialRefToSeal: string | undefined;
+          if (args.credential !== undefined) {
+            /**
+             * **The first measurement of a secured host, which had no path at
+             * all.** `putCredential` refuses an entry that does not exist, an
+             * entry exists only once a measurement has written one, and a
+             * measurement of a host behind an authenticating proxy needs the
+             * credential to get past `/api/version`. Three rules that each
+             * hold on their own, closing a circle nobody drew: on a Home that
+             * has never measured this host, no order of the existing calls
+             * reaches it.
+             *
+             * So the secret may arrive with the ask, and it is *sealed after
+             * the entry lands* rather than before - which keeps
+             * `putCredential`'s rule exactly as it was, and leaves a
+             * measurement that failed holding nobody's secret.
+             *
+             * It travels on this route once, the way it travels on
+             * `credential.submit` once: there is no read operation, and a
+             * re-measurement names the reference instead.
+             */
+            if (args.credential === ''
+              || typeof args.credentialRef !== 'string'
+              || args.credentialRef === '') {
+              return { outcome: 'invalid_arguments', result: {} };
+            }
+            credential = args.credential;
+            credentialRefToSeal = args.credentialRef;
+          } else if (args.credentialRef !== undefined) {
+            if (args.credentialRef === '') {
+              return { outcome: 'invalid_arguments', result: {} };
+            }
+            const seal = store.picoModelProviderConsent().credentialSealFor(
+              entryId,
+              principal.picoIdentityFingerprintHex,
+              args.credentialRef,
+            );
+            if (seal === undefined) {
+              return {
+                outcome: 'invalid_arguments',
+                result: { refusal: 'pico_model_provider_credential_not_held' },
+              };
+            }
+            const opened = modelProviderCredentials.open({
+              seal: seal as PicoModelProviderCredentialSeal,
+              entryId,
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+              credentialRef: args.credentialRef,
+            });
+            if (opened.status !== 'ok') {
+              // ADR 0072 R6. A restored database holds the seal and no key,
+              // which is a Home that cannot prove who it is - said in those
+              // words rather than measured as a host that refuses everything.
+              return {
+                outcome: 'invalid_arguments',
+                result: { refusal: 'pico_model_provider_credential_key_unavailable' },
+              };
+            }
+            credential = opened.secret;
+          }
+
           const providerClass = args.providerClass as PicoModelProviderClass;
           const startedAt = new Date().toISOString();
           const started = modelProviderMeasurements.start({
@@ -4911,6 +4998,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             try {
               const measurer = new PicoModelProviderMeasurer({
                 reach, model, providerClass, entryId,
+                ...(credential === undefined ? {} : { credential }),
                 /**
                  * ADR 0142's *residency is part of availability*, as a
                  * requirement rather than a flag.
@@ -4936,6 +5024,22 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               });
               // ADR 0142 PE1. The first caller this has ever had outside a test.
               store.picoModelProviderRegistry().put(entry, new Date().toISOString());
+              if (credentialRefToSeal !== undefined && credential !== undefined) {
+                // Now there is an entry for it to belong to, and a measurement
+                // that says what the far side does with it.
+                store.picoModelProviderConsent().putCredential({
+                  entryId,
+                  picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+                  credentialRef: credentialRefToSeal,
+                  seal: modelProviderCredentials.seal({
+                    entryId,
+                    picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+                    credentialRef: credentialRefToSeal,
+                    secret: credential,
+                  }),
+                  at: new Date().toISOString(),
+                });
+              }
               modelProviderMeasurements.settle({
                 entryId, at: new Date().toISOString(), notes: report.notes,
               });

@@ -45,6 +45,19 @@ export interface PicoFakeModelHostOptions {
   /** ADR 0151 PV5. Whether a credential that cannot be right is refused. */
   refusesAWrongCredential?: boolean;
   /**
+   * ADR 0151 PV1. The one credential this host accepts, if it reads any.
+   *
+   * **A host that checks is not a host that refuses.** `refusesAWrongCredential`
+   * models the half a probe can see from outside - something came back 401 -
+   * and a measurer pointed at it cannot measure anything, because its own
+   * requests are refused too. This option models the deployment that securing
+   * an open host actually produces: exactly one bearer is answered, everything
+   * else - wrong or absent - is not. It is what lets a test drive a full
+   * measurement *through* an authenticating proxy rather than only bounce off
+   * one.
+   */
+  credential?: string;
+  /**
    * A context width the host cannot hold. A run at or above it reports the
    * model spilling off the accelerator, which is what an entry must not claim.
    */
@@ -93,7 +106,14 @@ export async function startPicoFakeModelHost(
     const path = (request.url ?? '').split('?')[0] ?? '';
     requests.push(path);
 
-    if (options.refusesAWrongCredential === true) {
+    if (options.credential !== undefined) {
+      // The secured deployment: one bearer is answered and nothing else is,
+      // which includes a request that carries none at all.
+      if (request.headers.authorization !== `Bearer ${options.credential}`) {
+        response.writeHead(401).end('{}');
+        return;
+      }
+    } else if (options.refusesAWrongCredential === true) {
       const authorization = request.headers.authorization;
       if (typeof authorization === 'string' && authorization !== '') {
         // Exactly what the PV5 probe is looking for: a host that reads a

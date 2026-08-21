@@ -126,8 +126,17 @@ export interface PicoModelProviderMeasurementReport {
   widestFreeWindowTokensPerSecond: number | null;
   /** What the model's own metadata implies one token of KV cache costs. */
   kvBytesPerToken: number | null;
-  /** ADR 0142 PE5. True when a request carrying no credential was answered. */
-  answeredWithoutCredential: boolean;
+  /**
+   * ADR 0142 PE5. True when a request carrying no credential was answered.
+   *
+   * **Measured rather than assumed since 2026-08-21.** It was the constant
+   * `true` for as long as the measurer had no way to authenticate, where it
+   * restated the run having got as far as reading it. A measurer that sends a
+   * credential cannot say that any more, so this is now one deliberate bare
+   * request. `null` is the third answer: the host said something that is
+   * neither a refusal nor an answer, and PE5 went unmeasured.
+   */
+  answeredWithoutCredential: boolean | null;
   /**
    * ADR 0151 PV5, and the hole PV5 alone does not close.
    *
@@ -150,6 +159,21 @@ export interface PicoModelProviderMeasureOptions {
   /** ADR 0048. A person's judgement, never a measurement. */
   providerClass: PicoModelProviderClass;
   entryId: string;
+  /**
+   * ADR 0151 PV1. The secret a job on this entry would send, if the host reads
+   * one.
+   *
+   * **The plain secret rather than a reference, and only for the length of one
+   * measurement.** Custody lives where ADR 0138 CO1 put it - sealed under its
+   * own key domain in `ModelProviderCredentialCrypto` - and the caller opens
+   * it there and hands it here. The measurer holds no store, writes nothing
+   * and outlives no run, which is what makes taking the secret itself the
+   * smaller surface rather than the larger one.
+   *
+   * Absent measures an open host, which is what every measurement did before
+   * one was secured.
+   */
+  credential?: string;
   /** Contexts to measure generation at, in tokens. */
   contextSteps?: readonly number[];
   /** ADR 0142 PE4. Unloading first is the only way to observe a cold load. */
@@ -226,8 +250,34 @@ export class PicoModelProviderMeasurer {
     this.now = options.now ?? (() => Date.now());
   }
 
+  /**
+   * ADR 0151 PV1. Every probe carries what a job would carry.
+   *
+   * **A measurement of a path no job takes measures nothing.** Once a host
+   * reads a credential, an unauthenticated measurer observes exactly one
+   * thing - 401 at the first endpoint it touches - and that is not a fact
+   * about the deployment's window, its throughput or its lanes. So the secret
+   * rides on every request here, in the header `PicoModelRuntime.dispatch`
+   * uses, and the capacity in the report is capacity on the path the work will
+   * actually run on.
+   *
+   * The two probes that ask *about* credentials are deliberately outside this:
+   * one sends a credential that cannot be right, the other sends none, and
+   * both would be answering their own question if they came through here.
+   */
+  private headers(extra?: Record<string, string>): Record<string, string> {
+    const credential = this.options.credential;
+    return {
+      ...extra,
+      ...(credential === undefined ? {} : { authorization: `Bearer ${credential}` }),
+    };
+  }
+
   private async get(path: string): Promise<unknown> {
-    const response = await this.call(`${this.reach}${path}`, { method: 'GET' });
+    const response = await this.call(`${this.reach}${path}`, {
+      method: 'GET',
+      headers: this.headers(),
+    });
     if (!response.ok) {
       throw new Error(`pico_model_provider_probe_failed:${path}:${response.status}`);
     }
@@ -237,7 +287,7 @@ export class PicoModelProviderMeasurer {
   private async post(path: string, body: unknown): Promise<unknown> {
     const response = await this.call(`${this.reach}${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: this.headers({ 'content-type': 'application/json' }),
       body: JSON.stringify(body),
     });
     if (!response.ok) {
@@ -310,16 +360,64 @@ export class PicoModelProviderMeasurer {
     }
   }
 
+  /**
+   * ADR 0142 PE5, asked instead of assumed.
+   *
+   * **One deliberate bare request, at the cheapest endpoint on the host.** It
+   * reads in both directions: an open host answers it, a secured one refuses
+   * it, so the same probe carries PE5's finding whether or not this
+   * measurement was authenticated - where the old constant could only ever
+   * describe the open case it was written in.
+   *
+   * The note it can push is the one that matters most on a host somebody has
+   * just put a proxy in front of. A credential sent to a host that also
+   * answers without one distinguishes this Home from nobody, and ADR 0151 PV1
+   * spends that proof on retrieved memory - somebody else's remembered words,
+   * on the strength of a lock the door does not have.
+   */
+  private async answersWithoutACredential(notes: string[]): Promise<boolean | null> {
+    let answered: boolean | null;
+    try {
+      const probed = await this.call(`${this.reach}/api/version`, { method: 'GET' });
+      if (probed.status === 401 || probed.status === 403) {
+        answered = false;
+      } else if (probed.ok) {
+        answered = true;
+      } else {
+        answered = null;
+        notes.push(
+          `a request carrying no credential answered ${probed.status}, which is neither a `
+          + 'refusal nor an answer, so ADR 0142 PE5 went unmeasured on this run.',
+        );
+      }
+    } catch {
+      // Unreachable without a credential where it was reachable with one is
+      // not a thing a network does; it is a thing that could not be told.
+      answered = null;
+    }
+    if (answered === true && this.options.credential !== undefined) {
+      notes.push(
+        'this host answers a request carrying no credential at all, so the credential '
+        + 'this measurement sent distinguishes it from nobody who can reach the port. '
+        + 'ADR 0151 PV1 spends that proof on retrieved memory, and there is none here to spend.',
+      );
+    }
+    this.log(answered === null
+      ? 'could not tell whether a bare request is answered'
+      : answered
+        ? 'a request carrying no credential is answered'
+        : 'a request carrying no credential is refused');
+    return answered;
+  }
+
   public async measure(): Promise<PicoModelProviderMeasurementReport> {
     const notes: string[] = [];
     const keepAliveSeconds = this.options.keepAliveSeconds ?? 300;
     const steps = this.options.contextSteps ?? [4096, 8192];
 
     const version = await this.get('/api/version') as { version?: string };
-    // ADR 0142 PE5. Nothing above sent a credential, and the host answered.
-    // That is the finding, and it is the whole of what PE5 can observe.
-    const answeredWithoutCredential = true;
     this.log(`reachable, server version ${version.version ?? 'unknown'}`);
+    const answeredWithoutCredential = await this.answersWithoutACredential(notes);
 
     await this.takeTheAccelerator(notes);
 
@@ -749,8 +847,19 @@ export function picoModelProviderEntryFromMeasurement(
         keepAliveMs: report.keepAliveMs,
       },
     },
-    // ADR 0151 PV1. No credential was sent, so this is what the entry carries.
-    // The wider allowance is not something a measurement can grant.
+    /**
+     * ADR 0151 PV1. The narrower allowance, whatever the measurement found.
+     *
+     * **A measurement can now prove the far side reads a credential, and it
+     * still grants nothing.** The sentence here used to be "no credential was
+     * sent, so this is what the entry carries", which stopped being the reason
+     * the moment the measurer could authenticate. The reason was never the
+     * absence: PV1 spends a proof on somebody else's remembered words, and
+     * that is a person's decision through ADR 0152's surface. What a
+     * measurement contributes is `refusesAWrongCredential` and
+     * `answeredWithoutCredential` - the two findings that make the decision an
+     * informed one instead of a hopeful one.
+     */
     carries: 'live_turn',
   });
 }
