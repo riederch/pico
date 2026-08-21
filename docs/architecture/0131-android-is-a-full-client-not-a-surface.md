@@ -477,6 +477,54 @@ local-first product's most security-critical moment.
   live where the Linux one lives: the shell-free core never sees a
   `KeyInfo`, so on Android the platform code judges and what crosses into the
   core is a verdict with its evidence, not a backend name to be judged there.
+  **The two named gaps are closed, and closing them changed the answer**
+  (2026-08-21, same Galaxy A55, Android 16, patch 2026-07-05). The probe pins
+  the root and parses the extension now, which is what the paragraph above said
+  an implementation would have to do.
+
+  **There is not one Google attestation root. There are two, and pinning
+  either alone refuses real phones.** The RSA root
+  (`SERIALNUMBER=f92009e853b6b045`, valid to 2042) signed every chain until
+  Google's EC root - `CN=Key Attestation CA1`, P-384, valid 2025-07-17 to
+  2035-07-15 - **began signing on 2026-02-01**. This phone, six weeks off a
+  patch, already chains to the EC one. A pin written from the older
+  documentation would have refused it, and a pin written from this device alone
+  would refuse every phone that has not moved. Both are shipped.
+
+  The pin was not taken from the device it verifies, which would be circular.
+  The device's root was extracted, Google's published list fetched
+  independently from `https://android.googleapis.com/attestation/root`, and the
+  two compared: **byte-identical**, SHA-256
+  `6d9db4ce6c5c0b293166d08986e05774a8776ceb525d9e4329520de12ba4bcc0`. That
+  comparison also proves the transcription exact, since one wrong character
+  moves the digest. A refreshed pin comes from that endpoint, never from a
+  phone.
+
+  **What the extension actually says on this device**, read out of bytes signed
+  by a key the phone does not hold: attestation version 300, attestation
+  security level `trusted_environment`, KeyMint 300 at `trusted_environment`,
+  verified boot state `verified`, device locked, a 32-byte verified-boot key,
+  OS patch level `202607` and boot patch level `20260705`. The challenge comes
+  back exactly as it went in.
+
+  So the two independent sources **agree**: `KeyInfo.getSecurityLevel()` says
+  `TRUSTED_ENVIRONMENT` and the signed extension says `trusted_environment`.
+  That agreement is the whole point of reading both - on a keystore that is
+  software all the way down the first would say the same thing and the second
+  could not.
+
+  **Both checks were falsified rather than trusted.** One byte turned in the
+  pinned root makes the verdict `none`; a changed expected challenge makes
+  `challengeMatches` false *while the pin still matches*, so the two are
+  independent rather than one check wearing two names.
+
+  Two things stay open, and they are the product half. No Android surface
+  ships this yet - it lives in the probe, which is a lab artifact. And the
+  verdict that crosses into the shell-free core is not written: what belongs
+  there is a level plus its evidence, and the ADR 0134 question of what happens
+  when the pin list changes under a client that is already installed has no
+  answer yet. A pin is a list, and lists that ship become things that expire.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and
