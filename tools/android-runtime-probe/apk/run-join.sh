@@ -76,8 +76,8 @@ rm -rf "$stage"
 # resolves a cache of its own and has been seen to land somewhere unwritable.
 (cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir /tmp/pico-pnpm-store \
   deploy --prod --frozen-lockfile "$stage")
-cp "$here/join.mjs" "$here/keystore-port.mjs" "$here/daemon.mjs" "$here/preload.cjs" \
-  "$here/conformance.mjs" "$stage/"
+cp "$here/join.mjs" "$here/keystore-port.mjs" "$here/reopen.mjs" "$here/daemon.mjs" \
+  "$here/preload.cjs" "$here/conformance.mjs" "$stage/"
 tar -C "$repo/.pico-stage" -c --hard-dereference -f "$work/probe-stage.tar" probe-stage
 
 adb install -r "$work/pico-a1-probe.apk"

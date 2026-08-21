@@ -714,6 +714,50 @@ local-first product's most security-critical moment.
   einen Neustart übersteht, und dass der Kern den Belegsatz dieses Anschlusses
   - nicht den der Sonde - annimmt.
 
+  **Gelaufen, am selben Abend** (2026-08-21, Galaxy A55, Android 16, Patchstand
+  2026-07-05). Alle drei Fragen beantwortet:
+
+  - **Erreichbar.** `LocalServerSocket` über `Namespace.FILESYSTEM` nimmt eine
+    Verbindung von Nodes `net.connect` an. Der Beleg, den Node zurückbekam,
+    stammt aus den Schlüsseln des Anschlusses selbst - nicht aus denen der
+    Sonde -, und lautet `trusted_environment`, EC-Wurzel, Challenge passend.
+  - **Angenommen.** Der volle Beitritt lief gegen das Sponsor-Labor durch, das
+    Home meldete die Delegation, und `platform-unlock.json` steht auf dem
+    Telefon: `platform: android`, `keystoreLevel: trusted_environment`,
+    `sealedWith` mit Wurzel und beiden Patchständen, die Bindung an
+    Delegation und vier Fingerabdrücke - und **die Passphrase kommt darin
+    nicht vor**. 57 Byte Chiffrat: 12 IV, 29 Klartext, 16 Tag.
+  - **Übersteht den Prozesstod.** `adb shell am force-stop`, dann ein neuer
+    Prozess (`:reopen`), der beim Versiegeln nicht dabei war. Der Kern las den
+    Satz, verglich das Niveau, entsiegelte, und der Vault-Daemon öffnete beide
+    Gerätesitzungen - `unlock ok` für `device_signing` und
+    `device_key_agreement`, mit einer Passphrase, die niemand getippt hat. Der
+    Daemon ist dabei der eigentliche Zeuge: er nimmt eine falsche Passphrase
+    nicht an.
+
+  **Fünf Pflanzungen am echten Satz auf echter Hardware, fünf verschiedene
+  Ablehnungen** - und sie kommen aus drei verschiedenen Schichten, was der
+  interessante Teil ist:
+
+  | gedreht | Ablehnung | wer sprach |
+  |---|---|---|
+  | `keystoreLevel` → `strongbox` | `platform_unlock_level_changed` | die Regel |
+  | ein Byte im Chiffrat | `AEADBadTagException` | das TEE selbst |
+  | fremde `delegationId` | `platform_unlock_profile_mismatch` | die Bindung |
+  | `sealedWith` auf den alten Wurzelnamen | `invalid_platform_unlock_sealed_with` | der Parser |
+  | als Linux-Satz ausgegeben | `platform_unlock_platform_changed` | die Plattformprüfung |
+
+  **Ein erster Durchgang war wertlos und wurde verworfen.** Alle vier
+  Pflanzungen scheiterten mit `ECONNREFUSED` auf den Daemon-Socket - der
+  Reopen-Dienst startete, bevor der Vault-Daemon lauschte. Vier Fehlschläge,
+  kein einziger aus dem gepflanzten Grund. Ein Test, der aus einem anderen
+  Grund fällt als dem behaupteten, beweist nichts, und ihn zu zählen wäre
+  schlimmer als ihn nicht gelaufen zu haben.
+
+  `ReopenService` ist dafür dazugekommen, in eigenem Prozess: ein Siegel, das
+  nur im erzeugenden Prozess aufgeht, ist keins, und im selben Prozess zu
+  prüfen hieße, den Cache zu messen statt den Keystore.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and

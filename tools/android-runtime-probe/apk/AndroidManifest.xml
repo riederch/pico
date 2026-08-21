@@ -34,6 +34,15 @@
     </service>
     <!-- ADR 0131 A1: what this runtime actually provides, asked in its own
          process so it can be asked at any time. -->
+<!-- ADR 0131 A3: der zweite Prozess, der prüft, ob das Versiegelte sich
+         noch öffnet. Eigener Prozess, weil nodejs-mobile eine Node-Instanz je
+         Prozess hält - und weil ein Siegel, das nur im erzeugenden Prozess
+         aufgeht, kein Siegel ist. -->
+    <service android:name=".ReopenService" android:process=":reopen"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a1_runtime_probe" />
+    </service>
     <service android:name=".ConformanceService" android:process=":conformance"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
