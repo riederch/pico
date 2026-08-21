@@ -170,8 +170,8 @@ public final class JoinActivity extends Activity {
     String step = message.optString("step");
     switch (verb) {
       case "show":
-        title.setText(titleFor(step));
-        body.setText(bodyFor(step));
+        title.setText(titleOf(message, step));
+        body.setText(bodyOf(message, step));
         code.setText(message.optString("code"));
         code.setVisibility(View.VISIBLE);
         answer.setVisibility(View.GONE);
@@ -179,9 +179,9 @@ public final class JoinActivity extends Activity {
         status.setText("Hold this up to your other device, or type it there.");
         break;
       case "ask":
-        title.setText(titleFor(step));
+        title.setText(titleOf(message, step));
         body.setText(message.has("statement")
-          ? message.optString("statement") : bodyFor(step));
+          ? message.optString("statement") : bodyOf(message, step));
         // The code being shown stays on screen while the answer is typed:
         // the other device is reading it at that moment.
         code.setVisibility(message.has("showing") ? View.VISIBLE : code.getVisibility());
@@ -201,7 +201,7 @@ public final class JoinActivity extends Activity {
         status.setText("");
         break;
       case "say":
-        status.setText(bodyFor(step));
+        status.setText(bodyOf(message, step));
         answer.setVisibility(View.GONE);
         send.setVisibility(View.GONE);
         scan.setVisibility(View.GONE);
@@ -303,6 +303,29 @@ public final class JoinActivity extends Activity {
    * E3) said for a phone; a second vocabulary would be a second thing to keep
    * true.
    */
+  /**
+   * ADR 0131 A5 / ADR 0113 C2 - der gereichte Satz gewinnt.
+   *
+   * Bis zum 2026-08-21 wählte diese Activity ihre Worte selbst, und der Kern
+   * hielt dieselben Schritte in anderen Sätzen. Zwei Clients, die einer Person
+   * zwei verschiedene Dinge über denselben Moment sagen, sind der Defekt, den
+   * A5 misst - und diese Fläche war der zweite Client.
+   *
+   * Was unten stehen bleibt, sind die zwei Momente, die kein Schritt des Walks
+   * sind: die Passphrase und die ADR-0106-Zustimmung. Der Desktop hält seine
+   * dafür ebenfalls selbst, also ist das ein gleicher Stand und keine
+   * Abweichung.
+   */
+  private static String titleOf(JSONObject message, String step) {
+    String given = message.optString("title", "");
+    return given.isEmpty() ? titleFor(step) : given;
+  }
+
+  private static String bodyOf(JSONObject message, String step) {
+    String given = message.optString("body", "");
+    return given.isEmpty() ? bodyFor(step) : given;
+  }
+
   private static String titleFor(String step) {
     switch (step) {
       case "passphrase": return "Choose a Vault passphrase";

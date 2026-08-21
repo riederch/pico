@@ -1231,6 +1231,15 @@ local-first product's most security-critical moment.
   - the whole UI toolchain, twelve Java files: `javac` 0.3 s, `d8` 0.6 s -
     **one second**, against a Gradle build that starts by warming daemons
 
+  One correction to that list, made on the same day by compiling it: there *is*
+  a third-party jar. `ScanActivity` reads QR codes with `com.google.zxing`, and
+  `run-keystore-probe.sh` fetches `core-3.5.3.jar` from Maven Central with a
+  `curl` into `~/.cache/pico-apk-libs`. That is a dependency, and the first
+  version of this note read as though there were none. It does not change the
+  conclusion - one jar on a classpath is not a resolver, a daemon or a build
+  system - but "no dependency machinery" and "one curl" are different claims
+  and the second one is the true one.
+
   So the decision is not "can this machine afford Gradle" but "does the Android
   surface need Compose at all", and for the three verbs this gate owes a
   platform - put a code in front of a person, take one back, say where in the
@@ -1273,6 +1282,34 @@ local-first product's most security-critical moment.
   Die zwei Sätze kommen jetzt über einen eigenen Kanal fertig herüber; was das
   Fenster noch tut, ist auswählen, welcher zur geöffneten Absicht gehört. Unter
   fertigen Sätzen zu wählen ist keine Darstellungsentscheidung.
+
+  **Phase 5 hat angefangen, und der erste Handgriff war der, den der Umzug
+  derselben Stunde möglich gemacht hat** (2026-08-21). Die Android-Fläche
+  erfüllte den Vertrag längst: `join.mjs` implementiert `showCode`, `readCode`
+  und `announce` und treibt `runPicoCompanionAskingDeviceExchange`. Aber sie
+  reichte nur den **Schrittnamen** an die Activity weiter, und
+  `JoinActivity.java` hielt eigene Sätze für `show_offer`, `read_grant`,
+  `show_acceptance`, `waiting` und `joined` - in Java geschrieben, neben
+  denselben Schritten im Kern.
+
+  Das ist genau der zweite Client, den dieses Gate misst, und er existierte
+  schon. Der Desktop hat denselben Defekt am selben Tag verloren; hier war er
+  eine Ebene tiefer, weil zwischen Kern und Fläche noch ein Prozess und ein
+  Socket liegen.
+
+  `join.mjs` läuft im selben App-Prozess wie der Kern und kann ihn importieren,
+  also rendert es jetzt dort und schickt den fertigen Satz mit. Die Activity
+  nimmt den gereichten und wählt keinen mehr - dieselbe Gestalt wie das
+  Electron-Fenster, das seine Sätze über IPC bekommt.
+
+  Was in der Activity bleibt, sind zwei Momente, die kein Schritt des Walks
+  sind: die Passphrase und die ADR-0106-Zustimmung. Der Desktop hält seine
+  dafür ebenfalls selbst, **also ist das ein gleicher Stand und keine
+  Abweichung** - und die nächsten zwei, die umziehen, wenn jemand sie anfasst.
+
+  Gebaut und kompiliert (19 Klassen), **nicht auf dem Gerät bewiesen**: das
+  Telefon war beim Bauen nicht angeschlossen. Was fehlt, ist ein Lauf, der die
+  fünf Schritte auf dem Bildschirm zeigt.
 
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a

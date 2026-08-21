@@ -25,6 +25,7 @@ import {
 } from '@pico/companion/enrolment';
 import {
   picoCompanionEnrolmentReadPrefix,
+  picoCompanionEnrolmentStepLine,
   runPicoCompanionAskingDeviceExchange,
 } from '@pico/companion/enrolment-steps';
 
@@ -127,18 +128,46 @@ const ask = async (kind, step, extra = {}) => await new Promise((resolve) => {
   send(lastQuestion);
 });
 
+/**
+ * ADR 0131 A5 / ADR 0113 C2. Die Worte kommen aus dem Kern, nicht von hier
+ * und schon gar nicht aus der Activity.
+ *
+ * Bis zum 2026-08-21 reichte diese Fläche nur den Schrittnamen weiter, und
+ * `JoinActivity.java` hielt eigene Sätze für `show_offer`, `read_grant`,
+ * `show_acceptance`, `waiting` und `joined`. Das ist derselbe Defekt, den der
+ * Desktop am selben Tag verloren hat - und der Grund, warum A5 überhaupt misst,
+ * was ein zweiter Client neu entscheidet: zwei Clients, die einer Person zwei
+ * verschiedene Dinge über denselben Moment sagen.
+ *
+ * Dieser Prozess läuft im selben App-Prozess wie der Kern und kann ihn deshalb
+ * importieren. Die Activity kann es nicht - sie bekommt fertige Sätze, so wie
+ * das Electron-Fenster sie über IPC bekommt.
+ */
+const line = (step) => {
+  try {
+    return picoCompanionEnrolmentStepLine(step);
+  } catch (notAnEnrolmentStep) {
+    // `passphrase` und `approval` sind keine Schritte des Walks; sie gehören
+    // zur Gründung und zur ADR-0106-Zustimmung. Die Activity behält ihre
+    // Sätze dafür, so wie der Desktop seine behält - ein gleicher Stand auf
+    // beiden Seiten, keine Abweichung.
+    return {};
+  }
+};
+
 const surface = {
   showCode: async (step, code) => {
-    send({ v: 'show', step, code });
+    send({ v: 'show', step, code, ...line(step) });
   },
   readCode: async (step, showing) => await ask('code', step, {
     // The surface is told which prefix this step expects, so a camera can
     // refuse a code from an earlier step instead of handing it on.
     prefix: picoCompanionEnrolmentReadPrefix(step),
+    ...line(step),
     ...(showing === undefined ? {} : { showing }),
   }),
   announce: async (step) => {
-    send({ v: 'say', step });
+    send({ v: 'say', step, ...line(step) });
   },
 };
 
