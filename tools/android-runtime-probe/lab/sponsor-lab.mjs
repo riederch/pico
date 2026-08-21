@@ -19,7 +19,13 @@
  * carry codes between two screens the way the ceremony is meant to be walked.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { mkdtempSync, mkdirSync } from 'node:fs';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { createServer } from 'node:net';
@@ -59,14 +65,161 @@ const CORE = join(repoRoot, 'apps', 'core', 'dist', 'index.js');
 const CLI = join(repoRoot, 'apps', 'vault-daemon', 'dist', 'cli.js');
 const PASSPHRASE = process.env.PICO_LAB_PASSPHRASE ?? 'a-passphrase-for-the-lab';
 
+/**
+ * Was dieses Labor startet, nimmt es auch wieder mit.
+ *
+ * **Am 2026-08-21 tat es das nicht**, und der Grund war ein fehlender Name:
+ * es gab einen Handler für `SIGINT` und keinen für `SIGTERM`. Ein
+ * `pkill -f sponsor-lab.mjs` schickt `SIGTERM`, Node beendet sich daraufhin
+ * *ohne* die `exit`-Handler zu laufen, und Home und Vault-Daemon liefen
+ * weiter. `systemd --user` adoptierte sie, und drei Stunden später lauschte
+ * ein Home, von dem niemand mehr wusste, immer noch auf `0.0.0.0` - der
+ * Link-Intake bindet im Labor absichtlich auf alle Schnittstellen, damit ein
+ * Telefon ihn erreicht, und genau das macht ein vergessenes Labor zu mehr als
+ * einer Unordnung.
+ *
+ * Die Aufräumarbeit liegt hier und nicht in `run-sponsor-lab.sh`, weil das
+ * Skript mit `exec` in diesen Prozess übergeht: nach dem `exec` gibt es keine
+ * Shell mehr, die ein `trap` ausführen könnte.
+ */
+/**
+ * Die Notiz, an der der nächste Lauf die Reste dieses erkennt.
+ *
+ * **Ohne Sperre, und das ist eine Entscheidung.** Beenden sich zwei Labore im
+ * selben Moment, können ihre Schreibvorgänge einander überholen und eine Zeile
+ * stehenlassen, die niemandem mehr gehört. Das heilt sich beim nächsten Start:
+ * ein Kind, das nicht mehr läuft, wird übersprungen *und* aus der Notiz
+ * genommen. Eine Dateisperre für ein Laborskript wäre mehr Maschinerie als
+ * Nutzen - der Schaden eines verlorenen Schreibvorgangs ist eine Zeile zu
+ * viel, nicht ein Prozess zu wenig.
+ */
+const RUNNING = join(tmpdir(), 'pico-sponsor-lab.running');
+
 const children = [];
+let stopping = false;
 const stop = () => {
+  if (stopping) {
+    return;
+  }
+  stopping = true;
   for (const child of children) {
-    child.kill('SIGTERM');
+    try {
+      child.kill('SIGTERM');
+    } catch (alreadyGone) {
+      // Ein Kind, das schon tot ist, ist der gewünschte Zustand.
+    }
+  }
+  // Nur die eigenen Zeilen, nicht die Datei: ein zweites Labor darf hier
+  // gleichzeitig stehen, und seine Notiz gehört ihm.
+  forgetOwnLines();
+};
+// `SIGTERM` ist der, der gefehlt hat; `SIGHUP` ist das Terminal, das
+// weggeht - beides Wege aus diesem Prozess, die vorher niemand aufräumte.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => { stop(); process.exit(0); });
+}
+process.on('exit', stop);
+
+/**
+ * Und die Wege, die kein Handler abfängt.
+ *
+ * Ein `SIGKILL` auf diesen Prozess lässt sich von innen nicht behandeln -
+ * dagegen hilft nur, dass der *nächste* Lauf die Reste des vorigen findet.
+ * Deshalb schreibt das Labor die Prozessnummern seiner Kinder auf und liest
+ * sie beim Start wieder.
+ *
+ * Die Nummern allein wären gefährlich, weil das System sie wiederverwendet.
+ * Bevor eine beendet wird, muss ihre Kommandozeile noch zu dem passen, was
+ * dieses Labor gestartet hätte - sonst trifft es irgendeinen fremden Prozess,
+ * der zufällig dieselbe Nummer erbte.
+ */
+const remember = (child, marker) => {
+  children.push(child);
+  try {
+    // Die eigene Prozessnummer steht mit drin, und das ist der Unterschied
+    // zwischen Aufräumen und Sabotage: ohne sie würde ein startendes Labor die
+    // Kinder eines **laufenden** beenden, weil es sie für Reste hält.
+    appendFileSync(RUNNING, `${process.pid}\t${child.pid}\t${marker}\n`);
+  } catch (unwritable) {
+    // Ein Labor, das an seiner eigenen Notiz scheitert, soll trotzdem laufen.
   }
 };
-process.on('SIGINT', () => { stop(); process.exit(0); });
-process.on('exit', stop);
+const notedLines = () => {
+  try {
+    return readFileSync(RUNNING, 'utf8').split('\n').filter((line) => line !== '');
+  } catch (nothingLeftBehind) {
+    return [];
+  }
+};
+
+/** Läuft der Prozess noch, und ist er noch das, was die Notiz behauptet? */
+const stillIs = (pid, marker) => {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes(marker);
+  } catch (notRunning) {
+    return false;
+  }
+};
+
+const forgetOwnLines = () => {
+  const kept = notedLines().filter((line) => line.split('\t')[0] !== String(process.pid));
+  try {
+    if (kept.length === 0) {
+      unlinkSync(RUNNING);
+    } else {
+      writeFileSync(RUNNING, `${kept.join('\n')}\n`);
+    }
+  } catch (nothingToRemove) {
+    // Auch gut.
+  }
+};
+
+const sweepPreviousRun = () => {
+  const lines = notedLines();
+  if (lines.length === 0) {
+    return;
+  }
+  let ended = 0;
+  const kept = [];
+  for (const line of lines) {
+    const [labPid, childPid, marker] = line.split('\t');
+    if (marker === undefined || marker === '') {
+      continue;
+    }
+    // **Gehört das noch jemandem?** Lebt das Labor, das dieses Kind gestartet
+    // hat, dann ist es kein Rest, sondern fremder Betrieb - und ein Labor, das
+    // ein laufendes abräumt, wäre schlimmer als eins, das Reste liegen lässt.
+    if (stillIs(labPid, 'sponsor-lab.mjs')) {
+      kept.push(line);
+      continue;
+    }
+    if (!stillIs(childPid, marker)) {
+      // Schon beendet, oder die Nummer wurde inzwischen neu vergeben.
+      continue;
+    }
+    try {
+      process.kill(Number(childPid), 'SIGTERM');
+      ended += 1;
+    } catch (vanishedMeanwhile) {
+      // Zwischen Lesen und Senden beendet - auch gut.
+    }
+  }
+  try {
+    if (kept.length === 0) {
+      unlinkSync(RUNNING);
+    } else {
+      writeFileSync(RUNNING, `${kept.join('\n')}\n`);
+    }
+  } catch (nothingToRemove) {
+    // Auch gut.
+  }
+  if (ended > 0) {
+    process.stdout.write(
+      `== ${ended} Prozess(e) eines früheren Labors beendet, die niemand mehr `
+      + 'aufgeräumt hatte\n');
+  }
+};
+sweepPreviousRun();
 
 const say = (line) => process.stdout.write(`${line}\n`);
 const temp = (prefix) => mkdtempSync(join(tmpdir(), prefix));
@@ -152,7 +305,7 @@ async function startHome() {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  children.push(child);
+  remember(child, CORE);
   for (const stream of [child.stdout, child.stderr]) {
     stream.setEncoding('utf8');
     stream.on('data', (chunk) => { output += chunk; });
@@ -181,7 +334,7 @@ async function startDaemon() {
     '--foundation-data', temp('pico-lab-data-'),
     '--foundation-backup', temp('pico-lab-backup-'),
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
-  children.push(child);
+  remember(child, CLI);
   for (const stream of [child.stdout, child.stderr]) {
     stream.setEncoding('utf8');
     stream.on('data', (chunk) => { output += chunk; });

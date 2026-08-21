@@ -16,4 +16,8 @@ rm -rf "$work"
 (cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir /tmp/pico-pnpm-store \
   deploy --prod --frozen-lockfile "$work")
 cp "$here/sponsor-lab.mjs" "$work/"
+# `exec`, und deshalb steht das Aufräumen nicht hier. Nach dem `exec` gibt es
+# keine Shell mehr, die ein `trap` ausführen könnte - der Node-Prozess *ist*
+# von da an dieses Skript. Wer hier ein `trap` einhängt, hängt es an eine Shell,
+# die es nie erlebt.
 PICO_LAB_REPO="$repo" exec node "$work/sponsor-lab.mjs"
