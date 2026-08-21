@@ -68,6 +68,91 @@ afterEach(() => {
   }
 });
 
+/**
+ * ADR 0131 A3 - the start is an operation too, and it forgot to ask.
+ *
+ * **Found by standing a window up against a Home founded minutes earlier.**
+ * The keystore held the passphrase, the automatic unlock opened the vault when
+ * it was called by hand, and the shell never called it: `startServiceCore`
+ * built one, passed it in, and the runtime went straight to a lifecycle reader
+ * that builds a Link client - which signs with the device key, which is in a
+ * locked vault. The person saw "the local companion service could not start"
+ * on a device whose automatic unlock was configured and working.
+ *
+ * A cold vault is the normal state of a laptop in the morning, which is why
+ * every run that followed an unlocked one looked fine.
+ */
+describe('ADR 0131 A3 - a cold vault at the moment the runtime starts', () => {
+  it('asks the automatic unlock before it needs the device key', async () => {
+    const core = await startCore();
+    // Deliberately no approver and no unlock. This is the morning.
+    const daemon = await startDaemon('pico-companion-cold-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    const profilePath = join(tempDirectory('pico-companion-cold-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: { homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: 'delegation_companion_shell_cold_start',
+      },
+    });
+
+    const start = async (
+      automaticVaultUnlock?: {
+        ensureUnlocked(): Promise<void>;
+        lock(): Promise<void>;
+        close(): Promise<void>;
+      },
+    ): Promise<unknown> => await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: daemon.socketPath,
+      sodium,
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => undefined,
+        notify: () => undefined,
+      }),
+      ...(automaticVaultUnlock === undefined
+        ? {}
+        : { automaticVaultUnlock: automaticVaultUnlock as never }),
+    });
+
+    // Nobody to ask, so the vault stays shut and the start says which key it
+    // wanted rather than failing blankly.
+    await expect(start()).rejects.toThrow('link_device_signing_key_not_unlocked');
+
+    /**
+     * And with one, it is asked *first* - proven by letting it refuse. The
+     * sentinel is what surfaces; a start that still built the Link client
+     * before asking would fail on the device key one line further on, which is
+     * exactly what it did until 2026-08-21.
+     */
+    const asked: string[] = [];
+    await expect(start({
+      ensureUnlocked: async () => {
+        asked.push('ensureUnlocked');
+        throw new Error('the_keystore_refused');
+      },
+      lock: async () => { asked.push('lock'); },
+      close: async () => { asked.push('close'); },
+    })).rejects.toThrow('the_keystore_refused');
+    // Asked, refused, and closed again: a start that fails leaves no hold on
+    // the vault behind it. Written as the whole sequence rather than one
+    // membership check, because the order is the subject.
+    expect(asked).toEqual(['ensureUnlocked', 'close']);
+  }, 120_000);
+});
+
 describe('Electron-hosted companion runtime against real processes', () => {
   it('raises the ADR 0112 alarm from a real founded Home pending recovery', async () => {
     const core = await startCore();

@@ -412,6 +412,28 @@ export async function startPicoCompanionShellRuntime(input: {
 
   try {
     await daemonClient.hello();
+    /**
+     * ADR 0131 A3. The one place that forgot, and it is the first one.
+     *
+     * **Every operation below asks the automatic unlock before it runs, and
+     * the start did not.** The lifecycle reader builds a Link client, a Link
+     * client signs with the device key, and a device key in a locked vault
+     * refuses - so on a device that has been off, `startServiceCore` caught
+     * `link_device_signing_key_not_unlocked` and presented "the local
+     * companion service could not start" to somebody whose automatic unlock
+     * was configured, working, and never asked.
+     *
+     * Found by standing a window up against a Home founded minutes earlier:
+     * the keystore held the passphrase, `ensureUnlocked()` opened the vault
+     * when called by hand, and the shell never called it. A cold start is the
+     * normal state of a laptop in the morning, which is why this was invisible
+     * in every run that followed an unlocked one.
+     *
+     * Not swallowed: a keystore that cannot open is a Home this device cannot
+     * reach, and the caller's own catch says so in words. Silently carrying on
+     * would only move the same failure one line down.
+     */
+    await input.automaticVaultUnlock?.ensureUnlocked();
     const baseReadLifecycle = await createPicoCompanionLifecycleReader({
       profile,
       profilePath,
