@@ -130,6 +130,12 @@ A1
    │            schalenfreier Kern 66, 56 IPC-Kanäle beidseitig gleich benannt,
    │            15 Feldgrenzen als Namen)
    └─ ADR 0131  Android ist ein vollwertiger Client, keine Oberfläche
+        Code:   apps/companion/src/enrolment-steps.ts (die Sätze des Walks),
+                apps/companion/src/platform-secrets.ts (Android-Keystore-Verdikt),
+                tools/android-runtime-probe/apk/ (Fläche, noch Laborartefakt)
+        Beweis: enrolment-step-lines.test.ts, android-keystore-evidence.test.ts;
+                check-android-keystore-names.mjs (Kern und Sonde, 9 Belegfelder);
+                der volle Beitritt auf einem Galaxy A55 gegen ein echtes Home
 ```
 
 ### A2 — Wer ein Home betreibt, stellt Infrastruktur und erwirbt kein Leserecht
@@ -560,7 +566,9 @@ wiederholt. Was hier steht, ist die Position im Pfad:
 **Phase 1 und 2 sind durch, Phase 4 ist durchgelaufen. Offen sind Phase 3
 (die Zustandsgrenze), Phase 5 (Android-Ceremonies) und Phase 6 (die erste echte
 Nützlichkeit).** Der Linux-Client ist ohne Terminal installierbar und bedienbar;
-das Telefon trägt den Kern, aber noch keine ausgelieferte Fläche.
+das Telefon trägt den Kern und ist am 2026-08-21 vollständig in ein echtes
+Home eingezogen — drei Codes, zwei Geräte, die Sätze aus dem Kern —, aber die
+Fläche ist ein Laborartefakt und keine ausgelieferte App.
 
 ## Zukunft
 
@@ -622,6 +630,29 @@ Die Entscheidung heißt also nicht „kann diese Maschine Gradle tragen", sonder
 Phase schuldet, sagt der Befund: nein. Umkippen würde es eine echte
 AndroidX-Abhängigkeit — die zwei üblichen Kandidaten, Kamera und
 Biometrie-Dialog, beantwortet das Framework bei diesem `minSdkVersion` selbst.
+
+**Stand am 2026-08-21: die erste Vertikale läuft, die Sprache gehört dem
+Kern, das Urteil über die Hardware auch.** Der volle Beitritt lief auf einem
+Galaxy A55 gegen ein echtes Home, und dabei fielen zwei Dinge auf, die kein
+Vertrag gefangen hätte:
+
+- Der **letzte Bildschirm** gehörte noch der Fläche. `join.mjs` schickte am
+  Ende ein eigenes Verb `done`, außerhalb von
+  `PicoCompanionEnrolmentSurface`, und die Activity schrieb dafür eigene
+  Worte — während alle Schritte davor schon die des Kerns zeigten. `done` ist
+  eine Anzeigeform, kein zweiter Moment, und genau deshalb stand es nicht in
+  der Schnittstelle.
+- Der **Keystore-Beleg** war schon auseinandergedriftet, bevor die beiden
+  Hälften sich je begegnet waren: `google_ec_ca1` in der Sonde gegen
+  `google_ec_key_attestation_ca1` im Kern, und ein Sicherheitsniveau als Zahl
+  gegen dasselbe als Name. Ein Telefon mit einwandfreier Hardware hätte die
+  Ablehnung bekommen, die für gefälschte gedacht ist.
+
+Was daraus offen bleibt, ist die Hälfte, die ein Mensch bemerkt: **kein Gerät
+schützt seine Vault-Passphrase heute mit diesem Keystore.** Die Form des
+Urteils steht, die Funktion nicht. Dazu drei Momente, die auf beiden Clients
+noch eigene Sätze haben — Passphrase, ADR-0106-Zustimmung, Ablehnung —, und
+E3s zweite Hälfte: das Telefon als Sponsor statt als Bittsteller.
 
 Wie ein Telefon das Home erreicht: **nicht** über den Foundation-Port, der per
 Default an `127.0.0.1` bindet. Der Weg ist der eigene Link-Intake-Listener
