@@ -545,7 +545,7 @@ export async function acceptPicoCompanionEnrolment(input: {
         // has agreed.
         writePicoCompanionProfile(input.profilePath, profile);
         if (input.platformSecrets !== undefined && ownSession) {
-          writePicoCompanionPlatformUnlock({
+          await writePicoCompanionPlatformUnlock({
             path: input.platformUnlockPath
               ?? defaultPicoCompanionPlatformUnlockPath(input.profilePath),
             profile,

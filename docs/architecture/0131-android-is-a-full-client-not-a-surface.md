@@ -635,6 +635,30 @@ local-first product's most security-critical moment.
   Risse: erst versiegeln statt erst urteilen, "mindestens so gut" statt
   gleich, `sealedWith` doch verglichen, Plattformwechsel ungeprüft.
 
+  **Der Port ist asynchron, und das kostete `writePicoCompanionPlatformUnlock`
+  sein `async`** (2026-08-21). Electrons `safeStorage` antwortet im selben
+  Aufruf; der Android-Keystore liegt hinter einer Prozessgrenze, und daran
+  ändert keine Signatur etwas. Eine synchrone Fassade davor wäre die Art
+  Bequemlichkeit, die genau einmal gutgeht.
+
+  Die Umstellung machte eine Lücke auf, die dieses Projekt sonst nicht hat.
+  Aus jedem Aufruf einer bis dahin synchronen Funktion wurde eine Stelle, an
+  der ein vergessenes `await` nichts kaputt macht, was man sieht:
+
+      writePicoCompanionPlatformUnlock({ ... });   // Versprechen fällt
+      platformUnlockBound = true;                  // Behauptung steht
+
+  Der Journaleintrag sagt dann, die Passphrase sei an den Keystore gebunden,
+  während die Datei noch nicht geschrieben ist - und ein Absturz zwischen den
+  beiden Zeilen macht daraus ein Gerät, das sich für eingerichtet hält.
+  TypeScript sieht das nicht (ein ignoriertes `Promise<void>` ist gültiges
+  TypeScript), und dieses Projekt fährt ohne ESLint. Also prüft es
+  `scripts/check-awaited-secrets.mjs`, mit einer ausdrücklichen Grenze: nur
+  die `export async function`-Namen aus `platform-unlock.ts`, nur direkte
+  Aufrufe unter ihrem eigenen Namen. Zwei Pflanzungen, zwei Risse - ein
+  fehlendes `await`, und die Funktion wieder synchron gemacht, worauf der Gate
+  meldet, dass seine Liste ins Leere zeigt.
+
   Was jetzt noch fehlt, ist Java: ein Dienst, der einen TEE-Schlüssel hält,
   die Passphrase damit versiegelt und den Beleg über dieselbe Socket-Grenze
   reicht, über die der Beitritt schon spricht. Der Kern ist bereit, das Gerät

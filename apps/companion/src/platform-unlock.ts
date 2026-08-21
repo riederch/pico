@@ -130,20 +130,20 @@ export function defaultPicoCompanionPlatformUnlockPath(
  * unlock list. The passphrase string is an explicitly documented ADR 0123
  * JavaScript-runtime debt; it never crosses renderer IPC or persistent JSON.
  */
-export function writePicoCompanionPlatformUnlock(input: {
+export async function writePicoCompanionPlatformUnlock(input: {
   path: string;
   profile: PicoCompanionProfile;
   passphrase: string;
   secrets: PicoCompanionSecretPort;
-}): void {
+}): Promise<void> {
   assertPassphrase(input.passphrase);
   // **Zuerst** urteilen, dann versiegeln. Ein Keystore, den dieses Produkt
   // ablehnt, darf die Passphrase nicht einmal kurz gesehen haben; die
   // Reihenfolge ist derselbe Gedanke wie die Wurzel vor der Erweiterung.
   const header = input.secrets.platform === 'android'
-    ? androidHeader(input.secrets)
+    ? await androidHeader(input.secrets)
     : ({ platform: 'linux', backend: requireUsableBackend(input.secrets) } as const);
-  const encrypted = input.secrets.encryptString(input.passphrase);
+  const encrypted = await input.secrets.encryptString(input.passphrase);
   if (!(encrypted instanceof Uint8Array)
     || encrypted.byteLength === 0
     || encrypted.byteLength > 16 * 1_024) {
@@ -265,8 +265,8 @@ async function withPlatformPassphrase(
 ): Promise<void> {
   const record = readPicoCompanionPlatformUnlock(input.path);
   assertBinding(record, input.profile);
-  assertSameKeystore(record, input.secrets);
-  let passphrase = input.secrets.decryptString(
+  await assertSameKeystore(record, input.secrets);
+  let passphrase = await input.secrets.decryptString(
     Buffer.from(record.encryptedPassphraseBase64, 'base64'),
   );
   try {
@@ -431,13 +431,13 @@ function parseCiphertext(value: unknown): string {
 
 const requireUsableBackend = requirePicoCompanionKeystoreBackend;
 
-function androidHeader(secrets: PicoCompanionAndroidSecretPort): {
+async function androidHeader(secrets: PicoCompanionAndroidSecretPort): Promise<{
   platform: 'android';
   keystoreLevel: PicoCompanionAndroidKeystoreLevel;
   sealedWith: PicoCompanionAndroidUnlockRecord['sealedWith'];
-} {
+}> {
   const evidence = parsePicoCompanionAndroidKeystoreEvidence(
-    secrets.keystoreEvidence(),
+    await secrets.keystoreEvidence(),
   );
   return {
     platform: 'android',
@@ -460,16 +460,16 @@ function androidHeader(secrets: PicoCompanionAndroidSecretPort): {
  * ohnehin nicht mehr öffnen, weil sie an den alten Schlüssel gebunden sind.
  * Die Ablehnung ist also die ehrliche Auskunft und keine Härte.
  */
-function assertSameKeystore(
+async function assertSameKeystore(
   record: PicoCompanionPlatformUnlockRecord,
   secrets: PicoCompanionSecretPort,
-): void {
+): Promise<void> {
   if (record.platform !== secrets.platform) {
     throw new Error('platform_unlock_platform_changed');
   }
   if (record.platform === 'android') {
     if (record.keystoreLevel
-      !== requirePicoCompanionAndroidKeystore(
+      !== await requirePicoCompanionAndroidKeystore(
         secrets as PicoCompanionAndroidSecretPort)) {
       throw new Error('platform_unlock_level_changed');
     }

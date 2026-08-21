@@ -225,7 +225,7 @@ export async function runPicoCompanionFirstRun(
   }
 
   if (journal.step === 'completed') {
-    journal = commitFirstRun({ ...input, journalPath, journal });
+    journal = await commitFirstRun({ ...input, journalPath, journal });
   }
 
   if (journal.step !== 'committed') {
@@ -475,16 +475,20 @@ async function completeRecovery(input: RunPicoCompanionFirstRunInput & {
  * absence is recorded rather than hidden, since a crash takes the passphrase
  * with it and automatic unlock must then stay off.
  */
-function commitFirstRun(input: RunPicoCompanionFirstRunInput & {
+async function commitFirstRun(input: RunPicoCompanionFirstRunInput & {
   journalPath: string;
   journal: PicoCompanionFirstRunJournal & { step: 'completed' };
-}): PicoCompanionFirstRunJournal {
+}): Promise<PicoCompanionFirstRunJournal> {
   const profile = picoCompanionFirstRunProfile(input.journal.binding);
   writePicoCompanionProfile(input.profilePath, profile);
 
   let platformUnlockBound = false;
   if (input.platformSecrets !== undefined) {
-    writePicoCompanionPlatformUnlock({
+    // Awaited, seit der Android-Port existiert: dort liegt der Keystore
+    // hinter einer Prozessgrenze. Ohne `await` wäre der Fehlschlag eine
+    // unbehandelte Rejection und `platformUnlockBound` trotzdem `true` -
+    // also genau die Behauptung, die der Journaleintrag nicht machen darf.
+    await writePicoCompanionPlatformUnlock({
       path: input.platformUnlockPath
         ?? defaultPicoCompanionPlatformUnlockPath(input.profilePath),
       profile,

@@ -260,22 +260,29 @@ export function requirePicoCompanionAndroidKeystoreLevel(
  * Prozessgrenze, und `parsePicoCompanionAndroidKeystoreEvidence` ist die
  * Stelle, an der er eine Form bekommt - ein deklarierter Typ hier wäre ein
  * Versprechen, das der Kern nicht halten kann.
+ *
+ * **Und alle drei sind asynchron, anders als auf Linux.** Electrons
+ * `safeStorage` antwortet im selben Aufruf; der Android-Keystore liegt hinter
+ * einer Prozessgrenze, und daran ändert keine Signatur etwas. Eine synchrone
+ * Fassade davor wäre die Art Bequemlichkeit, die genau einmal gutgeht - sie
+ * kostet `writePicoCompanionPlatformUnlock` sein `async`, und das ist der
+ * ehrlichere Preis.
  */
 export interface PicoCompanionAndroidSecretPort {
   platform: 'android';
-  keystoreEvidence(): unknown;
-  encryptString(plainText: string): Uint8Array;
-  decryptString(encrypted: Uint8Array): string;
+  keystoreEvidence(): Promise<unknown>;
+  encryptString(plainText: string): Promise<Uint8Array>;
+  decryptString(encrypted: Uint8Array): Promise<string>;
 }
 
 /**
  * Das Niveau, unter dem dieses Gerät ein Geheimnis versiegeln darf - oder
  * die Ablehnung des Belegs, die schon sagt, woran es lag.
  */
-export function requirePicoCompanionAndroidKeystore(
+export async function requirePicoCompanionAndroidKeystore(
   secrets: PicoCompanionAndroidSecretPort,
-): PicoCompanionAndroidKeystoreLevel {
+): Promise<PicoCompanionAndroidKeystoreLevel> {
   return requirePicoCompanionAndroidKeystoreLevel(
-    parsePicoCompanionAndroidKeystoreEvidence(secrets.keystoreEvidence()),
+    parsePicoCompanionAndroidKeystoreEvidence(await secrets.keystoreEvidence()),
   );
 }

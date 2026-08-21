@@ -32,7 +32,7 @@ describe('Linux Platform Keystore unlock path (ADR 0081 P3)', () => {
   it('persists only ciphertext with private modes and reopens bounded device sessions', async () => {
     const path = temporaryPath();
     const secrets = secretPort('vault passphrase');
-    writePicoCompanionPlatformUnlock({
+    await writePicoCompanionPlatformUnlock({
       path,
       profile: profile(),
       passphrase: 'vault passphrase',
@@ -74,16 +74,16 @@ describe('Linux Platform Keystore unlock path (ADR 0081 P3)', () => {
   });
 
   it('refuses basic_text and a binding copied to another profile', async () => {
-    expect(() => writePicoCompanionPlatformUnlock({
+    await expect(writePicoCompanionPlatformUnlock({
       path: temporaryPath(),
       profile: profile(),
       passphrase: 'vault passphrase',
       secrets: secretPort('vault passphrase', 'basic_text'),
-    })).toThrow('platform_keystore_plaintext_refused');
+    })).rejects.toThrow('platform_keystore_plaintext_refused');
 
     const path = temporaryPath();
     const secrets = secretPort('vault passphrase');
-    writePicoCompanionPlatformUnlock({
+    await writePicoCompanionPlatformUnlock({
       path,
       profile: profile(),
       passphrase: 'vault passphrase',
@@ -117,7 +117,7 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
   it('seals against the level two sources agreed on, and reopens the same sessions', async () => {
     const path = temporaryPath();
     const secrets = androidPort('vault passphrase');
-    writePicoCompanionPlatformUnlock({
+    await writePicoCompanionPlatformUnlock({
       path,
       profile: profile(),
       passphrase: 'vault passphrase',
@@ -151,7 +151,7 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
     await automatic.close();
   });
 
-  it('judges the keystore before the passphrase is ever handed to it', () => {
+  it('judges the keystore before the passphrase is ever handed to it', async () => {
     // Die Reihenfolge ist die Aussage: ein Keystore, den dieses Produkt
     // ablehnt, darf die Passphrase nicht einmal kurz gesehen haben.
     const secrets = androidPort('vault passphrase', {
@@ -159,27 +159,27 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
       attestedKeyLevel: 'software',
       attestationLevel: 'software',
     });
-    expect(() => writePicoCompanionPlatformUnlock({
+    await expect(writePicoCompanionPlatformUnlock({
       path: temporaryPath(),
       profile: profile(),
       passphrase: 'vault passphrase',
       secrets,
-    })).toThrow('platform_keystore_software_refused');
+    })).rejects.toThrow('platform_keystore_software_refused');
     expect(secrets.encryptString).not.toHaveBeenCalled();
   });
 
-  it('refuses a chain that reached no pinned root, at sealing time', () => {
-    expect(() => writePicoCompanionPlatformUnlock({
+  it('refuses a chain that reached no pinned root, at sealing time', async () => {
+    await expect(writePicoCompanionPlatformUnlock({
       path: temporaryPath(),
       profile: profile(),
       passphrase: 'vault passphrase',
       secrets: androidPort('vault passphrase', { attestationRoot: 'none' }),
-    })).toThrow('platform_keystore_attestation_unrooted');
+    })).rejects.toThrow('platform_keystore_attestation_unrooted');
   });
 
   it('refuses to open what a different keystore level sealed', async () => {
     const path = temporaryPath();
-    writePicoCompanionPlatformUnlock({
+    await writePicoCompanionPlatformUnlock({
       path,
       profile: profile(),
       passphrase: 'vault passphrase',
@@ -209,7 +209,7 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
 
   it('refuses to read one platform\'s record with the other platform\'s port', async () => {
     const path = temporaryPath();
-    writePicoCompanionPlatformUnlock({
+    await writePicoCompanionPlatformUnlock({
       path,
       profile: profile(),
       passphrase: 'vault passphrase',
@@ -230,7 +230,7 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
 
   it('opens after the phone was patched, which is the point of not comparing', async () => {
     const path = temporaryPath();
-    writePicoCompanionPlatformUnlock({
+    await writePicoCompanionPlatformUnlock({
       path,
       profile: profile(),
       passphrase: 'vault passphrase',
@@ -258,7 +258,7 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
   it('refuses a record whose sealing note was tampered with', async () => {
     const path = temporaryPath();
     const secrets = androidPort('vault passphrase');
-    writePicoCompanionPlatformUnlock({
+    await writePicoCompanionPlatformUnlock({
       path, profile: profile(), passphrase: 'vault passphrase', secrets,
     });
     const record = JSON.parse(readFileSync(path, 'utf8'));
@@ -291,7 +291,7 @@ function androidPort(
 ): PicoCompanionAndroidSecretPort & { encryptString: ReturnType<typeof vi.fn> } {
   return {
     platform: 'android',
-    keystoreEvidence: () => ({
+    keystoreEvidence: async () => ({
       platform: 'android',
       keyInfoLevel: 'trusted_environment',
       attestedKeyLevel: 'trusted_environment',
@@ -304,8 +304,8 @@ function androidPort(
       bootPatchLevel: '20260705',
       ...evidence,
     }),
-    encryptString: vi.fn(() => Uint8Array.from([0xa1, 0xb2, 0xc3])),
-    decryptString: vi.fn(() => passphrase),
+    encryptString: vi.fn(async () => Uint8Array.from([0xa1, 0xb2, 0xc3])),
+    decryptString: vi.fn(async () => passphrase),
   };
 }
 

@@ -262,7 +262,7 @@ export async function foundPicoCompanionHome(
 
     let platformUnlockBound = false;
     if (input.platformSecrets !== undefined) {
-      writePicoCompanionPlatformUnlock({
+      await writePicoCompanionPlatformUnlock({
         path: input.platformUnlockPath
           ?? defaultPicoCompanionPlatformUnlockPath(input.profilePath),
         profile,
