@@ -53,6 +53,21 @@ import { rendererReachableFiles } from './companion-window.mjs';
  * carried a window longer than the policy allows. The rule is
  * `@pico/protocol/instant` now, and this check refuses the tenth copy.
  */
+/**
+ * What this check cannot do, measured rather than guessed (2026-08-21).
+ *
+ * Three of its five rules key on a *name*: an instant-shaped field is one
+ * ending in `At`, or `validUntil`, or `validFrom`. A deadline called `when`,
+ * `deadline` or `expiry` is invisible to all three, and so is a UTC day cut
+ * from it. The names were chosen from what this tree actually calls these
+ * fields rather than from what a field could be called, which is why the rule
+ * is worth stating: the day somebody names one differently, this check has
+ * nothing to say about it.
+ *
+ * The fifth rule keys on `toISOString() === value`, the shape every one of the
+ * nine hand-written instant rules happened to share. A tenth written as a
+ * length plus `Date.parse` would pass, and would be wrong in the same way.
+ */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
 
@@ -99,7 +114,8 @@ const handWrittenInstantRule = /toISOString\(\)\s*===\s*\w+/g;
  * measuring before writing rather than by a person reading a failure later.
  */
 const instantInterpolation = /\$\{([^{}]*\b(?:\w+At|validUntil|validFrom)\b[^{}]*)\}/g;
-const instantSlice = /(\w*(?:At|Until))\s*(?:\}\s*)?\.slice\s*\(0,\s*10\)/g;
+const instantSlice =
+  /(\w*(?:At|Until))\s*(?:\}\s*)?\.(?:slice|substring|substr)\s*\(0,\s*10\)/g;
 /**
  * Only the window is asked about day arithmetic: a day-length constant in a
  * main process or a core is ordinary - `first-run.ts` builds a year from one -

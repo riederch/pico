@@ -30,6 +30,23 @@ import { rendererReachableFiles } from './companion-window.mjs';
  * person shown one key twice is one reader, however many processes did the
  * showing, and ADR 0131 A5 is about to add a fourth.
  */
+/**
+ * What this check cannot do, measured rather than guessed (2026-08-21).
+ *
+ * It catches a rendering that either names a fingerprint or admits with an
+ * ellipsis that something was left out. It does **not** catch a bare prefix of
+ * a value it cannot recognise - `value.slice(0, 12)` on a parameter called
+ * `value`, returned without an ellipsis - because at that point nothing
+ * distinguishes it from the ordinary truncation any string may need, and a
+ * rule that fired on every `.slice(0, N)` would be a rule people learn to work
+ * around.
+ *
+ * That is the shape worth knowing about, because a prefix with no ellipsis is
+ * also the *worst* rendering of a key: it hides that anything was cut, and the
+ * cut end is the end an attacker grinds. What guards it is the review that
+ * asks where the string came from, and the twelve-character prefix in the
+ * Vault daemon is the reminder that the review can miss it for months.
+ */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
 
@@ -50,9 +67,23 @@ const allowed = new Map([
   ['packages/protocol/src/fingerprint-display.ts', 'the rule itself'],
   ['apps/companion/src/presence.ts', 'picoPresenceIdForDeviceSigningKey - the row a device is joined on'],
   ['apps/companion/src/domain-read-grant.ts', 'the grant id a privacy domain is recorded under'],
+])
+
+/**
+ * One file shortens with an ellipsis and is right to.
+ *
+ * `fitText` in the Recovery Card's PDF cuts a *label* - a Pico's name, a
+ * Home's name - to the width of the column it is drawn in, and says so with an
+ * ellipsis. That is typography answering a measured width, not a decision
+ * about how a key is shown: it takes no fingerprint, and the same label at a
+ * larger size is not cut at all.
+ */
+const shortensForTypography = new Map([
+  ['apps/vault-daemon/src/recovery-card-pdf.ts',
+    'fitText - a label cut to the width of the column it is drawn in'],
 ]);
 
-const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.slice\s*\(/g;
+const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.(?:slice|substring|substr)\s*\(/g;
 
 /**
  * And the same rule wearing a function's name instead of a field's.
@@ -71,7 +102,36 @@ const fingerprintSlice = /(\w*[Ff]ingerprintHex)\s*(?:\}\s*)?\.slice\s*\(/g;
  * the act *looks like* rather than what the value is called - a slice next to
  * an ellipsis is somebody shortening something for a person to read.
  */
-const ellipsisSlice = /\$\{[^{}]*\.slice\s*\([^{}]*\}\s*…|…\s*\$\{[^{}]*\.slice\s*\(/g;
+/**
+ * The backstop, and the reason it exists.
+ *
+ * Both rules above key on something a copy can rename away from. The field
+ * rule needs the value to be called `...FingerprintHex`; the rule below it
+ * needs the ellipsis to sit next to the slice as a literal. Probed on
+ * 2026-08-21, both miss `const gap = '…'` with a parameter called `value` -
+ * which is not an exotic way to write it.
+ *
+ * So the last rule keys on the two things a shortening-for-a-person cannot do
+ * without: it takes part of a string, and it says so with an ellipsis. Two
+ * files in the tree do both, and one of them is this rule's owner.
+ *
+ * Comments are stripped first, and finding that out cost a false positive on
+ * the first run: half the files that argue about this defect quote it, and
+ * `a1b2c3d4…7f8e9d0c` in a doc comment is a file explaining the rule rather
+ * than inventing one. A check that fires on its own explanation teaches people
+ * to write exemptions, which is the one thing it must not do.
+ */
+const shortensSomething = /\.(?:slice|substring|substr)\s*\(/;
+const printsAnEllipsis = /…|\\u2026/;
+
+function withoutComments(content) {
+  return content
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+const ellipsisSlice =
+  /\$\{[^{}]*\.(?:slice|substring|substr)\s*\([^{}]*\}\s*…|…\s*\$\{[^{}]*\.(?:slice|substring|substr)\s*\(/g;
 
 let scanned = 0;
 for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'))) {
@@ -86,6 +146,18 @@ for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'
   }
   scanned += 1;
   const content = readFileSync(file, 'utf8');
+  const code = withoutComments(content);
+  if (printsAnEllipsis.test(code)
+    && shortensSomething.test(code)
+    && !shortensForTypography.has(path)) {
+    errors.push(`${path}: takes part of a string and prints an ellipsis after it. That is `
+      + 'somebody shortening something for a person to read, whatever the value is called and '
+      + 'wherever the ellipsis is spelled. `picoDisplayFingerprint` in '
+      + '`@pico/protocol/fingerprint-display` is the rule the rest of the product shows. If this '
+      + 'is a label cut to a width rather than a key cut for the eye, say so in '
+      + '`shortensForTypography` with the reason.');
+  }
+
   for (const _ of content.matchAll(ellipsisSlice)) {
     errors.push(`${path}: shortens a string with a slice beside an ellipsis. That is a rendering `
       + 'for a person, whatever the value is called here - `picoDisplayFingerprint` in '
@@ -99,7 +171,7 @@ for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'
         + 'bare `@pico/...` import breaks at runtime and passes every test - so it cannot reach '
         + 'the one rule, and it must not invent a second. Send the shortened string across IPC '
         + 'beside the hex, rendered in the main process (ADR 0113 C2).'
-      : `${path}: shortens \`${symbol}\` with its own slice. How a key is shown to a person is `
+      : `${path}: shortens \`${symbol}\` itself. How a key is shown to a person is `
         + 'one decision for the whole product - `picoDisplayFingerprint` in '
         + '`@pico/protocol/fingerprint-display` - because a second spelling means one key reaches '
         + 'one person under two names, which is how this check came to exist. If this is an '
@@ -118,7 +190,8 @@ if (errors.length > 0) {
 
 console.log(
   `Fingerprint display check passed (${scanned} source files across apps and packages,`
-  + ` ${allowed.size - 1} derivations exempt with reasons, one rule for showing a key`
+  + ` ${allowed.size - 1} derivations and ${shortensForTypography.size} width-fit exempt with`
+  + ' reasons, one rule for showing a key'
   + ' to a person - the window included).',
 );
 
