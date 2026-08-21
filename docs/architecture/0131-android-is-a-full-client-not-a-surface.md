@@ -1616,6 +1616,14 @@ local-first product's most security-critical moment.
   dort hätte eine Person den falschen Satz gelesen. Die Ablehnung nennt jetzt
   beide Enden.
 
+  **Am Bildschirm nachgewiesen**, derselbe Galaxy A55: der erste Schritt des
+  Beitritts zeigt jetzt "Choose a Vault passphrase *for this device*" und "It
+  protects the keys this **device** is about to make for itself. **Your other
+  device keeps its own**; nothing can recover either without its passphrase."
+  Zwei sichtbare Änderungen an einem Bildschirm - der Titel gewann seine
+  Unterscheidung, der Rumpf den Halbsatz, den eine Person an genau dieser
+  Stelle wissen will.
+
   `scripts/check-one-voice.mjs` bewacht beide Familien - die Passphrase-Frage
   und die elf Schrittsätze, die bis heute **gar keinen** Wächter hatten. Drei
   Pflanzungen, drei Risse: der Desktop schreibt wieder selbst, das Telefon
