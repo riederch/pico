@@ -5,6 +5,7 @@ import {
   parsePicoRecoveryCardScanTransport,
   picoRecoveryCardScanPrefix,
 } from '@pico/protocol';
+import { picoRecoveryPinProtection } from '@pico/vault';
 import {
   picoCompanionCardPinPrompt,
   picoCompanionRecoveryCardEntryPrompt,
@@ -40,8 +41,8 @@ describe('ADR 0112 - a printed card can be typed, not only photographed', () => 
     // Two prompts, one rule: the PIN a person chooses when the card is printed
     // and the PIN they type when it is used are the same string, so a window
     // that validated them differently would refuse its own card.
-    const choose = picoCompanionCardPinPrompt('choose');
-    const enter = picoCompanionCardPinPrompt('enter');
+    const choose = picoCompanionCardPinPrompt('choose', picoRecoveryPinProtection);
+    const enter = picoCompanionCardPinPrompt('enter', picoRecoveryPinProtection);
 
     expect(enter.title).not.toBe(choose.title);
     for (const candidate of ['abc123', 'a'.repeat(64), 'ABC123', 'abc12', 'a'.repeat(65)]) {

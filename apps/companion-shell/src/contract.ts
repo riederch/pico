@@ -650,16 +650,40 @@ export function picoCompanionSecureInputBody(
     + 'The page receives neither keystrokes nor value.';
 }
 
-export function picoCompanionCardPinPrompt(purpose: 'choose' | 'enter' = 'choose'): {
+/**
+ * ADR 0112. The PIN that protects a printed Recovery Card.
+ *
+ * The rule arrives as an argument for the reason the card code's prefix and
+ * length do: this file loads in the renderer, where a bare `@pico/vault`
+ * import does not resolve, and the main process can read the record that
+ * declares it. Until 2026-08-21 the numbers were literals here with a test
+ * binding them to `picoRecoveryPinProtection` - an argued copy, and the
+ * project's own remedy for a copy that cannot be an import. It stopped being
+ * the best remedy available the day the prompt beside it started taking its
+ * bounds across, because a value that crosses cannot drift at all, and the
+ * test then checks the wiring instead of the equality of two literals.
+ *
+ * Both arguments are required. A default would have kept the literals here
+ * for whoever omitted it, which is the copy again with a way to reach it.
+ *
+ * The alphabet crosses too. It is not `[0-9a-z]` because that is what it
+ * happens to be: a PIN printed under a QR block is a good candidate for
+ * losing `0`, `o`, `1` and `l`, and on that day this must follow rather than
+ * go on offering characters the daemon refuses - silently, since a rejected
+ * secure input answers with a character count and no sentence.
+ */
+export function picoCompanionCardPinPrompt(
+  purpose: 'choose' | 'enter',
+  protection: { minLength: number; maxLength: number; alphabet: string },
+): {
   title: string;
   instruction: string;
   maximumLength: number;
   refusal: string;
   validate(value: string): boolean;
 } {
-  const minLength = 6;
-  const maxLength = 64;
-  const pattern = new RegExp(`^[0-9a-z]{${minLength},${maxLength}}$`, 'u');
+  const { minLength, maxLength } = protection;
+  const alphabet = new Set(protection.alphabet);
   return {
     title: purpose === 'choose' ? 'Choose the Card PIN' : 'Enter the Card PIN',
     /**
@@ -676,7 +700,9 @@ export function picoCompanionCardPinPrompt(purpose: 'choose' | 'enter' = 'choose
     maximumLength: maxLength,
     refusal: `A Card PIN is ${minLength}\u2013${maxLength} digits or lowercase letters, `
       + 'and nothing else.',
-    validate: (value: string) => pattern.test(value),
+    validate: (value: string) => value.length >= minLength
+      && value.length <= maxLength
+      && [...value].every((character) => alphabet.has(character)),
   };
 }
 

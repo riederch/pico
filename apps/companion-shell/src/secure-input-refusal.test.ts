@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  maxPicoRecoveryCardScanChars, picoRecoveryCardScanPrefix } from '@pico/protocol';
+  maxPicoRecoveryCardScanChars,
+  picoRecoveryCardScanPrefix,
+} from '@pico/protocol';
+import { picoRecoveryPinProtection } from '@pico/vault';
 import {
   picoCompanionCardPinPrompt,
   picoCompanionRecoveryCardEntryPrompt,
@@ -34,7 +37,7 @@ describe('ADR 0113 C2 - a refused secret says what the field wanted', () => {
 
   it('says what a Card PIN is, in both places it is asked for', () => {
     for (const purpose of ['choose', 'enter'] as const) {
-      const prompt = picoCompanionCardPinPrompt(purpose);
+      const prompt = picoCompanionCardPinPrompt(purpose, picoRecoveryPinProtection);
       expect(prompt.refusal).toMatch(/6/);
       expect(prompt.refusal).toMatch(/64/);
       expect(picoCompanionSecureInputBody(prompt, 3, true)).toContain(prompt.refusal);
@@ -49,7 +52,7 @@ describe('ADR 0113 C2 - a refused secret says what the field wanted', () => {
      * computed from the value would be the obvious next step and the wrong
      * one.
      */
-    const prompt = picoCompanionCardPinPrompt('enter');
+    const prompt = picoCompanionCardPinPrompt('enter', picoRecoveryPinProtection);
     const short = picoCompanionSecureInputBody(prompt, 1, true);
     const long = picoCompanionSecureInputBody(prompt, 63, true);
 

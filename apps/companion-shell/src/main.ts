@@ -40,7 +40,7 @@ import {
   isPicoCompanionMembershipSubject,
   picoCompanionMembershipSubjectLength,
 } from '@pico/companion/home-authority';
-import { maxPicoVaultPassphraseLength } from '@pico/vault';
+import { maxPicoVaultPassphraseLength, picoRecoveryPinProtection } from '@pico/vault';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoDisplayDate, picoDisplayInstant } from '@pico/protocol/when-display';
 import {
@@ -1744,7 +1744,7 @@ async function runFirstRun(source: PicoCompanionFirstRunScanSource): Promise<voi
         picoRecoveryCardScanPrefix,
         maxPicoRecoveryCardScanChars,
       ));
-    pin = await captureSecret(picoCompanionCardPinPrompt('enter'));
+    pin = await captureSecret(picoCompanionCardPinPrompt('enter', picoRecoveryPinProtection));
   }
   const passphrase = await captureSecret({
     title: need.need === 'card_and_secrets'
@@ -2241,7 +2241,7 @@ async function runRecoveryCardIssuance(
       await presentSecureInput(passphrasePrompt, count, invalid);
     },
   });
-  const pinPrompt = picoCompanionCardPinPrompt();
+  const pinPrompt = picoCompanionCardPinPrompt('choose', picoRecoveryPinProtection);
   const pin = await collectPicoCompanionSecureInput({
     window,
     prompt: pinPrompt,

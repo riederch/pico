@@ -293,6 +293,32 @@ transitional for the same reason the other twelve are.
   and the acceptor constrains nothing; it binds rotation *acceptance*, so a
   card carrying a wrong one produces a device that fails closed at its Home's
   next rotation rather than at first run.
+  **The Card PIN had four judges and one record, and the record was not
+  consulted** (2026-08-21). `picoRecoveryPinProtection` has carried an
+  `alphabet` since it was written; nothing running read it. The Vault and both
+  of the daemon's wire parsers spelled the same set as `/^[0-9a-z]+$/` - once
+  with the `u` flag and once without - and the window built a pattern from two
+  numeric literals of its own. Four agreeing spellings of a rule the record
+  already states.
+
+  The change that costs is narrowing it, and it is the likely one: a PIN
+  printed under a QR block wants `0`, `o`, `1` and `l` kept apart. Narrowing
+  the record and leaving the old regex in place was run rather than argued -
+  the record excluded all four and the regex accepted all four, with nothing
+  failing. Widening costs the other way: a person offered a character the
+  daemon refuses, in a box that answers with a character count and no
+  sentence.
+
+  `isPicoRecoveryCardPin` reads the record, by membership rather than by a
+  constructed pattern, so the alphabet can gain a character that would have
+  needed escaping without anyone noticing that it did. The window takes the
+  record across as an argument, the way the card code's prefix and length
+  already do (ADR 0113 C2), and the argument is required: a default would have
+  kept the literals for whoever omitted it, which is the copy again with a way
+  to reach it. The test walks the declared alphabet character by character
+  against the Vault's rule and the window's, so narrowing the record moves both
+  or fails.
+
 - **S4 - Character visuals (open, needs registered production assets):**
   avatar renderings for alarm/veto/completion states, each gated on a
   purpose-registered Character 3.2.1 production asset.

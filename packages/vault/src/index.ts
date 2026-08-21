@@ -2111,18 +2111,43 @@ function issuePicoVaultRecoveryCardFromSeed(
   }
 }
 
+/**
+ * What a Card PIN may be, read from the record that declares it.
+ *
+ * `picoRecoveryPinProtection` has carried an `alphabet` since it was written,
+ * and until 2026-08-21 no running code read it: three places spelled the same
+ * set as `/^[0-9a-z]+$/` instead - here, and twice in the Vault daemon's wire
+ * parser, once with the `u` flag and once without. The declared alphabet was
+ * documentation beside the rule rather than the rule.
+ *
+ * The drift that costs is narrowing it, which is the likely change: a PIN
+ * printed under a QR block wants `0`, `o`, `1` and `l` kept apart. Every
+ * regex would go on accepting the wider set while the record said otherwise,
+ * and the surface that read the record would be the only one telling the
+ * truth. Widening costs the other way - a person offered a character the
+ * daemon refuses, in a box that answers with a character count and no
+ * sentence.
+ *
+ * Membership rather than a constructed pattern, so the alphabet can gain a
+ * character that would have needed escaping without anybody noticing that it
+ * did.
+ */
+const picoRecoveryPinAlphabet = new Set(picoRecoveryPinProtection.alphabet);
+
+export function isPicoRecoveryCardPin(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length >= picoRecoveryPinProtection.minLength
+    && value.length <= picoRecoveryPinProtection.maxLength
+    && [...value].every((character) => picoRecoveryPinAlphabet.has(character));
+}
+
 function derivePicoRecoveryPinMaterial(
   sodium: VaultSodium,
   identityKeyFingerprintHex: string,
   pin: string,
 ): { key: Uint8Array; nonce: Uint8Array } {
   assertSodiumConstants(sodium);
-  if (
-    typeof pin !== 'string'
-    || pin.length < picoRecoveryPinProtection.minLength
-    || pin.length > picoRecoveryPinProtection.maxLength
-    || !/^[0-9a-z]+$/.test(pin)
-  ) {
+  if (!isPicoRecoveryCardPin(pin)) {
     throw new Error('invalid_recovery_pin');
   }
   const identityFingerprint = hexToBytes(

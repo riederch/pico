@@ -10,8 +10,8 @@ import {
 } from '@pico/protocol';
 import {
   MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES,
+  isPicoRecoveryCardPin,
   maxPicoVaultPassphraseLength,
-  picoRecoveryPinProtection,
 } from '@pico/vault';
 
 /**
@@ -765,10 +765,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         Buffer.from(canonicalCardPayloadHex, 'hex'),
       );
       const pin = parsed.pin;
-      if (typeof pin !== 'string'
-        || pin.length < picoRecoveryPinProtection.minLength
-        || pin.length > picoRecoveryPinProtection.maxLength
-        || !/^[0-9a-z]+$/u.test(pin)) {
+      if (!isPicoRecoveryCardPin(pin)) {
         throw new Error('invalid_request');
       }
       const passphrase = parsed.passphrase;
@@ -999,12 +996,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         ],
       );
       const pin = parsed.pin;
-      if (
-        typeof pin !== 'string'
-        || pin.length < picoRecoveryPinProtection.minLength
-        || pin.length > picoRecoveryPinProtection.maxLength
-        || !/^[0-9a-z]+$/.test(pin)
-      ) {
+      if (!isPicoRecoveryCardPin(pin)) {
         throw new Error('invalid_request');
       }
       return {
