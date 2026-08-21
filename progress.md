@@ -201,7 +201,7 @@ Wenn der Auftrag "aktualisiere progress.md" lautet, diese Datei anhand des aktue
 2. Dokumentation und ADRs nur ergänzend verwenden; ein ADR gilt erst als umgesetzt, wenn passende Implementierung, Integration oder Tests vorhanden sind.
 3. Bestehende Struktur, Reihenfolge und kurze Form beibehalten; Prozentwerte nur bei nachvollziehbarem Fortschritt oder neu erkannten Problemen ändern.
 4. Die Datei beschreibt ausschließlich den absoluten Zustand am analysierten Commit. Keine Änderungschronik, keine Formulierungen wie "seit der letzten Aktualisierung" und keine Vergleiche mit einem früheren Stand aufnehmen.
-5. Keine nächsten Blöcke, nächsten Schritte, Prioritäten, Reihenfolgen, Model-/Effort-Empfehlungen oder handlungsorientierten Einstiegspunkte aufnehmen. Solche Inhalte gehören in `.agent-context.md`.
+5. Keine nächsten Blöcke, nächsten Schritte, Prioritäten, Reihenfolgen, Model-/Effort-Empfehlungen oder handlungsorientierten Einstiegspunkte aufnehmen. Phasen, ihre Abhängigkeiten und terminierte Fixpunkte gehören seit dem 2026-08-21 in `Roadmap.md`; die nächste Handlung heute gehört in `.agent-context.md`.
 6. Bestehende Aussagen durch den aktuellen Zustand ersetzen; Git-Historie und Commits bilden den zeitlichen Verlauf.
 7. Offene Lücken und Risiken als gegenwärtige Eigenschaften benennen, nicht als Arbeitsplan formulieren.
 8. Keine neuen Hauptkomponenten erfinden. Nur Pico-Knotenrollen und unabhängig betriebene Pico-Dienste als Hauptkomponenten führen. Offiziell benannte Protokolle, Entscheidungs- und Ausführungsbausteine in der technischen Übersicht sichtbar machen; ihre Details dürfen unter der tatsächlich ausführenden Komponente bleiben. Ansichten, Register, Zustände und Lieferwege nicht zu Komponenten hochstufen.

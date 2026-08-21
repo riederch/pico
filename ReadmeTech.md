@@ -315,6 +315,7 @@ Details are documented in:
 ├── AGENTS.md             # repository-wide rules for coding agents
 ├── TODO.md               # open work not yet decided; decisions become ADRs
 ├── progress.md           # component-by-component record of development progress
+├── Roadmap.md            # the derivation tree, the phase order and the dated review findings
 ├── LICENSE               # source-available non-commercial project license
 ├── LICENSE-FAQ.md        # practical explanation of the licensing intent, not a substitute
 ├── NOTICE                # the attribution notice the licence requires
