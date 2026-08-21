@@ -19,12 +19,12 @@ Handlung *heute* steht in `.agent-context.md`.
 | Standdatum | 2026-08-21 |
 | Analysierter Commit | b9f561c |
 | Wurzel | ADR 0008 (entschieden) und `README.md` (nach außen gesagt) |
-| Anforderungsschicht | rekonstruiert, siehe Warnung unten |
+| Anforderungsschicht | rekonstruiert, siehe Warnung unten; A14 und A15 am 2026-08-21 gehoben |
 
 **Die Anforderungsschicht ist der einzige erfundene Teil dieses Baums.** Sie
 stand nirgends geschrieben: `docs/` hat `architecture`, `assets`,
 `design-system`, `development`, `protocol` und `release` — kein
-Anforderungsverzeichnis. Die dreizehn Sätze in A1–A13 sind aus den normativen
+Anforderungsverzeichnis. Die fünfzehn Sätze in A1–A15 sind aus den normativen
 Bestandteilen der Wurzel abgeleitet und mit ihnen belegt, aber sie sind **keine
 getroffene Entscheidung**. Wer sie als solche zitiert, zitiert eine Lesart.
 
@@ -282,7 +282,8 @@ A7
 
 Diese Anforderung wäre bei acht Sätzen verlorengegangen: ADR 0008s Kernregel hat
 fünf Klauseln, und die fünfte ist diese. Sie ist der Grund, warum die Schicht
-dreizehn Sätze hat und nicht acht.
+dreizehn Sätze hat und nicht acht. A14 und A15 kamen am 2026-08-21 dazu,
+gehoben aus ADR 0122 und ADR 0125 - siehe Befund B1 und B2.
 
 ### A8 — Pico täuscht keine Autorität vor, die es nicht hat
 
@@ -438,13 +439,18 @@ A13
 └─ ADR 0123  Laufzeit-Schlüsselhygiene  (auch A1)
 ```
 
-### Zwei Äste ohne Anforderung in der Wurzel
+### A14 — Was ankommt, ist nachweisbar das, was gebaut wurde
 
-Sie stehen hier, damit der Baum vollständig ist und die Lücke sichtbar statt
-weggelassen.
+*Wurzelbeleg: „a Pico release is trustworthy exactly as far as the repository
+commit that produced it, and what a person installs must be checkable against
+that commit" — als Grenzaussage aufgenommen am 2026-08-21, gehoben aus ADR
+0122s eigener Entscheidung (Befund B1).*
+
+Der Satz war entschieden und stand nur nicht an der Wurzel. Sechs ADRs und fünf
+Gates hingen unter einer Frage, die niemand gestellt hatte.
 
 ```
-Auslieferung — was gebaut wurde, kommt nachweisbar an        ⚠ Befund B1
+A14
 ├─ ADR 0005  Release- und Update-Plattform
 ├─ ADR 0006  Test- und Release-Gates
 ├─ ADR 0007  Home-Assistant-Add-on-Releasestruktur
@@ -454,16 +460,48 @@ Auslieferung — was gebaut wurde, kommt nachweisbar an        ⚠ Befund B1
      Beweis: check-license.mjs (18 Manifeste) · check-version.mjs ·
              check-workflow-pinning.mjs (25 Action-Referenzen, jede eine SHA) ·
              check-release-tag.mjs · check-release-monotonic.mjs
+```
 
-Gestalt — wie Pico aussieht und sich bewegt                   ⚠ Befund B2
+### A15 — Ein Pico bleibt es selbst, auch wenn sich Laufzeit und Gerät ändern
+
+*Wurzelbeleg: „a Pico's appearance is a versioned parametric description rather
+than transferred assets, so it stays recognisable across runtimes, devices and
+permitted forks" — aufgenommen am 2026-08-21, gehoben aus ADR 0125 (Befund B2).*
+
+Das ist Interoperabilität, nicht Aussehen. ADR 0125 sagt es selbst: Sprites,
+Texturen oder Meshes zu übertragen bände die Identität an eine
+Renderer-Generation und ein Geräteklasse, und jede Aktualisierung ließe alte
+Entwürfe stranden.
+
+```
+A15
+└─ ADR 0125  Parametrische Appearance und Versionskompatibilität
+     Warum:  eine Erscheinung muss Zeit und Heterogenität überleben - neuere
+             Laufzeiten, Geräte, die nie aktualisieren, und erlaubte Forks
+     Code:   packages/appearance/src/, packages/gesture/src/
+     Fläche: docs/protocol/appearance-document-v1.md,
+             docs/protocol/fixtures/appearance-document
+     Beweis: appearance-*.test.ts, gesture-pose-v1.test.ts,
+             check-wire-labels.mjs (die Appearance-Capabilities sind Teil der
+             129 einmal geschriebenen Labels), check-surface-classes.mjs
+```
+
+### Ein Ast, der aspirativ bleibt
+
+Er steht hier, damit der Baum vollständig ist und die Lage sichtbar statt
+weggelassen: Code und Tests ohne Auftrag sind kein Fehler, aber sie sind auch
+keine Anforderung.
+
+```
+Gestalt — wie Pico aussieht und sich bewegt        aspirativ (Befund B2)
 ├─ ADR 0009  Avatar- und Interaktionsmodell
 ├─ ADR 0013  Visuelle Designsprache
-├─ ADR 0124  Autorisierter Character Core  (nicht implementiert)
-└─ ADR 0125  Parametrische Appearance und Versionskompatibilität
-     Code:   packages/appearance/src/, packages/gesture/src/,
-             tools/character-modeling/
-     Beweis: appearance-*.test.ts, gesture-pose-v1.test.ts,
-             check-design-system.mjs (1.1.0 / Character 3.2.1)
+└─ ADR 0124  Autorisierter Character Core  (nicht implementiert)
+     Warum:  READMEs Wunschliste nennt „text, voice, avatar"; normativ sagt
+             die Wurzel über Gestalt nichts, und das ist nach der Entscheidung
+             vom 2026-08-21 so gewollt
+     Code:   tools/character-modeling/
+     Beweis: check-design-system.mjs (1.1.0 / Character 3.2.1)
 ```
 
 ### Aufzeichnungen ohne Ast
@@ -589,11 +627,6 @@ Die Zielmarke endet hier.
 
 ### Aus der Prüfung entstanden
 
-- **Eine Wurzelaussage zur Auslieferungsintegrität** — oder die ausdrückliche
-  Feststellung, dass sechs ADRs bewusst außerhalb des Produktbaums entscheiden.
-  *Verweist auf Befund B1.*
-- **Eine Entscheidung über den Gestalt-Strang** — er trägt Code und Tests, ruht
-  aber allein auf der Wunschliste. *Verweist auf Befund B2.*
 - **Ein Schreibweg für Reader-Custody-Inhalt** — ohne ihn bleiben fünfzehn
   implementierte ADRs ein Ast ohne Subjekt. *Verweist auf Befund B5.*
 
@@ -619,7 +652,9 @@ ADR 0005, 0006, 0007, 0027, 0122 und 0153 entscheiden, wie das Gebaute bei einer
 Person ankommt. Weder ADR 0008 noch das README sagt darüber etwas Normatives:
 das README nennt Home Assistant als ersten Verpackungsweg, aber keine
 Eigenschaft, die die Auslieferung haben muss. Sechs ADRs mit fünf Gates darunter
-beantworten damit eine Frage, die die Wurzel nicht stellt.
+beantworteten damit eine Frage, die die Wurzel nicht stellte.
+**Entschieden am 2026-08-21**: ADR 0122s eigener Satz ist an die Wurzel gehoben
+und trägt jetzt als A14 den Ast, statt dass der Ast in der Luft hängt.
 
 **B2 — Der Gestalt-Strang ruht allein auf der Wunschliste.**
 ADR 0009, 0013, 0124 und 0125 tragen zwei Pakete mit Tests
@@ -628,6 +663,15 @@ Design-System-Gate. Ihre einzige Wurzelgrundlage ist READMEs aspirativer Satz
 „interact through text, voice, avatar" — normativ sagt die Wurzel über Gestalt
 nichts. Das ist der Fall, den Frage 1 und Frage 2 unterscheiden: der lokale Zweck
 ist klar, der Auftrag fehlt.
+
+**Entschieden am 2026-08-21, und der Strang zerfiel dabei in zwei.** ADR 0125
+entscheidet Interoperabilität, nicht Aussehen - eine Erscheinung muss neuere
+Laufzeiten, nie aktualisierte Geräte und erlaubte Forks überleben, weshalb sie
+eine versionierte parametrische Beschreibung ist und keine übertragenen Assets.
+Das ist requirement-fähig und hat eine veröffentlichte Protokollfläche mit
+Fixtures; es steht jetzt unter A15. ADR 0009, 0013 und 0124 bleiben
+ausdrücklich aspirativ - Vorarbeit ohne Auftrag, was ehrlich ist, solange
+nichts davon ausliefert.
 
 **B3 — ADR 0034s Matrixzeile behauptet, was der Baum widerlegt.**
 Die Zeile sagt: „crypto canonicalization, signature inputs, cryptographic vectors

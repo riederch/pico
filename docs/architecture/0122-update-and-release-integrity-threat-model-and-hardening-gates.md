@@ -12,6 +12,15 @@ hostile content, ADR 0117 keeps it from the acting model, ADR 0121
 makes tampering non-silent - and all of it runs as whatever code the
 last update delivered.
 
+Status note, 2026-08-21: **this ADR's own sentence was lifted to the root.**
+"A Pico release is trustworthy exactly as far as the repository commit that
+produced it" was decided here and stood nowhere above it, so six ADRs and five
+gates answered a question the product's root never asked. A derivation review
+recorded that as finding B1 in `Roadmap.md`; the owner decided on 2026-08-21 to
+raise the sentence rather than declare delivery out of scope. It is a boundary
+statement in `README.md` now and requirement A14 in the tree. Nothing here
+changed - what changed is that it is no longer only here.
+
 ## Context
 
 The chain as it exists, stated exactly, because the decision is only

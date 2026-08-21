@@ -86,6 +86,8 @@ Pico's current concept work defines several important boundaries:
 - capabilities are evaluated above connector protocols; MCP is a tool connection method, not Pico authority
 - proactive delegation must remain bounded by user-owned preferences, policy decisions, confirmation and Action History
 - Pico identity, device, Home, transport and domain keys are separate roles; Pico must still use reviewed primitives and must not invent cryptography
+- a Pico release is trustworthy exactly as far as the repository commit that produced it, and what a person installs must be checkable against that commit
+- a Pico's appearance is a versioned parametric description rather than transferred assets, so it stays recognisable across runtimes, devices and permitted forks
 - the current Foundation HTTP API is a trusted local diagnostics and foundation interface, not a public remote-access API
 - Context Signals are contextual evidence, not global person scores
 - Context Sharing and location sharing must be scoped, visible, revocable and minimally precise

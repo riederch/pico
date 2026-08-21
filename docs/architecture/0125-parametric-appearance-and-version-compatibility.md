@@ -42,6 +42,17 @@ what a context *changes*, it qualifies.
 The style variant remains the one true absence: prose in ADR 0013, in no
 token, type or manifest, and never decided.
 
+Status note, 2026-08-21: **the appearance decision is interoperability, and it
+now has a requirement above it.** A derivation review found this ADR carrying
+code, tests and a published protocol surface while resting only on the README's
+wish list - "interact through text, voice, avatar" - which promises nothing
+(finding B2 in `Roadmap.md`). Reading this ADR settled it: an appearance that
+must survive newer runtimes, never-updated devices and permitted forks is the
+same kind of claim the protocol makes, not a claim about looks. The owner
+decided on 2026-08-21 to split the strand. This ADR is requirement A15; ADR
+0009, 0013 and 0124 stay expressly aspirational, which is honest while nothing
+of them ships.
+
 ## Context
 
 A PICO's appearance must survive time and heterogeneity: newer official
