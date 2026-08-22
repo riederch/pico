@@ -25,6 +25,7 @@ import {
 } from '@pico/companion/enrolment';
 import {
   picoCompanionEnrolmentReadPrefix,
+  picoCompanionEnrolmentRefusalLine,
   picoCompanionEnrolmentStepLine,
   runPicoCompanionAskingDeviceExchange,
 } from '@pico/companion/enrolment-steps';
@@ -397,6 +398,9 @@ async function walkTheJoin() {
     // To the log as well as to the surface: a failure a person sees and a
     // failure anybody can diagnose are not automatically the same event.
     process.stdout.write(`${JSON.stringify({ step: 'failed', reason })}\n`);
-    send({ v: 'failed', reason });
+    // Und der Satz kommt aus dem Kern, wie die elf davor. Bis zum 2026-08-22
+    // schrieb die Activity ihn selbst - und der Desktop schrieb einen anderen
+    // für dieselbe Ablehnung.
+    send({ v: 'failed', reason, ...picoCompanionEnrolmentRefusalLine(reason) });
   }
 }

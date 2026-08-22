@@ -293,3 +293,70 @@ export function picoCompanionEnrolmentStepLine(
       };
   }
 }
+
+/**
+ * ADR 0131 A5. Was ein Pico sagt, wenn ein Beitritt nicht zustande kommt.
+ *
+ * **Gemessen am 2026-08-22: die Zeremonie hat achtzehn Arten abzulehnen, und
+ * das Produkt hatte für alle achtzehn ein Achselzucken - in zwei
+ * Schreibweisen.** Der Desktop fiel auf "Pico could not set this device up
+ * (`code`). Nothing was changed at your Home.", das Telefon auf "This phone
+ * was not added / Nothing was changed at your Home." plus den rohen Code in
+ * einer Statuszeile. Keiner der beiden hatte ein Wort für die Ablehnungen, die
+ * der gemeinsame Kern tatsächlich erzeugt.
+ *
+ * Das ist eine andere Sorte Befund als die Passphrase: dort standen sechs
+ * Sätze für einen Moment, hier steht ein Satz für achtzehn. Beides ist
+ * dieselbe Frage - wem gehören die Worte - und beide Male ist die Antwort
+ * derselbe Ort.
+ *
+ * **Worte bekommen die vier, an denen eine Person etwas ändern kann.** Die
+ * übrigen vierzehn sind Zustände und Defekte: ein Profil, das sich nicht lesen
+ * lässt, eine Signatur mit der falschen Rolle, ein fehlender Zustimmungspfad.
+ * Für die ist die ehrliche Auskunft, dass nichts geschehen ist und wie der
+ * Fehler heißt - jemandem zu erklären, was er anders machen soll, wenn er
+ * nichts anders machen kann, ist keine Hilfe, sondern eine Vermutung.
+ */
+export function picoCompanionEnrolmentRefusalLine(
+  refusal: string,
+): { title: string; body: string } {
+  // Der Grund reist an manchen Codes mit (`was_not_accepted:...`); für die
+  // Auswahl zählt der Kopf, für die Ablehnung der ganze String.
+  const code = refusal.split(':')[0] ?? '';
+  switch (code) {
+    case 'pico_companion_enrolment_offer_is_this_device':
+      return {
+        title: 'That code is this device’s own',
+        body: 'You held this device up to itself. The code you need is the one on the '
+          + 'device you already have.',
+      };
+    case 'pico_companion_enrolment_acceptance_is_for_another_activation':
+      return {
+        title: 'That code answers a different attempt',
+        body: 'It was made for an earlier try. Start again on both devices, and carry '
+          + 'the codes from this attempt only.',
+      };
+    case 'pico_companion_enrolment_vault_is_not_new':
+      return {
+        title: 'This device already has keys',
+        body: 'Joining makes new ones, so it will not run on a device that is already '
+          + 'part of a Home. Nothing was changed.',
+      };
+    case 'pico_companion_enrolment_was_not_accepted':
+      return {
+        title: 'Your Home has not said yes',
+        body: 'The other device may not have sent the answer yet, or somebody still has '
+          + 'to approve it there. Nothing was changed at your Home.',
+      };
+    default:
+      /**
+       * Das eine Achselzucken. Der Code steht darin, weil er das Einzige ist,
+       * was hier wirklich hilft - und weil eine Ablehnung, die nichts nennt,
+       * niemandem erlaubt, danach zu fragen.
+       */
+      return {
+        title: 'This device was not added',
+        body: `Pico stopped before anything changed at your Home (${refusal}).`,
+      };
+  }
+}

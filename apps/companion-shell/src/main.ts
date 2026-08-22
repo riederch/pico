@@ -57,6 +57,9 @@ import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-s
 import {
   picoCompanionVaultPassphrasePrompt,
 } from '@pico/companion/vault-passphrase-prompt';
+import {
+  picoCompanionEnrolmentRefusalLine,
+} from '@pico/companion/enrolment-steps';
 import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
 import {
   openPicoCompanionVaultProductSession,
@@ -2222,17 +2225,29 @@ async function presentFirstRunOutcome(
  */
 async function presentFirstRunFailure(error: unknown): Promise<void> {
   const message = error instanceof Error ? error.message : '';
-  const body = picoCompanionFirstRunFailureBody(
-    message,
-    picoCompanionPublicServiceErrorReason(error),
-  );
+  /**
+   * ADR 0131 A5. Eine Ablehnung aus der Beitritts-Zeremonie gehört dem Kern,
+   * weil zwei Clients sie erzeugen können.
+   *
+   * Bis zum 2026-08-22 sagte dieses Fenster für jede der achtzehn "Pico could
+   * not set this device up" und das Telefon "This phone was not added" - ein
+   * Moment, zwei Sätze, und keiner davon wusste etwas über den Grund. Die
+   * anderen Fehler dieses Pfades - Karte, Kamera, abgebrochene Eingabe - sind
+   * Sachen des Erstlaufs und bleiben hier, wo der Erstlauf wohnt.
+   */
+  const enrolment = message.startsWith('pico_companion_enrolment_')
+    ? picoCompanionEnrolmentRefusalLine(message)
+    : undefined;
   await presentationPort.present(parsePicoCompanionPresentation({
     kind: 'first_run',
     severity: 'blocked',
     symbol: '×',
     decision: 'begin_first_run',
-    title: 'This device was not set up',
-    body,
+    title: enrolment?.title ?? 'This device was not set up',
+    body: enrolment?.body ?? picoCompanionFirstRunFailureBody(
+      message,
+      picoCompanionPublicServiceErrorReason(error),
+    ),
     observedAt: new Date().toISOString(),
   }));
   showWindow();

@@ -221,8 +221,12 @@ public final class JoinActivity extends Activity {
        * umzieht, wenn jemand die Ablehnungen anfasst.
        */
       case "failed":
-        title.setText("This phone was not added");
-        body.setText("Nothing was changed at your Home.");
+        // Der Satz kommt aus dem Kern; der rohe Code bleibt in der Statuszeile,
+        // weil er eine Diagnose ist und kein Satz. Bis zum 2026-08-22 stand
+        // hier "This phone was not added", während der Desktop für dieselbe
+        // Ablehnung etwas anderes sagte.
+        title.setText(titleOf(message, step));
+        body.setText(bodyOf(message, step));
         status.setText(message.optString("reason"));
         answer.setVisibility(View.GONE);
         send.setVisibility(View.GONE);

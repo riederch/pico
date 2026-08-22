@@ -1679,6 +1679,41 @@ local-first product's most security-critical moment.
   und was die Fläche darüber schreibt, ist die Frage, die auf einem Telefon
   eine Schaltfläche hat und im Fenster keine.
 
+  **Die Ablehnung war der dritte Moment, und ihr Befund ist der umgekehrte**
+  (2026-08-22). Bei der Passphrase standen sechs Sätze für einen Moment; hier
+  stand **ein** Satz für **achtzehn**. Die Beitritts-Zeremonie des Kerns hat
+  achtzehn Arten abzulehnen, und beide Clients zuckten für alle achtzehn mit
+  den Schultern - der Desktop mit *"Pico could not set this device up
+  (`code`)"*, das Telefon mit *"This phone was not added"* plus dem rohen Code
+  in einer Statuszeile. Ein Moment, zwei Achselzucken, und keines davon wusste
+  etwas über den Grund.
+
+  Bemerkenswert ist, wie lange das unsichtbar blieb: die fünfzehn Ablehnungen,
+  die der Desktop *mit* Worten versieht, kann ein Android-Beitritt gar nicht
+  auslösen - sie handeln von Fenstern, Kameras und Recovery-Karten. Die
+  achtzehn, die beide Clients treffen, hatte keiner von beiden.
+
+  **Worte bekommen die vier, an denen eine Person etwas ändern kann**: das
+  eigene Gerät vor sich selbst gehalten, ein Code aus einem früheren Versuch,
+  ein Gerät, das schon Schlüssel hat, und ein Home, das noch nicht zugestimmt
+  hat. Die übrigen vierzehn sind Zustände und Defekte - ein unlesbares Profil,
+  eine Signatur mit falscher Rolle, ein fehlender Zustimmungspfad. Jemandem zu
+  erklären, was er anders machen soll, wenn er nichts anders machen kann, ist
+  keine Hilfe, sondern eine Vermutung. Für die bleibt **ein** Achselzucken,
+  und der Code steht darin, weil er das Einzige ist, was dann noch hilft.
+
+  Sechs Tests, vier Pflanzungen, vier passende Risse: die Auswahl nimmt den
+  ganzen String statt des Kopfes (dann verliert `was_not_accepted:` seine
+  Worte), das Achselzucken nennt nur den Kopf (dann verschwindet die
+  eigentliche Auskunft hinter dem Doppelpunkt), ein handlungsfähiger Fall
+  verliert seine Worte, und ein Satz nennt die Zeremonie bei ihrem technischen
+  Namen.
+
+  **Der Bildschirmbeweis steht aus**: das Telefon ging während des Ausrollens
+  vom USB-Bus. Zu zeigen wäre der Fall, den eine Person am ehesten trifft - das
+  Gerät vor sich selbst gehalten -, und dass beide Clients dafür denselben Satz
+  zeigen.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on
