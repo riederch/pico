@@ -130,12 +130,21 @@ A1
    │            schalenfreier Kern 66, 56 IPC-Kanäle beidseitig gleich benannt,
    │            15 Feldgrenzen als Namen)
    └─ ADR 0131  Android ist ein vollwertiger Client, keine Oberfläche
-        Code:   apps/companion/src/enrolment-steps.ts (die Sätze des Walks),
-                apps/companion/src/platform-secrets.ts (Android-Keystore-Verdikt),
-                tools/android-runtime-probe/apk/ (Fläche, noch Laborartefakt)
-        Beweis: enrolment-step-lines.test.ts, android-keystore-evidence.test.ts;
-                check-android-keystore-names.mjs (Kern und Sonde, 9 Belegfelder);
-                der volle Beitritt auf einem Galaxy A55 gegen ein echtes Home
+        Code:   apps/companion/src/enrolment-steps.ts (die Sätze des Walks
+                und der Ablehnungen), vault-passphrase-prompt.ts (die fünf
+                Absichten einer Passphrase-Frage), platform-secrets.ts und
+                platform-unlock.ts (Android-Keystore-Verdikt und der zweite
+                Anschluss des automatischen Unlocks),
+                tools/android-runtime-probe/apk/ (Fläche, noch Laborartefakt,
+                mit KeystorePort.java und KeystoreEvidence.java)
+        Beweis: enrolment-step-lines.test.ts, enrolment-refusal-line.test.ts,
+                vault-passphrase-prompt.test.ts, android-keystore-evidence.test.ts,
+                der Android-Teil von platform-unlock.test.ts;
+                check-android-keystore-names.mjs (Kern und Sonde, 9 Belegfelder),
+                check-one-voice.mjs (ein Moment, eine Stimme),
+                check-awaited-secrets.mjs (kein fallengelassenes Versprechen);
+                der volle Beitritt auf einem Galaxy A55 gegen ein echtes Home,
+                Passphrase im TEE versiegelt und nach Prozesstod wieder geöffnet
 ```
 
 ### A2 — Wer ein Home betreibt, stellt Infrastruktur und erwirbt kein Leserecht
@@ -648,11 +657,26 @@ Vertrag gefangen hätte:
   gegen dasselbe als Name. Ein Telefon mit einwandfreier Hardware hätte die
   Ablehnung bekommen, die für gefälschte gedacht ist.
 
-Was daraus offen bleibt, ist die Hälfte, die ein Mensch bemerkt: **kein Gerät
-schützt seine Vault-Passphrase heute mit diesem Keystore.** Die Form des
-Urteils steht, die Funktion nicht. Dazu drei Momente, die auf beiden Clients
-noch eigene Sätze haben — Passphrase, ADR-0106-Zustimmung, Ablehnung —, und
-E3s zweite Hälfte: das Telefon als Sponsor statt als Bittsteller.
+**Stand am 2026-08-22: die Passphrase liegt im TEE, und die Sprache gehört
+dem Kern bis in die Ablehnung.** Was am Vortag offen war, ist beides zu:
+
+- **Der Keystore trägt jetzt das Entsperrgeheimnis.** Ein Java-Anschluss über
+  AF_UNIX versiegelt die Passphrase mit einem TEE-Schlüssel; der Kern urteilt
+  über den Beleg, nicht über die Kette. Am Gerät nachgewiesen, inklusive
+  Prozesstod: ein zweiter Prozess öffnete das Versiegelte, und der
+  Vault-Daemon nahm die Passphrase an, die niemand getippt hat.
+- **Zwei der drei Momente sind umgezogen.** Bei der Passphrase standen sechs
+  Schreibweisen für einen Moment, fünf davon im Electron-Hauptprozess allein;
+  bei der Ablehnung stand ein Satz für achtzehn, in zwei Schreibweisen. Beide
+  Male dieselbe Frage — wem gehören die Worte — und beide Male derselbe Ort.
+  `check-one-voice.mjs` hält es, und bewacht dabei auch die elf Schrittsätze,
+  die bisher keinen Wächter hatten.
+
+Offen bleibt der dritte Moment, **absichtlich**: die ADR-0106-Zustimmung
+schreibt die Fläche selbst, weil der Kern den *Satz* liefert, den eine Person
+unterschreibt, und die Frage darüber auf einem Telefon eine Schaltfläche hat
+und im Fenster keine. Dazu E3s zweite Hälfte: das Telefon als Sponsor statt
+als Bittsteller.
 
 Wie ein Telefon das Home erreicht: **nicht** über den Foundation-Port, der per
 Default an `127.0.0.1` bindet. Der Weg ist der eigene Link-Intake-Listener
