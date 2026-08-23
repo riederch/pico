@@ -180,11 +180,36 @@ export async function createPicoLinkDirectClient(
           )),
         };
 
-        const response = await requestFetch(linkUrl, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(envelope),
-        });
+        /**
+         * ADR 0131 A7. Ein Home, das nicht antwortet, bekommt hier einen
+         * Namen - so wie jeder andere Fehlschlag in dieser Datei einen hat.
+         *
+         * **Bis zum 2026-08-22 war er der einzige ohne.** Elf Ablehnungen
+         * heißen `link_rejected`, `link_invalid_response`,
+         * `link_response_unreadable` und so fort; nur das `fetch` selbst warf
+         * durch, was die Plattform gerade sagte - `fetch failed`,
+         * `ECONNREFUSED`, ein `AbortError`. Auf einem Telefon ist das der
+         * häufigste Fehlschlag überhaupt, weil es das Haus verlässt, und A7
+         * verlangt genau dafür einen Satz statt eines Symptoms: "nichts wartet"
+         * und "niemand hat nachgesehen" sind verschiedene Auskünfte.
+         *
+         * Der Grund reist mit, damit eine Diagnose möglich bleibt. Er ist
+         * nicht der Satz für eine Person - den wählt
+         * `picoCompanionEnrolmentRefusalLine` am Namen davor.
+         */
+        let response;
+        try {
+          response = await requestFetch(linkUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(envelope),
+          });
+        } catch (noAnswer) {
+          const cause = noAnswer instanceof Error
+            ? (noAnswer.cause as { code?: string } | undefined)?.code ?? noAnswer.message
+            : String(noAnswer);
+          throw new Error(`link_home_did_not_answer:${cause}`);
+        }
         const responseText = await readBoundedResponseText(response);
         let parsed: unknown;
         try {

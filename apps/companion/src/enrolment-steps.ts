@@ -342,6 +342,24 @@ export function picoCompanionEnrolmentRefusalLine(
         body: 'Joining makes new ones, so it will not run on a device that is already '
           + 'part of a Home. Nothing was changed.',
       };
+    case 'link_home_did_not_answer':
+      /**
+       * ADR 0131 A7. Der häufigste Fehlschlag eines Telefons, weil es das
+       * Haus verlässt - und bis zum 2026-08-22 der einzige ohne Namen: er kam
+       * als `fetch failed` durch und landete im Achselzucken.
+       *
+       * Die Worte sind **nicht** die der Bedingung `home_unreachable` aus
+       * `@pico/companion/conditions`, obwohl es dieselbe Lage ist. Deren
+       * Rumpf sagt "Recall, entry and capture continue here", was für einen
+       * laufenden Client stimmt und hier falsch wäre: dieser Beitritt läuft
+       * gerade nicht weiter. Denselben Satz zu nehmen, weil die Lage dieselbe
+       * heißt, hätte einer Person etwas Unwahres gesagt.
+       */
+      return {
+        title: 'Your Home did not answer',
+        body: 'This device is not on the same network as your Home, or your Home is not '
+          + 'running. Nothing was changed; try again where your Home can be reached.',
+      };
     case 'pico_companion_enrolment_was_not_accepted':
       return {
         title: 'Your Home has not said yes',

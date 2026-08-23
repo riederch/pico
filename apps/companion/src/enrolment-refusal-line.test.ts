@@ -10,6 +10,9 @@ const spoken = [
   'pico_companion_enrolment_acceptance_is_for_another_activation',
   'pico_companion_enrolment_vault_is_not_new',
   'pico_companion_enrolment_was_not_accepted',
+  // ADR 0131 A7: das Home antwortet nicht. Der häufigste Fehlschlag eines
+  // Geräts, das das Haus verlässt.
+  'link_home_did_not_answer',
 ];
 
 /** Zustände und Defekte: wahr, aber nichts, was jemand anders machen kann. */
@@ -48,6 +51,20 @@ describe('was ein Pico sagt, wenn ein Beitritt nicht zustande kommt', () => {
       // Der Code steht darin, weil er das Einzige ist, was hier hilft.
       expect(line.body, refusal).toContain(refusal);
     }
+  });
+
+  it('sagt bei unerreichbarem Home nicht, was ein laufender Client sagt', () => {
+    /**
+     * Die Bedingung `home_unreachable` im Kern trägt den Rumpf "Recall, entry
+     * and capture continue here". Für einen laufenden Client stimmt das; für
+     * einen abgebrochenen Beitritt wäre es unwahr - hier läuft nichts weiter.
+     * Denselben Satz zu nehmen, weil die Lage denselben Namen trägt, ist die
+     * Verwechslung, die dieser Test verhindert.
+     */
+    const line = picoCompanionEnrolmentRefusalLine('link_home_did_not_answer:ECONNREFUSED');
+    expect(line.title).toBe('Your Home did not answer');
+    expect(line.body.toLowerCase()).not.toContain('continue');
+    expect(line.body).toContain('Nothing was changed');
   });
 
   it('liest den Grund, der an manchen Codes mitreist', () => {

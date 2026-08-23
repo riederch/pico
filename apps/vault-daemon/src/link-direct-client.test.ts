@@ -316,6 +316,53 @@ describe('Pico Link direct client (ADR 0107 D3)', () => {
     expect(requestFetch).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * ADR 0131 A7. Ein Home, das nicht antwortet, war der einzige Fehlschlag in
+   * diesem Client ohne Namen - er warf durch, was die Plattform gerade sagte.
+   * Auf einem Telefon ist er der häufigste, weil es das Haus verlässt.
+   */
+  it('names a Home that did not answer, and carries the reason for a diagnosis', async () => {
+    const f = fixture();
+    const refused = Object.assign(new Error('fetch failed'), {
+      cause: { code: 'ECONNREFUSED' },
+    });
+    const requestFetch = vi.fn(async () => {
+      throw refused;
+    }) as unknown as typeof fetch;
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid',
+      host: f.host,
+      sender: f.sender,
+      fetch: requestFetch,
+    });
+
+    await expect(client.request('home.setup.read', {}))
+      .rejects.toThrow('link_home_did_not_answer:ECONNREFUSED');
+  });
+
+  it('falls back to the message when a transport failure carries no code', async () => {
+    // Nicht jede Laufzeit hängt einen `cause.code` an - nodejs-mobile auf dem
+    // Telefon meldet manches nur als Text. Ein Name ohne Grund ist immer noch
+    // ein Name; ein Name, der bei fehlendem Grund verschwindet, wäre keiner.
+    const f = fixture();
+    const requestFetch = vi.fn(async () => {
+      throw new Error('Failed to fetch');
+    }) as unknown as typeof fetch;
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid',
+      host: f.host,
+      sender: f.sender,
+      fetch: requestFetch,
+    });
+
+    await expect(client.request('home.setup.read', {}))
+      .rejects.toThrow('link_home_did_not_answer:Failed to fetch');
+  });
+
   it('refuses an oversized carrier response before parsing it', async () => {
     const f = fixture();
     const client = await createPicoLinkDirectClient({
