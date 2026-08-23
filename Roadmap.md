@@ -826,11 +826,21 @@ Zeilen.
 wurde nicht der Satz, sondern seine Grundlage: 231 Ausfuhren des Astes, jede
 Route, und die gesamte Link-Fläche.
 
-- **Der Ast hat gar keine Link-Operation.** Reader-Custody ist über
-  *Operator*-Routen erreichbar (`Requires an operator session`), nicht über
-  den Link, über den das Gerät einer Person spricht. Es fehlt also nicht ein
-  Client-Pfad zu einer Operation — es gibt die Operation nicht. Das ist eine
-  stärkere Aussage als „kein Subjekt" und eine, an der man arbeiten könnte.
+- **~~Der Ast hat gar keine Link-Operation.~~ Falsch, und am 2026-08-22 beim
+  Bauen widerlegt.** Hier stand, Reader-Custody sei nur über *Operator*-Routen
+  erreichbar. Tatsächlich leitet `home.authority.submit` seit Langem
+  `reader_custody_domain`, `reader_custody_reader_grant` und
+  `reader_custody_kek_rotation` weiter, und `home.authority.list` kannte
+  `reader_custody_domains`. Die Messung, die zu diesem Satz führte, suchte
+  nach *eigenen* Operationsnamen und übersah einen Sammelruf mit
+  `resource`-Feld — dieselbe Auflösungsblindheit, die einen Tag später auch
+  `check-link-reachability.mjs` hatte.
+
+  **Was wirklich fehlte, war eine Asymmetrie**, und es war die, die ADR 0130
+  E4/E5 für Mitgliedschaften bereits benannt hatten: vergeben ging vom Gerät
+  aus, nachsehen und beenden nicht. Beides ist am 2026-08-22 gebaut — eine
+  Person sieht jetzt, welche Domänen sie hält, wer sie liest, welche niemand
+  liest, und kann einen Leser wieder ausschließen.
 - **Drei Routen sind als Fläche versprochen**, als `experimental` markiert,
   und ihr einziger Test ist `unauthorized-writes.test.ts`. Das einzige, was
   über sie bewiesen ist, ist dass sie nein sagen.
@@ -841,17 +851,24 @@ Route, und die gesamte Link-Fläche.
   Messung hat die Antwort des Gates exakt reproduziert.
 
 **Warum B5 einen Baum brauchte, lässt sich jetzt genau sagen: drei Gates
-lassen den Ast durch, jedes aus einem richtigen Grund.**
+ließen den Ast durch, jedes aus einem eigenen Grund.**
 `check-store-writers.mjs` nimmt ihn ausdrücklich aus (ein Produzent, der
-absichtlich fehlt), `check-link-reachability.mjs` sieht ihn nie (er hat keine
-Operation, die zu prüfen wäre), und `check-surface-classes.mjs` lässt ihn
-passieren (dokumentiert *und* serviert). Drei grüne Zeilen, und der Ast trägt
-weiterhin nichts.
+absichtlich fehlt), `check-surface-classes.mjs` lässt ihn passieren
+(dokumentiert *und* serviert) — und `check-link-reachability.mjs` sah seine
+Ressourcen nicht, weil er Operations*namen* zählte und jede Ressource hinter
+einem Sammelruf dessen Grün erbte.
 
-Das ist keine Lücke in den Gates, die man schließen könnte: jedes prüft genau
-das, was es behauptet. Es ist die Grenze eines Prüfwerkzeugs, das an Kanten
-ansetzt — und ein Ast ohne Kante nach außen hat keine, an der es greifen
-könnte.
+**Der dritte Grund war doch eine Lücke, und sie ist am 2026-08-22
+geschlossen.** Das fiel auf, als `reader_custody_domains` seinen ersten
+Aufrufer bekam: die Ressource wurde vom Home ausgeliefert und von niemandem
+erfragt, unsichtbar für genau den Prüfer, der gegen diese Krankheit
+geschrieben wurde. Er prüft jetzt elf Ressourcen einzeln.
+
+Die anderen beiden bleiben, wie sie sind: jeder prüft genau das, was er
+behauptet. Und die Lehre daraus ist enger als „ein Baum zeigt, was Gates nicht
+zeigen" — sie lautet: **ein Prüfer, der an Namen ansetzt, sieht nicht, was
+hinter einem Namen verzweigt.** Das ist keine Eigenschaft von Bäumen, sondern
+eine von Auflösung, und man kann sie erhöhen.
 
 **B6 — Der Baum selbst war unvollständig, und das fand erst die Gegenprobe.**
 Der Baum wurde von oben gebaut und las sich vollständig. Sechs echte Dateien aus
