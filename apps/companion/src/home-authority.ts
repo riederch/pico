@@ -1,19 +1,16 @@
-import {
-  picoMemoryContentSuite,
-  picoReaderCustodyCanonicalLabels,
-  picoReaderCustodyReaderGrantLifecycleRecordSchema,
-  type PicoHomeContinuityReasonCategory,
-  type PicoHomeMembershipLifecycleReasonCategory,
-  type PicoHomeMembershipScope,
-  type PicoHomeMembershipStatus,
-  type PicoReaderCustodyReaderGrantLifecycleSignatureInput,
-  type PicoReaderCustodyReaderGrantRevocationReasonCategory,
+import type {
+  PicoHomeContinuityReasonCategory,
+  PicoHomeMembershipLifecycleReasonCategory,
+  PicoHomeMembershipScope,
+  PicoHomeMembershipStatus,
+  PicoReaderCustodyReaderGrantRevocationReasonCategory,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import {
   endPicoHomeMembership,
   issuePicoHomeMembership,
+  revokePicoHomeDomainReaderGrant,
   rotatePicoHomeHostKeys,
 } from '@pico/vault-daemon/home-authority-ceremony';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
@@ -500,14 +497,6 @@ async function ask(
 }
 
 /**
- * Wie im Zeremonienmodul nebenan: sechzehn Zufallsbytes werden ein
- * Bezeichner, und dafür lohnt keine Abhängigkeit.
- */
-function bytesToHex(bytes: Uint8Array): string {
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-/**
  * ADR 0082 mit ADR 0130 E5. Einen Lesezugang beenden, von dem Gerät aus, das
  * ihn vergeben hat.
  *
@@ -515,20 +504,19 @@ function bytesToHex(bytes: Uint8Array): string {
  * und die unangenehmere Hälfte.** `home.authority.submit` nahm
  * `reader_custody_reader_grant` entgegen; das Beenden gab es nur über eine
  * Foundation-Sitzung. Ein Zugang, den man vergeben, aber nicht nehmen kann,
- * ist schlimmer als einer, den man nicht sehen kann - und E5 hat den Satz für
- * Mitgliedschaften schon geschrieben: jemand konnte hereingelassen und nicht
- * hinausgelassen werden.
+ * ist schlimmer als einer, den man nicht sehen kann.
  *
- * **Signiert wird über den Hold-Channel des Daemons**, nicht in diesem
- * Prozess. Der Schlüssel liegt im Vault, und ADR 0106 zeigt der Person den
- * Satz, den sie unterschreibt - `sign-rendering.ts` kennt das kanonische Label
- * dafür bereits.
+ * Diese Hülle sieht aus wie `endPicoCompanionMembership`, und das ist kein
+ * Zufall: die Zeremonie liegt im Vault-Daemon, wo unterschrieben wird, und
+ * spricht die Foundation-Route an, damit sie über eine Sitzung genauso läuft
+ * wie über den Link.
  *
  * **Der Host-Schlüssel kommt aus der Domäne, nicht aus dem Profil.** Nach
- * einer Host-Schlüssel-Rotation (ADR 0115) sind das zwei verschiedene, und die
- * Aussage gehört zu dem, unter dem die Domäne autorisiert wurde.
+ * einer Rotation (ADR 0115) sind das zwei verschiedene, und die Aussage gehört
+ * zu dem, unter dem die Domäne autorisiert wurde.
  */
 export async function revokePicoCompanionDomainReader(input: {
+  profile: PicoCompanionProfile;
   daemonClient: PicoVaultDaemonClient;
   livingDeviceLinkClient: PicoLinkDirectClient;
   sodium: VaultSodium;
@@ -537,66 +525,31 @@ export async function revokePicoCompanionDomainReader(input: {
   reasonCategory: PicoReaderCustodyReaderGrantRevocationReasonCategory;
   now?: () => Date;
 }): Promise<{ readerGrantId: string; status: 'revoked' }> {
-  const status = await input.daemonClient.status();
-  const signer = status.sessions.find((session) =>
-    session.keyFingerprintHex === input.domain.ownerIdentityKeyFingerprintHex);
-  if (signer === undefined || signer.keyRole !== 'pico_identity') {
-    // Der Name der Rolle, nicht "ging nicht": ein gesperrter Vault ist etwas
-    // anderes als ein Gerät, das die Domäne gar nicht besitzt.
-    throw new Error('domain_owner_identity_not_unlocked');
-  }
-
   const now = (input.now ?? (() => new Date()))();
-  const changedAt = now.toISOString();
-  const lifecycle: PicoReaderCustodyReaderGrantLifecycleSignatureInput = {
-    suite: picoMemoryContentSuite,
-    lifecycleId:
-      `reader_grant_lifecycle_${bytesToHex(input.sodium.randombytes_buf(16))}`,
-    readerGrantId: input.reader.readerGrantId,
-    domainAuthorityId: input.domain.domainAuthorityId,
-    homeId: input.domain.homeId,
-    hostSigningKeyFingerprintHex: input.domain.hostSigningKeyFingerprintHex,
-    domainId: input.domain.domainId,
-    ownerIdentityKeyFingerprintHex: input.domain.ownerIdentityKeyFingerprintHex,
-    readerIdentityKeyFingerprintHex: input.reader.readerIdentityKeyFingerprintHex,
-    readerKeyFingerprintHex: input.reader.readerKeyFingerprintHex,
-    status: 'revoked',
-    reasonCategory: input.reasonCategory,
-    changedAt,
-    /**
-     * Millisekunden als Ordnung, wie bei den Mitgliedschaften: was die
-     * Reihenfolge entscheidet, ist welche von zwei Aussagen über denselben
-     * Zugang das Home projiziert - nicht, ob sie den Zugang selbst überragt.
-     */
-    lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
-  };
-
-  const signature = await input.daemonClient.sign({
-    keyFingerprintHex: signer.keyFingerprintHex,
-    label: picoReaderCustodyCanonicalLabels.readerGrantLifecycle,
-    fields: lifecycle as unknown as Record<string, unknown>,
-  });
-
-  const submitted = await input.livingDeviceLinkClient.request(
-    'home.authority.submit',
-    {
-      resource: 'reader_custody_reader_grant_lifecycle',
-      record: {
-        schema: picoReaderCustodyReaderGrantLifecycleRecordSchema,
-        lifecycle,
-        ownerIdentityKeyRecord: {
-          suite: picoMemoryContentSuite,
-          keyRole: 'pico_identity',
-          publicKeyHex: signer.publicKeyHex,
-        },
-        ownerSignatureHex: signature.signatureHex,
-        receivedAt: changedAt,
-      },
+  await revokePicoHomeDomainReaderGrant({
+    client: input.daemonClient,
+    sodium: input.sodium,
+    coreUrl: input.profile.coreUrl,
+    linkClient: input.livingDeviceLinkClient,
+    lifecycle: {
+      readerGrantId: input.reader.readerGrantId,
+      domainAuthorityId: input.domain.domainAuthorityId,
+      homeId: input.domain.homeId,
+      hostSigningKeyFingerprintHex: input.domain.hostSigningKeyFingerprintHex,
+      domainId: input.domain.domainId,
+      ownerIdentityKeyFingerprintHex: input.domain.ownerIdentityKeyFingerprintHex,
+      readerIdentityKeyFingerprintHex: input.reader.readerIdentityKeyFingerprintHex,
+      readerKeyFingerprintHex: input.reader.readerKeyFingerprintHex,
+      reasonCategory: input.reasonCategory,
+      changedAt: now.toISOString(),
+      /**
+       * Millisekunden als Ordnung, wie bei den Mitgliedschaften: was die
+       * Reihenfolge entscheidet, ist welche von zwei Aussagen über denselben
+       * Zugang das Home projiziert.
+       */
+      lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
     },
-  );
-  if (submitted.outcome !== 'ok') {
-    throw new Error(`domain_reader_revocation_rejected:${submitted.outcome}`);
-  }
+  });
 
   return Object.freeze({ readerGrantId: input.reader.readerGrantId, status: 'revoked' });
 }

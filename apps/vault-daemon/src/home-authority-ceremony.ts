@@ -13,6 +13,10 @@ import {
   type PicoHomeMembershipStatus,
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
+  picoMemoryContentSuite,
+  picoReaderCustodyCanonicalLabels,
+  picoReaderCustodyReaderGrantLifecycleRecordSchema,
+  type PicoReaderCustodyReaderGrantLifecycleSignatureInput,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
 import { picoFoundationRequest as foundationRequest } from './claim-home-ceremony.js';
@@ -205,6 +209,74 @@ export async function issuePicoHomeMembership(input: {
  * eighteen subcommands. A Home Host Pico could let somebody in and not let
  * them out.
  */
+/**
+ * ADR 0082 mit ADR 0130 E5. Einen Lesezugang beenden.
+ *
+ * **Hier und nicht im Companion, und der Grund ist eine Beobachtung über die
+ * eigene Arbeit** (2026-08-22): die erste Fassung nannte
+ * `reader_custody_reader_grant_lifecycle` direkt gegenüber dem Link-Client und
+ * war damit der einzige Aufrufer im Baum, der eine Autoritätsressource beim
+ * Namen ruft. Alle anderen sprechen die Foundation-Route an, und
+ * `picoFoundationRequest` entscheidet, ob sie über eine Sitzung oder über den
+ * Link geht - ein Vokabular statt zweier, und beide Transporte umsonst.
+ *
+ * Unterschrieben wird über den Hold-Channel: der Schlüssel liegt im Vault, und
+ * ADR 0106 zeigt der Person den Satz, den sie unterschreibt.
+ */
+export async function revokePicoHomeDomainReaderGrant(input: {
+  client: PicoVaultDaemonClient;
+  sodium: VaultSodium;
+  coreUrl: string;
+  session?: string;
+  linkClient?: PicoLinkDirectClient;
+  lifecycle: Omit<PicoReaderCustodyReaderGrantLifecycleSignatureInput,
+    'suite' | 'lifecycleId' | 'status'>;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find((session) =>
+    session.keyFingerprintHex === input.lifecycle.ownerIdentityKeyFingerprintHex);
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    // Der Name der Rolle, nicht "ging nicht": ein gesperrter Vault ist etwas
+    // anderes als ein Gerät, das die Domäne gar nicht besitzt.
+    throw new Error('domain_owner_identity_not_unlocked');
+  }
+
+  const lifecycle: PicoReaderCustodyReaderGrantLifecycleSignatureInput = {
+    suite: picoMemoryContentSuite,
+    lifecycleId: `reader_grant_lifecycle_${bytesToHex(input.sodium.randombytes_buf(16))}`,
+    status: 'revoked',
+    ...input.lifecycle,
+  };
+
+  const signature = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    label: picoReaderCustodyCanonicalLabels.readerGrantLifecycle,
+    fields: lifecycle as unknown as Record<string, unknown>,
+  });
+
+  const record = {
+    schema: picoReaderCustodyReaderGrantLifecycleRecordSchema,
+    lifecycle,
+    ownerIdentityKeyRecord: {
+      suite: picoMemoryContentSuite,
+      keyRole: 'pico_identity',
+      publicKeyHex: signer.publicKeyHex,
+    },
+    ownerSignatureHex: signature.signatureHex,
+    receivedAt: lifecycle.changedAt,
+  };
+
+  const accepted = await foundationRequest(
+    input.coreUrl,
+    '/api/home/reader-custody/reader-grant-lifecycle',
+    record,
+    input.session,
+    input.linkClient,
+  ) as Record<string, unknown>;
+
+  return { accepted, record };
+}
+
 export async function endPicoHomeMembership(input: {
   client: PicoVaultDaemonClient;
   sodium: VaultSodium;

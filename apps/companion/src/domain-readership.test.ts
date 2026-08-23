@@ -153,6 +153,7 @@ describe('einen Lesezugang beenden, vom Gerät aus, das ihn vergeben hat', () =>
     validUntil: '2027-08-22T00:00:00.000Z',
   };
   const sodium = { randombytes_buf: () => new Uint8Array(16) } as never;
+  const profile = { coreUrl: 'http://127.0.0.1:8321' } as never;
 
   function daemon(over: { keyRole?: string } = {}) {
     const signed: Record<string, unknown>[] = [];
@@ -196,6 +197,7 @@ describe('einen Lesezugang beenden, vom Gerät aus, das ihn vergeben hat', () =>
     const { client, signed } = daemon();
     const seen: Record<string, unknown>[] = [];
     await revokePicoCompanionDomainReader({
+      profile,
       daemonClient: client,
       livingDeviceLinkClient: link(seen),
       sodium,
@@ -213,6 +215,7 @@ describe('einen Lesezugang beenden, vom Gerät aus, das ihn vergeben hat', () =>
     // zeigt der Person den Satz, den sie unterschreibt.
     const { client, signed } = daemon();
     await revokePicoCompanionDomainReader({
+      profile,
       daemonClient: client,
       livingDeviceLinkClient: link([]),
       sodium,
@@ -227,6 +230,7 @@ describe('einen Lesezugang beenden, vom Gerät aus, das ihn vergeben hat', () =>
   it('schickt die Aussage über dieselbe Operation wie das Vergeben', async () => {
     const seen: Record<string, unknown>[] = [];
     await revokePicoCompanionDomainReader({
+      profile,
       daemonClient: daemon().client,
       livingDeviceLinkClient: link(seen),
       sodium,
@@ -241,6 +245,7 @@ describe('einen Lesezugang beenden, vom Gerät aus, das ihn vergeben hat', () =>
 
   it('nennt einen gesperrten Vault beim Namen, statt ihn als Ablehnung zu zeigen', async () => {
     await expect(revokePicoCompanionDomainReader({
+      profile,
       daemonClient: daemon({ keyRole: 'device_signing' }).client,
       livingDeviceLinkClient: link([]),
       sodium,
@@ -250,17 +255,25 @@ describe('einen Lesezugang beenden, vom Gerät aus, das ihn vergeben hat', () =>
     })).rejects.toThrow('domain_owner_identity_not_unlocked');
   });
 
-  it('nennt die Ablehnung des Homes beim Namen', async () => {
+  it('nennt die Ablehnung des Homes im Vokabular aller Zeremonien', async () => {
+    /**
+     * Die erste Fassung erfand hier einen eigenen Namen
+     * (`domain_reader_revocation_rejected:…`). Seit der Widerruf über
+     * `picoFoundationRequest` läuft wie jede andere Zeremonie, gilt deren
+     * Vokabular - ein Aufrufer, der beide kennen müsste, wäre der Preis für
+     * einen Namen, den nur eine Stelle spricht.
+     */
     const refusing = {
       request: async () => ({ outcome: 'foundation_rejected', result: {} }),
     } as unknown as PicoLinkDirectClient;
     await expect(revokePicoCompanionDomainReader({
+      profile,
       daemonClient: daemon().client,
       livingDeviceLinkClient: refusing,
       sodium,
       domain: readership,
       reader,
       reasonCategory: 'reader_removed',
-    })).rejects.toThrow('domain_reader_revocation_rejected:foundation_rejected');
+    })).rejects.toThrow('foundation_rejected');
   });
 });
