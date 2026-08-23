@@ -3488,6 +3488,37 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     };
   }
 
+  /**
+   * ADR 0082 mit ADR 0130 E5. Einen Lesezugang beenden, von dem Gerät aus,
+   * das ihn vergeben hat.
+   *
+   * Dieselbe Asymmetrie, die E5 für Mitgliedschaften benannt hat, eine
+   * Ressource weiter: `reader_custody_reader_grant` ging über Link, das
+   * Beenden nicht. Jemand konnte also einen Lesezugang von seinem eigenen
+   * Gerät aus vergeben und brauchte danach eine Foundation-Sitzung, um ihn zu
+   * widerrufen - was in der Praxis heißt, ihn nicht widerrufen zu können.
+   *
+   * Der Speicheraufruf ist derselbe, den die Foundation-Route macht. Was hier
+   * anders ist, ist nur der Kanal, über den er erreicht wird.
+   */
+  function recordReaderCustodyReaderGrantLifecycle(
+    body: unknown,
+  ): FoundationOperationResult {
+    const result = readerCustody.recordReaderGrantLifecycle(
+      body as PicoReaderCustodyReaderGrantLifecycleRecord,
+    );
+    if (!result.ok) {
+      return {
+        statusCode: readerCustodyFailureStatus(result.reason),
+        body: { error: result.reason },
+      };
+    }
+    return {
+      statusCode: result.inserted ? 201 : 200,
+      body: { readerGrant: result.value as unknown as Record<string, unknown> },
+    };
+  }
+
   function recordReaderCustodyKekRotation(body: unknown): FoundationOperationResult {
     const result = readerCustody.recordKekRotation(body as PicoReaderCustodyKekRotationRecord);
     if (!result.ok) {
@@ -3528,6 +3559,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         return recordReaderCustodyDomain(args.record);
       case 'reader_custody_reader_grant':
         return await recordReaderCustodyReaderGrant(args.record);
+      case 'reader_custody_reader_grant_lifecycle':
+        return recordReaderCustodyReaderGrantLifecycle(args.record);
       case 'reader_custody_kek_rotation':
         return recordReaderCustodyKekRotation(args.record);
       default:

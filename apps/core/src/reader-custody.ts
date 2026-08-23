@@ -62,6 +62,16 @@ export interface ReaderCustodyAuthoritySource {
 export interface PicoReaderCustodyDomainView {
   domainAuthorityId: string;
   homeId: string;
+  /**
+   * Der Host-Schlüssel, unter dem diese Domäne autorisiert wurde - **nicht**
+   * der, den das Home heute führt.
+   *
+   * Er steht hier, seit ein Gerät einen Lesezugang widerrufen können soll: die
+   * Widerrufsaussage trägt ihn, und wer ihn aus dem Profil nähme, träfe nach
+   * einer Host-Schlüssel-Rotation (ADR 0115) den falschen. Ein öffentlicher
+   * Fingerabdruck, den das Gerät ohnehin kennt.
+   */
+  hostSigningKeyFingerprintHex: string;
   domainId: string;
   ownerIdentityKeyFingerprintHex: string;
   ownerReaderKeyFingerprintHex: string;
@@ -2138,6 +2148,7 @@ function domainView(
   return {
     domainAuthorityId: record.domain.domainAuthorityId,
     homeId: record.domain.homeId,
+    hostSigningKeyFingerprintHex: record.domain.hostSigningKeyFingerprintHex,
     domainId: record.domain.domainId,
     ownerIdentityKeyFingerprintHex:
       record.domain.ownerIdentityKeyFingerprintHex,

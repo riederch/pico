@@ -360,6 +360,10 @@ export async function picoLinkFoundationRequest(
     '/api/home/reader-key-freshness-checkpoints': 'reader_key_freshness_checkpoint',
     '/api/home/reader-custody/domains': 'reader_custody_domain',
     '/api/home/reader-custody/reader-grants': 'reader_custody_reader_grant',
+    // ADR 0130 E5, dieselbe Asymmetrie eine Ressource weiter: das Vergeben
+    // ging über Link, das Beenden nicht.
+    '/api/home/reader-custody/reader-grant-lifecycle':
+      'reader_custody_reader_grant_lifecycle',
     '/api/home/reader-custody/kek-rotations': 'reader_custody_kek_rotation',
   };
   const resource = resources[path];

@@ -1,8 +1,13 @@
-import type {
-  PicoHomeContinuityReasonCategory,
-  PicoHomeMembershipLifecycleReasonCategory,
-  PicoHomeMembershipScope,
-  PicoHomeMembershipStatus,
+import {
+  picoMemoryContentSuite,
+  picoReaderCustodyCanonicalLabels,
+  picoReaderCustodyReaderGrantLifecycleRecordSchema,
+  type PicoHomeContinuityReasonCategory,
+  type PicoHomeMembershipLifecycleReasonCategory,
+  type PicoHomeMembershipScope,
+  type PicoHomeMembershipStatus,
+  type PicoReaderCustodyReaderGrantLifecycleSignatureInput,
+  type PicoReaderCustodyReaderGrantRevocationReasonCategory,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
@@ -398,6 +403,7 @@ export async function endPicoCompanionMembership(input: {
 export interface PicoCompanionDomainReader {
   readerGrantId: string;
   readerIdentityKeyFingerprintHex: string;
+  readerKeyFingerprintHex: string;
   accessMode: 'from_version' | 'forward_only';
   status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
   validUntil: string;
@@ -406,6 +412,14 @@ export interface PicoCompanionDomainReader {
 export interface PicoCompanionDomainReadership {
   domainId: string;
   domainAuthorityId: string;
+  homeId: string;
+  /**
+   * Der Host-Schlüssel, unter dem diese Domäne autorisiert wurde - nicht der,
+   * den das Profil heute führt. Nach einer Rotation (ADR 0115) sind das zwei
+   * verschiedene, und ein Widerruf trägt diesen.
+   */
+  hostSigningKeyFingerprintHex: string;
+  ownerIdentityKeyFingerprintHex: string;
   /** Leer heißt: außer der Eigentümerin liest sie niemand. */
   readers: readonly PicoCompanionDomainReader[];
 }
@@ -423,6 +437,7 @@ export async function readPicoCompanionDomainReadership(input: {
     if (typeof row.readerGrantId !== 'string'
       || typeof row.domainAuthorityId !== 'string'
       || typeof row.readerIdentityKeyFingerprintHex !== 'string'
+      || typeof row.readerKeyFingerprintHex !== 'string'
       || (row.accessMode !== 'from_version' && row.accessMode !== 'forward_only')
       || typeof row.status !== 'string'
       || typeof row.validUntil !== 'string') {
@@ -432,6 +447,7 @@ export async function readPicoCompanionDomainReadership(input: {
     readers.push(Object.freeze({
       readerGrantId: row.readerGrantId,
       readerIdentityKeyFingerprintHex: row.readerIdentityKeyFingerprintHex,
+      readerKeyFingerprintHex: row.readerKeyFingerprintHex,
       accessMode: row.accessMode,
       status: row.status as PicoCompanionDomainReader['status'],
       validUntil: row.validUntil,
@@ -441,12 +457,19 @@ export async function readPicoCompanionDomainReadership(input: {
 
   return Object.freeze(domains.map((entry) => {
     const row = entry as Record<string, unknown>;
-    if (typeof row.domainId !== 'string' || typeof row.domainAuthorityId !== 'string') {
+    if (typeof row.domainId !== 'string'
+      || typeof row.domainAuthorityId !== 'string'
+      || typeof row.homeId !== 'string'
+      || typeof row.hostSigningKeyFingerprintHex !== 'string'
+      || typeof row.ownerIdentityKeyFingerprintHex !== 'string') {
       throw new Error('invalid_pico_companion_domain_readership');
     }
     return Object.freeze({
       domainId: row.domainId,
       domainAuthorityId: row.domainAuthorityId,
+      homeId: row.homeId,
+      hostSigningKeyFingerprintHex: row.hostSigningKeyFingerprintHex,
+      ownerIdentityKeyFingerprintHex: row.ownerIdentityKeyFingerprintHex,
       readers: Object.freeze(byDomain.get(row.domainAuthorityId) ?? []),
     });
   }));
@@ -474,4 +497,106 @@ async function ask(
     throw new Error('invalid_pico_companion_domain_readership');
   }
   return rows;
+}
+
+/**
+ * Wie im Zeremonienmodul nebenan: sechzehn Zufallsbytes werden ein
+ * Bezeichner, und dafür lohnt keine Abhängigkeit.
+ */
+function bytesToHex(bytes: Uint8Array): string {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * ADR 0082 mit ADR 0130 E5. Einen Lesezugang beenden, von dem Gerät aus, das
+ * ihn vergeben hat.
+ *
+ * **Dieselbe Asymmetrie wie bei den Mitgliedschaften, eine Ressource weiter,
+ * und die unangenehmere Hälfte.** `home.authority.submit` nahm
+ * `reader_custody_reader_grant` entgegen; das Beenden gab es nur über eine
+ * Foundation-Sitzung. Ein Zugang, den man vergeben, aber nicht nehmen kann,
+ * ist schlimmer als einer, den man nicht sehen kann - und E5 hat den Satz für
+ * Mitgliedschaften schon geschrieben: jemand konnte hereingelassen und nicht
+ * hinausgelassen werden.
+ *
+ * **Signiert wird über den Hold-Channel des Daemons**, nicht in diesem
+ * Prozess. Der Schlüssel liegt im Vault, und ADR 0106 zeigt der Person den
+ * Satz, den sie unterschreibt - `sign-rendering.ts` kennt das kanonische Label
+ * dafür bereits.
+ *
+ * **Der Host-Schlüssel kommt aus der Domäne, nicht aus dem Profil.** Nach
+ * einer Host-Schlüssel-Rotation (ADR 0115) sind das zwei verschiedene, und die
+ * Aussage gehört zu dem, unter dem die Domäne autorisiert wurde.
+ */
+export async function revokePicoCompanionDomainReader(input: {
+  daemonClient: PicoVaultDaemonClient;
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  sodium: VaultSodium;
+  domain: PicoCompanionDomainReadership;
+  reader: PicoCompanionDomainReader;
+  reasonCategory: PicoReaderCustodyReaderGrantRevocationReasonCategory;
+  now?: () => Date;
+}): Promise<{ readerGrantId: string; status: 'revoked' }> {
+  const status = await input.daemonClient.status();
+  const signer = status.sessions.find((session) =>
+    session.keyFingerprintHex === input.domain.ownerIdentityKeyFingerprintHex);
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    // Der Name der Rolle, nicht "ging nicht": ein gesperrter Vault ist etwas
+    // anderes als ein Gerät, das die Domäne gar nicht besitzt.
+    throw new Error('domain_owner_identity_not_unlocked');
+  }
+
+  const now = (input.now ?? (() => new Date()))();
+  const changedAt = now.toISOString();
+  const lifecycle: PicoReaderCustodyReaderGrantLifecycleSignatureInput = {
+    suite: picoMemoryContentSuite,
+    lifecycleId:
+      `reader_grant_lifecycle_${bytesToHex(input.sodium.randombytes_buf(16))}`,
+    readerGrantId: input.reader.readerGrantId,
+    domainAuthorityId: input.domain.domainAuthorityId,
+    homeId: input.domain.homeId,
+    hostSigningKeyFingerprintHex: input.domain.hostSigningKeyFingerprintHex,
+    domainId: input.domain.domainId,
+    ownerIdentityKeyFingerprintHex: input.domain.ownerIdentityKeyFingerprintHex,
+    readerIdentityKeyFingerprintHex: input.reader.readerIdentityKeyFingerprintHex,
+    readerKeyFingerprintHex: input.reader.readerKeyFingerprintHex,
+    status: 'revoked',
+    reasonCategory: input.reasonCategory,
+    changedAt,
+    /**
+     * Millisekunden als Ordnung, wie bei den Mitgliedschaften: was die
+     * Reihenfolge entscheidet, ist welche von zwei Aussagen über denselben
+     * Zugang das Home projiziert - nicht, ob sie den Zugang selbst überragt.
+     */
+    lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
+  };
+
+  const signature = await input.daemonClient.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    label: picoReaderCustodyCanonicalLabels.readerGrantLifecycle,
+    fields: lifecycle as unknown as Record<string, unknown>,
+  });
+
+  const submitted = await input.livingDeviceLinkClient.request(
+    'home.authority.submit',
+    {
+      resource: 'reader_custody_reader_grant_lifecycle',
+      record: {
+        schema: picoReaderCustodyReaderGrantLifecycleRecordSchema,
+        lifecycle,
+        ownerIdentityKeyRecord: {
+          suite: picoMemoryContentSuite,
+          keyRole: 'pico_identity',
+          publicKeyHex: signer.publicKeyHex,
+        },
+        ownerSignatureHex: signature.signatureHex,
+        receivedAt: changedAt,
+      },
+    },
+  );
+  if (submitted.outcome !== 'ok') {
+    throw new Error(`domain_reader_revocation_rejected:${submitted.outcome}`);
+  }
+
+  return Object.freeze({ readerGrantId: input.reader.readerGrantId, status: 'revoked' });
 }

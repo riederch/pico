@@ -3290,6 +3290,19 @@ describe('Pico Home Core app', () => {
      * gibt nichts zu sehen" und "hier kann man nicht nachsehen", und das ist
      * genau die Auskunft, die vorher fehlte.
      */
+    /**
+     * ADR 0130 E5, dieselbe Asymmetrie eine Ressource weiter: das Vergeben
+     * ging über Link, das Beenden nicht. Geprüft wird hier nur, dass das Home
+     * die Ressource **kennt** - ein leerer Datensatz wird von der Speicherung
+     * abgelehnt, und genau diese Ablehnung ist der Beweis, dass sie ihn
+     * angenommen und geprüft hat statt ihn nicht zu kennen.
+     */
+    const linkedRevocation = await linkRequest('home.authority.submit', {
+      resource: 'reader_custody_reader_grant_lifecycle',
+      record: {},
+    });
+    expect(linkedRevocation.result).not.toMatchObject({ error: 'unknown_authority_resource' });
+
     for (const [resource, field] of [
       ['reader_custody_domains', 'domains'],
       ['reader_custody_reader_grants', 'readerGrants'],
