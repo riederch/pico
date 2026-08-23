@@ -3572,6 +3572,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           statusCode: 200,
           body: { memberships: store.picoHomeMemberships() as unknown as Record<string, unknown>[] },
         };
+      /**
+       * ADR 0082 mit ADR 0130 E4, und dieselbe Asymmetrie eine Ressource
+       * weiter.
+       *
+       * `home.authority.submit` nimmt seit Langem `reader_custody_reader_grant`
+       * entgegen: eine Person kann von ihrem eigenen Gerät aus jemandem das
+       * Lesen einer Domäne erlauben. Zurücklesen konnte sie es nicht - dafür
+       * brauchte es eine Foundation-Sitzung. Wer Zugang vergeben, aber nicht
+       * nachsehen kann, wem er ihn vergeben hat, hat eine Fläche, die ihre
+       * eigene Arbeit nicht prüfen kann; genau das steht bei `memberships`
+       * eine Zeile höher, und es gilt hier unverändert.
+       *
+       * Autorität schafft das keine: der Fall darüber hält den Aufrufer schon
+       * auf den aktuellen Home Host Pico fest, dieselbe Prüfung, die die
+       * Foundation-Route über `home-authority-relay` anwendet. Das hier fügt
+       * einen Leser hinzu, keine Befugnis.
+       */
+      case 'reader_custody_reader_grants':
+        return {
+          statusCode: 200,
+          body: {
+            readerGrants: readerCustody.readerGrants() as unknown as Record<string, unknown>[],
+          },
+        };
       default:
         return { statusCode: 400, body: { error: 'unknown_authority_resource' } };
     }

@@ -3280,6 +3280,26 @@ describe('Pico Home Core app', () => {
       claimState: { state: 'claimed', homeId },
     });
 
+    /**
+     * ADR 0082 mit ADR 0130 E4. Die Leseseite der Reader-Custody-Grants, über
+     * denselben Kanal wie ihre Schreibseite.
+     *
+     * **Leere Listen sind hier der Beweis, nicht seine Schwäche.** Geprüft
+     * wird, dass das Home diese Ressourcen *ausliefert* statt sie mit
+     * `unknown_authority_resource` abzulehnen - der Unterschied zwischen "es
+     * gibt nichts zu sehen" und "hier kann man nicht nachsehen", und das ist
+     * genau die Auskunft, die vorher fehlte.
+     */
+    for (const [resource, field] of [
+      ['reader_custody_domains', 'domains'],
+      ['reader_custody_reader_grants', 'readerGrants'],
+    ] as const) {
+      const linkedReadership = await linkRequest('home.authority.list', { resource });
+      expect(linkedReadership.response.outcome, resource).toBe('ok');
+      expect(linkedReadership.result, resource)
+        .toMatchObject({ statusCode: 200, [field]: [] });
+    }
+
     const linkedDeviceLifecycle = await linkRequest('home.device.lifecycle.read', {});
     expect(linkedDeviceLifecycle.response.outcome).toBe('ok');
     expect(linkedDeviceLifecycle.result).toMatchObject({

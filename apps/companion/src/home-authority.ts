@@ -375,3 +375,103 @@ export async function endPicoCompanionMembership(input: {
     status: ending.status,
   });
 }
+
+/**
+ * ADR 0082 mit ADR 0130 E4. Welche Domänen dieses Home hält, und wer sie lesen
+ * darf.
+ *
+ * **Die Asymmetrie, die das schließt, war dieselbe wie bei den
+ * Mitgliedschaften, eine Ressource weiter.** `home.authority.submit` nimmt
+ * `reader_custody_reader_grant` seit Langem entgegen - eine Person kann vom
+ * eigenen Gerät aus jemandem das Lesen einer Domäne erlauben. Zurücklesen ging
+ * nur über eine Foundation-Sitzung. Wer Zugang vergeben, aber nicht nachsehen
+ * kann, wem er ihn vergeben hat, hat eine Fläche, die ihre eigene Arbeit nicht
+ * prüfen kann.
+ *
+ * **Zwei Lesungen, nicht eine, und der Grund ist die Antwort auf die Frage.**
+ * Ein Lesezugriff trägt seine Domäne mit sich, also beantworteten die Grants
+ * allein "wer liest was". Was sie nicht beantworten, ist "welche Domäne liest
+ * niemand" - und das ist die Hälfte, die eine Person am dringendsten wissen
+ * will, weil sie sagt, was privat geblieben ist. Eine Ansicht, die nur die
+ * Domänen mit Lesern zeigt, verschweigt genau das Beruhigende.
+ */
+export interface PicoCompanionDomainReader {
+  readerGrantId: string;
+  readerIdentityKeyFingerprintHex: string;
+  accessMode: 'from_version' | 'forward_only';
+  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
+  validUntil: string;
+}
+
+export interface PicoCompanionDomainReadership {
+  domainId: string;
+  domainAuthorityId: string;
+  /** Leer heißt: außer der Eigentümerin liest sie niemand. */
+  readers: readonly PicoCompanionDomainReader[];
+}
+
+export async function readPicoCompanionDomainReadership(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<readonly PicoCompanionDomainReadership[]> {
+  const domains = await ask(input.livingDeviceLinkClient, 'reader_custody_domains', 'domains');
+  const grants = await ask(
+    input.livingDeviceLinkClient, 'reader_custody_reader_grants', 'readerGrants');
+
+  const byDomain = new Map<string, PicoCompanionDomainReader[]>();
+  for (const entry of grants) {
+    const row = entry as Record<string, unknown>;
+    if (typeof row.readerGrantId !== 'string'
+      || typeof row.domainAuthorityId !== 'string'
+      || typeof row.readerIdentityKeyFingerprintHex !== 'string'
+      || (row.accessMode !== 'from_version' && row.accessMode !== 'forward_only')
+      || typeof row.status !== 'string'
+      || typeof row.validUntil !== 'string') {
+      throw new Error('invalid_pico_companion_domain_readership');
+    }
+    const readers = byDomain.get(row.domainAuthorityId) ?? [];
+    readers.push(Object.freeze({
+      readerGrantId: row.readerGrantId,
+      readerIdentityKeyFingerprintHex: row.readerIdentityKeyFingerprintHex,
+      accessMode: row.accessMode,
+      status: row.status as PicoCompanionDomainReader['status'],
+      validUntil: row.validUntil,
+    }));
+    byDomain.set(row.domainAuthorityId, readers);
+  }
+
+  return Object.freeze(domains.map((entry) => {
+    const row = entry as Record<string, unknown>;
+    if (typeof row.domainId !== 'string' || typeof row.domainAuthorityId !== 'string') {
+      throw new Error('invalid_pico_companion_domain_readership');
+    }
+    return Object.freeze({
+      domainId: row.domainId,
+      domainAuthorityId: row.domainAuthorityId,
+      readers: Object.freeze(byDomain.get(row.domainAuthorityId) ?? []),
+    });
+  }));
+}
+
+/**
+ * Eine Ressource lesen und die Liste herausholen, oder mit dem Namen der
+ * Ablehnung abbrechen.
+ *
+ * Die Ablehnung trägt den Ausgang mit: `sender_is_not_home_authority` ist
+ * etwas anderes als ein Home, das nicht antwortet, und beides als "ging nicht"
+ * zu melden wäre die unbrauchbare Hälfte der Wahrheit.
+ */
+async function ask(
+  client: PicoLinkDirectClient,
+  resource: string,
+  field: string,
+): Promise<readonly unknown[]> {
+  const read = await client.request('home.authority.list', { resource });
+  if (read.outcome !== 'ok') {
+    throw new Error(`domain_readership_read_rejected:${read.outcome}`);
+  }
+  const rows = (read.result as Record<string, unknown>)[field];
+  if (!Array.isArray(rows)) {
+    throw new Error('invalid_pico_companion_domain_readership');
+  }
+  return rows;
+}
