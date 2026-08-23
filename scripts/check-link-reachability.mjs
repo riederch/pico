@@ -113,9 +113,52 @@ const operations = [...(declaration?.[1] ?? '').matchAll(/^\s*'([a-z][a-z0-9_.]*
 
 const callers = sources.filter((path) =>
   !isTestOnly(path) && path !== declaresTheList && path !== answersThem);
+/**
+ * **Und die Ressourcen darin, seit dem 2026-08-22.**
+ *
+ * Dieser Prüfer zählt Operationsnamen. Zwei davon sind aber Sammelrufe:
+ * `home.authority.list` und `home.authority.submit` verzweigen über ein
+ * `resource`-Feld, und jede Ressource darin erbt das Grün des Namens, ob
+ * jemand sie ruft oder nicht.
+ *
+ * Gefunden, als der Reader-Custody-Ast seine Leseseite bekam:
+ * `reader_custody_domains` wurde vom Home ausgeliefert und von keinem Client
+ * je erfragt - eine unerreichbare Fläche hinter einem erreichbaren Namen.
+ * Genau die Krankheit, gegen die dieser Prüfer geschrieben wurde, eine
+ * Auflösungsstufe unter ihm.
+ *
+ * **Was er auch hier nicht kann**, in derselben Ehrlichkeit wie oben: er
+ * folgt der Kette nicht bis zu einem Knopf. Eine Ressource, die eine
+ * Client-Funktion nennt, die niemand ruft, besteht - dieselbe Krankheit eine
+ * Ebene tiefer, und ein dritter Prüfer.
+ */
+const dispatchers = ['executeHomeAuthorityList', 'executeHomeAuthoritySubmit'];
+const homeSource = readFileSync(join(repoRoot, 'apps/core/src/app.ts'), 'utf8');
+const resources = new Set();
+for (const name of dispatchers) {
+  const body = homeSource.match(
+    new RegExp(`function ${name}\\(([\\s\\S]*?)\\n  \\}`));
+  if (body === null) {
+    continue;
+  }
+  for (const found of body[1].matchAll(/case '(\w+)':/g)) {
+    resources.add(found[1]);
+  }
+}
+if (resources.size === 0) {
+  errors.push('no authority resources found - this rule is guarding nothing');
+}
+const unaskedResources = [...resources].filter((resource) =>
+  !callers.some((path) => text.get(path).includes(`'${resource}'`)));
+
 const exempt = new Map(withoutACaller);
 const unreachable = operations.filter((operation) =>
   !callers.some((path) => text.get(path).includes(`'${operation}'`)));
+for (const resource of unaskedResources) {
+  errors.push(`the Home answers \`${resource}\` and nothing outside it ever asks: a resource `
+    + 'behind a reachable operation inherits that operation\'s green, so this one was invisible '
+    + 'to the check above. Either a client asks for it, or it goes.');
+}
 
 for (const operation of unreachable) {
   if (exempt.has(operation)) {
@@ -148,6 +191,7 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Link-reachability check passed (${operations.length} operations, each named by something `
+  `Link-reachability check passed (${operations.length} operations and `
+  + `${resources.size} authority resources, each named by something `
   + `other than the Home except ${withoutACaller.length} argued here).`,
 );
