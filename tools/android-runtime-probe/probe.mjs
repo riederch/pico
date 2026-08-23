@@ -47,6 +47,7 @@ import {
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
 } from '@pico/protocol';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
@@ -109,7 +110,12 @@ try {
   report('argon2id_moderate', {
     createKeyfileMs: createMs,
     openKeyfileMs: Math.round(now() - t),
-    keyFingerprintHex: created.keyFingerprintHex.slice(0, 12),
+    // ADR 0079 I5: die Anzeigeform des Produkts, nicht ein eigener Zuschnitt.
+    // Das Feld hieß bis zum 2026-08-22 `keyFingerprintHex` und trug einen
+    // abgeschnittenen Wert - ein Name, der Hex verspricht, und zwölf Zeichen,
+    // die keines mehr sind. Und ein Kopf-Präfix kann zwei Schlüssel mit
+    // gleichem Anfang nicht unterscheiden; genau dafür ist Kopf-und-Schwanz da.
+    keyFingerprint: picoDisplayFingerprint(created.keyFingerprintHex),
   });
   session.lock?.();
 

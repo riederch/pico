@@ -134,7 +134,31 @@ const ellipsisSlice =
   /\$\{[^{}]*\.(?:slice|substring|substr)\s*\([^{}]*\}\s*…|…\s*\$\{[^{}]*\.(?:slice|substring|substr)\s*\(/g;
 
 let scanned = 0;
-for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'))) {
+/**
+ * **`tools/` kam am 2026-08-22 dazu, und der Anlass war ein Feld mit einem
+ * falschen Namen.**
+ *
+ * Das Sponsor-Labor druckte `Home 976f4b4fcdf1 founded` und die Sonde meldete
+ * `keyFingerprintHex: <zwölf Zeichen>` - ein Name, der Hex verspricht, und ein
+ * Wert, der keines mehr ist. Beides sind Kopf-Präfixe, und ein Kopf-Präfix
+ * kann zwei Schlüssel mit gleichem Anfang nicht unterscheiden. Genau dafür
+ * wählte ADR 0079 I5 Kopf-und-Schwanz: die Frage an einen angezeigten
+ * Fingerabdruck ist immer "ist das der, den ich meine", und ein Präfix
+ * beantwortet sie mit "vielleicht".
+ *
+ * Dass es ein Labor ist, macht es nicht harmloser - es macht es leiser. Wer
+ * eine Laborzeile gegen einen Produktbildschirm hält, vergleicht zwei
+ * verschiedene Zuschnitte desselben Schlüssels und merkt es nicht.
+ *
+ * **Was hier nicht mitgeprüft wird**, damit die grüne Zeile gelesen wird, was
+ * sie behauptet: Java. Die Android-Fläche zeigt heute keinen Fingerabdruck -
+ * gemessen, nicht angenommen -, und ein Prüfer für eine Sprache ohne
+ * Fundstelle wäre eine Zeile, die nur so aussieht, als hielte sie etwas.
+ */
+for (const file of [
+  ...sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages')),
+  ...scriptFiles(join(repoRoot, 'tools')),
+]) {
   const path = relative(repoRoot, file);
   /**
    * Tests are left alone on purpose: pinning the rule means naming the form it
@@ -189,11 +213,30 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Fingerprint display check passed (${scanned} source files across apps and packages,`
+  `Fingerprint display check passed (${scanned} source files across apps, packages and tools,`
   + ` ${allowed.size - 1} derivations and ${shortensForTypography.size} width-fit exempt with`
   + ' reasons, one rule for showing a key'
   + ' to a person - the window included).',
 );
+
+/**
+ * `tools/` hat nicht die Form `paket/src` - dort liegen Skripte, die neben dem
+ * Produkt laufen. Also wird der Baum ganz gelaufen, und gezählt werden `.mjs`
+ * und `.js`.
+ */
+function* scriptFiles(root) {
+  for (const entry of readdirSync(root)) {
+    const path = join(root, entry);
+    if (statSync(path).isDirectory()) {
+      if (entry === 'node_modules' || entry === 'dist') {
+        continue;
+      }
+      yield* scriptFiles(path);
+    } else if (entry.endsWith('.mjs') || entry.endsWith('.js')) {
+      yield path;
+    }
+  }
+}
 
 function* sourceFiles(...roots) {
   for (const root of roots) {

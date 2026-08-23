@@ -33,6 +33,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
+import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { enrolPicoCompanionDevice } from '@pico/companion/enrolment';
 import {
   foundPicoCompanionHome,
@@ -386,7 +387,7 @@ await foundPicoCompanionHome({
 const founded = readPicoCompanionProfile(profilePath);
 writePicoCompanionProfile(profilePath, { ...founded, coreUrl: home.phoneUrl });
 const profile = readPicoCompanionProfile(profilePath);
-say(`   Home ${profile.home.homeHostPicoIdentityFingerprintHex.slice(0, 12)} founded`);
+say(`   Home ${picoDisplayFingerprint(profile.home.homeHostPicoIdentityFingerprintHex)} founded`);
 say(`   profile now points at ${profile.coreUrl}, which is what the grant carries`);
 
 say('');
@@ -514,6 +515,6 @@ const enrolled = await enrolPicoCompanionDevice({
 
 say('');
 say(`== the phone is in: delegation ${enrolled.delegationId}`);
-say(`   its signing key is ${enrolled.targetSigningKeyFingerprintHex.slice(0, 12)}`);
+say(`   its signing key is ${picoDisplayFingerprint(enrolled.targetSigningKeyFingerprintHex)}`);
 say('== leaving the Home running; Ctrl-C ends the lab.');
 await new Promise(() => {});
