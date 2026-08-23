@@ -1758,6 +1758,37 @@ local-first product's most security-critical moment.
   the Card printed and laminated and warns against the file export, so a
   root on a phone whose owner has no printer is one loss from identity
   loss - and that is exactly the person A6 would be opened for.
+  **Nachgemessen am 2026-08-22, weil eine Planzeile das Gegenteil nahelegte.**
+  In der Roadmap stand „E3s zweite Hälfte: das Telefon als Sponsor statt als
+  Bittsteller" als offener Phase-5-Punkt - also als Android-Arbeit, die noch
+  zu tun sei. Sie ist keine.
+
+  `enrollPicoHomeDevice` unterschreibt die Delegation mit
+  `keyRole: 'pico_identity'`, und der Vault eines beigetretenen Geräts hält
+  genau zwei Rollen: `device_signing` und `device_key_agreement`. Der Kern
+  erzwingt das selbst - alles andere heißt dort `vault_is_not_new`. Ein
+  Telefon, das nach dem Beitritt sponsern wollte, scheitert also nicht an
+  einer fehlenden Kamera-Oberfläche oder einem fehlenden Verb, sondern daran,
+  dass Autorität schaffen heißt, mit der Wurzel zu unterschreiben.
+
+  Das ist genau die Entscheidung, die dieses Gate getroffen hat, und sie war
+  richtig getroffen - der Punkt ist nur, dass die Folge daraus an anderer
+  Stelle als offene Aufgabe geführt wurde. Ein Plan, der einen geschlossenen
+  Gate als Rest führt, lässt jemanden bauen, was nicht laufen kann.
+
+  Bemerkenswert daran: die Roadmap-Prüfung selbst hat die Zeile geschrieben.
+  Ein Ast, der von der Wurzel zur Implementierung abgeleitet ist, schützt
+  nicht davor, dass zwei Äste einander widersprechen - **A5s offene Liste
+  gegen A6s Entscheidung** -, wenn niemand sie nebeneinanderlegt.
+
+  Deshalb wurde die Klasse geprüft und nicht nur der Fall: alle Gates mit
+  Status `closed` oder `blocked` gegen die Planungsdokumente gehalten. Es sind
+  drei. **ADR 0121 J3** ist geschlossen, weil eine Signatur von einem
+  Schlüssel, den ein Angreifer erreicht, schlechter ist als keine - und wird
+  in keinem Plan als Arbeit geführt. **ADR 0126 P4** steht „open, blocked" und
+  nennt seinen Blocker selbst (den Runner, den es nicht gibt), was genau die
+  Form ist, in der so etwas stehen soll. Bleibt A6, und der ist behoben.
+
 - **A7 - The home-network limit is spoken (half implemented 2026-08-19):**
   the client names an unreachable Home rather than presenting it as a quiet
   one, and no product surface or document claims away-from-home function.

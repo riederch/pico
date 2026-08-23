@@ -675,8 +675,22 @@ dem Kern bis in die Ablehnung.** Was am Vortag offen war, ist beides zu:
 Offen bleibt der dritte Moment, **absichtlich**: die ADR-0106-Zustimmung
 schreibt die Fläche selbst, weil der Kern den *Satz* liefert, den eine Person
 unterschreibt, und die Frage darüber auf einem Telefon eine Schaltfläche hat
-und im Fenster keine. Dazu E3s zweite Hälfte: das Telefon als Sponsor statt
-als Bittsteller.
+und im Fenster keine.
+
+**Was hier bis zum 2026-08-22 als Phase-5-Rest stand, gehört nicht hierher.**
+„E3s zweite Hälfte: das Telefon als Sponsor" liest sich wie fehlende
+Android-Arbeit und ist keine. Gemessen am Kern: `enrollPicoHomeDevice`
+unterschreibt die Delegation mit `keyRole: 'pico_identity'`, also mit der
+Identitätswurzel — und der Vault eines beigetretenen Geräts hält genau zwei
+Rollen, `device_signing` und `device_key_agreement`; der Kern erzwingt das
+selbst und nennt alles andere `vault_is_not_new`.
+
+Ein Telefon kann also nicht sponsern, weil ihm nichts an Fläche fehlt, sondern
+weil Autorität zu schaffen heißt, mit der Wurzel zu unterschreiben. Das ist
+**ADR 0131 A6**, und A6 ist geschlossen — mit drei datierten Bedingungen zum
+Wiederöffnen, von denen keine „Android-Arbeit" heißt. Die Zeile ist damit
+keine Aufgabe dieser Phase, sondern eine Folge einer Entscheidung, die
+woanders getroffen wurde.
 
 Wie ein Telefon das Home erreicht: **nicht** über den Foundation-Port, der per
 Default an `127.0.0.1` bindet. Der Weg ist der eigene Link-Intake-Listener
