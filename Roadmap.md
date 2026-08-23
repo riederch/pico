@@ -822,6 +822,37 @@ sie ist in ADR 0130 E5 bereits argumentiert. Hier steht sie, weil ein Baum sie
 zeigt und eine Statusmatrix sie nicht zeigen kann: dort sind es fünfzehn grüne
 Zeilen.
 
+**Am 2026-08-22 nachgemessen, und der Befund wird dabei schärfer.** Geprüft
+wurde nicht der Satz, sondern seine Grundlage: 231 Ausfuhren des Astes, jede
+Route, und die gesamte Link-Fläche.
+
+- **Der Ast hat gar keine Link-Operation.** Reader-Custody ist über
+  *Operator*-Routen erreichbar (`Requires an operator session`), nicht über
+  den Link, über den das Gerät einer Person spricht. Es fehlt also nicht ein
+  Client-Pfad zu einer Operation — es gibt die Operation nicht. Das ist eine
+  stärkere Aussage als „kein Subjekt" und eine, an der man arbeiten könnte.
+- **Drei Routen sind als Fläche versprochen**, als `experimental` markiert,
+  und ihr einziger Test ist `unauthorized-writes.test.ts`. Das einzige, was
+  über sie bewiesen ist, ist dass sie nein sagen.
+- **Die ganze Link-Fläche wurde durchgezählt**: 47 servierte Operationen, und
+  genau zwei ruft nichts — `home.identity.rotation.submit` und `.veto`. Beide
+  sind in `check-link-reachability.mjs` namentlich mit Begründung
+  ausgenommen und als ADR 0114 T4s offene Hälfte verbucht. Die unabhängige
+  Messung hat die Antwort des Gates exakt reproduziert.
+
+**Warum B5 einen Baum brauchte, lässt sich jetzt genau sagen: drei Gates
+lassen den Ast durch, jedes aus einem richtigen Grund.**
+`check-store-writers.mjs` nimmt ihn ausdrücklich aus (ein Produzent, der
+absichtlich fehlt), `check-link-reachability.mjs` sieht ihn nie (er hat keine
+Operation, die zu prüfen wäre), und `check-surface-classes.mjs` lässt ihn
+passieren (dokumentiert *und* serviert). Drei grüne Zeilen, und der Ast trägt
+weiterhin nichts.
+
+Das ist keine Lücke in den Gates, die man schließen könnte: jedes prüft genau
+das, was es behauptet. Es ist die Grenze eines Prüfwerkzeugs, das an Kanten
+ansetzt — und ein Ast ohne Kante nach außen hat keine, an der es greifen
+könnte.
+
 **B6 — Der Baum selbst war unvollständig, und das fand erst die Gegenprobe.**
 Der Baum wurde von oben gebaut und las sich vollständig. Sechs echte Dateien aus
 verschiedenen Ästen wurden anschließend von unten gelesen — die vier Fragen
