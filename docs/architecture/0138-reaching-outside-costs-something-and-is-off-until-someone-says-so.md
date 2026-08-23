@@ -344,6 +344,32 @@ receives the credential; it does not keep it.
   wire shape should be decided by the first supplier that does rather than
   guessed at by the one that does not.
 
+  **Ein Credential ist nicht zwingend eines, und das kam von einem echten
+  Aufbau** (Anforderung des Nutzers, 2026-08-22). Sein Gitea steht hinter einer
+  vorgeschalteten HTTP-Basic-Auth, die für *alle* Nutzer dieselbe ist - ein
+  Türschlüssel, kein Ausweis. Eine Git-Bridge, die dort lesen soll, muss
+  deshalb **zwei** Geheimnisse führen: das der Bedienung (Gitea-Token oder
+  Basic Auth des Kontos) und das des Perimeters, und die beiden haben
+  verschiedene Eigentümer, verschiedene Lebensdauern und verschiedene
+  Bedeutungen. Ein Feld namens `credential` reicht dafür nicht.
+
+  **Es ist derselbe Aufbau, der eine Stelle weiter schon gemessen wurde.** Der
+  ADR-0152-Modell-Provider desselben Nutzers steht hinter einem Bearer am nginx
+  hinter cloudflared - auch ein geteiltes Geheimnis vor dem eigentlichen
+  Dienst, auch nicht der Ausweis des Dienstes. Zwei unabhängige Fälle mit
+  derselben Form sind das, was ein Muster von einem Einzelfall unterscheidet:
+  wer eigene Dienste betreibt, stellt ihnen etwas vor die Tür, und das Ding
+  vor der Tür kennt keine Personen.
+
+  Was daraus folgt und hier noch **nicht** entschieden ist: ob der Perimeter
+  ein zweites Credential mit eigenem Scope ist oder ein Feld am ersten; ob er
+  demselben Schlüssel-Domain gehört; und was ADR 0138 CO2 meldet, wenn eines
+  von beiden fehlt - "not configured" ist für zwei Geheimnisse eine
+  Halbwahrheit. Die Git-Bridge existiert noch nicht (`bridges/suppliers/
+  git-library` ist eine lokale Arbeitskopie ohne Netz und ohne Credential),
+  also ist das eine Anforderung an ihren Entwurf und keine offene Baustelle -
+  aber sie steht hier, damit der Entwurf nicht mit einem Feld anfängt.
+
 - **CO2 - Condition is a typed value (implemented):**
   `picoSupplierConditions` is the closed list, with `out_of_scope` from
   ADR 0137 IN3 beside it, and `assertPicoSupplierCondition` refuses

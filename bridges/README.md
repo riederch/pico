@@ -39,6 +39,30 @@ versioned family label - and a third party reproduces it from the
 specification rather than by linking against a package. `git-library` imports
 `node:fs` and `node:path`, and nothing else.
 
+## What a bridge will need that a library does not
+
+A library reads local disk. A bridge reaches an outside system, and reaching
+one that somebody self-hosts usually means getting past **two** doors rather
+than one.
+
+Recorded on 2026-08-22 from a real setup: a Gitea server with HTTP Basic Auth
+in front of it, the same credentials for every user. That is a door key, not
+an identity - it says nothing about who is knocking, and it sits in front of
+whatever authentication the service itself wants. A git bridge reading from
+that host has to carry the service's credential *and* the perimeter's, and the
+two differ in owner, in lifetime, and in what it means to lose one.
+
+The same shape had already been measured one slot over: a self-hosted model
+provider behind a bearer token at an nginx behind cloudflared. Two independent
+cases with one shape is what separates a pattern from an anecdote - somebody
+who runs their own services puts something in front of them, and the thing in
+front knows no people.
+
+So the design question a bridge starts from is not "where does the credential
+go" but "how many are there". It is written up in ADR 0138 CO1, and it is a
+requirement on a design rather than an open construction site: no bridge
+exists yet.
+
 ## Why this is not `modules/`
 
 `modules/` ships with the product and is checked by `pnpm module:check`, which

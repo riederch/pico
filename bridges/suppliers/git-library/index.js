@@ -6,6 +6,16 @@
  * to end today - a bridge would need ADR 0138 CO1's credential and a paid
  * account, and neither exists.
  *
+ * **Was eine vernetzte Git-Bridge zusätzlich braucht, steht seit 2026-08-22 in
+ * ADR 0138 CO1: zwei Geheimnisse, nicht eines.** Der Gitea-Server des Nutzers
+ * steht hinter einer vorgeschalteten HTTP-Basic-Auth, die für alle Nutzer
+ * dieselbe ist - ein Türschlüssel, kein Ausweis. Wer dort lesen will, braucht
+ * das Credential der Bedienung *und* das des Perimeters; die beiden haben
+ * verschiedene Eigentümer und verschiedene Lebensdauern. Diese Datei ist davon
+ * nicht betroffen, weil sie eine lokale Arbeitskopie liest - aber wer sie als
+ * Vorlage für die Bridge nimmt, fängt sonst mit einem Feld an, wo zwei
+ * hingehören.
+ *
  * **It reports what it is; it does not hand over what it holds.** Reading a
  * library is only lawful through ADR 0117 X4's quarantined read job, which
  * needs a model delegation runtime that does not exist, so there is no `offer`
