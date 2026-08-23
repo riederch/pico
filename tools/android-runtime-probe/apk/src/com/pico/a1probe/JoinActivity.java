@@ -81,6 +81,25 @@ public final class JoinActivity extends Activity {
     column.setBackgroundColor(Color.parseColor("#0d1117"));
 
     title = text(column, 22, Color.parseColor("#e6edf3"), Typeface.DEFAULT_BOLD);
+    /**
+     * **"Phone" hier und "device" elf Sätze später - geprüft und so gelassen**
+     * (2026-08-22). Am Vortag wurde genau diese Uneinigkeit vom
+     * Passphrase-Bildschirm entfernt, also liegt die Frage nahe.
+     *
+     * Der Unterschied ist der Ort. Jener Bildschirm lag *im* Walk, unmittelbar
+     * neben Sätzen des Kerns, die "device" sagen, und der Kern besaß für
+     * denselben Moment einen eigenen Satz - zwei Fassungen einer Sache. Dieser
+     * hier ist die Vordertür der App, bevor die Zeremonie beginnt: der Kern hat
+     * dafür keinen Satz, der Desktop keinen Gegensatz (seine
+     * Erstlauf-Bildschirme handeln von der Recovery-Karte, nicht vom Beitritt
+     * über ein anderes Gerät), und wer das Gerät gerade in der Hand hält, liest
+     * "this phone" genauer als "this device".
+     *
+     * `scripts/check-one-voice.mjs` schließt diese Zeile deshalb ausdrücklich
+     * nicht ein, und sagt das auch. Wer sie eines Tages doch angleicht, soll es
+     * tun, weil er diesen Absatz für falsch hält - nicht, weil er ihn nicht
+     * gefunden hat.
+     */
     title.setText("Add this phone to your Home");
     body = text(column, 15, Color.parseColor("#9aa7b4"), Typeface.DEFAULT);
     body.setText("Your other device grants this one. Nothing is sent until you say so.");
