@@ -44,6 +44,17 @@ public final class KeystoreEvidence {
    * Verified before shipping rather than copied: the EC root's DER is
    * byte-identical to the certificate this device produced as the last link of
    * its own chain (SHA-256 `6d9db4ce…4bcc0`), and the device cannot mint it.
+   *
+   * **Am 2026-08-22 galt dieser Satz nur für die EC-Wurzel, und er stand unter
+   * einer Überschrift, die von beiden handelt.** Über die Herkunft der
+   * RSA-Wurzel stand nichts - sie war beschrieben (Seriennummer, Gültigkeit)
+   * und nicht belegt. Seitdem sind beide gegen Googles Liste geprüft: sie
+   * liefert genau zwei Wurzeln, beide byte-identisch mit den hier gepinnten
+   * (EC `6d9db4ce…4bcc0`, RSA `cedb1cb6…00dfc`), und es steht nichts darin,
+   * was hier fehlt. `scripts/check-android-keystore-names.mjs` hält die Bytes
+   * **und ihre Reihenfolge** fest - letztere, weil `pinnedRootVerdict` die
+   * Wurzel über ihren Index benennt und zwei vertauschte Einträge jedem
+   * Telefon den falschen Namen zurückgäben.
    * Google serves the authoritative list as JSON at
    * `https://android.googleapis.com/attestation/root`, which is where a
    * refreshed pin comes from - not from a device.

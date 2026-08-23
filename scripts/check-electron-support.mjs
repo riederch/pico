@@ -2,6 +2,32 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * Der Electron-Unterbau, gegen das, was oben tatsächlich unterstützt wird.
+ *
+ * Drei Dinge werden erzwungen: der gepinnte Runtime **ist** die überprüfte
+ * neueste stabile Fassung (Gleichheit, nicht "innerhalb des Fensters"), die
+ * drei unterstützten Hauptversionen sind drei und enthalten die gepinnte, und
+ * die Daten in der Beleg-Datei widersprechen sich nicht.
+ *
+ * **Was er nicht kann, und das ist die wichtigere Hälfte.** Er erreicht kein
+ * Netz - `check-time-authority.mjs` verbietet genau das für jede
+ * Korrektheitsquelle in diesem Baum -, also weiß er nicht, wann Electron
+ * wirklich veröffentlicht. Die Zwangsfunktion ist deshalb `recheckBefore`, ein
+ * Datum, das die Datei **über sich selbst** behauptet. Wer es nach vorn
+ * schiebt, bekommt eine grüne Zeile, während der Pin veraltet - der Prüfer
+ * merkt es erst, wenn jemand `latestStableVersion` mitzieht.
+ *
+ * Das ist kein Versehen, sondern der Preis dafür, dass eine Prüfung offline
+ * dasselbe sagt wie online. Es steht hier, damit die grüne Zeile als das
+ * gelesen wird, was sie ist: ein Versprechen mit einem Datum daran, nicht eine
+ * Messung an der Wirklichkeit.
+ *
+ * Am 2026-08-22 widerlegt: Frist auf heute gestellt, und der Prüfer meldet
+ * "expired before 2026-08-22". Frist auf den Tag nach dem Release gestellt,
+ * und er meldet grün - genau die Lücke, die der Absatz oben benennt.
+ */
+
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const shellRoot = join(repoRoot, 'apps', 'companion-shell');
 const packageJson = JSON.parse(readFileSync(join(shellRoot, 'package.json'), 'utf8'));

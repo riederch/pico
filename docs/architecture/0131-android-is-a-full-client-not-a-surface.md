@@ -825,6 +825,31 @@ local-first product's most security-critical moment.
   desselben Herstellers sind noch keine Aussage über Android - aber es ist der
   Unterschied zwischen einer Messung und einem Einzelfall.
 
+  **Die Pins waren zur Hälfte unbelegt, und niemand konnte es sehen**
+  (2026-08-22). Der Satz "Verified before shipping rather than copied" stand
+  unter einer Überschrift über *beide* Wurzeln und belegte nur die EC: die war
+  byte-identisch mit dem, was das Gerät selbst produzierte, mit
+  aufgeschriebenem Digest. Über die RSA-Wurzel stand ihre Seriennummer und ihre
+  Gültigkeit - eine Beschreibung, kein Beleg.
+
+  Nachgeholt gegen die Quelle, die diese ADR selbst als autoritativ benennt:
+  `https://android.googleapis.com/attestation/root` liefert **genau zwei**
+  Wurzeln, beide byte-identisch mit den gepinnten (EC
+  `6d9db4ce…4bcc0`, RSA `cedb1cb6…00dfc`), und es steht nichts darin, was hier
+  fehlt. Die Menge ist also nicht nur richtig, sondern vollständig.
+
+  **Und die Bytes prüfte bis dahin nichts.** `check-android-keystore-names.mjs`
+  verglich Namen; ein gekipptes base64-Zeichen hätte grün ergeben und auf dem
+  Telefon `unrooted` - dieselbe stille Sorte Bruch, für die dieser Prüfer
+  überhaupt geschrieben wurde, eine Ebene tiefer. Er hält jetzt beide Digests.
+
+  Dabei fiel eine Kopplung auf, die keiner der beiden Prüfer sah:
+  `pinnedRootVerdict` benennt die Wurzel über ihren **Index**. Zwei vertauschte
+  Einträge geben jedem Telefon den falschen Wurzelnamen zurück, während der
+  Namensvergleich grün bleibt, weil beide Namen weiterhin vorkommen. Die
+  Reihenfolge wird jetzt mitgeprüft. Drei Pflanzungen, drei Risse: ein Zeichen
+  gekippt, die beiden vertauscht, eine entfernt.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and

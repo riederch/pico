@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -94,6 +95,60 @@ const compare = (what, fromCore, fromProbe, alsoInProbe = []) => {
 
 compare('Attestierungswurzeln',
   coreList('picoCompanionAndroidAttestationRoots'), probeRoots());
+
+/**
+ * **Und die Wurzeln selbst, nicht nur ihre Namen** (2026-08-22).
+ *
+ * Bis hierher vergleicht dieser Prüfer Namen. Die Bytes daneben - zwei
+ * base64-kodierte Zertifikate im Java-Array - prüfte nichts, und die ADR sagt
+ * über sie: ein falsches Zeichen verschiebt den Digest. Ein gekipptes Byte
+ * hätte also grün ergeben und auf dem Telefon `unrooted` - genau die stille
+ * Sorte Bruch, für die dieser Prüfer überhaupt existiert, eine Ebene tiefer.
+ *
+ * Die erwarteten Digests stammen aus Googles autoritativer Liste
+ * (`https://android.googleapis.com/attestation/root`), am 2026-08-22 abgerufen
+ * und mit den gepinnten Bytes verglichen: beide byte-identisch, und die Liste
+ * enthält genau diese zwei - nichts gepinnt, was Google nicht publiziert,
+ * nichts publiziert, was hier fehlt.
+ *
+ * **Die Reihenfolge wird mitgeprüft, und das ist kein Beiwerk.**
+ * `pinnedRootVerdict` benennt die Wurzel über ihren *Index* - `i == 0` heißt
+ * EC. Wer die beiden Einträge vertauscht, bekommt für jedes Telefon den
+ * falschen Wurzelnamen zurück, und der Namensvergleich oben merkt davon
+ * nichts, weil beide Namen weiterhin vorkommen.
+ */
+const pinnedRootDigests = [
+  ['google_ec_key_attestation_ca1',
+    '6d9db4ce6c5c0b293166d08986e05774a8776ceb525d9e4329520de12ba4bcc0'],
+  ['google_rsa_f92009e853b6b045',
+    'cedb1cb6dc896ae5ec797348bce9286753c2b38ee71ce0fbe34a9a1248800dfc'],
+];
+const pinnedBytes = (() => {
+  const found = probe.match(
+    /PINNED_ATTESTATION_ROOTS = \{([\s\S]*?)\n  \};/);
+  if (found === null) {
+    failures.push('PINNED_ATTESTATION_ROOTS steht nicht mehr in KeystoreEvidence.java');
+    return [];
+  }
+  return found[1].split(/,\s*\n/)
+    .map((chunk) => [...chunk.matchAll(/"([^"]*)"/g)].map((m) => m[1]).join(''))
+    .filter((entry) => entry !== '');
+})();
+if (pinnedBytes.length !== pinnedRootDigests.length) {
+  failures.push(
+    `Wurzelbytes: ${pinnedBytes.length} gepinnt, ${pinnedRootDigests.length} erwartet`);
+} else {
+  for (const [index, [name, expected]] of pinnedRootDigests.entries()) {
+    const actual = createHash('sha256')
+      .update(Buffer.from(pinnedBytes[index], 'base64'))
+      .digest('hex');
+    if (actual !== expected) {
+      failures.push(
+        `Wurzelbytes: Eintrag ${index} soll ${name} sein (sha256 ${expected.slice(0, 12)}…), `
+        + `ist aber sha256 ${actual.slice(0, 12)}… - vertauscht oder verändert`);
+    }
+  }
+}
 // `software` gehört dazu: der Kern *kennt* es und lehnt es namentlich ab.
 // Ein Niveau, das die Sonde vergibt und der Kern nicht einmal ablehnen kann,
 // wäre der Fehler - nicht eins, das er ablehnt.
@@ -133,4 +188,5 @@ if (failures.length > 0) {
 }
 process.stdout.write(
   `android keystore names: ${evidenceFields.length} Belegfelder, `
+  + `${pinnedBytes.length} Wurzeln mit geprüften Bytes und Reihenfolge, `
   + 'Wurzeln und Niveaus in beiden Sprachen gleich.\n');
