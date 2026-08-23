@@ -102,7 +102,23 @@ for (const path of files) {
       value += `\n${lines[last]}`;
     }
     index = last;
-    if (/'[^']*passphrase/i.test(value)) {
+    /**
+     * **Jede Zitierform, nicht nur die einfache** (2026-08-22 nachgeschärft).
+     *
+     * Der erste Entwurf suchte `'[^']*passphrase` und war damit blind für
+     * genau zwei Zeilen, die jeder schreiben würde: ein Template-Literal und
+     * doppelte Anführungszeichen. Beide gepflanzt, beide durchgegangen - ein
+     * Gate, das weniger bewacht als es behauptet, und zwar meines, einen Tag
+     * alt.
+     *
+     * Geprüft werden deshalb die **Zeichenketten** im Titelausdruck, nicht der
+     * Ausdruck selbst. Das ist auch der Grund, warum `title: prompt.title`
+     * durchgeht und soll: dort steht ein Verweis auf etwas, das den Satz schon
+     * besitzt, und keine zweite Fassung davon.
+     */
+    const literals = [...value.matchAll(/'([^']*)'|"([^"]*)"|`([^`]*)`/g)]
+      .map((found) => found[1] ?? found[2] ?? found[3] ?? '');
+    if (literals.some((literal) => /passphrase/i.test(literal))) {
       titles += 1;
       failures.push(
         `${shown}:${index + 1}: fragt selbst nach einer Passphrase - `
@@ -111,26 +127,71 @@ for (const path of files) {
   }
 }
 
-/** Regel 2: was die Android-Fläche noch selbst sagen darf. */
+/**
+ * Regel 2: was die Android-Fläche noch selbst sagen darf.
+ *
+ * **Am 2026-08-22 nachgeschärft, nachdem zwei Pflanzungen durchgingen.** Der
+ * erste Entwurf las `case "..."` in genau zwei Methoden. Eine `if`-Kette statt
+ * eines `switch` schlüpfte durch - und meldete dabei "0 eigene Momente" und
+ * trotzdem grün, was die schlimmere Hälfte ist: der Prüfer fand nichts zu
+ * prüfen und nannte das Erfolg. Eine dritte Methode neben den beiden
+ * schlüpfte ebenfalls durch.
+ *
+ * Also wird jetzt nicht nach einer Syntax gesucht, sondern nach der **Form
+ * der Sache**: jede Methode, die einen `String step` entgegennimmt und einen
+ * `String` zurückgibt, wählt Worte anhand eines Moments. Von denen darf es
+ * nur die bekannten geben, und in ihnen nur die erlaubten Momente - egal ob
+ * mit `switch`, `if` oder etwas Drittem geschrieben.
+ *
+ * **Was das nicht fängt**, damit die grüne Zeile gelesen wird, was sie
+ * behauptet: einen Satz, der ohne Umweg über einen Schritt auf den Bildschirm
+ * kommt. Der Startbildschirm der Activity ist so einer ("Add this phone to
+ * your Home"), und die Statuszeilen sind es auch. Sie gehören der Fläche
+ * absichtlich - eine Knopfbeschriftung ist kein Moment einer Zeremonie -, und
+ * eine Regel, die sie einschlösse, bräuchte am ersten Tag zwölf begründete
+ * Ausnahmen. Das wäre eine Schuldenliste im Gewand eines Prüfers.
+ */
 const activity = join(root,
   'tools/android-runtime-probe/apk/src/com/pico/a1probe/JoinActivity.java');
 const java = readFileSync(activity, 'utf8');
+/** Die Methoden, die Worte aus einem Schritt wählen dürfen. */
+const wordChoosers = ['titleFor', 'bodyFor'];
 let localSteps = 0;
-for (const name of ['titleFor', 'bodyFor']) {
-  const body = java.match(
-    new RegExp(`private static String ${name}\\(String step\\) \\{([\\s\\S]*?)\\n  \\}`));
-  if (body === null) {
-    // Verschwunden ist in Ordnung - dann schreibt die Fläche gar nichts mehr.
+
+const stepMethods = [...java.matchAll(
+  /private static String (\w+)\(String step\) \{([\s\S]*?)\n  \}/g)];
+for (const [, name] of stepMethods) {
+  if (!wordChoosers.includes(name)) {
+    failures.push(
+      `JoinActivity.${name}: wählt Worte aus einem Schritt, steht aber nicht `
+      + 'in der Liste der Methoden, die das dürfen');
+  }
+}
+for (const [, name, body] of stepMethods) {
+  if (!wordChoosers.includes(name)) {
     continue;
   }
-  for (const found of body[1].matchAll(/case "(\w+)":/g)) {
+  // Jedes Literal, das an einem Schrittnamen hängt - `case "x":` ebenso wie
+  // `"x".equals(step)`. Die Syntax ist Geschmack, der Moment ist die Sache.
+  for (const found of body.matchAll(/case "(\w+)":|"(\w+)"\.equals\(step\)/g)) {
+    const step = found[1] ?? found[2];
     localSteps += 1;
-    if (!localMoments.includes(found[1])) {
+    if (!localMoments.includes(step)) {
       failures.push(
-        `JoinActivity.${name}: schreibt eigene Worte für "${found[1]}", `
+        `JoinActivity.${name}: schreibt eigene Worte für "${step}", `
         + 'was nicht in der Liste erlaubter Momente steht');
     }
   }
+}
+/**
+ * Und die Wachsamkeit gegen sich selbst: findet der Prüfer gar keinen Moment
+ * mehr, ist das kein Erfolg, sondern ein Hinweis, dass er ins Leere greift.
+ */
+if (stepMethods.length > 0 && localSteps === 0) {
+  failures.push(
+    'JoinActivity: die Methoden, die Worte aus einem Schritt wählen, nennen '
+    + 'keinen einzigen - so eine grüne Zeile hat schon einmal einen Umbau '
+    + 'auf eine if-Kette verdeckt');
 }
 
 if (failures.length > 0) {
