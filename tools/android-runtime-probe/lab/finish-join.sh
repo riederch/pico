@@ -7,6 +7,25 @@
 # it never invents a code, and it never answers an approval: that tap is the
 # one thing the ceremony is for.
 set -euo pipefail
+
+# Was dieses Skript NICHT tut, und warum das jedes Mal Zeit kostet, wenn man es
+# vergisst: es tippt die Passphrase nicht. Der erste Schritt gehört einem
+# Menschen, und wer ihn über `adb` nachstellt, läuft in drei Fallen, die alle
+# gleich aussehen - "der Knopf reagiert nicht":
+#
+#   * Die Bildschirmtastatur verdeckt CONTINUE. Der Knopf ist da, der Tipp
+#     landet auf der Tastatur. Position immer frisch aus dem UI-Dump lesen
+#     statt aus einem früheren Lauf zu übernehmen; sie verschiebt sich, je
+#     nachdem ob der Kompatibilitätsdialog vorher stand.
+#   * `input keyevent KEYCODE_BACK`, um die Tastatur wegzubekommen, beendet
+#     stattdessen die Activity. Der Dienst läuft weiter - `am start` holt sie
+#     zurück, und `begin` zeigt wieder die offene Frage -, aber der Umweg
+#     kostet einen Durchgang.
+#   * `KEYCODE_ENTER` im Passphrasefeld schickt nicht ab.
+#
+# Der Grant hat seine eigenen Fallen, und die stehen weiter unten an ihrer
+# Stelle. Gemeinsam ist beiden: nach dem Tippen nachsehen, was auf dem Schirm
+# steht, statt anzunehmen, dass es angekommen ist.
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
 pkg=com.pico.a1probe
