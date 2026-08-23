@@ -1768,6 +1768,45 @@ local-first product's most security-critical moment.
   `pico_companion_enrolment_was_not_accepted:link_rejected:400:sender_is_not_authorized`
   - drei Doppelpunkte -, und der gesprochene Fall wurde trotzdem getroffen.
 
+  **Die Android-Hälfte spricht die Grenze jetzt** (2026-08-22), und der Weg
+  dahin war ein Fehler nach dem anderen, jeder am Gerät gefunden.
+
+  Der Link-Client benennt elf Fehlschläge und genau einen nicht: das `fetch`
+  selbst warf durch, was die Plattform sagte - `fetch failed`, `ECONNREFUSED`,
+  `UND_ERR_SOCKET`. Auf einem Telefon ist das der häufigste Fehlschlag
+  überhaupt, weil es das Haus verlässt, und eine Person las dafür "Pico stopped
+  before anything changed at your Home (fetch failed)": ein Symptom statt einer
+  Auskunft. `link_home_did_not_answer:<grund>` heißt er jetzt, mit einem
+  eigenen Satz im Kern.
+
+  **Der Satz ist bewusst nicht der der Bedingung `home_unreachable`**, obwohl
+  es dieselbe Lage ist: deren Rumpf sagt "Recall, entry and capture continue
+  here", was für einen laufenden Client stimmt und für einen abgebrochenen
+  Beitritt falsch wäre. Denselben Satz zu nehmen, weil die Lage denselben Namen
+  trägt, hätte einer Person etwas Unwahres gesagt.
+
+  **Und dann fing der Gerätelauf den eigentlichen Defekt.** Der Wartelauf
+  schachtelt Gründe: er warf
+  `pico_companion_enrolment_was_not_accepted:link_home_did_not_answer:UND_ERR_SOCKET`
+  - der Name für das unerreichbare Home *stand darin* -, und der Bildschirm
+  zeigte "Your Home has not said yes. The other device may not have sent the
+  answer yet." Also ein unerreichbares Home als **stilles** dargestellt, was
+  dieses Gate wörtlich verbietet. Die eigene neue Benennung machte die Diagnose
+  möglich, und die eigene Auswahlregel warf sie weg, weil sie nur den Kopf
+  ansah.
+
+  Seitdem gewinnt der **innerste** Name: der Kopf ist die allgemeinere
+  Wahrheit, der geschachtelte Grund die genauere. Am Gerät nachgewiesen mit
+  demselben Ablehnungsstring: vorher "Your Home has not said yes", jetzt "Your
+  Home did not answer".
+
+  Nebenbei fand derselbe Lauf einen sechsten Satz. Ein zu langsamer Walk ließ
+  den Grant ablaufen, und der Bildschirm zeigte
+  `pico_device_enrolment_grant_expired` als rohen Code - für den
+  wahrscheinlichsten menschlichen Fehler überhaupt, weil vier Minuten laufen,
+  während jemand zwischen zwei Zimmern geht. Die Frist bleibt richtig; was
+  fehlte, war der Satz.
+
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

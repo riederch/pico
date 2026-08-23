@@ -13,6 +13,9 @@ const spoken = [
   // ADR 0131 A7: das Home antwortet nicht. Der häufigste Fehlschlag eines
   // Geräts, das das Haus verlässt.
   'link_home_did_not_answer',
+  // Am Gerät gefunden, weil ein Walk zu langsam war: vier Minuten laufen,
+  // während jemand zwischen zwei Zimmern geht.
+  'pico_device_enrolment_grant_expired',
 ];
 
 /** Zustände und Defekte: wahr, aber nichts, was jemand anders machen kann. */
@@ -65,6 +68,36 @@ describe('was ein Pico sagt, wenn ein Beitritt nicht zustande kommt', () => {
     expect(line.title).toBe('Your Home did not answer');
     expect(line.body.toLowerCase()).not.toContain('continue');
     expect(line.body).toContain('Nothing was changed');
+  });
+
+  it('nimmt den innersten Namen, nicht den äußersten', () => {
+    /**
+     * Am Gerät gefunden: das Home fiel während eines echten Beitritts weg, der
+     * Kern warf
+     * `pico_companion_enrolment_was_not_accepted:link_home_did_not_answer:UND_ERR_SOCKET`,
+     * und der Bildschirm sagte "Your Home has not said yes" - ein
+     * unerreichbares Home als stilles dargestellt, was ADR 0131 A7 in genau
+     * diesen Worten verbietet.
+     */
+    const nested = picoCompanionEnrolmentRefusalLine(
+      'pico_companion_enrolment_was_not_accepted:link_home_did_not_answer:UND_ERR_SOCKET');
+    expect(nested.title).toBe('Your Home did not answer');
+    // Und der äußere Fall bleibt, wo kein innerer Name steht.
+    expect(picoCompanionEnrolmentRefusalLine(
+      'pico_companion_enrolment_was_not_accepted:home_said_no').title)
+      .toBe('Your Home has not said yes');
+  });
+
+  it('hält die Liste der gesprochenen Codes und die Fälle gleich', () => {
+    // Ein siebter Satz ohne Eintrag in `spokenRefusals` bliebe stumm, sobald
+    // sein Grund geschachtelt ankommt - unsichtbar, solange niemand ihn
+    // geschachtelt sieht.
+    for (const refusal of spoken) {
+      const direct = picoCompanionEnrolmentRefusalLine(refusal);
+      const nestedInside = picoCompanionEnrolmentRefusalLine(
+        `pico_companion_enrolment_was_not_accepted:${refusal}`);
+      expect(nestedInside, refusal).toEqual(direct);
+    }
   });
 
   it('liest den Grund, der an manchen Codes mitreist', () => {

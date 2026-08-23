@@ -317,12 +317,44 @@ export function picoCompanionEnrolmentStepLine(
  * Fehler heißt - jemandem zu erklären, was er anders machen soll, wenn er
  * nichts anders machen kann, ist keine Hilfe, sondern eine Vermutung.
  */
+/**
+ * Die Codes, für die es unten einen eigenen Satz gibt - ausgeschrieben, weil
+ * ein `switch` sich nicht danach fragen lässt, welche Fälle er kennt. Ein
+ * siebter Satz ohne Eintrag hier bliebe stumm, sobald sein Grund geschachtelt
+ * ankommt; `enrolment-refusal-line.test.ts` hält beide Listen gleich.
+ */
+const spokenRefusals = new Set([
+  'pico_companion_enrolment_offer_is_this_device',
+  'pico_companion_enrolment_acceptance_is_for_another_activation',
+  'pico_companion_enrolment_vault_is_not_new',
+  'pico_device_enrolment_grant_expired',
+  'link_home_did_not_answer',
+  'pico_companion_enrolment_was_not_accepted',
+]);
+
 export function picoCompanionEnrolmentRefusalLine(
   refusal: string,
 ): { title: string; body: string } {
-  // Der Grund reist an manchen Codes mit (`was_not_accepted:...`); für die
-  // Auswahl zählt der Kopf, für die Ablehnung der ganze String.
-  const code = refusal.split(':')[0] ?? '';
+  /**
+   * **Der innerste Name gewinnt, nicht der äußerste** (am Gerät gefunden,
+   * 2026-08-22).
+   *
+   * Gründe schachteln sich: der Wartelauf fängt jeden Fehlschlag und wirft am
+   * Ende `pico_companion_enrolment_was_not_accepted:<letzter Grund>`. Als das
+   * Home während eines echten Beitritts wegfiel, stand dort
+   * `…was_not_accepted:link_home_did_not_answer:UND_ERR_SOCKET` - und der
+   * Bildschirm sagte "Your Home has not said yes. The other device may not
+   * have sent the answer yet." Also ein **unerreichbares** Home als **stilles**
+   * dargestellt, was ADR 0131 A7 in genau diesen Worten verbietet.
+   *
+   * Der Kopf ist die allgemeinere Wahrheit, der geschachtelte Grund die
+   * genauere. Deshalb gewinnt der **letzte** Abschnitt, für den es einen Satz
+   * gibt: "es kam keine Zustimmung" stimmt auch dann, wenn niemand erreichbar
+   * war - nur hilft es niemandem.
+   */
+  const segments = refusal.split(':');
+  const code = segments.filter((segment) => spokenRefusals.has(segment)).at(-1)
+    ?? segments[0] ?? '';
   switch (code) {
     case 'pico_companion_enrolment_offer_is_this_device':
       return {
@@ -341,6 +373,23 @@ export function picoCompanionEnrolmentRefusalLine(
         title: 'This device already has keys',
         body: 'Joining makes new ones, so it will not run on a device that is already '
           + 'part of a Home. Nothing was changed.',
+      };
+    case 'pico_device_enrolment_grant_expired':
+      /**
+       * Vier Minuten, und die laufen, während jemand zwischen zwei Zimmern
+       * geht. **Am Gerät gefunden, weil ein Walk zu langsam war** - der
+       * Bildschirm zeigte "Pico stopped before anything changed at your Home
+       * (pico_device_enrolment_grant_expired)", also einen Code für den
+       * wahrscheinlichsten menschlichen Fehler überhaupt.
+       *
+       * Die Frist selbst ist richtig und bleibt: ein Code, der lange gilt, ist
+       * ein Code, der lange gestohlen werden kann. Was fehlte, war der Satz
+       * dazu.
+       */
+      return {
+        title: 'That code has run out',
+        body: 'A code is good for a few minutes, so it is no use to anyone who finds it '
+          + 'later. Ask your other device for a new one and carry it straight over.',
       };
     case 'link_home_did_not_answer':
       /**
