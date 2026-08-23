@@ -622,9 +622,14 @@ zwei Blöcke" las sich wie Arbeit, die anliegt. Was tatsächlich gilt:
 Vertagung war "es gibt keine mobile Laufzeit". Die gibt es seit Phase 5 - ein
 Android-Client, der zweimal an einem Tag einem echten Home beigetreten ist.
 Was jetzt fehlt, ist ein Erfassungs-Adapter darauf; die Fläche deklariert nicht
-einmal eine Standortberechtigung. Damit ist die offene Frage keine technische
-mehr, sondern die alte Produktfrage ohne ihren technischen Vorwand - und sie
-gehört dem Nutzer, nicht dieser Datei.
+einmal eine Standortberechtigung. Damit war die offene Frage keine technische
+mehr, sondern die alte Produktfrage ohne ihren technischen Vorwand.
+
+**Am 2026-08-22 gestellt und beantwortet: vertagt lassen.** Phase 3 bleibt
+damit zu, und Phase 6 hängt weiter daran - aber die Vertagung steht jetzt auf
+einer Entscheidung von heute statt auf einer Tatsache von gestern. Wer diese
+Zeile das nächste Mal liest, muss die Frage nicht erneut aufmachen, um zu
+erfahren, ob sie schon gestellt wurde.
 
 ### Phase 5 — Android-Ceremonies (ADR 0131 A5, A3)
 

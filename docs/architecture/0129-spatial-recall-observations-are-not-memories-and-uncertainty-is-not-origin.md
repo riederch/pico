@@ -81,6 +81,13 @@ Erste ist ein Zustand der Welt, das Zweite eine Entscheidung mit einem Namen
 daran. Eine Begründung, deren Tatsache abgelaufen ist, hält eine Absenz
 länger fest, als jemand sie beschlossen hat.
 
+**Dem Nutzer am 2026-08-22 vorgelegt, mit der geänderten Prämisse, und die
+Antwort war: vertagt lassen.** Damit steht die Absenz auf einer Entscheidung
+von heute statt auf einer Tatsache von gestern. SR5 bleibt unimplementiert,
+ADR 0126 P3 bleibt zur Hälfte offen, und Phase 6 hängt weiter daran - aber
+niemand muss die Frage noch einmal aufmachen, um zu erfahren, ob sie schon
+gestellt wurde.
+
 ## Scope
 
 Covers: what shape sensor-rate data has and who owns it; whether a place
