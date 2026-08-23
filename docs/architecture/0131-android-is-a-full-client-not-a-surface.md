@@ -804,6 +804,27 @@ local-first product's most security-critical moment.
   direkter Link-Client ohne Frage, und ein Kern, der keinen Link-Client mehr
   baut - worauf das Gate meldet, dass es nichts mehr bewacht.
 
+  **Ein zweites Modell, und es sagt dasselbe** (2026-08-22, Galaxy A34
+  SM-A346B, Android 16, Patchstand 2026-07-05). Bis dahin stammte jede Zahl
+  dieser Messung von genau einem Gerät, was für eine Aussage über *den
+  Android-Keystore* zu wenig ist. Auf dem zweiten Modell deckt sich jeder
+  einzelne Wert:
+
+  - `KeyInfo.getSecurityLevel()` sagt `trusted_environment`, die signierte
+    Erweiterung ebenfalls, Kette fünf Zertifikate lang, Wurzel dieselbe
+    gepinnte EC-Wurzel, Challenge passend.
+  - **StrongBox fehlt auch hier** und wirft `StrongBoxUnavailableException`,
+    statt still einen schwächeren Schlüssel zurückzugeben. Der Satz weiter
+    oben - der Boden ist das TEE, StrongBox ein Bonus - stützt sich damit auf
+    zwei Geräte statt auf eines.
+  - Fail-closed mit `UserNotAuthenticatedException`, Rundlauf 32 Bytes hinein,
+    48 versiegelt, identisch zurück, Alias überlebt den Prozesstod.
+
+  Auch der Beitritt lief darauf: eingebettetes Node, Keystore-Anschluss über
+  AF_UNIX, Beleg aus den Schlüsseln des Anschlusses selbst. Zwei Modelle
+  desselben Herstellers sind noch keine Aussage über Android - aber es ist der
+  Unterschied zwischen einer Messung und einem Einzelfall.
+
 - **A4 - Reachability contract measured (measured 2026-08-19, all four
   questions answered):** foreground service, periodic check interval, alarm
   loudness with and without the restricted full-screen permission, and
@@ -1709,10 +1730,18 @@ local-first product's most security-critical moment.
   verliert seine Worte, und ein Satz nennt die Zeremonie bei ihrem technischen
   Namen.
 
-  **Der Bildschirmbeweis steht aus**: das Telefon ging während des Ausrollens
-  vom USB-Bus. Zu zeigen wäre der Fall, den eine Person am ehesten trifft - das
-  Gerät vor sich selbst gehalten -, und dass beide Clients dafür denselben Satz
-  zeigen.
+  **Am Bildschirm nachgewiesen** (2026-08-22), und zwar mit einem der vier und
+  nicht mit dem Achselzucken: der Beitritt lief bis zur Bestätigung, die
+  Antwort wurde absichtlich nie abgeliefert, und nach den zwei Minuten stand
+  dort *"Your Home has not said yes"* mit dem Rumpf *"The other device may not
+  have sent the answer yet, or somebody still has to approve it there."* In der
+  Statuszeile darunter der rohe Code, als Diagnose. Der alte Satz der Fläche
+  hätte *"This phone was not added / Nothing was changed at your Home."*
+  gelautet.
+
+  Dabei tat die Kopf-Auswahl genau das, wofür ein Test sie prüft: der Kern warf
+  `pico_companion_enrolment_was_not_accepted:link_rejected:400:sender_is_not_authorized`
+  - drei Doppelpunkte -, und der gesprochene Fall wurde trotzdem getroffen.
 
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
