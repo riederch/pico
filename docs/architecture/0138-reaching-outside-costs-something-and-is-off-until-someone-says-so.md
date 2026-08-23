@@ -291,6 +291,14 @@ receives the credential; it does not keep it.
   cipher rather than by a value somebody could edit. The identifier and
   the domain are bound too, so a seal cannot be moved between instances or
   between Private Spaces; three tests state the three refusals.
+
+  **Genauer gesagt, seit dem 2026-08-22 nachgemessen:** die drei Tests nennen
+  keinen Grund, sie verlangen nur, dass etwas geworfen wird. Das ist kein
+  Versäumnis - die Ablehnung kommt aus der AEAD-Prüfung, und dieser Baum lässt
+  die überall unbenannt durch, auch im Vault. Getragen wird der Satz vom
+  ersten Test derselben Datei: ein voller Rundlauf, der laut fiele, wenn die
+  Signatur bräche. Für die drei Tests allein ist der Satz oben also etwas
+  stärker als sie; für die Datei stimmt er.
   **The cipher has no caller, found on 2026-08-14.** `SupplierCredentialCrypto`
   is exported, tested against its three refusals, and reached from nowhere in
   the tree: nothing seals a credential and nothing opens one. So "presence is

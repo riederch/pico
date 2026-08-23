@@ -867,6 +867,42 @@ Das ist derselbe Handgriff, mit dem am Vortag die Gates widerlegt wurden, und
 dieselbe Lehre: **ein Dokument, das niemand von der falschen Seite gelesen hat,
 kann vollständig aussehen, weil es nur von der richtigen gelesen wurde.**
 
+**B8 — Die Testsuite auf dieselbe Frage abgeklopft wie die Gates (2026-08-22,
+später nachgetragen).** Was hier ist grün, ohne etwas zu halten?
+
+- **2640 Testfälle, keiner ohne Prüfung.** Die neununddreißig, die zuerst wie
+  Ausnahmen aussahen, prüfen über einen gemeinsamen Helfer, der Fehlertyp *und*
+  Code festnagelt. Zwei eigene Messfehler unterwegs, beide durch Nachsehen
+  gefunden statt durch Glauben.
+- **3948 Gleichheitsprüfungen**, davon 36 mit demselben Aufruf auf beiden
+  Seiten. Fast alle sind genau richtig: zwei *verschiedene* Eingaben durch
+  dieselbe Funktion ist der Test für „diese beiden sind ununterscheidbar", und
+  `genuine.slice(0,12) === forged.slice(0,12)` beweist absichtlich, dass ein
+  Präfix nicht unterscheidet. **Eine war eine Tautologie** und ist ersetzt —
+  siehe unten.
+- **1032 `toThrow`-Prüfungen, 52 ohne genannten Grund** (fünf Prozent). Die
+  Disziplin „eine Prüfung fällt aus dem genannten Grund" hält also breit.
+
+**Der eine Fund und seine Grenze.** `expect(id(profile)).toBe(id(profile))`
+stand unter einer Zeile, die den Wert exakt festnagelt — sie konnte nicht
+fallen. Sie prüft jetzt, was der Kommentar daneben behauptet: zwei Profile, die
+sich in allem außer dem Signaturschlüssel unterscheiden, ergeben dieselbe
+Kennung. Gemessen, nicht behauptet: eine Implementierung, die die Delegation
+anhängt, sobald eine da ist, lässt den gepinnten Wert unberührt und fällt nur
+bei der neuen Zeile durch. Und sie ist kein Kunstgriff — eine Delegation
+wechselt bei der Erneuerung, und dann sähe ein Gerät wie zwei aus.
+
+**Was ausdrücklich nicht geändert wurde.** Die drei nackten `toThrow()` in
+`supplier-credential-crypto.test.ts` tragen eine ADR-Zusage: ADR 0138 CO1 sagt
+„three tests state the three refusals". Sie nennen keinen Grund, weil es keinen
+gibt — die Ablehnung kommt aus libsodiums AEAD-Prüfung, und das ganze Haus
+lässt die unbenannt durch, auch der Vault. Einen Namen zu vergeben wäre ein
+neues Muster in sicherheitsrelevantem Code, kein Anwenden eines vorhandenen.
+Getragen wird die Zusage stattdessen vom **ersten** Test derselben Datei: ein
+voller Rundlauf, der laut fiele, wenn die Signatur bräche. Der Satz im ADR ist
+damit für die drei Tests allein etwas stärker als sie — für die Datei stimmt
+er.
+
 **B7 — Ein Produktbegriff hatte drei Namen, und die Prüfung sah keinen davon.**
 ADR 0026 bildet ADR 0015s `Full Client` auf **Pico Vault** ab; das ausgelieferte
 Artefakt heißt `pico-companion_<version>_amd64.deb`; das README nennt es **Pico
