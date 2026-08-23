@@ -58,6 +58,29 @@ phone. The companion is Linux Electron and the core is a server; there is
 no mobile runtime. The issue names the way out itself: the domain logic
 must not depend on a particular operating-system API.
 
+Status note, 2026-08-22: **die Prämisse dieser ADR hat sich geändert, und
+das ist an vier Stellen im Text noch nicht zu sehen.** Sie sagt "there is no
+mobile runtime" und begründet damit, warum SR5 unimplementiert bleibt -
+"whoever fills this port is a mobile runtime that does not exist, and an
+adapter that cannot be run against a real device would be code nobody can
+verify". Seit ADR 0131 A5 gibt es eine: ein Android-Client, der zweimal an
+einem Tag einem echten Home beigetreten ist, seine Schlüssel im TEE hält und
+den schalenfreien Kern ausführt. Ein Adapter *könnte* jetzt gegen ein echtes
+Gerät laufen.
+
+Was damit **nicht** gesagt ist: dass er gebaut werden soll. Es fehlt weiterhin
+ein Erfassungs-Adapter auf diesem Client - und die Android-Fläche deklariert
+nicht einmal eine Standortberechtigung. Das ist eine Produktentscheidung, und
+sie wurde vom Nutzer zurückgestellt (Befund B4 in `Roadmap.md`, ADR 0126 P3:
+"the SR2 buffer stays where it is until a runtime with a sensor exists").
+
+Der Unterschied ist wichtig genug, um ihn hinzuschreiben: bis heute war die
+Begründung *"es gibt keine Laufzeit"*, ab heute ist sie *"es gibt keine
+Erfassung, und ob es sie geben soll, hat jemand entschieden zu vertagen"*. Das
+Erste ist ein Zustand der Welt, das Zweite eine Entscheidung mit einem Namen
+daran. Eine Begründung, deren Tatsache abgelaufen ist, hält eine Absenz
+länger fest, als jemand sie beschlossen hat.
+
 ## Scope
 
 Covers: what shape sensor-rate data has and who owns it; whether a place

@@ -44,7 +44,8 @@ import { fileURLToPath } from 'node:url';
  *
  * Measured before it was left open: ten exported functions in `apps/core/src`
  * have no product caller, and eight are mechanisms waiting for a producer that
- * is deliberately absent - the observation buffer with no mobile runtime, the
+ * is deliberately absent - the observation buffer with no capture adapter
+ * (its "no mobile runtime" reason expired on 2026-08-22; see ADR 0129), the
  * supplier content intake with no bridge supplier shipped, the migration
  * backup with no destructive migration in the chain. A check over them would
  * need eight argued exemptions on its first day, which is a debt list wearing

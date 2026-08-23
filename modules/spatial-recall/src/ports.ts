@@ -20,9 +20,20 @@ import type {
  * parking means should outlive three generations of location plumbing, and it
  * only can if it never learned the plumbing's name.
  *
- * **Unimplemented, deliberately.** Whoever fills this is a mobile runtime that
- * does not exist, and an adapter that cannot be run against a real device
- * would be code nobody can verify. Declaring it now is what keeps the rules
+ * **Unimplemented, deliberately - und die Begründung dafür hat sich am
+ * 2026-08-22 geändert.** Bis dahin lautete sie: wer diesen Port füllt, ist eine
+ * mobile Laufzeit, die es nicht gibt, und ein Adapter, der nicht gegen ein
+ * echtes Gerät laufen kann, wäre Code, den niemand prüfen kann. Seit ADR 0131
+ * A5 gibt es die Laufzeit - ein Android-Client, der einem echten Home
+ * beigetreten ist -, und ein Adapter könnte geprüft werden.
+ *
+ * Unimplementiert bleibt er trotzdem, aber aus einem anderen Grund: es fehlt
+ * die Erfassung auf diesem Client, und ob sie gebaut wird, ist eine
+ * Produktentscheidung, die der Nutzer zurückgestellt hat (ADR 0126 P3, Befund
+ * B4). Der Unterschied zählt - das eine ist ein Zustand der Welt, das andere
+ * eine Entscheidung mit einem Namen daran.
+ *
+ * Declaring it now is what keeps the rules
  * above it independent of the API underneath - the same cut ADR 0128 H4 made
  * for the Home Assistant transport.
  */

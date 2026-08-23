@@ -607,7 +607,24 @@ Grenze statt am Store. Praktisch zieht das den Beobachtungspuffer aus dem Core
 ins Gerät — womit das Home keine Rohstandorte mehr sieht und Phase 6 offline
 antworten kann.
 
-**Verweist auf Befund B4.** Ein bis zwei Blöcke.
+**Am 2026-08-22 nachgemessen, und die Zeile war zu optimistisch.** "Ein bis
+zwei Blöcke" las sich wie Arbeit, die anliegt. Was tatsächlich gilt:
+
+- **Die Tür steht.** ADR 0126 P3 ist zur Hälfte umgesetzt, und beide Keeps
+  gehen durch `crossPicoStateBoundary`. ADR 0129 meldet SR1-SR6 als
+  implementiert.
+- **Was fehlt, ist die zurückgestellte Hälfte**: den Beobachtungspuffer aus
+  `apps/core/src/observation-condensation.ts` ins Gerät zu ziehen, und dafür
+  braucht es eine Erfassung auf einem Gerät. Genau das ist **Befund B4**, und
+  genau das hat der Nutzer vertagt.
+
+**Was sich seitdem geändert hat, und zwar heute:** die Begründung für die
+Vertagung war "es gibt keine mobile Laufzeit". Die gibt es seit Phase 5 - ein
+Android-Client, der zweimal an einem Tag einem echten Home beigetreten ist.
+Was jetzt fehlt, ist ein Erfassungs-Adapter darauf; die Fläche deklariert nicht
+einmal eine Standortberechtigung. Damit ist die offene Frage keine technische
+mehr, sondern die alte Produktfrage ohne ihren technischen Vorwand - und sie
+gehört dem Nutzer, nicht dieser Datei.
 
 ### Phase 5 — Android-Ceremonies (ADR 0131 A5, A3)
 
