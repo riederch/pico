@@ -68,7 +68,28 @@ describe('ADR 0126 P2 - what the companion declares', () => {
     // identity for the device to lose, and losing it would make one machine
     // look like two.
     expect(picoCompanionPresenceId(profile)).toBe(`device-${'ab'.repeat(12)}`);
-    expect(picoCompanionPresenceId(profile)).toBe(picoCompanionPresenceId(profile));
+    /**
+     * **Aus dem Signaturschlüssel und aus sonst nichts.** Hier stand bis zum
+     * 2026-08-22 `expect(id(profile)).toBe(id(profile))` - eine Zeile, die
+     * nicht fallen kann, solange die darüber hält, weil die den Wert exakt
+     * festnagelt. Sie sah nach Sorgfalt aus und trug nichts.
+     *
+     * Was der Satz oben behauptet, ist etwas anderes: die Kennung ist
+     * *abgeleitet*, nicht erzeugt. Also müssen zwei Profile, die sich in allem
+     * außer dem Signaturschlüssel unterscheiden, dieselbe Kennung ergeben -
+     * sonst hinge an ihr etwas, das ein Gerät wechseln kann, ohne ein anderes
+     * zu werden.
+     */
+    const elsewhere = {
+      device: {
+        signingKeyFingerprintHex: 'ab'.repeat(32),
+        keyAgreementKeyFingerprintHex: 'cd'.repeat(32),
+        delegationId: 'delegation_somewhere_else',
+      },
+      identity: { keyFingerprintHex: 'ef'.repeat(32) },
+      coreUrl: 'http://127.0.0.1:9999',
+    } as unknown as PicoCompanionProfile;
+    expect(picoCompanionPresenceId(elsewhere)).toBe(picoCompanionPresenceId(profile));
   });
 });
 
