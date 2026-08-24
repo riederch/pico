@@ -978,6 +978,42 @@ zu. Sie ist aus `sqlite_master` zurückgelesen, nicht getippt; eine ihrer
 Anweisungen von Hand nachzuziehen gäbe die einzige Eigenschaft auf, die sie
 prüfbar macht. Die Begründung steht neben der Ausnahme, die sie trägt.
 
+**B10 — Vier Prüfungen sagten „sauber", wo sie „nicht hingesehen" meinten
+(2026-08-24).** Jede Prüfung in `scripts/` wurde gegen einen Spiegel der
+Verzeichnisform dieses Baums gefahren, der keine einzige Datei enthält. Vier
+meldeten Erfolg — und es sind die vier, die die weitesten Sätze sprechen:
+`check-link-seal` („0 files; no mailbox address reaches a log, an error or a
+URL"), `check-fingerprint-display` („0 source files … one rule for showing a
+key to a person"), `check-instant-rules` („0 source files … no instant
+reaching a person raw") und `check-runtime-floor`, dessen Erfolgszeile die
+Länge der eigenen handgeschriebenen Wurzelliste zählte statt irgendetwas
+Gelesenes: „6 packages carry no ICU dependency", sechs Pakete, die es nie
+geöffnet hatte. Jeder Satz gilt über das ganze Produkt und war wahr über
+nichts.
+
+**Warum das genau diese vier traf, ist der Teil, der über den Baum etwas
+sagt.** Von den zweiunddreißig geprüften Prüfungen scheiterten siebenundzwanzig
+geschlossen und eine übersprang bewusst — sie nennen eine Datei oder ein
+Verzeichnis, dessen Vorhandensein sie *behaupten*, und sterben daran, ohne
+einen Wächter zu brauchen. Die vier, die grün meldeten, sind genau die, die
+nach Dateien suchen und nie behaupten, welche gefunden zu haben. Der breite
+Anspruch und die Verwundbarkeit haben dieselbe Ursache.
+
+Alle vier zählen jetzt **pro Wurzel** und lehnen eine Null ab, denn eine Summe
+versteckt weiter den Fall, der wirklich vorkommt: eine Wurzel wandert, die
+anderen bleiben voll. Die Klasse hält `scripts/check-vacuous-gates.mjs` — es
+fährt jede andere Prüfung gegen denselben leeren Spiegel und weist eine
+zurück, die nichts sauber nennt. Den vierten fand es beim ersten Lauf; mein
+handgebauter Leerbaum davor hatte ihn übersehen, weil ihm die
+Paketverzeichnisse fehlten. Deshalb ist der Spiegel abgeleitet und nicht
+aufgeschrieben.
+
+Was es nicht kann, steht in ihm: eine Prüfung, die an einer fehlenden Datei
+abstürzt, scheitert geschlossen, und ein Absturz ist von einem Wächter nicht
+zu unterscheiden. Der Anspruch ist deshalb genau der gedruckte — **keine
+Prüfung meldet Erfolg über nichts** —, und ob eine Prüfung wacht statt
+abzustürzen, beweist die Pflanzung neben ihr.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:

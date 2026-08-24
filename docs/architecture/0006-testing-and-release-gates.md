@@ -4,6 +4,34 @@
 
 Accepted for the foundation phase.
 
+**Status note 2026-08-24: green can also mean "did not look", and four checks
+said it.** The rule below is "no green pipeline, no release", which puts the
+whole weight on what a green line means. Every check in `scripts/` was run
+against a mirror of this repository's directory shape holding no files at all.
+Four reported success: `check-link-seal.mjs` ("0 files; no mailbox address
+reaches a log, an error or a URL"), `check-fingerprint-display.mjs` ("0 source
+files ... one rule for showing a key to a person"), `check-instant-rules.mjs`
+("0 source files ... no instant reaching a person raw") and
+`check-runtime-floor.mjs`, whose passing line counted the length of its own
+hand-written root list rather than anything it had read - "6 packages carry no
+ICU dependency", six packages it had never opened. Each is a sentence about
+the whole product, said truthfully about nothing.
+
+All four now count **per root** and refuse a zero, because a single total
+still hides the case that actually happens: one root moves, the others stay
+full. The class is held by `scripts/check-vacuous-gates.mjs`, which runs every
+other check against that empty mirror and refuses one that calls nothing
+clean. It found the fourth on its first run. The mirror is derived from the
+tree rather than written down, a skip is read off the word a check prints
+rather than kept as a list of names, and what it cannot tell apart is stated
+in it: a check that crashes on a missing file fails closed, which is the right
+direction, and this cannot distinguish that from a guard.
+
+The body below is kept rather than rewritten (ADR 0128). Its "Current CI
+gates" section describes a three-step `release:verify`; that chain is
+thirty-three steps now, and the count belongs in `progress.md` rather than
+here.
+
 Pico must treat automated tests as release blockers. A broken release must be stopped before it reaches Home Assistant servers, clients, or update channels.
 
 ## Release rule
