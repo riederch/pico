@@ -1133,6 +1133,35 @@ Ein toter Export ist dabei gelöscht statt begründet worden:
 `picoCompanionFirstRunStepOrder` war eine öffentliche Hülle um eine private
 Funktion, ohne Aufrufer und ohne Test.
 
+**B15 — Die Reichweitenregel hörte beim Companion auf, weil ich es behauptet
+hatte (2026-08-24).** Der Prüfer aus B14 trug in seinem Kopf ein Argument von
+mir: `apps/core` werde über einen Dispatcher erreicht und `packages/*` seien
+Bibliotheken, dort ginge es also um Modulhygiene statt darum, was eine Person
+tun kann. Das war nie gemessen. Nachgemessen: **neun** unerreichte Exporte in
+`apps/core/src` und **drei** in `apps/vault-daemon/src`. Der
+Companion-Shell mit 90 Exporten, der Relay und die Weboberfläche haben keinen.
+
+Kein einziger davon ist ein Defekt — und das ist das Ergebnis. Jeder ist die
+Codekante einer Abwesenheit, die dieser Baum längst in Prosa festhält: keine
+reale Bridge, kein Home-Assistant-Transport, keine Sensor-Laufzeit, kein
+Plattformanker, kein Schreiber für Reader-Custody, keine Betreiberfläche für
+das Migrationsprotokoll. Neun aufgeschriebene Lücken, die niemand mit ihrem
+Code verbunden hatte; sie stehen jetzt als Begründungen neben den Namen, und
+eine Begründung, die ihren Gegenstand überlebt, fällt durch.
+
+**Eine Sache war wirklich neu: eine Sicherung, die niemand zurückspielen
+kann.** Vor einer Migration entsteht eine Datenbanksicherung. Der
+Migrationslauf liegt in einer einzigen SQLite-Transaktion, rollt bei einem
+Fehlschlag also selbst zurück; die Sicherung deckt, was eine Transaktion nicht
+kann — ein Abschuss mitten im Commit, eine kaputte Datei. `restoreSqliteBackup`
+hat sechs Tests und weder einen Aufrufer noch einen Befehl. Ob es einen geben
+soll, entscheidet kein ADR.
+
+**Und der Prüfer hatte eine dritte Lücke**, wieder nur von der Pflanzung
+gefunden: er wies eine Modulbegründung zurück, die ihr Modul überlebt hatte,
+aber keine Namensbegründung, die ihren Namen überlebt hat. Eine Begründung ist
+ein Urteil über heute; sie muss altern können.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
