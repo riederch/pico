@@ -45,6 +45,17 @@ import { fileURLToPath } from 'node:url';
  *
  * `apps/companion-shell/src` (90 exports), `apps/relay/src` and `apps/web/src`
  * were measured too and have none, so they are in scope and silent.
+ *
+ * **`modules/` was left out the same way, by assumption, and measured later
+ * the same day - the second time in one day that a scope of mine was a claim
+ * nobody had checked.** A module is exactly the thing this rule is about: ADR
+ * 0127 calls it vocabulary, composition and surface, and the core imports its
+ * functions by name. Six of thirteen exports are unreached, four of them the
+ * code edge of an absence already recorded (the Home Assistant transport, the
+ * spatial-recall deferral) and two of them a module's own way of saying
+ * something to a person that the product never asks for. Every module's `src`
+ * is read, so a fifth module is in scope the day it exists.
+ *
  * `packages/*` stay out: there an unreached export is module hygiene, not a
  * capability nobody has.
  *
@@ -53,6 +64,9 @@ import { fileURLToPath } from 'node:url';
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const roots = [
+  ...readdirSync(join(repoRoot, 'modules'))
+    .filter((entry) => statSync(join(repoRoot, 'modules', entry, 'src')).isDirectory())
+    .map((entry) => join('modules', entry, 'src')),
   join('apps', 'companion', 'src'),
   join('apps', 'companion-shell', 'src'),
   join('apps', 'core', 'src'),
@@ -116,6 +130,42 @@ const arguedNames = [
  * code edge of an absence this repository records elsewhere in prose. The
  * point of writing them here is that prose and code stop being two documents.
  */
+const arguedModuleNames = [
+  [
+    'picoCalendarAgenda',
+    'ADR 0127. Die Ordnung, in der ein Mensch seine zeitgebundenen Einträge sehen soll - '
+      + 'Überfälliges zuerst, darin das Älteste. Der Core bedient `picoCalendarDueEntriesView`, '
+      + 'und keine Fläche sortiert; das Modul kann etwas sagen, wonach das Produkt nicht fragt, '
+      + 'und niemand baut es woanders nach',
+  ],
+  [
+    'picoDepotState',
+    'ADR 0143. Das Zustandswort eines Depots für eine Person - `never_fetched`, `unreachable` - '
+      + 'mit der einen Stelle, an der ein Grund eine Folge überholt. Die Depotzeilen im Fenster '
+      + 'zeigen es nicht; auch hier fragt das Produkt nicht, statt es nachzubauen',
+  ],
+  [
+    'toPicoHomeAssistantObservations',
+    'ADR 0128 H4. Der Connector-Eingang, dessen Transport die Matrix als deklariert und '
+      + 'nicht implementiert führt',
+  ],
+  [
+    'picoHomeAssistantChangedEntities',
+    'ADR 0128 H4, dieselbe fehlende Seite: was sich geändert hat, für einen Transport, den '
+      + 'es nicht gibt',
+  ],
+  [
+    'picoDeriveParkingCandidate',
+    'ADR 0129 SR2/SR5, Befund B4. "Wo habe ich geparkt" braucht Beobachtungen, und '
+      + '`appendPicoObservations` hat außerhalb seiner Tests keinen Aufrufer - die Vertagung '
+      + 'ist die des Nutzers vom 2026-08-16',
+  ],
+  [
+    'picoParkingAnswer',
+    'ADR 0129, dieselbe Vertagung: die Antwort auf eine Ableitung, die nichts speist',
+  ],
+];
+
 const arguedCoreNames = [
   [
     'intakePicoSupplierContent',
@@ -243,7 +293,7 @@ const callerText = new Map(
 );
 
 const arguedModules = new Set(argued.map((entry) => entry.module));
-const arguedNameSet = new Map([...arguedNames, ...arguedCoreNames]);
+const arguedNameSet = new Map([...arguedNames, ...arguedCoreNames, ...arguedModuleNames]);
 let exportsChecked = 0;
 let reachedOnlyByItsOwnFile = 0;
 /**
@@ -258,6 +308,16 @@ const unreached = [];
 for (const entry of sources) {
   const path = join(repoRoot, entry);
   const own = readFileSync(path, 'utf8');
+  /**
+   * Auch innen ist Prosa keine Benutzung. Die Aufruferseite strippt Kommentare
+   * seit dem Tag, an dem der Kopfkommentar dieses Prüfers eine Fähigkeit
+   * erreicht aussehen ließ; der Zähler unten tat es nicht, und ein Name, der
+   * einmal in seinem eigenen Doc-Kommentar steht, rutschte damit in den
+   * harmlosen Topf statt in die Meldung (2026-08-24, an `picoParkingAnswer`
+   * gefunden - und zwar dadurch, dass seine Begründung als veraltet gemeldet
+   * wurde, was sie nicht war).
+   */
+  const ownCode = withoutComments(own);
   for (const [, name] of own.matchAll(/^export (?:async )?function (\w+)/gmu)) {
     exportsChecked += 1;
     let reached = false;
@@ -278,7 +338,7 @@ for (const entry of sources) {
      * subject than the export that reaches it. Counted rather than refused -
      * the capability above it is reachable, so nobody is missing anything.
      */
-    if ((own.match(new RegExp(`\\b${name}\\b`, 'gu')) ?? []).length > 1) {
+    if ((ownCode.match(new RegExp(`\\b${name}\\b`, 'gu')) ?? []).length > 1) {
       reachedOnlyByItsOwnFile += 1;
       continue;
     }
