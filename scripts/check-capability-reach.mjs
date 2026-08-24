@@ -22,7 +22,10 @@ import { fileURLToPath } from 'node:url';
  * one is written so the sixth is caught by name.
  *
  * **What it found on the day it was written, 2026-08-24:** fifteen of 134
- * exports, and thirteen of them are one subsystem. The device side of Pico
+ * exports, and thirteen of them are one subsystem. The other two were the
+ * reader-custody pair, argued here for half a day until the window got a
+ * panel for them; the arguments went stale the moment it did, and this check
+ * said so. The device side of Pico
  * Relay - issue a mailbox, exchange addresses, sweep, admit a push, correlate
  * a reply - is four modules with tests and no product path into any of them.
  * ADR 0149's status says "Both loops run"; the Home's loop runs, and the
@@ -105,17 +108,6 @@ const arguedNames = [
       + 'of deleting the file, so `completed` is the terminal status and the receipt is what '
       + 'the person is shown afterwards. Clearing is an end to that lifecycle which the '
       + 'product does not have',
-  ],
-  [
-    'readPicoCompanionDomainReadership',
-    'ADR 0130 E5, built 2026-08-23. Which domains exist and who may read them, over Link. '
-      + 'The window has no panel for it yet, and building one is a surface decision rather '
-      + 'than a wiring job: it is the first place a person would meet reader custody',
-  ],
-  [
-    'revokePicoCompanionDomainReader',
-    'ADR 0130 E5, the other half. Ending a read access needs the same panel, and a control '
-      + 'that ends something must sit beside the list that shows it',
   ],
 ];
 
