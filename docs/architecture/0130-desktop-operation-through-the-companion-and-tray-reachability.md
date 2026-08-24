@@ -2,6 +2,32 @@
 
 ## Status
 
+**Status note 2026-08-24: E5's read half reaches the window.** The two
+capabilities built on 2026-08-23 - which domains exist with who may read them,
+and ending one reader's access from the device that granted it - had no caller
+outside their tests for a day, which is the shape `check-capability-reach.mjs`
+was written for a few hours later and which it then argued rather than hid.
+They now have a panel: `pico:domain-readership:get` and `pico:domain-read:end`,
+a section above the Home because who lives in a Home is the host's decision
+and who may read your memory is yours.
+
+Three things the panel keeps rather than invents. **A domain nobody reads is
+in the list** - that is why the companion makes two reads instead of one, and
+a view showing only domains with readers would withhold exactly the reassuring
+part. **The reason is asked with the act**, as it is for ending a membership:
+five categories, each a sentence, because "they should not read this any more"
+and "something is wrong with that key" are two different records and the Home
+keeps which one it was. And **the window points at a row rather than
+describing it**: `endDomainRead` takes two identifiers and the runtime reads
+the domain and the reader back out of the same list it offered, because a
+domain carries the host key it was authorised under (ADR 0115) and the window
+neither knows it nor should be able to assert it.
+
+What stays open is E5's other half and the argument for it is unchanged:
+creating and rotating domains and granting a reader would be controls whose
+effect nobody can observe, because nothing in the product writes
+reader-custody content.
+
 Accepted as a product-surface and platform-order decision; E1, E2, E3, E4 and
 E6 implemented, E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
 the background companion, that `pico-vault` stays a tool rather than a
