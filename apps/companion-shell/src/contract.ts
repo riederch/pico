@@ -707,8 +707,41 @@ export function picoCompanionFirstRunFailureBody(
     return 'Pico could not read that line as the one your Home printed when it started. '
       + 'Copy the whole line, including the braces at both ends.';
   }
-  return `Pico could not set this device up (${fallbackReason}). Nothing was changed at `
-    + 'your Home.';
+  return 'Pico could not set this device up, and nothing was changed at your Home. '
+    + picoCompanionServiceErrorBody(fallbackReason);
+}
+
+/**
+ * What stopped the companion, said to the person rather than shown as a code.
+ *
+ * `picoCompanionPublicServiceErrorReason` narrows any failure to one of four
+ * public reasons, deliberately: an error message from a daemon or a filesystem
+ * is not a sentence and can carry a path. But both places that used it put the
+ * *code* on the screen - "The local companion service could not start
+ * (companion_profile_invalid)" - beside one instruction that was the same for
+ * all four, so the code was doing the sentence's work (2026-08-24).
+ *
+ * Four reasons, four sentences, in one place, which is what
+ * `picoCompanionEnrolmentRefusalLine` does for the eighteen enrolment refusals
+ * and `picoCompanionFirstRunFailureBody` for first run. An unknown reason gets
+ * the honest one rather than a code: a person who cannot be told what happened
+ * is not helped by being told a word for it.
+ */
+export function picoCompanionServiceErrorBody(reason: string): string {
+  switch (reason) {
+    case 'companion_profile_unavailable':
+      return 'Pico could not read this device\'s companion profile. That file says which '
+        + 'Home this device belongs to, so nothing starts without it.';
+    case 'companion_profile_invalid':
+      return 'This device\'s companion profile is not in a shape Pico understands, so Pico '
+        + 'stopped instead of guessing what it meant.';
+    case 'pico_vault_unavailable':
+      return 'Pico Vault is not answering on this device. It holds the keys, so the '
+        + 'companion cannot start without it.';
+    default:
+      return 'The local companion service did not start, and Pico could not tell more '
+        + 'precisely why.';
+  }
 }
 
 

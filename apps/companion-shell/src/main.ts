@@ -80,6 +80,7 @@ import {
   picoCompanionRecoveryCardEntryPrompt,
   picoCompanionSecureInputBody,
   picoCompanionFirstRunFailureBody,
+  picoCompanionServiceErrorBody,
   picoCompanionHostRotationLine,
   picoCompanionHostRotationReasonLines,
   picoCompanionMembershipEndingLines,
@@ -2518,8 +2519,7 @@ function presentServiceError(error: unknown): void {
     symbol: '×',
     decision: 'none',
     title: 'Pico companion needs attention',
-    body: `The local companion service could not start (${reason}). `
-      + 'Check this device\'s companion profile and Pico Vault service.',
+    body: picoCompanionServiceErrorBody(reason),
     observedAt: new Date().toISOString(),
   });
   presentationPort.present(state);
