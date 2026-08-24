@@ -26,6 +26,28 @@ import { fileURLToPath } from 'node:url';
  * is exactly right. So this catches the copy, not the invention. The
  * invention is caught by a test that builds a real value and requires the
  * surface to accept it, which is what `recovery-card-entry.test.ts` now does.
+ *
+ * **One shape of invention it can catch, added 2026-08-24: the wrong version
+ * of a right label.** `pico.recovery.card.v2` is not a copy of anything and
+ * matches no constant, so the rule above is blind to it - but the protocol
+ * exports `pico.recovery.card.v1`, and a label sharing a stem with an
+ * exported one while carrying a version the protocol does not have is a
+ * spelling left behind by a version that went away. The broad rule was
+ * measured before being written and rejected at 46 false positives; this
+ * narrow one was measured the same way and has none: three product hits,
+ * two of them the defect it was written for.
+ *
+ * ADR 0134 F2 collapsed `pico.recovery.card.v1`/`v2` and
+ * `pico.home.founding-record.v1`/`v2` into their surviving `v1` names on
+ * 2026-08-10. Fourteen days later the companion's public card metadata still
+ * *required* the `v2` name in its type, and its test built a card carrying
+ * it - code and test agreeing with each other rather than with the protocol,
+ * which is why neither said anything.
+ *
+ * **Tests are excluded from this rule too, and the measurement says why:** of
+ * nine test hits, eight spell a `.v0` - the idiom for a version that must be
+ * refused. A negative test naming a version that does not exist is doing its
+ * job.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const protocolRoot = join(repoRoot, 'packages', 'protocol', 'src');
@@ -38,7 +60,12 @@ const allowed = [
   {
     file: join(repoRoot, 'apps', 'core', 'src', 'migrations.ts'),
     why: 'a migration describes what a database already holds, so it must *not* follow a '
-      + 'renamed constant - the old rows keep the old word',
+      + 'renamed constant - the old rows keep the old word. Concretely, since 2026-08-24: '
+      + 'the baseline\'s founding-record CHECK still admits '
+      + '\'pico.home.founding-record.v2\', a schema ADR 0134 F2 collapsed away and nothing '
+      + 'writes. It stays because that baseline is *derived* - read back from sqlite_master '
+      + 'after the seventeen steps it folds - and retyping a statement by hand is exactly '
+      + 'the property its comment gives up',
   },
   {
     file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'protocol.ts'),
@@ -72,8 +99,31 @@ const tabled = /(\w+)\s*:\s*'([^']{6,})'/gu;
 const anyLabel = /'(pico[^']{5,})'/gu;
 
 const labels = new Map();
+/**
+ * Stem to the versions the protocol actually exports, for the second rule.
+ *
+ * Built from the protocol's non-test sources only, unlike `labels` above: a
+ * label appearing solely in a protocol test is a version being refused, not a
+ * version being offered. `pico.recovery.card.v3` lives in `recovery.test.ts`
+ * for exactly that reason, and counting it would license the spelling this
+ * rule exists to refuse.
+ */
+const versions = new Map();
+const stemOf = (value) => value.replace(/(-v\d+:|\.v\d+)$/u, '');
 for (const file of sourceFiles(protocolRoot)) {
   const source = readFileSync(file, 'utf8');
+  if (!file.endsWith('.test.ts')) {
+    for (const [, value] of source.matchAll(anyLabel)) {
+      if (!wireLabel.test(value)) {
+        continue;
+      }
+      const stem = stemOf(value);
+      if (!versions.has(stem)) {
+        versions.set(stem, new Set());
+      }
+      versions.get(stem).add(value);
+    }
+  }
   for (const [, name, value] of source.matchAll(exported)) {
     if (wireLabel.test(value) && value.startsWith('pico')) {
       labels.set(value, name);
@@ -95,6 +145,10 @@ const errors = [];
 if (labels.size === 0) {
   errors.push('scripts/check-wire-labels.mjs found no protocol labels to protect; the '
     + 'export shape it reads must have changed.');
+}
+if (versions.size === 0) {
+  errors.push('scripts/check-wire-labels.mjs found no versioned protocol label stems; the '
+    + 'version rule would pass over anything and must not report that as clean.');
 }
 
 for (const root of ['apps', 'modules', 'packages']) {
@@ -120,6 +174,23 @@ for (const root of ['apps', 'modules', 'packages']) {
         );
       }
     }
+    for (const [, value] of source.matchAll(anyLabel)) {
+      if (!wireLabel.test(value) || labels.has(value)) {
+        continue;
+      }
+      const known = versions.get(stemOf(value));
+      if (known === undefined || known.has(value)) {
+        continue;
+      }
+      errors.push(
+        `${relative(repoRoot, file)}: names '${value}', a version of a protocol label `
+        + `that the protocol does not have. It spells ${[...known]
+          .map((one) => `'${one}'`)
+          .join(' and ')}. A surviving name with a retired version still written beside `
+        + 'it is what a collapsed format leaves behind, and a literal type built on the '
+        + 'retired one makes the false name mandatory for everything downstream.',
+      );
+    }
   }
 }
 
@@ -133,6 +204,7 @@ if (errors.length > 0) {
 
 console.log(
   `Wire label check passed (${labels.size} protocol labels spelled once, `
+  + `${versions.size} versioned stems held to the versions the protocol exports, `
   + `${allowed.length} argued exemptions).`,
 );
 
