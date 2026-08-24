@@ -12,6 +12,7 @@ import {
   issuePicoCompanionMembership,
   readPicoCompanionHomeMembers,
   rotatePicoCompanionHostKeys,
+  readPicoCompanionDomainReadership,
 } from '@pico/companion/home-authority';
 import {
   foundPicoCompanionHome,
@@ -89,7 +90,12 @@ async function waitFor(predicate: () => boolean, label: string): Promise<void> {
   throw new Error(`timeout:${label}`);
 }
 
-async function startUnclaimedHome(): Promise<{ coreUrl: string; announcementLine: string }> {
+async function startUnclaimedHome(): Promise<{
+  coreUrl: string;
+  announcementLine: string;
+  /** Damit ein Test beweisen kann, dass eine Antwort vom Home kam. */
+  child: ChildProcess;
+}> {
   const port = await freePort();
   const data = tempDirectory('pico-e4-core-');
   let output = '';
@@ -118,6 +124,7 @@ async function startUnclaimedHome(): Promise<{ coreUrl: string; announcementLine
   return {
     coreUrl: `http://127.0.0.1:${port}`,
     announcementLine: output.split('\n').find((line) => line.includes('picoHomeMoveInCode'))!,
+    child,
   };
 }
 
@@ -142,6 +149,7 @@ async function startEmptyDaemon(): Promise<string> {
 async function foundedDevice(): Promise<{
   profilePath: string;
   session: PicoCompanionVaultProductSession;
+  home: ChildProcess;
 }> {
   const home = await startUnclaimedHome();
   const socketPath = await startEmptyDaemon();
@@ -179,7 +187,7 @@ async function foundedDevice(): Promise<{
     decisions: { decideApproval: async () => true },
   });
   sessions.push(session);
-  return { profilePath, session };
+  return { profilePath, session, home: home.child };
 }
 
 describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => {
@@ -457,5 +465,52 @@ describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => 
       subjectPicoIdentityFingerprintHex: 'not-a-fingerprint',
       validUntil: '2027-01-01T00:00:00.000Z',
     })).rejects.toThrow('invalid_pico_companion_membership_subject');
+  }, 300_000);
+});
+
+/**
+ * **Eine Falle beim Falsifizieren hier, gefunden am 2026-08-24.**
+ *
+ * Diese Datei importiert `@pico/companion/*` als *gebautes* Paket - die
+ * Exports zeigen auf `dist/`. Wer eine Pflanzung in `apps/companion/src`
+ * setzt und den Test laufen lässt, ändert nichts an dem, was der Test lädt,
+ * und bekommt Grün. Das liest sich wie „der Test greift ins Leere" und ist in
+ * Wahrheit „die Pflanzung ist nie angekommen".
+ *
+ * `pnpm --filter @pico/companion build` dazwischen, und danach wieder zurück.
+ */
+describe('ADR 0130 E5 - wer welche Domäne lesen darf', () => {
+  it('liest die Leserschaft von einem echten Home, statt sie zu behaupten', async () => {
+    await sodium.ready;
+    const { profilePath, session, home } = await foundedDevice();
+    const profile = readPicoCompanionProfile(profilePath);
+    const linkClient = await createPicoCompanionLinkClient({
+      profile,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+
+    /**
+     * Zwei Autoritätsressourcen, ein Ergebnis. Der Weg ist nie gelaufen, bevor
+     * dieser Block existierte: die Unit-Tests prüfen das Vokabular an
+     * Fixtures, und ein Typecheck sagt nichts darüber, ob dieses Gerät die
+     * beiden Ressourcen überhaupt lesen darf. Ein frisch gegründetes Home hat
+     * keine Domäne, also ist die leere Liste die richtige Antwort - und dass
+     * es eine Liste ist statt eines Fehlschlags, ist die Aussage.
+     */
+    const readership = await readPicoCompanionDomainReadership({
+      livingDeviceLinkClient: linkClient,
+    });
+    expect(Array.isArray(readership)).toBe(true);
+    expect(readership).toHaveLength(0);
+
+    /**
+     * **Und dass die Antwort vom Home kam.** Eine leere Liste ist genau das,
+     * was ein Prüfer auch bekäme, der gar nicht gefragt hat; ohne diese Hälfte
+     * wäre der Test über einem Client grün, der nie eine Verbindung aufbaut.
+     */
+    home.kill('SIGTERM');
+    await expect(readPicoCompanionDomainReadership({ livingDeviceLinkClient: linkClient }))
+      .rejects.toThrow();
   }, 300_000);
 });
