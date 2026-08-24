@@ -120,6 +120,67 @@ for (const name of preloadChannels.keys()) {
   }
 }
 
+/**
+ * The other two sides of the same door, added 2026-08-24.
+ *
+ * The comparison above holds the contract against the preload and says why:
+ * "a channel the main process handles and the bridge never exposes is a
+ * surface nobody can reach". It never checked that the main process handles
+ * one, or that the window calls it - the two ends of the wire whose absence
+ * would be exactly that.
+ *
+ * Measured before being written: all 57 channels are handled or sent, and all
+ * 57 exposed methods are called by `renderer.ts`. So this direction starts
+ * green with **no exemptions at all**, which is the cheapest a rule in this
+ * repository gets - and it is worth having because the same shape (a door
+ * with nobody behind it, or nobody in front) has been found five times in
+ * other layers this month.
+ *
+ * Two channels are `send` rather than `handle`: the main process pushes them
+ * at the window, so a handler would be the wrong end to look for.
+ */
+const mainProcess = readFileSync(join(shellRoot, 'src', 'main.ts'), 'utf8');
+const rendererScript = readFileSync(join(shellRoot, 'src', 'renderer.ts'), 'utf8');
+let channelsAnswered = 0;
+for (const [name] of contractChannels) {
+  const answered = new RegExp(
+    `ipcMain\\.(?:handle|on)\\(\\s*picoCompanionIpcChannels\\.${name}\\b`,
+    'u',
+  ).test(mainProcess);
+  const pushed = new RegExp(`send\\(\\s*picoCompanionIpcChannels\\.${name}\\b`, 'u')
+    .test(mainProcess);
+  if (answered || pushed) {
+    channelsAnswered += 1;
+    continue;
+  }
+  errors.push(
+    `apps/companion-shell: the main process neither answers nor pushes the \`${name}\` `
+    + 'channel the contract declares. A call with nothing behind it hangs, which is what '
+    + 'the person sees.',
+  );
+}
+
+const exposed = /exposeInMainWorld\('picoCompanion', Object\.freeze\(\{([\s\S]*?)\n\}\)\)/u
+  .exec(preload);
+const exposedMethods = exposed === null
+  ? []
+  : [...exposed[1].matchAll(/^ {2}(\w+):/gmu)].map(([, name]) => name);
+if (exposedMethods.length === 0) {
+  errors.push(
+    'apps/companion-shell: could not read the exposed bridge, so the window side of this '
+    + 'comparison passed over nothing.',
+  );
+}
+for (const method of exposedMethods) {
+  if (new RegExp(`\\b${method}\\b`, 'u').test(rendererScript)) {
+    continue;
+  }
+  errors.push(
+    `apps/companion-shell: the window never calls \`${method}\`, which the bridge offers `
+    + 'it. An offered call nobody makes is a surface that exists only in the preload.',
+  );
+}
+
 const rendererHtml = readFileSync(join(shellRoot, 'src', 'renderer', 'index.html'), 'utf8');
 for (const requiredDirective of [
   "default-src 'none'",
@@ -537,7 +598,9 @@ console.log(
   'Companion shell-boundary check passed'
   + ` (tray start reaches ${trayReached.size} modules,`
   + ` the shell-free core ${clientReached.size};`
-  + ` ${contractChannels.size} IPC channels, named identically on both sides;`
+  + ` ${contractChannels.size} IPC channels, named identically on both sides,`
+  + ` ${channelsAnswered} answered or pushed by the main process and`
+  + ` ${exposedMethods.length} offered methods each called by the window;`
   + ` ${namedCaps} field caps, each a name rather than a number;`
   + ` ${guardedClients} calls that reach a Link client`
   + ` through ${signingEntryPoints.size} core entry points, each behind an unlock;`
