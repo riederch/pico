@@ -1162,6 +1162,32 @@ gefunden: er wies eine Modulbegründung zurück, die ihr Modul überlebt hatte,
 aber keine Namensbegründung, die ihren Namen überlebt hat. Eine Begründung ist
 ein Urteil über heute; sie muss altern können.
 
+**B16 — Von 61 bedienten Routen fragt niemand nach siebzehn (2026-08-24).**
+`check-surface-classes` hielt die Routenliste des Homes gegen
+`public-surfaces.md`: eine Route muss aufgeschrieben sein, und eine
+aufgeschriebene muss bedient werden. Beide Richtungen fragen nicht, ob jemand
+sie **ruft**. Nachgemessen: 28 ruft das Dashboard, 16 der Companion oder der
+Vault-Daemon über Foundation-HTTP, 17 ruft nichts außerhalb von `app.ts` und
+seiner Tests.
+
+**Es sind keine siebzehn Defekte, und die Begründungen sind der Ertrag.** Acht
+davon sind die *zweite* Tür: das Produkt spricht Pico Link, also ist
+`home.depot.attach` die benutzte Tür, während `POST /api/depot/attachments` auf
+eine Foundation-Sitzung wartet, die kein Produkt öffnet. Acht weitere sind die
+Schreiberhälfte der Reader-Custody samt Share-Envelopes — dieselbe Abwesenheit,
+auf der ADR 0130 E5 offen steht, und für die es nicht einmal eine
+Link-Operation gibt. Bleibt `GET /api/system/version`: die einzige Route ohne
+Aufrufer *und* ohne Link-Zwilling.
+
+**Der Prüfer hatte zwei eigene Fehler, beide von der Pflanzung gefunden.** Der
+erste war meiner: eine Route galt als gerufen, wenn ihr Pfad irgendwo als
+Teilstring vorkam — `/api/auth/session` sah erreicht aus, weil das Dashboard
+vier Zeilen weiter `/api/auth/sessions` nennt. Eine Route stand für eine andere
+ein, weil sie deren Präfix ist; genau die Verwechslung, gegen die diese
+Richtung geschrieben ist. Der zweite war der Pflanzversuch selbst: zweimal habe
+ich einen Namen in einen **längeren** umbenannt, der den alten enthält, und das
+Ausbleiben des Risses zuerst dem Prüfer angelastet.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
