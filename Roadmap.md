@@ -1065,6 +1065,37 @@ an der Wurzel wirklich hat, trägt eine Dateiendung und keinen Platzhalter —
 prüft 880 Pfade und braucht **keine einzige Ausnahme**. Das ist der Test, ob
 eine so billige Regel die richtige ist.
 
+**B13 — Zwei Prüfungen zählten dieselbe Liste und kamen auf 45 und 46
+(2026-08-24).** `check-surface-classes` und `check-link-reachability` lesen
+beide `picoLinkDirectOperations`, jede mit einer eigenen Regex. Die zweite
+buchstabierte ihre Zeichenklasse als `[a-z][a-z0-9_.]*` — **ohne Bindestrich**.
+Genau eine Operation trägt einen: `home.domain.read-grant.submit`. Die
+Prüfung, deren ganze Aufgabe es ist zu sagen, dass jede Operation von jemandem
+außerhalb des Homes genannt wird, hat diese eine nie angesehen.
+
+Dahinter war nichts kaputt — `apps/companion/src/domain-read-grant.ts` nennt
+sie —, und das ist der Punkt: wäre dieser Aufrufer verschwunden, wäre die
+Prüfung grün geblieben und hätte weiter bis 45 gezählt.
+
+**Die Warnung stand seit jeher auf dem Bildschirm.** Beide Zahlen werden bei
+jedem Lauf gedruckt, vier Zeilen auseinander, und niemand hat sie zusammen
+gelesen — auch ich nicht, als ich dieses Gate gestern um elf
+Autoritätsressourcen erweiterte und „45 Operationen" berichtete.
+`progress.md` hat eine der beiden Zahlen abgeschrieben.
+
+Behoben wurde nicht der fehlende Bindestrich, sondern dass die Liste zweimal
+gelesen wird: `scripts/link-operations.mjs` liest sie einmal, beide Prüfungen
+fragen dort. Zwei Leser einer Liste driften wieder.
+
+**Und ein zweiter Fund aus derselben Messung:** `progress.md` behauptet für
+den von ihm benannten Commit „72 einmalig geschriebene Wire-Labels". Der
+Commit `7f9e76f`, der dieselbe Prüfung von 72 auf 119 hob, ist dessen Vorfahr,
+und zwischen beiden hat kein Commit `packages/protocol/src` angefasst. Die
+Zahl war dort schon falsch — und es ist ausgerechnet die, von der jene
+Commit-Nachricht schreibt, sie habe gelesen, „als wäre sie alles". Berichtigt,
+ohne das Standdatum anzufassen: das Dokument ist damit weiterhin veraltet,
+aber nicht mehr falsch über den Stand, den es benennt.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
