@@ -1014,6 +1014,34 @@ zu unterscheiden. Der Anspruch ist deshalb genau der gedruckte — **keine
 Prüfung meldet Erfolg über nichts** —, und ob eine Prüfung wacht statt
 abzustürzen, beweist die Pflanzung neben ihr.
 
+**B11 — Dieselbe Frage an die Tests gestellt: einer von 163 (2026-08-24).**
+Nachdem vier Prüfungen „sauber" über nichts gesagt hatten (B10), lag dieselbe
+Frage für die Testsuite nahe: eine Behauptung in einer Schleife, die keinmal
+läuft, ist grün und leer. Gemessen: keine übersprungenen oder fokussierten
+Tests in 250 Dateien, und 163 Schleifen, die behaupten. Davon laufen zehn über
+Literale in derselben Datei und sieben über importierte `as const`-Listen —
+beide können nicht leer werden, ohne dass jemand Zeilen löscht oder der
+Compiler es anderswo bemerkt. Drei sind berechnet, zwei davon durch eine
+Behauptung im selben Test gedeckt.
+
+Bleibt einer: `leaves the rig at rest for the rest pose` behauptete über die
+Rotationen, die zurückkamen — auch über keine. Ein Projektor, der gar nichts
+mehr ausgibt, ließ ihn grün; umfallen tat nur der Nachbartest daneben. Ein
+Test, dessen Grün an seinem Nachbarn hängt, beweist nicht, was sein Name sagt.
+
+**Der Teil, den die Pflanzung fand, betrifft die Reparatur.** Der erste
+Versuch hielt die Projektion gegen `gesturePoseV1MountNames()` — und diese
+Funktion *ist* die Projektion der Ruhepose, eine Zeile darunter im selben
+Modul. Die Härtung war eine Tautologie und beide Pflanzungen liefen weiter
+durch. Die Rig steht jetzt einmal im Test ausgeschrieben und trägt beide
+Behauptungen.
+
+**Kein Gate dafür.** Von 163 Schleifen bräuchten 28 eine Ausnahmebegründung,
+damit eine bissig würde. `check-link-seal.mjs` hat den Satz dafür schon
+aufgeschrieben: eine Prüfung, deren Fehlschläge überwiegend falsch sind,
+bringt Leuten bei, sie zu überspringen. Die Messung steht hier, die Ausnahme
+nirgends.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
