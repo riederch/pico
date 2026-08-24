@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  picoLinkOperationsPath,
+  readPicoLinkDirectOperations,
+} from './link-operations.mjs';
 
 /**
  * ADR 0134 obligation 4 asks `docs/protocol/public-surfaces.md` to decide
@@ -206,13 +210,12 @@ for (const documented of new Set(documentedPaths)) {
  * Grouping is allowed, because the document already groups: one row may name a
  * family with `/` between the operations, and the sentence is about the family.
  */
-const operationsPath = 'packages/protocol/src/index.ts';
-const operationsSource = readFileSync(join(repoRoot, operationsPath), 'utf8');
-const operationBlock = /export const picoLinkDirectOperations = \[([\s\S]*?)\] as const;/u
-  .exec(operationsSource);
-const operations = operationBlock === null
-  ? []
-  : [...operationBlock[1].matchAll(/'([a-z0-9_.-]+)'/gu)].map(([, name]) => name);
+// Read through the shared reader rather than a second regex of its own: this
+// file counted 46 and `check-link-reachability.mjs` counted 45 for as long as
+// both existed, because its reader had no hyphen in its character class
+// (2026-08-24).
+const operationsPath = picoLinkOperationsPath;
+const operations = readPicoLinkDirectOperations();
 
 if (operations.length === 0) {
   errors.push(

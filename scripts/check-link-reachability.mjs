@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPicoLinkDirectOperations } from './link-operations.mjs';
 
 /**
  * Link operations, checked for somebody outside the Home who calls them.
@@ -103,13 +104,20 @@ const text = new Map(sources.map((path) => [path, readFileSync(join(repoRoot, pa
 /** A spec, or a helper the repository already names `test-`. */
 const isTestOnly = (path) => /\.test\.ts$/u.test(path) || /\/test-[^/]+$/u.test(path);
 
-const declaration = /picoLinkDirectOperations = \[([\s\S]*?)\n\] as const;/u
-  .exec(text.get(declaresTheList) ?? '');
-if (declaration === null) {
-  errors.push(`${declaresTheList}: could not read the closed operation list.`);
+/**
+ * Read through the shared reader. This file had its own, and its character
+ * class was `[a-z][a-z0-9_.]*` - no hyphen. `home.domain.read-grant.submit`
+ * carries one, so the check written to say that every operation is named by
+ * somebody outside the Home had never looked at it, and printed "45
+ * operations" beside `check-surface-classes`'s "46" for as long as both have
+ * existed (2026-08-24). Nothing was broken behind it, which is the point: had
+ * its caller gone, this would have stayed green and kept counting to 45.
+ */
+const operations = readPicoLinkDirectOperations();
+if (operations.length === 0) {
+  errors.push(`${declaresTheList}: could not read the closed operation list, so every `
+    + 'sentence below is about nothing.');
 }
-const operations = [...(declaration?.[1] ?? '').matchAll(/^\s*'([a-z][a-z0-9_.]*)',$/gmu)]
-  .map(([, name]) => name);
 
 const callers = sources.filter((path) =>
   !isTestOnly(path) && path !== declaresTheList && path !== answersThem);
