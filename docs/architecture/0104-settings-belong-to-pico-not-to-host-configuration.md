@@ -2,6 +2,38 @@
 
 ## Status
 
+Status note, 2026-08-24: **the relay's twelve were classified by nobody.**
+`settings:check` reads `apps/core/src/config.ts` and holds its twenty-two
+entries against S5 below. Pico Relay reads twelve of its own, and the check
+never looked at them - its passing line said "22 environment entries, each
+classified", which is true and reads as though it were all of them. The same
+shape as the seventy-two wire labels beside a hundred and nineteen.
+
+S2 makes a person's setting in the environment a defect, and the judgement
+that none of these is one had never been written down. It is written now, in
+S5's shape so the check can read it as a classification rather than as a
+mention:
+
+**S5 (relay), 2026-08-24 - deployment parameters, every one:**
+`PICO_RELAY_DATABASE_PATH` is where the host puts the file.
+`PICO_RELAY_HOST`, `PICO_RELAY_PORT`, `PICO_RELAY_HEALTH_HOST`,
+`PICO_RELAY_HEALTH_PORT`, `PICO_RELAY_OPERATOR_HOST` and
+`PICO_RELAY_OPERATOR_PORT` are where it listens - three ports on purpose,
+since ADR 0147 keeps the mailbox surface, the health signal and operator
+administration apart. `PICO_RELAY_OPERATOR` is the hostname senders resolve
+to reach this relay, so it is an address rather than a preference, and the
+service refuses to start without it rather than guessing one that would issue
+addresses pointing elsewhere. `PICO_RELAY_MAX_CONNECTIONS`,
+`PICO_RELAY_HEADERS_TIMEOUT_MS`, `PICO_RELAY_KEEP_ALIVE_TIMEOUT_MS` and
+`PICO_RELAY_REQUEST_TIMEOUT_MS` are what the machine can carry.
+
+**Not one of them is a person's decision**, and that is the load-bearing part:
+a relay holds no Pico identity and decides nothing for anybody, so it has no
+setting to misplace. The classification is cheap here precisely because the
+component was built that way - and writing it down is what makes the emptiness
+checkable instead of assumed.
+
+
 Status note, 2026-08-16: **S3's retirement is carried out.**
 `memory_encryption` is gone from the add-on configuration in 0.2.0, and
 `options` is now empty - which is the shape S2 was asking for rather than an
