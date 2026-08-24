@@ -194,6 +194,86 @@ if (stepMethods.length > 0 && localSteps === 0) {
     + 'auf eine if-Kette verdeckt');
 }
 
+/**
+ * Dritte Regel: ein öffentlicher Dienstgrund erreicht eine Person als Satz.
+ *
+ * `public-error.ts` verengt jeden Fehlschlag auf vier öffentliche Gründe, und
+ * das ist richtig - eine Fehlermeldung aus einem Daemon ist kein Satz und kann
+ * einen Pfad tragen. Beide Stellen, die das benutzten, setzten aber den
+ * **Code** in den Text: "The local companion service could not start
+ * (companion_profile_invalid)", daneben eine Anweisung, die für alle vier
+ * dieselbe war. Der Code machte die Arbeit des Satzes (2026-08-24).
+ *
+ * Die Worte stehen jetzt in `picoCompanionServiceErrorBody`. Wer einen dieser
+ * vier Gründe irgendwo sonst ausschreibt, baut die zweite Stimme wieder auf -
+ * also darf nur der Erzeuger sie nennen und die eine Stelle, die sie in Sätze
+ * übersetzt.
+ */
+const serviceReasons = [
+  'companion_profile_unavailable',
+  'companion_profile_invalid',
+  'pico_vault_unavailable',
+  'companion_service_unavailable',
+];
+const reasonHomes = [
+  'apps/companion-shell/src/public-error.ts',
+  'apps/companion-shell/src/contract.ts',
+];
+/**
+ * **Nur im Text, nicht im Wurf** - die erste Fassung dieser Regel suchte den
+ * Code überall und meldete sofort `main.ts`, wo `companion_service_unavailable`
+ * als *geworfener Fehler* über die IPC-Grenze steht. Ein Fehlerbezeichner darf
+ * so heißen; niemand liest ihn. Geprüft wird der `body:` einer Präsentation,
+ * denn dort steht, was eine Person sieht - und eine Prüfung, deren Fehlschläge
+ * überwiegend falsch sind, bringt Leuten bei, sie zu überspringen.
+ */
+let reasonSpellings = 0;
+let bodiesRead = 0;
+for (const path of files) {
+  const shown = relative(root, path);
+  if (reasonHomes.includes(shown) || /\.test\.[cm]?ts$/.test(shown)) {
+    continue;
+  }
+  const lines = readFileSync(path, 'utf8').split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^\s*body:/.test(lines[index])) {
+      continue;
+    }
+    let value = lines[index];
+    let last = index;
+    while (!/,\s*$/.test(value) && last + 1 < lines.length && last - index < 6) {
+      last += 1;
+      value += `\n${lines[last]}`;
+    }
+    index = last;
+    bodiesRead += 1;
+    for (const reason of serviceReasons) {
+      if (!value.includes(reason)) {
+        continue;
+      }
+      reasonSpellings += 1;
+      failures.push(
+        `${shown}: setzt den Dienstgrund "${reason}" in einen Text, den eine Person liest. `
+        + 'Die Sätze dazu stehen in `picoCompanionServiceErrorBody`; ein Code auf dem '
+        + 'Bildschirm ist die zweite Stimme, die dieser Prüfer sucht');
+    }
+  }
+}
+if (bodiesRead === 0) {
+  failures.push(
+    'one voice: kein einziger Präsentationstext gelesen, also lief diese Regel über nichts');
+}
+/** Auch hier gegen sich selbst: kein Grund gefunden heißt nicht sauber. */
+{
+  const producer = readFileSync(join(root, reasonHomes[0]), 'utf8');
+  const missing = serviceReasons.filter((reason) => !producer.includes(reason));
+  if (missing.length > 0) {
+    failures.push(
+      `${reasonHomes[0]}: nennt ${missing.join(', ')} nicht mehr, also prüft diese Regel `
+      + 'gegen eine Liste, die es nicht mehr gibt');
+  }
+}
+
 if (failures.length > 0) {
   for (const failure of failures) {
     process.stderr.write(`  ${failure}\n`);
@@ -204,4 +284,6 @@ if (failures.length > 0) {
 process.stdout.write(
   `one voice: ${files.length} Dateien, ${titles} fremde Passphrase-Fragen, `
   + `${localSteps} eigene Momente der Android-Fläche `
-  + `(erlaubt: ${localMoments.join(', ')}).\n`);
+  + `(erlaubt: ${localMoments.join(', ')}), `
+  + `${serviceReasons.length} Dienstgründe mit Satz statt Code in `
+  + `${bodiesRead} Präsentationstexten (${reasonSpellings} fremde Nennungen).\n`);
