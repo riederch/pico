@@ -8,7 +8,15 @@ import type { PicoCompanionProfile } from './profile.js';
 export type PicoCompanionRecoveryCardPrintForm = 'paper' | 'card_printer';
 
 export interface PicoCompanionRecoveryCardPublicMetadata {
-  schema: 'pico.recovery.card.v2';
+  /**
+   * The card's own schema type rather than a second spelling of it. ADR 0134
+   * F2 collapsed the `v1`/`v2` pair into the surviving `v1` name on
+   * 2026-08-10; this field went on requiring `pico.recovery.card.v2` for
+   * fourteen days, a name no card has ever carried. Nothing read it, which is
+   * why nothing said so - and a literal type made the false name mandatory
+   * for anything that ever would.
+   */
+  schema: PicoVaultRecoveryCard['payload']['schema'];
   identityKeyFingerprintHex: string;
   picoName: string;
   homeNameOrId: string;
@@ -77,7 +85,8 @@ export async function issuePicoCompanionRecoveryCard(input: {
     ? pdfs.paperPrintablePdf
     : pdfs.cardPrinterPdf;
   const metadata: PicoCompanionRecoveryCardPublicMetadata = {
-    schema: 'pico.recovery.card.v2',
+    // Read off the card that was just issued, not spelled again.
+    schema: card.payload.schema,
     identityKeyFingerprintHex: card.payload.identityKeyFingerprintHex,
     picoName: card.payload.picoName,
     homeNameOrId: card.payload.homeNameOrId,

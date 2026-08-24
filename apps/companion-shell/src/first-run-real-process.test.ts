@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   buildPicoRecoveryCardScanTransport,
   picoHomeDeviceRecoveryTiming,
+  picoRecoveryCardScanPrefix,
 } from '@pico/protocol';
 import {
   createPicoVaultKeyfile,
@@ -97,7 +98,7 @@ describe('ADR 0112 S3 first run against real processes', () => {
 
     // The card is issued by the real approval-gated ceremony, so the bytes this
     // test scans are the bytes a printed card carries.
-    const transport = await issueCardV2(living, core, homeId);
+    const transport = await issueCard(living, core, homeId);
 
     const target = await startDaemon('pico-first-run-target-', []);
     const paths = firstRunPaths();
@@ -217,7 +218,7 @@ describe('ADR 0112 S3 first run against real processes', () => {
     // card carrying a wrong one leaves a device that fails closed at its Home's
     // next rotation instead of at first run. At first run the card is the trust
     // root for all three pins, which is ADR 0110's premise.
-    const forged = await issueCardV2(living, core, homeId, {
+    const forged = await issueCard(living, core, homeId, {
       hostSigningKeyFingerprintHex: 'a'.repeat(64),
     });
     const target = await startDaemon('pico-first-run-unverified-target-', []);
@@ -276,14 +277,25 @@ function silentNotifications(): PicoCompanionRecoveryNotifications {
   };
 }
 
+/**
+ * The prefix is taken from the protocol and asserted rather than measured by
+ * the length of a literal. This file used to strip
+ * `'pico-recovery-card-v2:'.length`, which worked only because the invented
+ * spelling happens to be exactly as long as the real one - the same invented
+ * spelling that once made the companion refuse every printed card, silently
+ * (`scripts/check-wire-labels.mjs`).
+ */
 function transportPayloadHex(transport: string): string {
+  if (!transport.startsWith(picoRecoveryCardScanPrefix)) {
+    throw new Error(`card_transport_prefix_unexpected:${transport.slice(0, 32)}`);
+  }
   return Buffer.from(
-    transport.slice('pico-recovery-card-v2:'.length),
+    transport.slice(picoRecoveryCardScanPrefix.length),
     'base64url',
   ).toString('hex');
 }
 
-async function issueCardV2(
+async function issueCard(
   daemon: RunningDaemon,
   core: RunningCore,
   homeId: string,

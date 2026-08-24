@@ -1,3 +1,4 @@
+import type { PicoVaultRecoveryCard } from '@pico/vault';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon';
 import { describe, expect, it, vi } from 'vitest';
 import type { PicoCompanionProfile } from './profile.js';
@@ -43,7 +44,7 @@ describe('Companion Recovery Card product issuance', () => {
     expect(printedBytes).toEqual([[4, 5, 6]]);
     expect(result).toEqual({
       metadata: {
-        schema: 'pico.recovery.card.v2',
+        schema: 'pico.recovery.card.v1',
         identityKeyFingerprintHex: '55'.repeat(32),
         picoName: 'Mira',
         homeNameOrId: 'home_product_1',
@@ -81,10 +82,18 @@ describe('Companion Recovery Card product issuance', () => {
   });
 });
 
-function card(): Record<string, unknown> {
+/**
+ * Typed as the real card, because an untyped stand-in is what let this file
+ * agree with the code instead of with the protocol: both said
+ * `pico.recovery.card.v2` for fourteen days after ADR 0134 F2 collapsed the
+ * pair into `v1`, and `Record<string, unknown>` meant no compiler compared
+ * them. The literal stays spelled out - pinning the exact name is what a
+ * fixture is for - but now a wrong one fails to build.
+ */
+function card(): PicoVaultRecoveryCard {
   return {
     payload: {
-      schema: 'pico.recovery.card.v2',
+      schema: 'pico.recovery.card.v1',
       suite: 'pico.suite.id.v1',
       picoName: 'Mira',
       homeNameOrId: 'home_product_1',
