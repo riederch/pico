@@ -23,10 +23,18 @@ the domain and the reader back out of the same list it offered, because a
 domain carries the host key it was authorised under (ADR 0115) and the window
 neither knows it nor should be able to assert it.
 
+**The panel is not a window onto an empty room**, and that was worth checking
+rather than assuming: the tool's `create-domain` and `grant-reader` ceremonies
+submit to a Home, so a domain with readers can exist today. What the product
+lacks is the *making* of one, which is E6's distinction rather than a missing
+subject - the tool exists, and a product may not route somebody through it.
+
 What stays open is E5's other half and the argument for it is unchanged:
-creating and rotating domains and granting a reader would be controls whose
-effect nobody can observe, because nothing in the product writes
-reader-custody content.
+creating and rotating domains and granting a reader as *product* surfaces
+would be controls whose ordinary effect nobody can observe, because nothing in
+the product writes reader-custody content. A person who has used the tool sees
+the result of that in the panel; a person who has not sees that nobody reads
+their memory, which is also true and is the sentence they most want.
 
 Accepted as a product-surface and platform-order decision; E1, E2, E3, E4 and
 E6 implemented, E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
