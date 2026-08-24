@@ -8,6 +8,42 @@ go-live. This ADR accepts that with one correction to the trigger, and
 turns it into the rule that governs both the Recovery Card cleanup and a
 sweep for compatibility kept on behalf of nobody.
 
+**Status note 2026-08-24: F2's collapse left the retired name in three
+places, and the cause is in this document.** The Context below names three
+facts that decide what v1 costs, and the second is "the companion types the
+schema as a literal `v2`". F2's removal list names the second schema, the
+dual QR transport, the Vault branch, the PDF writer's conditional and first
+run's v1-specific rejection - not that literal. It survived fourteen days:
+`PicoCompanionRecoveryCardPublicMetadata.schema` went on *requiring*
+`pico.recovery.card.v2`, a name no card has ever carried, and
+`recovery-card.test.ts` built a stand-in card carrying it, typed
+`Record<string, unknown>` so that no compiler compared the two. Code and
+test agreed with each other rather than with the protocol, which is why
+neither said anything; nothing read the field, which is why nothing broke.
+`first-run-real-process.test.ts` stripped the scan prefix by
+`'pico-recovery-card-v2:'.length`, correct only because the invented
+spelling is exactly as long as the real one - the same invented spelling
+that once made the shell refuse every printed card, silently.
+
+The metadata now takes its schema off the card it just issued rather than
+spelling it a second time, the fixture is typed as a real card so a wrong
+name fails to build, and the prefix is asserted rather than measured.
+
+**A fourth site stays, argued rather than fixed:** the baseline migration's
+founding-record CHECK still admits `pico.home.founding-record.v2`. That
+baseline is *derived* - read back from `sqlite_master` after the seventeen
+steps it folds - and retyping one of its statements by hand gives up the
+only property that makes it checkable. Nothing writes the value; the
+argument is recorded in `scripts/check-wire-labels.mjs`, beside the
+exemption it justifies.
+
+The general lesson is F1's, applied to F1: **a collapse is not done when the
+branch is gone.** The name outlives the branch wherever it was written as a
+type, a fixture or a length. `check-wire-labels.mjs` gained the rule that
+would have caught all three - a label sharing an exported label's stem while
+carrying a version the protocol does not export - which is narrower than the
+one that check's header measured and rejected at 46 false positives.
+
 ## Context
 
 The question surfaced on the Recovery Card, where two formats exist.

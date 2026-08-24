@@ -948,6 +948,36 @@ drei davon sagen im Text selbst, dass es um reservierte Typen oder um
 Mechanismen geht, auf denen sie aufbauen würden (ADR 0010, 0017, 0145). Der
 vierte ist B3.
 
+**B9 — Ein Formatzusammenschluss lässt den zurückgezogenen Namen dort stehen,
+wo er kein Zweig ist (2026-08-24).** ADR 0134 F2 legte am 2026-08-10 zwei
+Formatpaare in ihren überlebenden `v1`-Namen zusammen. Vierzehn Tage später
+*verlangte* der Kartentyp der Companion weiterhin `pico.recovery.card.v2` — ein
+Name, den keine Karte je getragen hat. Niemand las das Feld, also brach nichts;
+der Test baute eine Karte mit demselben falschen Namen und war als
+`Record<string, unknown>` getippt, sodass kein Compiler die beiden verglich.
+Code und Test stimmten miteinander überein statt mit dem Protokoll — deshalb
+sagte keiner von beiden etwas. Ein dritter Ort maß das Transportpräfix an der
+Länge von `'pico-recovery-card-v2:'`, richtig nur deshalb, weil die erfundene
+Schreibweise genau so lang ist wie die echte; dieselbe Erfindung hatte einmal
+jede gedruckte Karte stillschweigend abgewiesen.
+
+**Warum es nichts fand.** `check-wire-labels.mjs` fängt *Kopien* von
+Protokoll-Labels und sagt in der eigenen Kopfzeile, dass es Erfindungen nicht
+fangen kann — eine zurückgezogene Version eines überlebenden Namens ist nach
+dieser Definition eine Erfindung. Die breite Regel „Label ohne Konstante" war
+vor dem Schreiben gemessen und bei 46 Fehlalarmen verworfen worden. Die enge
+Regel wurde genauso gemessen und hat keinen: gleicher Stamm, Version, die das
+Protokoll nicht exportiert. Drei Treffer im Produktcode, zwei davon der Defekt.
+Neun Treffer in Tests, acht davon `.v0` — die Schreibweise für „das muss
+abgelehnt werden"; deshalb bleiben Tests ausgenommen, und deshalb ist die
+Ausnahme jetzt gemessen statt angenommen.
+
+**Ein vierter Ort bleibt, begründet statt behoben.** Die abgeleitete
+Baseline-Migration lässt `pico.home.founding-record.v2` in einer CHECK-Klausel
+zu. Sie ist aus `sqlite_master` zurückgelesen, nicht getippt; eine ihrer
+Anweisungen von Hand nachzuziehen gäbe die einzige Eigenschaft auf, die sie
+prüfbar macht. Die Begründung steht neben der Ausnahme, die sie trägt.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
