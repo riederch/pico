@@ -97,7 +97,6 @@ export {
   parsePicoCompanionFirstRunJournal,
   picoCompanionFirstRunJournalSchema,
   picoCompanionFirstRunProfile,
-  picoCompanionFirstRunStepOrder,
   picoCompanionFirstRunSteps,
   readPicoCompanionFirstRunJournal,
 } from './first-run-journal.js';

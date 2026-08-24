@@ -268,12 +268,6 @@ export function clearPicoCompanionFirstRunJournal(path: string): void {
   fsyncPath(dirname(path), 'r');
 }
 
-export function picoCompanionFirstRunStepOrder(
-  step: PicoCompanionFirstRunStep,
-): number {
-  return stepOrder(step);
-}
-
 function stepOrder(step: PicoCompanionFirstRunStep): number {
   return picoCompanionFirstRunSteps.indexOf(step);
 }
