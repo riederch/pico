@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -328,6 +328,146 @@ for (const probe of probes) {
   }
 }
 
+/**
+ * Third direction: a served route somebody calls.
+ *
+ * The two directions above compare the registry against
+ * `public-surfaces.md` - a route must be written down, and a written-down
+ * route must be served. Neither asks whether anybody *asks* for it, and on
+ * 2026-08-24 seventeen of sixty-one had no caller: twenty-eight are reached
+ * by the dashboard, sixteen by the Companion or the Vault daemon over
+ * Foundation HTTP, and the rest by nothing outside `app.ts` and its tests.
+ *
+ * That is not seventeen defects, and the argument list below is the point of
+ * the check rather than an escape from it. Most of them are the *second*
+ * door: the product speaks Pico Link, and `home.depot.attach` is the door in
+ * use while `POST /api/depot/attachments` waits for a Foundation session that
+ * no product opens. The rest are the reader-custody writer half, whose
+ * absence this repository records in several places and which now says so
+ * here too, next to the routes it is about.
+ *
+ * **A route is matched by the static part of its path**, because a client
+ * builds `/api/model/jobs/${id}/keep` and the registry spells
+ * `:jobId`. Tests do not count as callers, for the reason
+ * `check-capability-reach.mjs` gives: a capability only a test reaches is a
+ * capability nobody has.
+ */
+const arguedRoutes = [
+  {
+    prefix: '/api/home/domain-read-grant',
+    why: 'ADR 0082 with ADR 0130 E5. The door in use is the Link operation '
+      + '`home.domain.read-grant.submit`, which the companion calls from the person\'s own '
+      + 'device; this is the same signed evidence over a Foundation session, and no product '
+      + 'opens one for it',
+  },
+  {
+    prefix: '/api/home/share-envelope',
+    why: 'ADR 0086/0089. No companion issues or receives a share envelope, and there is no '
+      + 'Link operation either - this family has no door in use at all, which is the same '
+      + 'absence ADR 0130 E5 stays open on',
+  },
+  {
+    prefix: '/api/home/reader-custody/',
+    why: 'ADR 0086/0117. The writer half: nothing in the product writes reader-custody '
+      + 'content, so a writer grant would authorise a writer that does not exist. The reader '
+      + 'half of the same family *is* reached, over the authority resources the Link '
+      + 'reachability check counts',
+  },
+  {
+    prefix: '/api/auth/bootstrap',
+    why: 'ADR 0130. A Home is claimed from the Client over Link (`home.claim.submit`), and '
+      + 'the Foundation bootstrap is what the tool used before that walk existed',
+  },
+  {
+    prefix: '/api/depot/attachments',
+    why: 'ADR 0143. `home.depot.attach` is the door in use',
+  },
+  {
+    prefix: '/api/model/jobs/',
+    why: 'ADR 0117/0151. `home.model.read.keep` is the door in use',
+  },
+  {
+    prefix: '/api/model/providers/mine',
+    why: 'ADR 0151. `home.model.providers.read` is the door in use',
+  },
+  {
+    prefix: '/api/memory/time-bound-entries/',
+    why: 'ADR 0118 O1. `home.time_bound_entry.acknowledge` is the door in use',
+  },
+  {
+    prefix: '/api/system/version',
+    why: 'ADR 0075. A diagnostic a person never asks for and no client polls; it exists so '
+      + 'somebody with a terminal can tell what is running. The only route here with '
+      + 'neither a caller nor a Link twin',
+  },
+];
+
+const routeCallerFiles = [];
+const collectRouteCallers = (directory) => {
+  for (const entry of readdirSync(directory)) {
+    if (entry === 'node_modules' || entry === 'dist' || entry === 'out'
+      || (directory === repoRoot && entry === 'scripts')) {
+      continue;
+    }
+    const path_ = join(directory, entry);
+    if (statSync(path_).isDirectory()) {
+      collectRouteCallers(path_);
+    } else if (/\.(ts|mjs|html|js)$/u.test(path_)
+      && !/\.test\.(ts|mjs)$/u.test(path_)
+      && path_ !== join(repoRoot, appPath)) {
+      routeCallerFiles.push(path_);
+    }
+  }
+};
+collectRouteCallers(repoRoot);
+const routeCallerText = routeCallerFiles
+  .map((path_) => readFileSync(path_, 'utf8'))
+  .join('\n');
+
+let routesChecked = 0;
+let routesArgued = 0;
+for (const route of registered) {
+  routesChecked += 1;
+  const stem = route.route.split('/:')[0];
+  /**
+   * The stem must end where the route ends. A plain `includes` made
+   * `/api/auth/session` look reached because the dashboard names
+   * `/api/auth/sessions` four lines away - one route standing in for another
+   * by being a prefix of it, which is exactly the confusion this direction
+   * exists to catch.
+   */
+  const named = new RegExp(
+    `${stem.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![A-Za-z0-9_-])`,
+    'u',
+  );
+  if (named.test(routeCallerText)) {
+    continue;
+  }
+  if (arguedRoutes.some((entry) => route.route.startsWith(entry.prefix))) {
+    routesArgued += 1;
+    continue;
+  }
+  errors.push(
+    `${appPath}: ${route.method} ${route.route} is served and nothing outside this file `
+    + 'and its tests asks for it. Either a client is missing, or the door in use is '
+    + 'somewhere else and that belongs beside the other arguments in this check.',
+  );
+}
+if (routesChecked === 0) {
+  errors.push(
+    `${appPath}: no served route was checked for a caller, so this direction passed over `
+    + 'nothing.',
+  );
+}
+/** An argument for a prefix no route carries is a sentence about nothing. */
+for (const entry of arguedRoutes) {
+  if (!registered.some((route) => route.route.startsWith(entry.prefix))) {
+    errors.push(
+      `${entry.prefix} is argued here as uncalled and no route starts with it.`,
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Surface-class check failed:');
   for (const error of errors) {
@@ -340,5 +480,6 @@ console.log(
   `Surface-class check passed (${surfaceRows.length} surfaces, `
   + `${formRows.length} canonical forms, all classed; `
   + `${registered.length} served routes and ${operations.length} Link `
-  + 'operations, each named).',
+  + `operations, each named; ${registered.length - routesArgued} of those routes have a `
+  + `caller and ${routesArgued} are argued without one).`,
 );
