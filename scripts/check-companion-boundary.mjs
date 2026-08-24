@@ -182,6 +182,46 @@ for (const method of exposedMethods) {
 }
 
 const rendererHtml = readFileSync(join(shellRoot, 'src', 'renderer', 'index.html'), 'utf8');
+/**
+ * Und die Tür innerhalb des Fensters, ergänzt am 2026-08-24.
+ *
+ * `requireElement` wirft bei einem fehlenden Element - fail-closed, und das
+ * ist die richtige Richtung. Nur wirft es **im Fenster einer Person**: ein
+ * umbenanntes `id` im HTML wird zu einem Fenster, das aufgeht und nicht
+ * arbeitet. Zur Commit-Zeit kostet dieselbe Frage nichts.
+ *
+ * Vor dem Schreiben gemessen: 101 verlangte Elemente, alle 101 im HTML, 104
+ * `id`s insgesamt. Diese Richtung startet grün und ohne Ausnahme. Die andere
+ * Richtung - ein `id`, das niemand verlangt - wird bewusst *nicht* geprüft:
+ * drei davon sind ein Abschnitt, ein zweiter Abschnitt und der Absendeknopf
+ * eines Formulars, dessen Handler am Formular hängt. Eine Regel, die die drei
+ * meldet, hätte drei falsche Fehlschläge und keinen richtigen.
+ */
+const rendererScriptForElements = readFileSync(join(shellRoot, 'src', 'renderer.ts'), 'utf8');
+const declaredIds = new Set(
+  [...rendererHtml.matchAll(/id="([^"]+)"/gu)].map(([, id]) => id),
+);
+const requiredIds = [...new Set(
+  [...rendererScriptForElements.matchAll(/require[A-Za-z]*\(\s*'([a-z0-9-]+)'\s*\)/gu)]
+    .map(([, id]) => id),
+)];
+if (requiredIds.length === 0 || declaredIds.size === 0) {
+  errors.push(
+    'apps/companion-shell: read no required elements or no ids, so the window side of this '
+    + 'comparison ran over nothing.',
+  );
+}
+for (const id of requiredIds) {
+  if (declaredIds.has(id)) {
+    continue;
+  }
+  errors.push(
+    `apps/companion-shell: the window script requires the element \`${id}\` and `
+    + 'index.html declares no such id. `requireElement` throws, so this is a window that '
+    + 'opens and does not work - and it throws where a person is looking rather than here.',
+  );
+}
+
 for (const requiredDirective of [
   "default-src 'none'",
   "script-src 'self'",
@@ -600,7 +640,8 @@ console.log(
   + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides,`
   + ` ${channelsAnswered} answered or pushed by the main process and`
-  + ` ${exposedMethods.length} offered methods each called by the window;`
+  + ` ${exposedMethods.length} offered methods each called by the window,`
+  + ` ${requiredIds.length} elements the window requires and index.html declares;`
   + ` ${namedCaps} field caps, each a name rather than a number;`
   + ` ${guardedClients} calls that reach a Link client`
   + ` through ${signingEntryPoints.size} core entry points, each behind an unlock;`
