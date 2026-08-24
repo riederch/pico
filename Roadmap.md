@@ -1307,6 +1307,15 @@ aufzuschreiben, gerade weil der Relay so gebaut ist: er hält keine
 Pico-Identität und entscheidet für niemanden, hat also keine Einstellung zu
 verlegen. Aufgeschrieben wird die Leere damit prüfbar statt angenommen.
 
+**Ein dritter Fall am selben Tag, und deshalb steht er hier statt als eigener
+Befund:** `progress.md` nannte die Regeln für Fingerabdruck, Zeitpunkt und
+Zeitspanne „je eine **produktweit** geprüfte Regel", während beide Prüfer
+`modules/` nicht lasen. Ein Modul ist nach ADR 0127 eine Fläche, könnte also
+einen Schlüssel fürs Auge kürzen oder einen Zeitpunkt roh zeigen. Die Wurzel
+dazuzunehmen kostete nichts — beide bleiben grün —, und erst damit stimmt das
+Wort. Dreimal an einem Tag dieselbe Form: eine Zahl oder ein Wort, das
+vollständig klingt und eine Komponente auslässt.
+
 **Und der Block war zuerst falsch geschnitten.** Er reichte bis zur nächsten
 `##`-Überschrift und verschluckte die ältere Statusnotiz darunter, in der
 `PICO_MEMORY_ENCRYPTION` vorkommt — ein Name aus einer anderen Geschichte
