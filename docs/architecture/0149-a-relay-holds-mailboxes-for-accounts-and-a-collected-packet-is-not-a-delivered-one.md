@@ -15,6 +15,31 @@ the client, the transport joining them and the device's reply correlation
 all landed the same day. Both loops run. What remains is a real
 operator to run against, and two named test gaps that share one fixture.
 
+**Status note 2026-08-24: "Both loops run" is true of the Home's loop and of
+the device's tests.** `startPicoCompanionLinkRelaySweep` has no caller outside
+its own tests, and neither does anything else on the device side: thirteen
+exports across `link-mailbox.ts`, `link-relay-sweep.ts`, `link-push-gate.ts`
+and `pending-reply.ts` are named by no product path. A device issues no
+mailbox, hands no address over, sweeps nothing and admits no push - the
+machine is built, tested and never started.
+
+The text above is kept rather than rewritten (ADR 0128); it records what
+landed, and all of it did. What it does not record is that landing a loop and
+starting one are two things, and the sentence reads as though they were one.
+
+**What starting it needs is a decision, not wiring.** When a device begins
+asking a relay, how often it keeps asking, and what that costs a phone are
+open questions this ADR does not answer, and there is no operated relay to ask
+- the same "real operator to run against" the paragraph above already names.
+So the honest state is: the device half waits on the operator, and the reason
+it waits is now written where a reader meets it rather than inferred from a
+loop nobody starts.
+
+Held from now on by `scripts/check-companion-reach.mjs`, which refuses a
+companion capability that nothing names and takes an argument in its place.
+The four modules are argued there, and an argument that outlives its module
+fails the check.
+
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
 those addresses point at.
