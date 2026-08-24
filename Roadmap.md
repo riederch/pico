@@ -1258,6 +1258,32 @@ steht. Ein Fehlerbezeichner darf so heißen; niemand liest ihn. Geprüft wird
 jetzt der `body:` einer Präsentation — 110 davon —, denn eine Prüfung, deren
 Fehlschläge überwiegend falsch sind, bringt Leuten bei, sie zu überspringen.
 
+**B19 — Zweimal an einem Tag war mein Umfang eine Behauptung (2026-08-24).**
+Der Reichweitenprüfer aus B14/B15 ließ `modules/` aus, ohne dass jemand
+nachgesehen hätte — genau der Fehler, den derselbe Prüfer mir am Vormittag
+schon einmal nachgewiesen hatte. Ein Modul ist aber genau das, worum es dieser
+Regel geht: ADR 0127 nennt es Vokabular, Komposition und Fläche, und der Core
+importiert seine Funktionen beim Namen.
+
+Sechs von dreizehn Modulexporten ruft nichts. Vier sind die Codekante einer
+aufgeschriebenen Abwesenheit — der Home-Assistant-Transport und die
+Spatial-Recall-Vertagung aus **B4**. Zwei sind etwas anderes: die Art, wie ein
+Modul einer Person etwas sagt, wonach das Produkt nicht fragt.
+`picoCalendarAgenda` ordnet zeitgebundene Einträge, Überfälliges zuerst und
+darin das Älteste; `picoDepotState` gibt einem Depot ein Zustandswort mit der
+einen Stelle, an der ein Grund eine Folge überholt. Keine Fläche zeigt
+beides — und, nachgemessen, keine baut es woanders nach. Es ist also
+Nichtfragen, nicht Drift.
+
+**Und der Prüfer hatte eine vierte eigene Lücke, gefunden dadurch, dass er
+sich selbst widersprach.** Er meldete eine meiner Begründungen als veraltet,
+obwohl sie stimmte. Der Grund: er strippt seit heute Vormittag Kommentare auf
+der *Aufruferseite* — Prosa ist kein Aufrufer —, zählte aber die Nennungen in
+der *eigenen Datei* roh. `picoParkingAnswer` steht einmal im eigenen
+Doc-Kommentar, und das genügte, um es in den harmlosen Topf „für die eigenen
+Tests exportiert" zu schieben statt in die Meldung. Eine Regel, die auf einer
+Seite gilt und auf der anderen nicht, versteckt genau das, wonach sie sucht.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
