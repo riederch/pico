@@ -1096,6 +1096,43 @@ Commit-Nachricht schreibt, sie habe gelesen, „als wäre sie alles". Berichtigt
 ohne das Standdatum anzufassen: das Dokument ist damit weiterhin veraltet,
 aber nicht mehr falsch über den Stand, den es benennt.
 
+**B14 — „Both loops run" gilt für den Home und für die Tests des Geräts
+(2026-08-24).** Von 133 exportierten Fähigkeiten des Companion-Kerns nennt
+nichts fünfzehn — und dreizehn davon sind **ein** Teilsystem: die geräteseitige
+Relay-Abholung. Mailbox ausgeben, Adresse übergeben, abholen, einen Push
+zulassen, eine Antwort zuordnen — vier Module mit Tests, in die kein
+Produktpfad führt. Ein Gerät gibt keine Mailbox aus, übergibt keine Adresse,
+holt nichts ab. Die Maschine ist gebaut, geprüft und wird nie gestartet.
+
+ADR 0149s Status sagt „Both loops run". Der Satz stimmt für die Schleife des
+Homes und für die Testsuite des Geräts; `progress.md` hat ihn übernommen — und
+**ich habe ihn heute Morgen mitgeschleppt**, als ich `progress.md` neu
+abgeleitet habe: die Zahlen nachgemessen, den Satz daneben stehen gelassen.
+Eine Aktualisierung, die nur die Zahlen prüft, prüft die Hälfte.
+
+**Diese Form findet der Baum zum sechsten Mal.** `attachPicoSupplier` ohne
+Aufrufer ließ die Zuliefererliste auf jedem Home leer; `detachPicoSupplier`
+ebenso; `setPicoSupplierReach` machte beide Vorgaben zum einzigen erreichbaren
+Zustand, im ADR, dessen Titel ihre Existenz ist; `put()` ließ die
+Präsenz-Registry auf jedem echten Home leer; `appendPicoObservations` ist eine
+begründete Vertagung. Fünfmal durch Zufall oder durch `store:check`. Jetzt hält
+`scripts/check-companion-reach.mjs` die Klasse: eine Fähigkeit, die nichts
+nennt, oder eine Begründung an ihrer Stelle — und eine Begründung, die ihren
+Gegenstand überlebt, fällt ebenfalls durch.
+
+**Zwei blinde Flecken hatte der Prüfer selbst, und beide fand erst die
+Pflanzung.** Ein Re-Export zählte als Aufrufer: `index.ts` trägt den halben
+Kern als Fassreifen weiter, und damit sah jede weitergereichte Fähigkeit
+erreicht aus, ob sie jemand importiert oder nicht — die Erreichbarkeitsmenge
+sieht vollständig aus, während niemand sie abläuft. Danach zählte der
+Kopfkommentar des Prüfers selbst als Aufrufer, weil er einen Namen nennt, um
+sich zu erklären. Ein Prüfer ist kein Aufrufer, und Prosa auch nicht; ohne die
+Pflanzung wäre beides grün geblieben.
+
+Ein toter Export ist dabei gelöscht statt begründet worden:
+`picoCompanionFirstRunStepOrder` war eine öffentliche Hülle um eine private
+Funktion, ohne Aufrufer und ohne Test.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
