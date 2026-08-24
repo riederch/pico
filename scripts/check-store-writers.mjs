@@ -105,8 +105,21 @@ const text = new Map(sources.map((path) => [path, readFileSync(join(repoRoot, pa
 /** A spec, or a helper the repository already names `test-`. */
 const isTestOnly = (path) => /\.test\.ts$/u.test(path) || /\/test-[^/]+$/u.test(path);
 
+/**
+ * **Ein Prüfer ist kein Speicher** (2026-08-24). Diese Datei erkennt einen
+ * Speicher daran, dass er `private readonly db` hält - und schreibt genau
+ * diese Zeichenkette selbst, in der Zeile darunter. Sie zählte sich also mit:
+ * gemeldet waren elf Speicher, echte gibt es zehn. Schreibmethoden hat sie
+ * keine, die Zahl daneben stimmte; falsch war nur die, die vollständig klang.
+ *
+ * Dieselbe Selbstbezüglichkeit wie in `check-capability-reach.mjs`, wo der
+ * eigene Kopfkommentar eine Fähigkeit erreicht aussehen ließ - dort verdeckte
+ * sie einen Befund, hier bläht sie eine Zahl.
+ */
 const storeFiles = sources.filter((path) =>
-  !isTestOnly(path) && /private readonly db\s*[:,]/u.test(text.get(path)));
+  !isTestOnly(path)
+  && !path.startsWith('scripts/')
+  && /private readonly db\s*[:,]/u.test(text.get(path)));
 
 if (storeFiles.length === 0) {
   errors.push('No store found. This check reads a class holding `private readonly db`.');
