@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * A companion capability that nothing calls is a capability nobody has.
+ * A capability that nothing calls is a capability nobody has.
  *
  * The sibling of `check-store-writers.mjs` and `check-link-reachability.mjs`,
  * one layer further out. Those ask whether a store method and a Link operation
@@ -28,17 +28,35 @@ import { fileURLToPath } from 'node:url';
  * ADR 0149's status says "Both loops run"; the Home's loop runs, and the
  * device's runs in its tests.
  *
- * **Scope, and why it stops at the companion.** `apps/core` is reached
- * through one dispatcher and `packages/*` are libraries whose callers are
- * other packages, so the same rule there would be about module hygiene rather
- * than about what a person can do. Here an unreached export means exactly one
- * thing, and it is worth failing a build over.
+ * **Scope, measured rather than assumed - and the first assumption was
+ * wrong.** The day this was written it covered only `apps/companion/src`, on
+ * the argument that `apps/core` is reached through one dispatcher and that
+ * `packages/*` are libraries whose callers are other packages. That argument
+ * was never measured. Measured the same day: `apps/core/src` has nine
+ * unreached exports and `apps/vault-daemon/src` three, and every one of them
+ * is the code edge of a gap this repository already records in prose - no
+ * bridge, no Home Assistant transport, no sensor runtime, no platform anchor,
+ * no reader-custody writer, no operator surface for the migration audit - or
+ * a seam a test opened. Nine documented absences that nothing connected to
+ * their code; they are connected below.
+ *
+ * `apps/companion-shell/src` (90 exports), `apps/relay/src` and `apps/web/src`
+ * were measured too and have none, so they are in scope and silent.
+ * `packages/*` stay out: there an unreached export is module hygiene, not a
+ * capability nobody has.
  *
  * An argument is not a permission. Each entry below says why a capability has
  * no caller *today*, in a form somebody can disagree with.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const companionRoot = join(repoRoot, 'apps', 'companion', 'src');
+const roots = [
+  join('apps', 'companion', 'src'),
+  join('apps', 'companion-shell', 'src'),
+  join('apps', 'core', 'src'),
+  join('apps', 'vault-daemon', 'src'),
+  join('apps', 'relay', 'src'),
+  join('apps', 'web', 'src'),
+];
 
 /**
  * Modules whose whole surface is unreached, with the argument for it. A module
@@ -48,25 +66,25 @@ const companionRoot = join(repoRoot, 'apps', 'companion', 'src');
  */
 const argued = [
   {
-    module: 'link-mailbox.ts',
+    module: 'apps/companion/src/link-mailbox.ts',
     why: 'ADR 0148. The device half of the relay path: a mailbox this device owns, and the '
       + 'exchange that hands its address to the Home. Nothing starts it because nothing '
       + 'starts the sweep below it, and the sweep waits on the same thing',
   },
   {
-    module: 'link-relay-sweep.ts',
+    module: 'apps/companion/src/link-relay-sweep.ts',
     why: 'ADR 0149\'s collecting side on the device. Starting it is a product decision that '
       + 'has not been made - when a device begins asking a relay, and what it costs a phone '
       + 'to keep asking - and there is no operated relay to ask. The Home\'s loop runs; this '
       + 'one runs in its tests',
   },
   {
-    module: 'link-push-gate.ts',
+    module: 'apps/companion/src/link-push-gate.ts',
     why: 'ADR 0150. What a device admits when a push arrives, which is downstream of a sweep '
       + 'that nothing starts',
   },
   {
-    module: 'pending-reply.ts',
+    module: 'apps/companion/src/pending-reply.ts',
     why: 'ADR 0149\'s reply correlation, reached only from the sweep above it. Its four '
       + 'unreached exports are the book\'s lifecycle; the sweep uses the other five',
   },
@@ -101,9 +119,89 @@ const arguedNames = [
   ],
 ];
 
+/**
+ * The nine in `apps/core/src` and three in `apps/vault-daemon/src`, each the
+ * code edge of an absence this repository records elsewhere in prose. The
+ * point of writing them here is that prose and code stop being two documents.
+ */
+const arguedCoreNames = [
+  [
+    'intakePicoSupplierContent',
+    'ADR 0136 BR3. What a supplier hands inward, labelled `external_content` by the core '
+      + 'without asking. A tracked library does not come this way - `library-read.ts` '
+      + 'classes an excerpt as `own_pico` on purpose - so the only caller would be a Bridge, '
+      + 'and no real bridge exists',
+  ],
+  [
+    'recordPicoConnectorObservations',
+    'ADR 0128 H4. The Home Assistant connector\'s intake, whose transport the matrix lists '
+      + 'as declared and unimplemented',
+  ],
+  [
+    'condensePicoObservations',
+    'ADR 0129. The sibling of `appendPicoObservations`, which is itself an argued deferral: '
+      + 'no runtime with a sensor fills the buffer, so there is nothing to condense',
+  ],
+  [
+    'openPicoTpm2AnchorCounter',
+    'ADR 0122. The platform anchor, named as missing wherever this tree reports its '
+      + 'production-blocking limits',
+  ],
+  [
+    'restoreSqliteBackup',
+    'The migration run is one SQLite transaction, so a failed migration rolls back and the '
+      + 'backup covers what a transaction cannot - a kill mid-commit, a corrupt file. '
+      + 'Nothing plays one back: no code path and no command. Six tests use it, ADR 0136 '
+      + 'BR3\'s backup-and-restore comparison among them, so it is a seam a test opened '
+      + 'and not an operator surface. Whether it should be one is decided nowhere',
+  ],
+  [
+    'listMigrationAuditRecords',
+    'ADR 0121/0122. The migration audit is written on every run and read by no surface; '
+      + 'the operator view that would show it does not exist',
+  ],
+  [
+    'describeMigrationState',
+    'The same audit, summarised, and the same missing surface',
+  ],
+  [
+    'picoLinkDirectKeyRecordFingerprintHex',
+    'A fingerprint helper beside the Direct listener that the listener does not use. Its '
+      + 'test pins the derivation; nothing in the product derives one this way',
+  ],
+  [
+    'picoLinkRelayMailboxOf',
+    'One line over `parsePicoLinkPacketAddress`, for a relay path on the Home side that '
+      + 'reads the address itself',
+  ],
+  [
+    'createPicoVaultDaemonReaderAccessUnlockPort',
+    'ADR 0117. Reader access needs somebody holding a reader grant, and nothing in the '
+      + 'product issues one - the same absence that leaves ADR 0130 E5 half open',
+  ],
+  [
+    'picoRecoveryCardQrPayload',
+    'A public name over `picoRecoveryCardContent(card).qrPayload`, opened so the PDF '
+      + 'writer\'s test can pin the payload without the PDF around it',
+  ],
+  [
+    'createPicoRecoveryCardQrMatrix',
+    'The same seam one step further: the matrix the card carries, reachable by its test '
+      + 'while the writer uses the private `picoRecoveryCardQrMatrixFor`',
+  ],
+];
+
 const errors = [];
-const sources = readdirSync(companionRoot)
-  .filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
+/**
+ * A file this repository already names `test-` is a helper for tests, and its
+ * callers are tests by construction - the same convention
+ * `check-link-reachability.mjs` reads.
+ */
+const sources = roots.flatMap((root) => readdirSync(join(repoRoot, root))
+  .filter((entry) => entry.endsWith('.ts')
+    && !entry.endsWith('.test.ts')
+    && !entry.startsWith('test-'))
+  .map((entry) => join(root, entry)))
   .sort();
 
 /** Every non-test file in the tree, which is where a caller would be. */
@@ -153,13 +251,20 @@ const callerText = new Map(
 );
 
 const arguedModules = new Set(argued.map((entry) => entry.module));
-const arguedNameSet = new Map(arguedNames);
+const arguedNameSet = new Map([...arguedNames, ...arguedCoreNames]);
 let exportsChecked = 0;
 let reachedOnlyByItsOwnFile = 0;
+/**
+ * Which arguments still describe something. An argument for a name that has
+ * since found a caller, or that no longer exists, is a sentence about nothing
+ * - the same defect one level up, and the plant that removed a name from a
+ * check rather than from the code is what showed this half was missing.
+ */
+const arguedNamesFound = new Set();
 const unreached = [];
 
 for (const entry of sources) {
-  const path = join(companionRoot, entry);
+  const path = join(repoRoot, entry);
   const own = readFileSync(path, 'utf8');
   for (const [, name] of own.matchAll(/^export (?:async )?function (\w+)/gmu)) {
     exportsChecked += 1;
@@ -186,6 +291,7 @@ for (const entry of sources) {
       continue;
     }
     if (arguedModules.has(entry) || arguedNameSet.has(name)) {
+      arguedNamesFound.add(name);
       continue;
     }
     unreached.push(`${relative(repoRoot, path)}: ${name}`);
@@ -194,31 +300,41 @@ for (const entry of sources) {
 
 if (exportsChecked === 0) {
   errors.push(
-    'scripts/check-companion-reach.mjs found no companion exports to check, so it passed '
-    + 'over nothing. Either the companion core stopped exporting functions or the reading '
-    + 'of it broke.',
+    `scripts/check-capability-reach.mjs found no exports across ${roots.length} roots, so `
+    + 'it passed over nothing. Either those roots stopped exporting functions or the '
+    + 'reading of them broke.',
   );
 }
 for (const name of unreached) {
   errors.push(
-    `${name} is exported by the companion core and named by nothing outside its own file. `
+    `${name} is exported and named by nothing outside its own file. `
     + 'A capability nobody can reach is a capability nobody has: give it a caller, or put '
     + 'the reason it has none beside the others in this check, in a sentence somebody can '
     + 'disagree with.',
   );
 }
+for (const [name] of arguedNameSet) {
+  if (arguedNamesFound.has(name)) {
+    continue;
+  }
+  errors.push(
+    `${name} is argued here as unreached and is either reached now or gone. An argument `
+    + 'outliving its subject reads like a judgement somebody made about today.',
+  );
+}
+
 /** An argument for a module that has become reachable is a stale exemption. */
 for (const entry of argued) {
   if (!sources.includes(entry.module)) {
     errors.push(
-      `${entry.module} is argued here as unreached and no longer exists in the companion `
-      + 'core. An argument outliving its subject is the same defect this check exists for.',
+      `${entry.module} is argued here as unreached and no longer exists. An argument `
+      + 'outliving its subject is the same defect this check exists for.',
     );
   }
 }
 
 if (errors.length > 0) {
-  console.error('Companion reach check failed:');
+  console.error('Capability reach check failed:');
   for (const error of errors) {
     console.error(`- ${error}`);
   }
@@ -226,7 +342,7 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Companion reach check passed (${exportsChecked} exported capabilities, `
-  + `${reachedOnlyByItsOwnFile} exported for their own tests, `
-  + `${argued.length} modules and ${arguedNames.length} single names argued unreached).`,
+  `Capability reach check passed (${exportsChecked} exported capabilities across `
+  + `${roots.length} roots, ${reachedOnlyByItsOwnFile} exported for their own tests, `
+  + `${argued.length} modules and ${arguedNameSet.size} single names argued unreached).`,
 );
