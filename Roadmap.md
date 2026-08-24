@@ -1188,6 +1188,38 @@ Richtung geschrieben ist. Der zweite war der Pflanzversuch selbst: zweimal habe
 ich einen Namen in einen **längeren** umbenannt, der den alten enthält, und das
 Ausbleiben des Risses zuerst dem Prüfer angelastet.
 
+**B17 — Die Modelljob-Warteschlange behält die Worte der Person, im Klartext,
+für immer (2026-08-24).** Die Frage, aus der das kam, war harmlos: warum haben
+acht von 47 Tabellen eine Q5-Obergrenze und die übrigen nicht? Die meisten
+antworten durch ihre Form — ein Schlüssel, der eine Zeile zulässt, eine Zeile
+je Domäne, eine je Modul — und 32 werden irgendwo gelöscht. Übrig blieb eine:
+`pico_model_job_queue`.
+
+Sie hält je Modelljob eine Zeile. `job_json` trägt die Einheiten nach ADR 0116
+W3, darunter den Satz, den die Person getippt hat; `result_json` die Antwort;
+`recall_context_json` das erinnerte Material, das der Job bekam. Alle drei im
+Klartext. **Fünf Dinge, die vergleichbare Speicher erreichen, erreichen diese
+Tabelle nicht** — jedes nachgemessen, keines gefolgert: keine Q5-Obergrenze,
+kein einziges `DELETE`, `home.memory.forget` leert nur den *Verweis* auf das
+behaltene Item, `domain-shred.ts` nennt die Tabelle nie, und die
+Verschlüsselungshaltung, die ein `memory_item` trägt, gibt es hier nicht.
+
+**Und warum das keine Verdrahtungsarbeit ist, ist der Teil zum Entscheiden.**
+`result_json` beim Vergessen zu leeren würde eine sichtbare Fläche verändern:
+`answeredFor` listet einen vergangenen Lesevorgang, indem es auf `result_json
+IS NOT NULL` filtert. Ein behaltenes Item vergessen und einen Lesevorgang aus
+der Liste nehmen sind zwei verschiedene Handlungen, und welche der
+Vergessen-Knopf meint, hat kein ADR entschieden. Die Zeile ist außerdem
+absichtlich tragend: ADR 0126s Statusnotiz hält fest, dass ein behaltenes Item
+*über seinen Job* gefunden wird, und dass vorher jemand eine Erinnerung machen
+und nie wieder aufheben konnte. Genau deshalb überlebt die Zeile — und mit ihr
+ihr Inhalt.
+
+`scripts/check-store-ceilings.mjs` fragt jetzt jede Tabelle, wie sie aufhört
+zu wachsen. Diese antwortet, dass sie es nicht tut, in der Begründungsliste des
+Prüfers selbst: eine Ausnahme, die vorgibt, wäre schlimmer als keine, und so
+steht die Antwort bei jedem Lauf auf dem Bildschirm statt nirgends.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
