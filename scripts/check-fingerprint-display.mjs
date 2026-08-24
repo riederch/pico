@@ -155,6 +155,18 @@ let scanned = 0;
  * gemessen, nicht angenommen -, und ein Prüfer für eine Sprache ohne
  * Fundstelle wäre eine Zeile, die nur so aussieht, als hielte sie etwas.
  */
+/**
+ * Pro Wurzel gezählt statt in einer Summe, weil eine Summe ein sauberes
+ * Produkt nicht von einem abwesenden unterscheiden kann. Über einen Baum
+ * gefahren, dessen Wurzeln nichts enthalten, druckte diese Prüfung am
+ * 2026-08-24 "0 source files across apps, packages and tools ... one rule for
+ * showing a key to a person" und ging mit null hinaus - ein Satz über das
+ * ganze Produkt, wahr über nichts. Der Fall, den eine Summe weiter verstecken
+ * würde, ist der wirkliche: eine Wurzel wandert, die anderen bleiben voll.
+ */
+const scanRoots = ['apps', 'packages', 'tools'];
+const scannedPerRoot = new Map(scanRoots.map((root) => [root, 0]));
+
 for (const file of [
   ...sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages')),
   ...scriptFiles(join(repoRoot, 'tools')),
@@ -169,6 +181,10 @@ for (const file of [
     continue;
   }
   scanned += 1;
+  const root = path.split(/[\\/]/u)[0];
+  if (scannedPerRoot.has(root)) {
+    scannedPerRoot.set(root, scannedPerRoot.get(root) + 1);
+  }
   const content = readFileSync(file, 'utf8');
   const code = withoutComments(content);
   if (printsAnEllipsis.test(code)
@@ -204,6 +220,15 @@ for (const file of [
   }
 }
 
+for (const [root, count] of scannedPerRoot) {
+  if (count === 0) {
+    errors.push(
+      `${root} contributed no source files, so the sentence this check prints would be `
+      + 'true of nothing. A root that stops answering is a move, not a clean result.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Fingerprint display check failed:');
   for (const error of errors) {
@@ -213,7 +238,8 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Fingerprint display check passed (${scanned} source files across apps, packages and tools,`
+  `Fingerprint display check passed (${scanned} source files across `
+  + `${scannedPerRoot.size} roots, each of which answered,`
   + ` ${allowed.size - 1} derivations and ${shortensForTypography.size} width-fit exempt with`
   + ' reasons, one rule for showing a key'
   + ' to a person - the window included).',

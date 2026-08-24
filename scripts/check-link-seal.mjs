@@ -21,6 +21,14 @@ import { fileURLToPath } from 'node:url';
  * prove absence - a value renamed twice escapes any such reading - so it is a
  * floor and not a proof, and it is written that way on purpose: the cheap half
  * of a discipline that catches the next one by name in a second.
+ *
+ * **It also could not tell a clean product from an empty one until
+ * 2026-08-24.** Run over a tree with none of the four directories in it, this
+ * printed "0 files; no mailbox address reaches a log, an error or a URL" and
+ * exited zero - a sentence about the whole product, said truthfully about
+ * nothing. The four directories are now counted one by one, because a total
+ * hides the case that actually happens: three still full and one renamed
+ * away.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
@@ -100,9 +108,11 @@ const searched = [
 ];
 
 let scannedFiles = 0;
+const scannedPerDirectory = new Map(searched.map((directory) => [directory, 0]));
 for (const directory of searched) {
   for (const file of listSourceFiles(directory)) {
     scannedFiles += 1;
+    scannedPerDirectory.set(directory, scannedPerDirectory.get(directory) + 1);
     const lines = readFileSync(file, 'utf8').split('\n');
     for (const [index, line] of lines.entries()) {
       // String contents are stripped first, and that correction is the useful
@@ -148,6 +158,16 @@ for (const directory of searched) {
   }
 }
 
+for (const [directory, count] of scannedPerDirectory) {
+  if (count === 0) {
+    errors.push(
+      `${relative(repoRoot, directory)} contributed no source files, so the sentence this `
+      + 'check prints would be true of nothing. A named directory that stops answering is '
+      + 'a rename, not a clean result.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Pico Link seal check failed:');
   for (const error of errors) {
@@ -157,5 +177,7 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Pico Link seal check passed (${scannedFiles} files; no mailbox address reaches a log, an error or a URL).`,
+  `Pico Link seal check passed (${scannedFiles} files across `
+  + `${scannedPerDirectory.size} named directories, each of which answered; `
+  + 'no mailbox address reaches a log, an error or a URL).',
 );

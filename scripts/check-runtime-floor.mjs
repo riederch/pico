@@ -26,6 +26,15 @@ import { fileURLToPath } from 'node:url';
  * `localeCompare` also *works* without ICU; it just compares differently,
  * which is a hazard where an answer travels and harmless where it does not.
  * Banning it outright would be a rule this check cannot justify.
+ *
+ * **Its passing line counted the wrong thing until 2026-08-24.** It reported
+ * `roots.length` - the length of the hand-written list above, a constant -
+ * rather than anything it had read, so over a tree holding the six
+ * directories and no files in them it printed "6 packages carry no ICU
+ * dependency" and exited zero. Six packages it had never opened.
+ * `check-vacuous-gates.mjs` found it on its first run. The count is now per
+ * root and a zero refuses, because one root emptying while the others stay
+ * full is the case a total would still hide.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -70,11 +79,13 @@ function withoutComments(source) {
     .replace(/(^|[^:])\/\/.*$/gmu, '$1');
 }
 
+const scannedPerRoot = new Map(roots.map((root) => [root, 0]));
 for (const root of roots) {
   for (const file of sourceFiles(join(repoRoot, root))) {
     if (file.endsWith('.test.ts')) {
       continue;
     }
+    scannedPerRoot.set(root, scannedPerRoot.get(root) + 1);
     const source = withoutComments(readFileSync(file, 'utf8'));
     source.split('\n').forEach((line, index) => {
       for (const rule of forbidden) {
@@ -90,6 +101,15 @@ for (const root of roots) {
   }
 }
 
+for (const [root, count] of scannedPerRoot) {
+  if (count === 0) {
+    errors.push(
+      `${root} contributed no source files, so the sentence this check prints would be `
+      + 'true of nothing. A named root that stops answering is a move, not a clean result.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Runtime floor check failed:');
   for (const error of errors) {
@@ -99,7 +119,9 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Runtime floor check passed (${roots.length} packages carry no ICU dependency).`,
+  `Runtime floor check passed (${[...scannedPerRoot.values()].reduce((a, b) => a + b, 0)} `
+  + `files across ${roots.length} embedded-runtime roots, each of which answered, `
+  + 'carry no ICU dependency).',
 );
 
 function sourceFiles(directory) {
