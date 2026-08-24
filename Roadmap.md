@@ -1231,6 +1231,33 @@ zu wachsen. Diese antwortet, dass sie es nicht tut, in der Begründungsliste des
 Prüfers selbst: eine Ausnahme, die vorgibt, wäre schlimmer als keine, und so
 steht die Antwort bei jedem Lauf auf dem Bildschirm statt nirgends.
 
+**B18 — Der Code machte die Arbeit des Satzes, an zwei Stellen (2026-08-24).**
+`picoCompanionPublicServiceErrorReason` verengt jeden Fehlschlag auf vier
+öffentliche Gründe, und das ist richtig: eine Meldung aus einem Daemon ist kein
+Satz und kann einen Pfad tragen. Beide Stellen, die das benutzten, setzten
+danach den **Code** auf den Bildschirm — „The local companion service could not
+start (companion_profile_invalid)" — und daneben eine Anweisung, die für alle
+vier dieselbe war. Die Person bekam also ein Wort, das nichts erklärt, neben
+einem Satz, der nicht unterscheidet.
+
+Das Muster dagegen stand direkt daneben: achtzehn Beitritts-Ablehnungen haben
+seit dem 2026-08-21 Titel und Satz, das Erstlauf-Vokabular ebenso. Vier Gründe,
+vier Sätze, an einer Stelle — und ein unbekannter Grund bekommt den ehrlichen
+Satz statt seines Wortlauts, weil eine Person, der man nicht sagen kann, was
+passiert ist, mit einem Wort dafür nicht geholfen ist.
+
+**Ein Test hielt dabei den Defekt fest.** „falls back to the reason it was
+given rather than inventing one" verlangte, dass der Code im Text steht,
+während sein eigener Kommentar „etwas Wahres und Spezifisches" verlangte. Die
+Absicht war richtig, die Behauptung war das alte Verhalten.
+
+**Und die erste Fassung der Regel war zu breit**, was der Prüfer selbst sofort
+zeigte: sie suchte den Code überall und meldete `main.ts`, wo
+`companion_service_unavailable` als *geworfener Fehler* über die IPC-Grenze
+steht. Ein Fehlerbezeichner darf so heißen; niemand liest ihn. Geprüft wird
+jetzt der `body:` einer Präsentation — 110 davon —, denn eine Prüfung, deren
+Fehlschläge überwiegend falsch sind, bringt Leuten bei, sie zu überspringen.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
