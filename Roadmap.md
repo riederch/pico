@@ -1284,6 +1284,36 @@ Doc-Kommentar, und das genügte, um es in den harmlosen Topf „für die eigenen
 Tests exportiert" zu schieben statt in die Meldung. Eine Regel, die auf einer
 Seite gilt und auf der anderen nicht, versteckt genau das, wonach sie sucht.
 
+**B20 — Die Einstellungsgrenze galt für das Home und nicht für den Relay
+(2026-08-24).** `settings:check` liest `apps/core/src/config.ts` und hält
+dessen zweiundzwanzig Einträge gegen ADR 0104 S5. Pico Relay liest zwölf
+eigene, und der Prüfer hat sie nie angesehen. Seine Erfolgszeile sagte „22
+environment entries, each classified" — wahr, und zu lesen, als wären es alle.
+Dieselbe Form wie die zweiundsiebzig Wire-Labels neben hundertneunzehn
+(**B13**), und wieder war die Zahl selbst die Warnung.
+
+Der Weg dorthin war ein anderer: die Frage war, ob ein Deployment eine
+Variable setzt, die der Code nicht liest. Das war sauber — alle vier
+Deployment-Dateien setzen nur Gelesenes. Auffällig wurde stattdessen die
+Zählung daneben.
+
+**Kein einziger der zwölf ist eine Einstellung**, und das ist die
+load-bearing Aussage: Datenbankpfad, drei Paare aus Host und Port,
+Zeitgrenzen, Verbindungsobergrenze — und `PICO_RELAY_OPERATOR`, der Hostname,
+den Absender auflösen, weshalb der Dienst ohne ihn gar nicht startet statt
+einen zu raten. S2 macht eine Einstellung in der Umgebung zum Defekt, und
+dass hier keine ist, hatte niemand aufgeschrieben. Es ist billig
+aufzuschreiben, gerade weil der Relay so gebaut ist: er hält keine
+Pico-Identität und entscheidet für niemanden, hat also keine Einstellung zu
+verlegen. Aufgeschrieben wird die Leere damit prüfbar statt angenommen.
+
+**Und der Block war zuerst falsch geschnitten.** Er reichte bis zur nächsten
+`##`-Überschrift und verschluckte die ältere Statusnotiz darunter, in der
+`PICO_MEMORY_ENCRYPTION` vorkommt — ein Name aus einer anderen Geschichte
+galt damit als Relay-Klassifikation und wurde sofort als veraltet gemeldet.
+Der Prüfer hatte recht, der Schnitt war falsch; er endet jetzt an der nächsten
+Notiz.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
