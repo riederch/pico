@@ -160,33 +160,51 @@ describe('the published corridor is the one validation enforces', () => {
   }
 });
 
+/**
+ * Die Rig, im Test ausgeschrieben und nur hier.
+ *
+ * `gesturePoseV1MountNames()` ist die Projektion der Ruhepose - eine Zeile
+ * darunter im selben Modul. Sie als erwartete Liste zu benutzen hieße, die
+ * Projektion gegen sich selbst zu halten; ein Projektor, der gar keine
+ * Rotation mehr ausgibt, käme durch. Am 2026-08-24 genau so geschrieben und
+ * von der Pflanzung widerlegt.
+ */
+const rigMounts = [
+  'PICO_MOUNT_body',
+  'PICO_MOUNT_head',
+  'PICO_MOUNT_shoulder.L',
+  'PICO_MOUNT_arm.L',
+  'PICO_MOUNT_finger.L.1',
+  'PICO_MOUNT_finger.L.2',
+  'PICO_MOUNT_finger.L.3',
+  'PICO_MOUNT_thumb.L',
+  'PICO_MOUNT_shoulder.R',
+  'PICO_MOUNT_arm.R',
+  'PICO_MOUNT_finger.R.1',
+  'PICO_MOUNT_finger.R.2',
+  'PICO_MOUNT_finger.R.3',
+  'PICO_MOUNT_thumb.R',
+];
+
 describe('projection onto the authored rig', () => {
   it('names every mount the rig carries, once, and no other', () => {
     const mounts = gesturePoseV1MountNames();
     expect(new Set(mounts).size).toBe(mounts.length);
-    expect(mounts).toEqual([
-      'PICO_MOUNT_body',
-      'PICO_MOUNT_head',
-      'PICO_MOUNT_shoulder.L',
-      'PICO_MOUNT_arm.L',
-      'PICO_MOUNT_finger.L.1',
-      'PICO_MOUNT_finger.L.2',
-      'PICO_MOUNT_finger.L.3',
-      'PICO_MOUNT_thumb.L',
-      'PICO_MOUNT_shoulder.R',
-      'PICO_MOUNT_arm.R',
-      'PICO_MOUNT_finger.R.1',
-      'PICO_MOUNT_finger.R.2',
-      'PICO_MOUNT_finger.R.3',
-      'PICO_MOUNT_thumb.R',
-    ]);
+    expect(mounts).toEqual(rigMounts);
     expect(mounts).not.toContain('PICO_MOUNT_elbow.L');
   });
 
   it('leaves the rig at rest for the rest pose', () => {
     const projection = projectGesturePoseV1(gesturePoseV1Rest);
+    // Erst, dass jeder Mount überhaupt da ist. "Ruht" ist über eine Rig ohne
+    // Knochen wahr, und eine Schleife über nichts behauptet nichts: mit einem
+    // Projektor, der gar keine Rotation mehr ausgibt, blieb dieser Test grün
+    // und nur der Nachbar oben fiel um (2026-08-24).
+    expect(projection.rotations.map((rotation) => rotation.mount))
+      .toEqual(rigMounts);
     for (const rotation of projection.rotations) {
-      expect([rotation.pitch, rotation.yaw, rotation.roll]).toEqual([0, 0, 0]);
+      expect([rotation.pitch, rotation.yaw, rotation.roll], rotation.mount)
+        .toEqual([0, 0, 0]);
     }
   });
 
