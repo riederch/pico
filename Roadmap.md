@@ -1042,6 +1042,29 @@ aufgeschrieben: eine Prüfung, deren Fehlschläge überwiegend falsch sind,
 bringt Leuten bei, sie zu überspringen. Die Messung steht hier, die Ausnahme
 nirgends.
 
+**B12 — Die Statusmatrix nennt 880 Dateien, und niemand hat je nachgesehen,
+ob es sie gibt (2026-08-24).** `implementation-status.md` ist das einzige
+Dokument, dessen ganze Aufgabe es ist, *jetzt* wahr zu sein — die ADRs behalten
+ihren Text (0128) und halten fest, was entschieden wurde, ein dort genannter
+Pfad darf also Geschichte sein. In der Matrix ist ein Pfad dagegen ein Zeiger,
+dem jemand folgen soll. Zwei zeigten ins Leere.
+
+Einer davon ist der interessante: `packages/module-spatial-recall/src/ports.ts`
+gibt es nicht, der Port liegt unter `modules/`. Das war der einzige Zeiger auf
+**B4**s zurückgestellte Arbeit — ADR 0129s deklarierter und leerer SR5-Port,
+der auf eine Sensor-Laufzeit wartet. Die Vertagung war begründet und datiert;
+der Weg dorthin führte nirgendwohin.
+
+**Die breite Fassung der Regel wurde gemessen und verworfen.** Über den ganzen
+`docs`-Baum sehen 44 Pfade tot aus, und fast alle sind in Ordnung:
+`07_Governance/QA_Checklist.md` liegt relativ zur Wurzel des Design-Systems,
+`pico_core/config.yaml` ist der Name der Add-on-App vor ihrer Umbenennung und
+gehört in das ADR, das sie entschied, `./helper.js` ist ein Beispiel im
+Fließtext. Die enge Fassung — beginnt mit einem Verzeichnis, das dieser Baum
+an der Wurzel wirklich hat, trägt eine Dateiendung und keinen Platzhalter —
+prüft 880 Pfade und braucht **keine einzige Ausnahme**. Das ist der Test, ob
+eine so billige Regel die richtige ist.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:
