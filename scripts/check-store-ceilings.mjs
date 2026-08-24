@@ -65,9 +65,10 @@ const argued = [
     + 'Q5 ceiling names the store, `home.memory.forget` clears only the pointer to the kept '
     + 'item, `domain-shred.ts` never names the table, and the ADR 0072 encryption posture a '
     + 'memory item carries does not exist here. Recorded 2026-08-24 in ADR 0049\'s status '
-    + 'note and as Roadmap finding B17; bounding it is a product decision rather than a '
-    + 'wiring job, because `answeredFor` lists a past read by filtering on the very column '
-    + 'a sweep would clear'],
+    + 'note and as Roadmap finding B17. This is the recall history the person is shown - '
+    + '`recallsFor` returns the question and the answer, `home.recall.read` serves it - and '
+    + 'the closed operation list has no `home.recall.forget`, so bounding it is a missing '
+    + 'operation rather than a wiring job'],
 ];
 
 const migrations = readFileSync(join(coreRoot, 'migrations.ts'), 'utf8');

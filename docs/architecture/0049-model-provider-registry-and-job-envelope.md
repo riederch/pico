@@ -24,13 +24,27 @@ rather than inferred:
   `content_posture` that can be `domain_encrypted`; a job row has no posture
   at all, whatever the person decided about their memories.
 
-**Why this is not a wiring fix, which is the part worth deciding.** Clearing
-`result_json` on forget would change a surface the person can see:
-`answeredFor` lists a past library read by filtering on `result_json IS NOT
-NULL`, so a swept row disappears from the read list. Forgetting a kept memory
-item and dropping a read from the list are two different acts, and which one
-the forget control means is a product decision this ADR did not make. So is
-whether a job row should carry a posture, and what a ceiling here would evict.
+**What this table is, stated exactly, because the first version of this note
+understated it.** The queue is not a log beside the product; it *is* the
+recall history the person is shown. `recallsFor` returns each row as a
+`question` - read back out of `job_json`'s `person_present` unit - beside the
+answer's values, and `home.recall.read` serves it. Pico showing somebody what
+they asked and what it said is a feature, not a leak.
+
+**So the gap is a missing operation, not an ambiguous one.** The closed
+operation list has `home.recall.ask`, `home.recall.read`, `home.recall.keep`
+and `home.memory.forget`. There is no `home.recall.forget`. A person can
+unmake the memory item they kept from an answer and cannot unmake the exchange
+it came from; the question and the answer stay in the list, in the clear,
+whatever they decided about encrypting their memories.
+
+What that operation should do is the decision this ADR did not make: a row
+that still names a kept item is load-bearing - ADR 0126's note records that a
+kept item is found *through* its job - so forgetting a recall whose answer was
+kept must either refuse, take the item with it, or leave the link and clear
+only the words. Whether a job row should carry an ADR 0072 posture, and what a
+Q5 ceiling here would evict from a history somebody may want, are the same
+kind of question.
 
 The queue is deliberately load-bearing for forget - ADR 0126's status note
 records why: a kept item is found *through* its job, and before that link

@@ -1204,16 +1204,27 @@ kein einziges `DELETE`, `home.memory.forget` leert nur den *Verweis* auf das
 behaltene Item, `domain-shred.ts` nennt die Tabelle nie, und die
 Verschlüsselungshaltung, die ein `memory_item` trägt, gibt es hier nicht.
 
-**Und warum das keine Verdrahtungsarbeit ist, ist der Teil zum Entscheiden.**
-`result_json` beim Vergessen zu leeren würde eine sichtbare Fläche verändern:
-`answeredFor` listet einen vergangenen Lesevorgang, indem es auf `result_json
-IS NOT NULL` filtert. Ein behaltenes Item vergessen und einen Lesevorgang aus
-der Liste nehmen sind zwei verschiedene Handlungen, und welche der
-Vergessen-Knopf meint, hat kein ADR entschieden. Die Zeile ist außerdem
-absichtlich tragend: ADR 0126s Statusnotiz hält fest, dass ein behaltenes Item
-*über seinen Job* gefunden wird, und dass vorher jemand eine Erinnerung machen
-und nie wieder aufheben konnte. Genau deshalb überlebt die Zeile — und mit ihr
-ihr Inhalt.
+**Was diese Tabelle ist, genau gesagt — die erste Fassung dieses Befunds sagte
+es zu schwach.** Sie ist kein Protokoll neben dem Produkt, sie *ist* die
+Recall-Historie, die der Person gezeigt wird: `recallsFor` gibt jede Zeile als
+`question` zurück, aus der `person_present`-Einheit des Jobs zurückgelesen,
+daneben die Werte der Antwort, und `home.recall.read` liefert das aus. Dass
+Pico zeigt, was jemand gefragt und was es geantwortet hat, ist eine
+Eigenschaft, kein Leck.
+
+**Die Lücke ist damit eine fehlende Operation, keine mehrdeutige.** Die
+geschlossene Liste hat `home.recall.ask`, `home.recall.read`,
+`home.recall.keep` und `home.memory.forget`. Ein `home.recall.forget` gibt es
+nicht. Eine Person kann die Erinnerung aufheben, die sie aus einer Antwort
+behalten hat, und den Austausch, aus dem sie kam, nicht — Frage und Antwort
+bleiben in der Liste, im Klartext, egal was sie über das Verschlüsseln ihrer
+Erinnerungen entschieden hat.
+
+Was diese Operation tun soll, ist die Entscheidung: eine Zeile, die noch ein
+behaltenes Item nennt, ist tragend — ADR 0126s Notiz hält fest, dass ein
+behaltenes Item *über seinen Job* gefunden wird —, also müsste ein Vergessen
+entweder ablehnen, das Item mitnehmen oder nur die Worte leeren und die
+Verbindung lassen.
 
 `scripts/check-store-ceilings.mjs` fragt jetzt jede Tabelle, wie sie aufhört
 zu wachsen. Diese antwortet, dass sie es nicht tut, in der Begründungsliste des
