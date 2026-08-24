@@ -156,6 +156,12 @@ let scanned = 0;
  * Fundstelle wäre eine Zeile, die nur so aussieht, als hielte sie etwas.
  */
 /**
+ * **`modules/` kam am 2026-08-24 dazu, und es kostete nichts.** Ein Modul ist
+ * nach ADR 0127 Vokabular, Komposition und Fläche - also genau eine Stelle,
+ * an der jemand einen Schlüssel für ein Auge kürzen könnte. Dass es heute
+ * keines tut, war nie geprüft, weil die Wurzel fehlte; mit ihr bleibt die
+ * Prüfung grün und die Aussage gilt erst für das ganze Produkt.
+ *
  * Pro Wurzel gezählt statt in einer Summe, weil eine Summe ein sauberes
  * Produkt nicht von einem abwesenden unterscheiden kann. Über einen Baum
  * gefahren, dessen Wurzeln nichts enthalten, druckte diese Prüfung am
@@ -164,11 +170,11 @@ let scanned = 0;
  * ganze Produkt, wahr über nichts. Der Fall, den eine Summe weiter verstecken
  * würde, ist der wirkliche: eine Wurzel wandert, die anderen bleiben voll.
  */
-const scanRoots = ['apps', 'packages', 'tools'];
+const scanRoots = ['apps', 'packages', 'modules', 'tools'];
 const scannedPerRoot = new Map(scanRoots.map((root) => [root, 0]));
 
 for (const file of [
-  ...sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages')),
+  ...sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'), join(repoRoot, 'modules')),
   ...scriptFiles(join(repoRoot, 'tools')),
 ]) {
   const path = relative(repoRoot, file);

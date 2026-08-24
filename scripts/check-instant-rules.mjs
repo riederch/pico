@@ -147,6 +147,11 @@ const literalDuration = /`(?:[^`\\]|\\.)*`/gs;
 const spokenDuration = /\b\d+[- ](?:hour|minute|second|day|week|month)s?\b/i;
 
 /**
+ * **`modules/` kam am 2026-08-24 dazu, und es kostete nichts.** Ein Modul
+ * spricht mit einer Person - der Kalender sagt, was fällig ist -, kann also
+ * einen Zeitpunkt roh zeigen oder auf einen UTC-Tag schneiden. Dass keines es
+ * tut, war nie geprüft, weil die Wurzel fehlte.
+ *
  * Counted per root rather than in one total, because a total cannot tell a
  * clean product from an absent one. Run over a tree whose `apps` and
  * `packages` hold nothing, this printed "0 source files across apps and
@@ -154,7 +159,7 @@ const spokenDuration = /\b\d+[- ](?:hour|minute|second|day|week|month)s?\b/i;
  * a sentence about the whole product, true of nothing. One root emptying while
  * the other stays full is the case a total would still hide.
  */
-const scanRoots = ['apps', 'packages'];
+const scanRoots = ['apps', 'packages', 'modules'];
 const scannedPerRoot = new Map(scanRoots.map((root) => [root, 0]));
 
 let scanned = 0;
