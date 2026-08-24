@@ -242,6 +242,69 @@ for (const number of rowed) {
   }
 }
 
+/**
+ * Third direction: the evidence a row names must exist.
+ *
+ * This matrix is the one document whose whole job is to be true *now* - the
+ * ADRs keep their text under ADR 0128 and record what was decided, and a path
+ * that has moved since stays in an ADR body as history. Here a path is a
+ * pointer somebody is meant to follow, and a pointer into nothing is a claim
+ * that cannot be checked.
+ *
+ * **Measured before being written, because the broad version is unusable.**
+ * Over every backticked token the matrix holds, 44 look dead across the docs
+ * tree and almost all of them are fine: `07_Governance/QA_Checklist.md` is
+ * relative to the design system's own root, `pico_core/config.yaml` is the
+ * add-on's name before it was renamed and belongs in the ADR that decided it,
+ * `./helper.js` is an example in prose, and a bare `main.ts` is how English
+ * names a file. So the rule is narrowed to what cannot be any of those: a
+ * token that begins with a directory this repository actually has at its root,
+ * carries a file extension and no glob. That is 880 paths, and it found two -
+ * `scripts/reachability.mjs`, which the same row spells in full four hundred
+ * words earlier, and `packages/module-spatial-recall/src/ports.ts`, which is
+ * `modules/`. The second was the pointer at ADR 0129 SR5's deferral: the one
+ * link to work that is waiting, aimed at nothing.
+ *
+ * It needs no exemption list, which is the test of whether a rule this cheap
+ * is the right one.
+ */
+const topLevelDirectories = new Set(
+  readdirSync(repoRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !notPartOfTheTree(entry.name))
+    .map((entry) => entry.name),
+);
+let matrixPathsChecked = 0;
+matrix.split('\n').forEach((line, index) => {
+  if (!line.startsWith('|')) {
+    return;
+  }
+  for (const [, token] of line.matchAll(/`([^`\s]+)`/gu)) {
+    const named = token.replace(/[.,;:)]+$/u, '');
+    if (!named.includes('/')
+      || named.includes('*')
+      || !topLevelDirectories.has(named.split('/')[0])
+      || !/\.[a-z0-9]{1,5}$/iu.test(named)) {
+      continue;
+    }
+    matrixPathsChecked += 1;
+    if (existsSync(join(repoRoot, named))) {
+      continue;
+    }
+    errors.push(
+      `${matrixPath}:${index + 1}: names \`${named}\`, and there is no such file. This `
+      + 'matrix is read as the current state, so a path in it is a pointer somebody '
+      + 'follows rather than a record of where something was. Name where the file is '
+      + 'now, or say in the row that it is gone.',
+    );
+  }
+});
+if (matrixPathsChecked === 0) {
+  errors.push(
+    `${matrixPath}: no path under a root directory was checked, so this direction passed `
+    + 'over nothing. Either the matrix stopped naming evidence or the reading of it broke.',
+  );
+}
+
 // --- Second indexes over the ADRs --------------------------------------------
 
 /**
@@ -437,7 +500,8 @@ console.log(
     ? 'root files not compared - not a git checkout'
     : `${rootFiles.length} tracked root files`}, `
   + `${named.size} entries named, each real; ${adrNumbers.length} ADRs, `
-  + `${rowed.size} with a row and ${withoutRow.size} deliberately without one; `
+  + `${rowed.size} with a row and ${withoutRow.size} deliberately without one, `
+  + `${matrixPathsChecked} named files under a root directory, each real; `
   + `${claimsChecked} present-tense absence claims and `
   + `${statusClaimsChecked} nothing-is-built claims, each still true).`,
 );
