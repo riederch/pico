@@ -11,10 +11,15 @@ import {
   picoCompanionRelayAccountIssued,
   parsePicoCompanionRelays,
   picoCompanionDeviceLines,
+  picoCompanionDomainReadershipLines,
+  picoCompanionDomainReadershipSummary,
   picoCompanionHomeMemberLines,
+  picoCompanionReaderRevocationReasonLines,
+  type PicoCompanionReaderRevocationReasonLine,
   picoCompanionHomeMembersSummary,
   picoCompanionMembershipEndingLines,
   type PicoCompanionMembershipEndingLine,
+  parsePicoCompanionDomainReadership,
   parsePicoCompanionHomeMembers,
   picoCompanionDeviceAuthorityLines,
   picoCompanionDeviceAuthoritySummary,
@@ -627,6 +632,78 @@ function deviceAuthorityBlock(
  * one has no ceremony anywhere yet - not in the tool either. A row with a
  * button that cannot work would be worse than a row without one.
  */
+/**
+ * ADR 0082 mit ADR 0130 E5. Wer welche deiner Domänen lesen darf.
+ *
+ * Eine Domäne, die niemand liest, steht mit in der Liste - das ist der Grund,
+ * aus dem die Companion zwei Lesevorgänge macht statt eines. Eine Ansicht, die
+ * nur Domänen mit Lesern zeigt, verschweigt genau das Beruhigende.
+ */
+export function renderPicoCompanionDomainReadership(
+  root: { list: HTMLElement; section: HTMLElement; summary: HTMLElement; document: Document },
+  value: unknown,
+  end: (input: {
+    domainId: string;
+    readerGrantId: string;
+    reasonCategory: PicoCompanionReaderRevocationReasonLine['reasonCategory'];
+  }) => void,
+): void {
+  const domains = parsePicoCompanionDomainReadership(value);
+  root.section.hidden = false;
+  root.summary.textContent = picoCompanionDomainReadershipSummary(domains);
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionDomainReadershipLines(domains)) {
+    const item = root.document.createElement('li');
+    item.className = 'provider-line';
+    item.dataset.domainId = line.domainId;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    item.append(headline, detail);
+
+    for (const reader of line.readers) {
+      const readerLine = root.document.createElement('p');
+      readerLine.className = 'detail';
+      readerLine.textContent = `${reader.headline} ${reader.detail}`;
+      item.append(readerLine);
+
+      if (reader.endLabel === null) {
+        continue;
+      }
+      /**
+       * Der Grund wird mit der Handlung gefragt, nicht danach: „sie soll das
+       * nicht mehr lesen" und „mit dem Schlüssel stimmt etwas nicht" sind zwei
+       * verschiedene Aufzeichnungen, und das Home behält, welche es war.
+       */
+      for (const reason of picoCompanionReaderRevocationReasonLines()) {
+        const button = root.document.createElement('button');
+        button.type = 'button';
+        button.className = 'secondary';
+        button.dataset.readerGrantId = reader.readerGrantId;
+        button.dataset.reasonCategory = reason.reasonCategory;
+        button.textContent = `${reader.endLabel}: ${reason.label}`;
+        button.addEventListener('click', () => {
+          end({
+            domainId: line.domainId,
+            readerGrantId: reader.readerGrantId,
+            reasonCategory: reason.reasonCategory,
+          });
+        });
+        item.append(button);
+      }
+    }
+
+    root.list.append(item);
+  }
+}
+
 export function renderPicoCompanionHomeMembers(
   root: { list: HTMLElement; section: HTMLElement; summary: HTMLElement; document: Document },
   value: unknown,

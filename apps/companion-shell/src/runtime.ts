@@ -72,7 +72,9 @@ import type {
   PicoCompanionHostRotation,
   PicoCompanionHostRotationReason,
   PicoCompanionMembershipEnding,
+  PicoCompanionDomainReadership,
 } from '@pico/companion/home-authority';
+import type { PicoReaderCustodyReaderGrantRevocationReasonCategory } from '@pico/protocol';
 import { picoPresenceLeaseMs } from '@pico/protocol/presence';
 import {
   claimPicoCompanionRelay,
@@ -325,6 +327,20 @@ export interface PicoCompanionShellRuntime {
     picoIdentityFingerprintHex: string;
     ending: PicoCompanionMembershipEnding;
   }): Promise<{ credentialId: string; status: string }>;
+  /**
+   * ADR 0082 mit ADR 0130 E5. Wer welche Domäne lesen darf, und das Beenden
+   * eines vergebenen Zugangs - von dem Gerät aus, das ihn vergeben hat.
+   *
+   * `endDomainRead` bekommt zwei Bezeichner und liest Domäne und Leser aus
+   * derselben Liste zurück, die das Fenster angeboten hat. Das Fenster
+   * beschreibt nicht, was widerrufen wird; es zeigt auf eine Zeile.
+   */
+  readDomainReadership(): Promise<readonly PicoCompanionDomainReadership[]>;
+  endDomainRead(input: {
+    domainId: string;
+    readerGrantId: string;
+    reasonCategory: PicoReaderCustodyReaderGrantRevocationReasonCategory;
+  }): Promise<{ readerGrantId: string; status: 'revoked' }>;
   rotateHostKeys(input: {
     reason: PicoCompanionHostRotationReason;
   }): Promise<PicoCompanionHostRotation>;
@@ -1123,6 +1139,55 @@ export async function startPicoCompanionShellRuntime(input: {
           ending: ending.ending,
         });
       }),
+      readDomainReadership: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { readPicoCompanionDomainReadership } =
+          await import('@pico/companion/home-authority');
+        const profile = readPicoCompanionProfile(profilePath);
+        return await readPicoCompanionDomainReadership({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      endDomainRead: async ({ domainId, readerGrantId, reasonCategory }) =>
+        await serialized(async () => {
+          await input.automaticVaultUnlock?.ensureUnlocked();
+          const { readPicoCompanionDomainReadership, revokePicoCompanionDomainReader } =
+            await import('@pico/companion/home-authority');
+          const profile = readPicoCompanionProfile(profilePath);
+          const livingDeviceLinkClient = await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          });
+          /**
+           * Aus derselben Liste gelesen, die das Fenster angeboten hat, statt
+           * aus dem, was es zurückschickt: eine Domäne trägt den Host-Schlüssel,
+           * unter dem sie autorisiert wurde, und den kennt das Fenster nicht -
+           * es soll ihn auch nicht behaupten können.
+           */
+          const domains = await readPicoCompanionDomainReadership({ livingDeviceLinkClient });
+          const domain = domains.find((entry) => entry.domainId === domainId);
+          const reader = domain?.readers
+            .find((entry) => entry.readerGrantId === readerGrantId);
+          if (domain === undefined || reader === undefined) {
+            throw new Error('unknown_domain_read_grant');
+          }
+          return await revokePicoCompanionDomainReader({
+            profile,
+            daemonClient,
+            livingDeviceLinkClient,
+            sodium: input.sodium,
+            domain,
+            reader,
+            reasonCategory,
+          });
+        }),
       rotateHostKeys: async ({ reason }) => await serialized(async () => {
         await input.automaticVaultUnlock?.ensureUnlocked();
         const { rotatePicoCompanionHostKeys } = await import('@pico/companion/home-authority');

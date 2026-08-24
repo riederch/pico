@@ -29,6 +29,7 @@ import {
   renderPicoCompanionRelays,
   renderPicoCompanionRelayAccountIssued,
   renderPicoCompanionDevices,
+  renderPicoCompanionDomainReadership,
   renderPicoCompanionHomeMembers,
   renderPicoCompanionMeasurements,
   renderPicoCompanionSuppliers,
@@ -114,6 +115,12 @@ declare global {
         enabled: boolean,
       ): Promise<void>;
       forgetDevice(presenceId: string): Promise<void>;
+      getDomainReadership(): Promise<unknown>;
+      endDomainRead(request: {
+        domainId: string;
+        readerGrantId: string;
+        reasonCategory: string;
+      }): Promise<unknown>;
       getHomeMembers(): Promise<unknown>;
       admitHomeMember(): Promise<{
         credentialId: string;
@@ -825,6 +832,39 @@ depotFetchNow.addEventListener('click', () => {
     });
 });
 
+const readershipSection = requireElement('readership');
+const readershipList = requireElement('readership-list');
+const readershipSummary = requireElement('readership-summary');
+const readershipStatus = requireElement('readership-status');
+
+/**
+ * ADR 0082 mit ADR 0130 E5. Wer welche deiner Domänen lesen darf.
+ *
+ * Wie beim Home wirft der Lesevorgang, statt leer zu antworten, und der
+ * Abschnitt bleibt dann verborgen: „niemand liest mit" ist eine Aussage über
+ * dein Gedächtnis, und ein Fenster, das sie nach einem fehlgeschlagenen
+ * Lesevorgang sagt, sagt dir etwas Falsches über deine eigenen Sachen.
+ */
+function refreshDomainReadership(): void {
+  void window.picoCompanion.getDomainReadership().then((domains) => {
+    renderPicoCompanionDomainReadership(
+      { list: readershipList, section: readershipSection, summary: readershipSummary, document },
+      domains,
+      (ending) => {
+        readershipStatus.textContent = 'Ending that access...';
+        void window.picoCompanion.endDomainRead(ending).then(() => {
+          readershipStatus.textContent = 'That access has ended.';
+          refreshDomainReadership();
+        }, () => {
+          readershipStatus.textContent = 'Pico could not end that access.';
+        });
+      },
+    );
+  }, () => {
+    readershipSection.hidden = true;
+  });
+}
+
 const homeSection = requireElement('home');
 const homeMemberList = requireElement('home-member-list');
 const homeMembersSummary = requireElement('home-members-summary');
@@ -1397,6 +1437,7 @@ function showView(view: PicoCompanionWindowView): void {
     refreshSuppliers();
     refreshModuleConsent();
     refreshDepots();
+    refreshDomainReadership();
     refreshHomeMembers();
     refreshDevices();
     refreshRelays();

@@ -5,11 +5,14 @@ import {
 } from '@pico/protocol/when-display';
 import type { PicoCompanionDeviceView } from '@pico/companion/presence';
 import type { PicoCompanionDeviceAuthorityView } from '@pico/companion/device-lifecycle';
-import type { PicoCompanionHomeMember as PicoCompanionCoreHomeMember }
-  from '@pico/companion/home-authority';
+import type {
+  PicoCompanionHomeMember as PicoCompanionCoreHomeMember,
+  PicoCompanionDomainReadership as PicoCompanionCoreDomainReadership,
+} from '@pico/companion/home-authority';
 import type {
   PicoCompanionDevice,
   PicoCompanionDeviceAuthority,
+  PicoCompanionDomainReadershipRow,
   PicoCompanionHomeMember,
   PicoCompanionModelProvider,
 } from './contract.js';
@@ -79,5 +82,28 @@ export function picoCompanionRenderedProviders(
   return providers.map((provider) => ({
     ...provider,
     measuredDisplay: picoDisplayDate(provider.measuredAt),
+  }));
+}
+
+/**
+ * ADR 0082 mit ADR 0130 E5. Wer welche Domäne lesen darf, auf dem Weg ins
+ * Fenster: zwei Fingerabdrücke gekürzt, ein Zeitpunkt auf einen Kalendertag.
+ * Die `domainAuthorityId` reist ungekürzt mit, weil ein Widerruf sie nennt und
+ * sie kein Schlüssel ist, den jemand vergleicht.
+ */
+export function picoCompanionRenderedDomainReadership(
+  domains: readonly PicoCompanionCoreDomainReadership[],
+): readonly PicoCompanionDomainReadershipRow[] {
+  return domains.map((domain) => ({
+    domainId: domain.domainId,
+    domainAuthorityId: domain.domainAuthorityId,
+    ownerDisplay: picoDisplayFingerprint(domain.ownerIdentityKeyFingerprintHex),
+    readers: domain.readers.map((reader) => ({
+      readerGrantId: reader.readerGrantId,
+      readerDisplay: picoDisplayFingerprint(reader.readerIdentityKeyFingerprintHex),
+      accessMode: reader.accessMode,
+      status: reader.status,
+      validUntilDisplay: picoDisplayDate(reader.validUntil),
+    })),
   }));
 }

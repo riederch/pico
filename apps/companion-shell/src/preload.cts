@@ -43,6 +43,8 @@ const channels = Object.freeze({
   forgetDevice: 'pico:device:forget',
   joinFromDevice: 'pico:enrolment:join',
   beginEnrolment: 'pico:enrolment:begin',
+  getDomainReadership: 'pico:domain-readership:get',
+  endDomainRead: 'pico:domain-read:end',
   getHomeMembers: 'pico:home-members:get',
   admitHomeMember: 'pico:home-member:admit',
   endHomeMembership: 'pico:home-member:end',
@@ -210,6 +212,10 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   beginEnrolment: async (source: string): Promise<void> => {
     await ipcRenderer.invoke(channels.beginEnrolment, source);
   },
+  getDomainReadership: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.getDomainReadership),
+  endDomainRead: async (request: unknown): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.endDomainRead, request),
   getHomeMembers: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.getHomeMembers),
   admitHomeMember: async (): Promise<unknown> =>

@@ -105,6 +105,8 @@ export const picoCompanionIpcChannels = Object.freeze({
    * ADR 0130 E4. The Home rather than a device: who else lives in it, and the
    * keys it is known by.
    */
+  getDomainReadership: 'pico:domain-readership:get',
+  endDomainRead: 'pico:domain-read:end',
   getHomeMembers: 'pico:home-members:get',
   admitHomeMember: 'pico:home-member:admit',
   endHomeMembership: 'pico:home-member:end',
@@ -2125,6 +2127,180 @@ export interface PicoCompanionHomeMember {
   /** `null` exactly where `validUntil` is: a place that does not end. */
   validUntilDisplay: string | null;
   isThisIdentity: boolean;
+}
+
+/**
+ * Wer welche deiner Domänen lesen darf, ADR 0082 mit ADR 0130 E5.
+ *
+ * Die Zeile trägt keinen Fingerabdruck in voller Länge: gekürzt wird im
+ * Hauptprozess (`rendered-rows.ts`), weil renderer-erreichbare Dateien nur
+ * relative Pfade auflösen und die eine Regel dafür nicht erreichen können
+ * (ADR 0113 C2, ADR 0079 I5).
+ */
+export interface PicoCompanionDomainReaderRow {
+  readerGrantId: string;
+  readerDisplay: string;
+  accessMode: 'from_version' | 'forward_only';
+  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
+  validUntilDisplay: string;
+}
+
+export interface PicoCompanionDomainReadershipRow {
+  domainId: string;
+  domainAuthorityId: string;
+  ownerDisplay: string;
+  /** Leer heißt: außer dir liest sie niemand. */
+  readers: readonly PicoCompanionDomainReaderRow[];
+}
+
+export interface PicoCompanionDomainReadershipLine {
+  domainId: string;
+  headline: string;
+  detail: string;
+  readers: readonly {
+    readerGrantId: string;
+    headline: string;
+    detail: string;
+    /** `null` auf einem Zugang, den nichts mehr beenden kann. */
+    endLabel: string | null;
+  }[];
+}
+
+/**
+ * Die fünf Gründe, aus denen ein Lesezugang endet, mit Worten statt Codes.
+ *
+ * Wie bei einer Mitgliedschaft ist der Grund keine Verzierung: „sie liest
+ * nicht mehr mit" und „mit diesem Schlüssel stimmt etwas nicht" sind zwei
+ * verschiedene Aufzeichnungen, und das Home behält, welche es war.
+ */
+export interface PicoCompanionReaderRevocationReasonLine {
+  reasonCategory:
+    'reader_removed' | 'device_retired' | 'relationship_revoked'
+    | 'security_review' | 'grant_reissued';
+  label: string;
+}
+
+export function picoCompanionReaderRevocationReasonLines():
+readonly PicoCompanionReaderRevocationReasonLine[] {
+  return Object.freeze([
+    Object.freeze({
+      reasonCategory: 'reader_removed' as const,
+      label: 'They should not read this any more',
+    }),
+    Object.freeze({
+      reasonCategory: 'device_retired' as const,
+      label: 'The device that read it is gone',
+    }),
+    Object.freeze({
+      reasonCategory: 'relationship_revoked' as const,
+      label: 'We are no longer sharing anything',
+    }),
+    Object.freeze({
+      reasonCategory: 'security_review' as const,
+      label: 'Something is wrong with that key',
+    }),
+    Object.freeze({
+      reasonCategory: 'grant_reissued' as const,
+      label: 'It is being replaced by a new one',
+    }),
+  ]);
+}
+
+export function parsePicoCompanionDomainReadership(
+  value: unknown,
+): readonly PicoCompanionDomainReadershipRow[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_companion_domain_readership');
+  }
+  return Object.freeze(value.map((entry) => {
+    const record = entry as Record<string, unknown>;
+    if (typeof record?.domainId !== 'string'
+      || typeof record.domainAuthorityId !== 'string'
+      || typeof record.ownerDisplay !== 'string'
+      || !Array.isArray(record.readers)) {
+      throw new Error('invalid_companion_domain_readership');
+    }
+    return Object.freeze({
+      domainId: record.domainId,
+      domainAuthorityId: record.domainAuthorityId,
+      ownerDisplay: record.ownerDisplay,
+      readers: Object.freeze(record.readers.map((reader) => {
+        const row = reader as Record<string, unknown>;
+        if (typeof row?.readerGrantId !== 'string'
+          || typeof row.readerDisplay !== 'string'
+          || (row.accessMode !== 'from_version' && row.accessMode !== 'forward_only')
+          || (row.status !== 'active' && row.status !== 'not_yet_valid'
+            && row.status !== 'expired' && row.status !== 'revoked')
+          || typeof row.validUntilDisplay !== 'string') {
+          throw new Error('invalid_companion_domain_reader');
+        }
+        return Object.freeze({
+          readerGrantId: row.readerGrantId,
+          readerDisplay: row.readerDisplay,
+          accessMode: row.accessMode,
+          status: row.status,
+          validUntilDisplay: row.validUntilDisplay,
+        });
+      })),
+    });
+  }));
+}
+
+/**
+ * **Domänen ohne Leser stehen mit in der Liste**, und das ist der Grund, aus
+ * dem die Companion zwei Lesevorgänge macht statt eines: eine Ansicht, die
+ * nur Domänen mit Lesern zeigt, verschweigt genau das Beruhigende.
+ */
+export function picoCompanionDomainReadershipSummary(
+  domains: readonly PicoCompanionDomainReadershipRow[],
+): string {
+  if (domains.length === 0) {
+    return 'You have no memory domains with an owner record yet.';
+  }
+  const read = domains.filter((domain) =>
+    domain.readers.some((reader) => reader.status === 'active')).length;
+  const domainWord = domains.length === 1 ? 'domain' : 'domains';
+  if (read === 0) {
+    return `${domains.length} ${domainWord}, and nobody but you reads any of them.`;
+  }
+  return `${domains.length} ${domainWord}, ${read} of them read by somebody else.`;
+}
+
+export function picoCompanionDomainReadershipLines(
+  domains: readonly PicoCompanionDomainReadershipRow[],
+): readonly PicoCompanionDomainReadershipLine[] {
+  return Object.freeze(domains.map((domain) => Object.freeze({
+    domainId: domain.domainId,
+    headline: domain.domainId,
+    detail: domain.readers.length === 0
+      ? 'Nobody but you reads this.'
+      : `${domain.readers.length} reader${domain.readers.length === 1 ? '' : 's'}.`,
+    readers: Object.freeze(domain.readers.map((reader) => Object.freeze({
+      readerGrantId: reader.readerGrantId,
+      headline: `Another Pico (${reader.readerDisplay})`,
+      detail: picoCompanionDomainReaderDetail(reader),
+      // Nur ein laufender Zugang lässt sich beenden; ein abgelaufener oder
+      // widerrufener ist schon zu Ende, und ein Knopf daneben würde eine
+      // Handlung anbieten, die nichts tut.
+      endLabel: reader.status === 'active' ? 'End this access' : null,
+    }))),
+  })));
+}
+
+function picoCompanionDomainReaderDetail(reader: PicoCompanionDomainReaderRow): string {
+  const reach = reader.accessMode === 'forward_only'
+    ? 'reads what arrives from now on'
+    : 'reads this domain from the version they were given';
+  switch (reader.status) {
+    case 'active':
+      return `${reach}, until ${reader.validUntilDisplay}.`;
+    case 'not_yet_valid':
+      return `${reach}, starting later and until ${reader.validUntilDisplay}.`;
+    case 'expired':
+      return `no longer reads this; the access ran out on ${reader.validUntilDisplay}.`;
+    default:
+      return 'no longer reads this; the access was ended.';
+  }
 }
 
 export interface PicoCompanionHomeMemberLine {

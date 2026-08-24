@@ -206,6 +206,17 @@
       keys it is known by. Above the devices, because it is the larger subject
       - a device belongs to a person, a Home is the place.
     -->
+    <!--
+      ADR 0082 mit ADR 0130 E5. Wer welche deiner Domänen lesen darf. Über dem
+      Home, weil es die persönlichere Frage ist: wer hier wohnt, entscheidet
+      der Host - wer mitlesen darf, entscheidest du.
+    -->
+    <section id="readership" class="providers" hidden>
+      <h2>Who may read your memory</h2>
+      <p id="readership-summary" class="detail"></p>
+      <ul id="readership-list" class="provider-list"></ul>
+      <p id="readership-status" class="detail" role="status" aria-live="polite"></p>
+    </section>
     <section id="home" class="providers" hidden>
       <h2>Your Home</h2>
       <p id="home-members-summary" class="detail"></p>

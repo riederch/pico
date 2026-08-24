@@ -49,6 +49,7 @@ import { picoDisplayDate, picoDisplayInstant } from '@pico/protocol/when-display
 import {
   picoCompanionRenderedDeviceAuthority,
   picoCompanionRenderedDevices,
+  picoCompanionRenderedDomainReadership,
   picoCompanionRenderedHomeMembers,
   picoCompanionRenderedProviders,
 } from './rendered-rows.js';
@@ -87,6 +88,7 @@ import {
   type PicoCompanionFirstRunScanSource,
   type PicoCompanionDeviceCode,
   type PicoCompanionPresentation,
+  picoCompanionReaderRevocationReasonLines,
 } from './contract.js';
 import { startPicoCompanionNetworkRegainMonitor } from './network-monitor.js';
 import {
@@ -1519,6 +1521,48 @@ function registerIpc(): void {
         credentialId: record.credentialId,
         picoIdentityFingerprintHex: record.picoIdentityFingerprintHex,
         ending: ending.ending,
+      });
+    },
+  );
+  /**
+   * ADR 0082 mit ADR 0130 E5. Wer welche deiner Domänen lesen darf, und das
+   * Beenden eines Zugangs von dem Gerät aus, das ihn vergeben hat.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getDomainReadership,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      // Hier gerendert, im Prozess, der die Regel erreichen darf: das Fenster
+      // darf es nicht (ADR 0113 C2, ADR 0131 A5).
+      return picoCompanionRenderedDomainReadership(await runtime.readDomainReadership());
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.endDomainRead,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      /**
+       * Der Grund wird aus derselben Liste gelesen, die das Fenster angeboten
+       * hat, statt wiederholt - dasselbe wie beim Beenden einer Mitgliedschaft.
+       */
+      const reason = picoCompanionReaderRevocationReasonLines()
+        .find((line) => line.reasonCategory === record?.reasonCategory);
+      if (typeof record?.domainId !== 'string'
+        || typeof record.readerGrantId !== 'string'
+        || reason === undefined) {
+        throw new Error('invalid_domain_read_ending');
+      }
+      return await runtime.endDomainRead({
+        domainId: record.domainId,
+        readerGrantId: record.readerGrantId,
+        reasonCategory: reason.reasonCategory,
       });
     },
   );
