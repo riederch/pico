@@ -4,6 +4,43 @@
 
 Accepted as a model-provider registry and job-envelope direction before runtime schema, provider discovery or transport implementation.
 
+**Status note 2026-08-24: the queue this ADR named keeps the person's words,
+in the clear, for good.** `pico_model_job_queue` holds one row per model job.
+`job_json` carries the ADR 0116 W3 units - among them the sentence the person
+typed - `result_json` carries the answer, and `recall_context_json` the
+remembered material the job was given. All three are plain text.
+
+Five things that reach comparable stores do not reach this one, each measured
+rather than inferred:
+
+- **No ADR 0119 Q5 ceiling.** Eight stores have one; this is not among them.
+- **No sweep.** No `DELETE FROM pico_model_job_queue` exists anywhere.
+- **Forget does not reach it.** `home.memory.forget` deletes the memory item
+  and calls `markKept(null)`, which clears the *pointer*. The answer stays in
+  the row it came from.
+- **A domain shred does not reach it.** `domain-shred.ts` never names the
+  table.
+- **The encryption decision does not reach it.** A `memory_item` carries a
+  `content_posture` that can be `domain_encrypted`; a job row has no posture
+  at all, whatever the person decided about their memories.
+
+**Why this is not a wiring fix, which is the part worth deciding.** Clearing
+`result_json` on forget would change a surface the person can see:
+`answeredFor` lists a past library read by filtering on `result_json IS NOT
+NULL`, so a swept row disappears from the read list. Forgetting a kept memory
+item and dropping a read from the list are two different acts, and which one
+the forget control means is a product decision this ADR did not make. So is
+whether a job row should carry a posture, and what a ceiling here would evict.
+
+The queue is deliberately load-bearing for forget - ADR 0126's status note
+records why: a kept item is found *through* its job, and before that link
+existed a person could make a memory and never unmake one. That is the reason
+the row survives, and it is also why the row's content survives with it.
+
+Held from now on by `scripts/check-store-ceilings.mjs`, which asks every table
+how it stops growing. This one answers that it does not, in the check's own
+argument list, so the answer is on screen at every run rather than absent.
+
 ## Context
 
 ADR 0048 allows Pico to delegate model inference or planning to a trusted model capability provider, such as a stronger Pico Home, desktop Pico Vault, peer endpoint or mediated cloud connector.
