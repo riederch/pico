@@ -1,0 +1,138 @@
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * No check may report success over nothing.
+ *
+ * A gate that scans a tree and finds no files has two possible reports, and
+ * they are opposites: "the product is clean" and "I did not look". This
+ * repository has now printed the first while meaning the second three times.
+ * `check-one-voice.mjs` reported "0 moments" and exited zero one day after it
+ * was written, because an `if`-chain had replaced the `switch` it keyed on.
+ * The version rule in `check-wire-labels.mjs` needed a guard before it was
+ * ever green. And on 2026-08-24 an audit ran every check in this directory
+ * against an empty tree: three of them passed, and the three were the ones
+ * that say the most - "no mailbox address reaches a log", "one rule for
+ * showing a key to a person", "no instant reaching a person raw", each a
+ * sentence about the whole product, said truthfully about nothing.
+ *
+ * Fixing those three left the class open, so the audit is the check.
+ *
+ * **How the empty tree is built matters, and it is derived rather than
+ * listed.** Every directory of this repository is mirrored - the directories
+ * only, no file in any of them - so a check finds its roots exactly where it
+ * expects them and nothing inside. A hand-written skeleton would be a second
+ * copy of the tree's shape, which is the drift this repository keeps finding.
+ * The checks themselves are copied in, because they have to run.
+ *
+ * **What a crash counts as.** A check that reads a file it names and dies
+ * because the file is not there fails closed, which is the right direction,
+ * and this cannot tell that apart from a guard. The claim is therefore
+ * narrow and exactly what it says: no check *reports success* over an empty
+ * product. Proving that a check guards rather than crashes is the job of the
+ * plant beside it, in the check's own file.
+ *
+ * **A skip is not a pass.** `check-release-tag.mjs` and
+ * `check-release-monotonic.mjs` answer "skipped" outside a tag build, which
+ * is correct behaviour and not a claim about anything. That is read off the
+ * word they print rather than kept as a list of their names here: a list of
+ * two names drifts the moment a third check learns to skip, and the property
+ * is right there in the output.
+ */
+
+const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
+const scriptsDir = join(repoRoot, 'scripts');
+const self = 'check-vacuous-gates.mjs';
+const skipped = new Set(['node_modules', '.git', 'dist', 'out', 'build', 'coverage']);
+
+const errors = [];
+const workspace = mkdtempSync(join(tmpdir(), 'pico-vacuity-'));
+let checksRun = 0;
+let skippedByDesign = 0;
+let directoriesMirrored = 0;
+
+try {
+  mirrorDirectories(repoRoot, workspace);
+  cpSync(scriptsDir, join(workspace, 'scripts'), { recursive: true });
+
+  for (const entry of readdirSync(scriptsDir).sort()) {
+    if (!entry.startsWith('check-') || !entry.endsWith('.mjs') || entry === self) {
+      continue;
+    }
+    checksRun += 1;
+    const run = spawnSync(process.execPath, [join(workspace, 'scripts', entry)], {
+      cwd: workspace,
+      encoding: 'utf8',
+    });
+    if (run.status !== 0) {
+      continue;
+    }
+    const firstLine = (run.stdout ?? '').split('\n')[0] ?? '';
+    if (/\bskipped\b/u.test(firstLine)) {
+      skippedByDesign += 1;
+      continue;
+    }
+    errors.push(
+      `scripts/${entry} reports success over an empty tree: ${JSON.stringify(firstLine)}. `
+      + 'A check that finds nothing has two opposite things to say and must say the second '
+      + 'one. Count what it looked at - per root, not in one total, because one root '
+      + 'emptying while another stays full is the case a total hides - and refuse a zero.',
+    );
+  }
+} finally {
+  rmSync(workspace, { recursive: true, force: true });
+}
+
+if (checksRun === 0) {
+  errors.push(
+    'scripts/check-vacuous-gates.mjs found no checks to run, which is the failure it exists '
+    + 'to catch, in itself.',
+  );
+}
+if (directoriesMirrored < 2) {
+  errors.push(
+    `scripts/check-vacuous-gates.mjs mirrored ${directoriesMirrored} directories, so the `
+    + 'tree it tested against was not this repository\'s shape and every result above is '
+    + 'about something else.',
+  );
+}
+
+if (errors.length > 0) {
+  console.error('Vacuous-gate check failed:');
+  for (const error of errors) {
+    console.error(`- ${error}`);
+  }
+  process.exit(1);
+}
+
+console.log(
+  `Vacuous-gate check passed (${checksRun} checks run against ${directoriesMirrored} `
+  + `mirrored directories holding no files; ${skippedByDesign} skipped by design, `
+  + `${checksRun - skippedByDesign} refused to call nothing clean).`,
+);
+
+/** The shape of the tree without any of its contents. */
+function mirrorDirectories(source, target) {
+  for (const entry of readdirSync(source)) {
+    if (skipped.has(entry)) {
+      continue;
+    }
+    const path = join(source, entry);
+    let stats;
+    try {
+      stats = statSync(path);
+    } catch {
+      continue;
+    }
+    if (!stats.isDirectory()) {
+      continue;
+    }
+    const mirrored = join(target, relative(source, path));
+    mkdirSync(mirrored, { recursive: true });
+    directoriesMirrored += 1;
+    mirrorDirectories(path, mirrored);
+  }
+}
