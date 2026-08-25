@@ -1,15 +1,15 @@
 {
   "schema": "pico.electron-support.v1",
-  "checkedAt": "2026-08-21",
+  "checkedAt": "2026-08-25",
   "policy": "latest-three-stable-major-versions",
-  "latestStableVersion": "43.4.1",
+  "latestStableVersion": "44.0.0",
   "supportedMajorVersions": [
-    41,
     42,
-    43
+    43,
+    44
   ],
-  "nextStableDate": "2026-08-25",
-  "recheckBefore": "2026-08-25",
+  "nextStableDate": "2026-10-20",
+  "recheckBefore": "2026-10-20",
   "sources": [
     "https://www.electronjs.org/docs/latest/tutorial/electron-timelines",
     "https://releases.electronjs.org/schedule",

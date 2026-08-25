@@ -33,6 +33,6 @@
   "devDependencies": {
     "@pico/core": "workspace:*",
     "@types/qrcode": "1.5.6",
-    "electron": "43.4.1"
+    "electron": "44.0.0"
   }
 }
