@@ -195,6 +195,8 @@ export interface PicoCompanionShellRuntime {
   detachSupplier(identifier: string): Promise<void>;
   /** ADR 0143 DP8. Takes back an attachment, and the working copy with it. */
   detachDepot(remote: string): Promise<void>;
+  /** ADR 0143 DP1. Nimmt ein Angebot an, indem sie seinen Commit nennt. */
+  acceptDepotOffer(remote: string, acceptedCommit: string): Promise<void>;
   /** ADR 0142 PE1. Forgets a measured machine, decisions and all. */
   forgetModelProvider(entryId: string): Promise<void>;
   decideSupplierReach(input: {
@@ -815,6 +817,20 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           remote,
+        });
+      }),
+      acceptDepotOffer: async (remote, acceptedCommit) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { acceptPicoCompanionDepotOffer } = await import('@pico/companion/suppliers');
+        await acceptPicoCompanionDepotOffer({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          remote,
+          acceptedCommit,
         });
       }),
       forgetModelProvider: async (entryId) => await serialized(async () => {

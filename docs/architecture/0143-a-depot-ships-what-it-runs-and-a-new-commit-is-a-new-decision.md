@@ -924,6 +924,35 @@ compatibility a property of a commit a person accepted.
   about a limit that lifts on its own. Two closed lists copied into each
   other are two lists that can disagree.
 
+  **Die Annahme wurde am 2026-08-25 erreichbar, und bis dahin war DP1s
+  Zusage wahr über eine Datenbankzeile.** Der Fetch schrieb das Angebot,
+  `picoDepotState` konnte `offered` sagen, `acceptPicoDepotOffer` war gebaut
+  und geprüft - und keine Operation erreichte eines der drei. Gefunden wurde
+  das nicht als eine Lücke, sondern als drei: ein Speicher-Schreiber ohne
+  Aufrufer, eine exportierte Fähigkeit, die als unerreicht begründet war
+  („die Depotzeilen im Fenster zeigen es nicht"), und eine Operationsliste
+  ohne Annahme. Erst zusammengelesen zeigten sie auf **eine** fehlende
+  Hälfte.
+
+  `home.depot.offer.accept` ist die 48. Link-Operation. Der Depot-Lesevorgang
+  trägt jetzt das Zustandswort des Moduls und den angebotenen Commit; das
+  Fenster macht daraus einen Satz und stellt die Frage **über** die beiden
+  Schalter, weil ein Angebot eine gestellte Frage ist und die Schalter
+  Einstellungen sind, die weiter entschieden werden. Die Annahme nennt den
+  Commit, den die Person gesehen hat, und der reist mit dem Knopf statt aus
+  einer späteren Lesung - ein Fetch zwischen der Frage und der Antwort wird
+  damit zur Ablehnung statt zur stillen Zustimmung.
+
+  **Ein Fehler wurde erst durch die Erreichbarkeit sichtbar:** die Annahme
+  löschte `offered_commit` nicht. Der Zustand wäre `offered` geblieben - „es
+  gibt etwas Neues" über genau den Commit, der gerade angenommen wurde.
+  Dieselbe absichtliche Vergesslichkeit, mit der `acceptPicoDepotOffer` einen
+  gewöhnlichen Pin zurückgibt, gilt jetzt auch für die Zeile.
+
+  Ein Depot, das es nicht gibt, und eines ohne stehendes Angebot bekommen
+  dasselbe `no_offer_standing` (ADR 0077 C4), und die Annahme holt nichts:
+  ob Pico hinausgehen darf, ist ADR 0138 CO3/CO4s eigene Entscheidung.
+
   What the wiring turned up is that **three standing preconditions have to
   be read rather than discovered by failing.** ADR 0139 AC4 consent,
   because an unconsented effect makes `decidePicoAction` throw rather than

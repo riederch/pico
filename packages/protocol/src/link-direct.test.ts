@@ -185,6 +185,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.depot.reach.decide',
       'home.depot.detach',
       'home.depot.fetch.ask',
+      'home.depot.offer.accept',
       'home.action.approval.read',
       'home.action.approval.resolve',
       'home.modules.consent.read',

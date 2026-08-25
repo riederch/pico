@@ -689,6 +689,19 @@ export const picoLinkDirectOperations = [
    * to be asked*.
    */
   'home.depot.fetch.ask',
+  /**
+   * ADR 0143 DP1. Der eine Weg von einem Angebot zu einem laufenden Commit.
+   *
+   * Ohne ihn war DP1s Zusage - „ein neuerer Commit wartet auf eine Person" -
+   * ab dem 2026-08-25 nachweisbar wahr über eine Datenbankzeile und nicht
+   * über ein Pico: der Fetch schrieb das Angebot, `picoDepotState` konnte
+   * `offered` sagen, und niemand konnte es sehen oder annehmen.
+   *
+   * Die Annahme **nennt den Commit**. Wer zustimmt, stimmt einer bestimmten
+   * Revision zu und nicht „dem Update" - und was hier angenommen wird, ist
+   * Code, der ausgeführt wird.
+   */
+  'home.depot.offer.accept',
   'home.action.approval.read',
   'home.action.approval.resolve',
   /**

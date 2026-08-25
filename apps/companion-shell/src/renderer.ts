@@ -83,6 +83,7 @@ declare global {
       getSuppliers(): Promise<unknown>;
       detachSupplier(identifier: string): Promise<void>;
       detachDepot(remote: string): Promise<void>;
+      acceptDepotOffer(remote: string, acceptedCommit: string): Promise<void>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
@@ -702,6 +703,23 @@ function refreshDepots(): void {
             refreshSuppliers();
           }, (error: unknown) => {
             depotStatus.textContent = refusalText(error, 'That was not removed.');
+          });
+        },
+        (accepted) => {
+          /**
+           * ADR 0143 DP1. Der Satz sagt, was jetzt läuft, und nicht, dass ein
+           * Vorgang gelungen ist - was hier angenommen wurde, ist Code auf
+           * dieser Maschine, und die Person will wissen, welcher.
+           */
+          void window.picoCompanion.acceptDepotOffer(
+            accepted.remote,
+            accepted.acceptedCommit,
+          ).then(() => {
+            depotStatus.textContent =
+              `Now running ${accepted.acceptedCommit.slice(0, 12)}.`;
+            refreshDepots();
+          }, (error: unknown) => {
+            depotStatus.textContent = refusalText(error, 'That was not accepted.');
           });
         },
       );

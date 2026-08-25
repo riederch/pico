@@ -55,6 +55,7 @@ export const picoCompanionIpcChannels = Object.freeze({
   attachDepot: 'pico:depot:attach',
   decideDepotReach: 'pico:depot-reach:decide',
   fetchDepotsNow: 'pico:depot-fetch:ask',
+  acceptDepotOffer: 'pico:depot-offer:accept',
   /**
    * ADR 0141 RN4, and deliberately not `decideApproval` above.
    *
@@ -2728,6 +2729,23 @@ export interface PicoCompanionSupplierLine {
    * what Pico derived under it stays where it is (ADR 0136 with ADR 0129 SR6).
    */
   removeActionLabel: string;
+  /**
+   * ADR 0143 DP1, seit dem 2026-08-25. Ein neuerer Commit, der auf eine
+   * Person wartet - und **vor** den beiden Schaltern, nicht dahinter.
+   *
+   * Die Schalter werden weiter entschieden; das hier ist eine Frage, die
+   * jemand gestellt bekommen hat und die eine Antwort erwartet. Sie steht
+   * deshalb oben und trägt den Commit, den sie annimmt, im eigenen Feld: wer
+   * zusagt, sagt zu *dieser* Revision zu, nicht „dem Update".
+   *
+   * Nur Depots haben eine. Ein Lieferant hält Material und kein Depot hält
+   * seines - eine Bridge hat nichts, das man annehmen könnte.
+   */
+  offer?: {
+    acceptedCommit: string;
+    detail: string;
+    acceptActionLabel: string;
+  };
 }
 
 export function picoCompanionSupplierLines(
@@ -2878,6 +2896,9 @@ export interface PicoCompanionDepot {
   commit: string;
   mayFetch: boolean;
   mayFetchUnasked: boolean;
+  /** ADR 0143 DP1. Das Wort des Moduls; der Satz daraus entsteht hier. */
+  state?: string;
+  offeredCommit?: string;
 }
 
 export function picoCompanionDepotLines(
@@ -2890,12 +2911,33 @@ export function picoCompanionDepotLines(
     kind: 'depot',
     mayReachOutside: depot.mayFetch,
     mayReachUnasked: depot.mayFetchUnasked,
-  }))).map((line, index) => Object.freeze({
-    ...line,
-    // The line's own identity is the remote, because that is what the
-    // decision names. The revision is in the words a person reads.
-    identifier: depots[index]!.remote,
-  }));
+  }))).map((line, index) => {
+    const depot = depots[index]!;
+    return Object.freeze({
+      ...line,
+      // The line's own identity is the remote, because that is what the
+      // decision names. The revision is in the words a person reads.
+      identifier: depot.remote,
+      /**
+       * ADR 0143 DP1. Nur wenn das Modul `offered` sagt - und das Wort kommt
+       * von dort, damit die Reihenfolge, in der ein Grund eine Folge
+       * überholt, an einer Stelle steht. Ein unerreichbares Depot zeigt kein
+       * Angebot, weil das Annehmen einen Fetch plant, der nicht gelingen kann.
+       *
+       * Der Satz nennt beide Enden, gekürzt, weil eine Person einen Commit an
+       * seinen ersten Zeichen erkennt oder gar nicht. Und er sagt, was das
+       * Annehmen bedeutet: von hier nach dort, jetzt.
+       */
+      ...(depot.state !== 'offered' || depot.offeredCommit === undefined ? {} : {
+        offer: Object.freeze({
+          acceptedCommit: depot.offeredCommit,
+          detail: `There is a newer revision: ${depot.offeredCommit.slice(0, 12)}. `
+            + `This one keeps running ${depot.commit.slice(0, 12)} until you say so.`,
+          acceptActionLabel: `Run ${depot.offeredCommit.slice(0, 12)} instead`,
+        }),
+      }),
+    });
+  });
 }
 
 /**
@@ -3075,11 +3117,28 @@ export function parsePicoCompanionDepots(value: unknown): readonly PicoCompanion
       || typeof record.mayFetchUnasked !== 'boolean') {
       throw new Error('invalid_pico_companion_depot');
     }
+    /**
+     * ADR 0143 DP1. Das Zustandswort wird als Zeichenkette geprüft und nicht
+     * gegen eine Liste: `picoDepotStates` gehört dem Depot-Modul, und zwei
+     * geschlossene Listen, die ineinander kopiert sind, sind zwei Listen, die
+     * sich widersprechen können. Diese Fläche handelt nur auf `offered` und
+     * lässt jedes andere Wort das sein, was es ist - ein Wort, aus dem sie
+     * keine Frage macht.
+     *
+     * Beide Felder sind wahlfrei, weil ein älteres Home sie nicht schickt und
+     * ein Fenster, das darüber stolpert, eine Depotliste ganz verlöre.
+     */
+    if ((record.state !== undefined && typeof record.state !== 'string')
+      || (record.offeredCommit !== undefined && typeof record.offeredCommit !== 'string')) {
+      throw new Error('invalid_pico_companion_depot');
+    }
     return Object.freeze({
       remote: record.remote,
       commit: record.commit,
       mayFetch: record.mayFetch,
       mayFetchUnasked: record.mayFetchUnasked,
+      ...(record.state === undefined ? {} : { state: record.state }),
+      ...(record.offeredCommit === undefined ? {} : { offeredCommit: record.offeredCommit }),
     });
   }));
 }

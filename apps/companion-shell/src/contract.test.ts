@@ -521,6 +521,47 @@ describe('ADR 0143 DP1 - a depot asks the same two questions', () => {
     expect(on?.unaskedDetail).toContain('visible to nobody');
   });
 
+  it('stellt ein Angebot nur, wenn das Modul es stellt', () => {
+    /**
+     * ADR 0143 DP1. Das Zustandswort kommt aus dem Depot-Modul, weil dort die
+     * Reihenfolge steht, in der ein Grund eine Folge überholt: ein
+     * unerreichbares Depot zeigt kein Angebot, denn das Annehmen plante einen
+     * Fetch, der nicht gelingen kann. Die Fläche entscheidet das nicht noch
+     * einmal - sie liest das Wort.
+     */
+    const offering = {
+      ...depot, mayFetch: true, state: 'offered', offeredCommit: 'b'.repeat(40),
+    };
+    expect(picoCompanionDepotLines([offering])[0]?.offer?.acceptedCommit)
+      .toBe('b'.repeat(40));
+
+    for (const state of ['running', 'unreachable', 'not_materialised', 'never_fetched']) {
+      expect(picoCompanionDepotLines([{ ...offering, state }])[0]?.offer, state)
+        .toBeUndefined();
+    }
+    // Und ohne Wort gar nichts: eine ältere Fassung des Homes, die keinen
+    // Zustand mitschickt, darf keine Frage erfinden.
+    expect(picoCompanionDepotLines([{ ...depot, offeredCommit: 'b'.repeat(40) }])[0]?.offer)
+      .toBeUndefined();
+  });
+
+  it('nennt beide Enden und sagt, dass bis dahin nichts geschieht', () => {
+    // Ein Angebot ändert nichts. Der Satz muss das sagen, sonst liest ihn
+    // jemand als Meldung darüber, dass sich etwas geändert *hat*.
+    const [line] = picoCompanionDepotLines([{
+      ...depot, mayFetch: true, state: 'offered', offeredCommit: 'b'.repeat(40),
+    }]);
+    expect(line?.offer?.detail).toContain('bbbbbbbbbbbb');
+    expect(line?.offer?.detail).toContain('keeps running aaaaaaaaaaaa');
+    expect(line?.offer?.acceptActionLabel).toContain('bbbbbbbbbbbb');
+    // In den Worten nie der volle Commit - eine Zeile, die 40 Zeichen trägt,
+    // ist keine. Im `acceptedCommit` schon: das ist nicht, was jemand liest,
+    // sondern das, wozu er zusagt, und eine gekürzte Zusage wäre keine.
+    expect(line?.offer?.detail).not.toContain('b'.repeat(40));
+    expect(line?.offer?.acceptActionLabel).not.toContain('b'.repeat(40));
+    expect(line?.offer?.acceptedCommit).toBe('b'.repeat(40));
+  });
+
   it('refuses a depot row that is missing what a line needs', () => {
     expect(() => parsePicoCompanionDepots([{ remote: 'x' }]))
       .toThrow('invalid_pico_companion_depot');

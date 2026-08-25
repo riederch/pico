@@ -174,6 +174,16 @@ export interface PicoCompanionDepotView {
   mayFetch: boolean;
   mayFetchUnasked: boolean;
   acceptedAt: string;
+  /**
+   * ADR 0143 DP1. Das Zustandswort des Depot-Moduls, nicht eines von hier.
+   *
+   * Es reist als Wort und nicht als Satz: was eine Person liest, entscheidet
+   * die Fläche. Bis zum 2026-08-25 reiste es gar nicht - `picoDepotState` war
+   * gebaut, geprüft und im laufenden Produkt unerreicht.
+   */
+  state: string;
+  /** Gesetzt, wenn ein neuerer Commit auf eine Person wartet. */
+  offeredCommit?: string;
 }
 
 export async function readPicoCompanionDepots(input: {
@@ -210,6 +220,35 @@ export async function attachPicoCompanionDepot(input: {
   const result = answer.result as { remote?: unknown; commit?: unknown };
   if (typeof result.remote !== 'string' || typeof result.commit !== 'string') {
     throw new Error('invalid_pico_depot_attach_result');
+  }
+  return { remote: result.remote, commit: result.commit };
+}
+
+/**
+ * ADR 0143 DP1. Nimmt ein Angebot an, indem sie seinen Commit nennt.
+ *
+ * Der Commit wird mitgeschickt und nicht vom Home erraten: was hier zugesagt
+ * wird, ist Code, der ausgeführt wird, und „ja zu dieser Revision" ist etwas
+ * anderes als „ja zu dem, was gerade das Neueste ist". Ein Fetch zwischen der
+ * Frage und der Antwort wird dadurch zu einer Ablehnung statt zu einer
+ * stillen Zustimmung.
+ */
+export async function acceptPicoCompanionDepotOffer(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  remote: string;
+  acceptedCommit: string;
+}): Promise<{ remote: string; commit: string }> {
+  const answer = await input.livingDeviceLinkClient.request('home.depot.offer.accept', {
+    remote: input.remote,
+    acceptedCommit: input.acceptedCommit,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `depot_offer_accept_${answer.outcome}`);
+  }
+  const result = answer.result as { remote?: unknown; commit?: unknown };
+  if (typeof result.remote !== 'string' || typeof result.commit !== 'string') {
+    throw new Error('invalid_pico_depot_offer_accept_result');
   }
   return { remote: result.remote, commit: result.commit };
 }

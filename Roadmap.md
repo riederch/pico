@@ -1326,15 +1326,33 @@ Klammerzählung gemeldet und von der Zeilenlesung nicht gesehen.
 Alle drei sind in ihrem ADR als halb umgesetzt verzeichnet, keines war
 verschwiegen — nur ungeprüft:
 
-- `setPicoSupplierCredential` (ADR 0138 CO1, „part implemented"): Umfang und
-  Vorhandensein eines Zugangs sind entschieden, wo das Geheimnis ruht, ist im
-  ADR offen. **Ein Zugangswort für einen Lieferanten kann heute niemand
-  hinterlegen**; `home.model.provider.credential.submit` ist die Fläche
-  nebenan und erreicht keine Lieferanten.
-- `acceptPicoDepotOffer` (ADR 0143 DP1): Das Angebot wird berechnet, die
-  Annahme nennt den Commit — und die geschlossene Operationsliste hat keine
-  Annahme. **Ein Depot lässt sich heute nicht auf einen neueren Commit
-  bewegen**; es läuft auf dem, an dem es angehängt wurde.
+- `setPicoSupplierCredential` (ADR 0138 CO1): **Ein Zugangswort für einen
+  Lieferanten kann heute niemand hinterlegen.** Die erste Fassung dieses
+  Befunds sagte, es warte darauf, wo das Geheimnis ruht — das war falsch und
+  ist am selben Tag berichtigt: die Verwahrung ist entschieden (Domänen-KEK,
+  ein Domänen-Shred nimmt es mit), `SupplierCredentialCrypto` ist gebaut und
+  gegen seine drei Ablehnungen geprüft. Was fehlt, ist ein **Abnehmer**: der
+  einzige existierende Lieferant ist eine lokale git-Arbeitskopie, deren
+  eigener Kopf sagt, dass sie keines braucht, und die Übergabe bräuchte
+  zusätzlich einen Platz im geschlossenen Lieferanten-Transport (ADR 0136
+  BR2). Das ADR sagt das ausdrücklich als Entscheidung: jetzt zu bauen hieße,
+  einen zweiten ungenutzten Mechanismus neben den zu stellen, den es schon
+  meldet.
+- `acceptPicoDepotOffer` (ADR 0143 DP1): **Gebaut, am selben Tag.** Der
+  Befund war in Wahrheit drei Befunde, die auf *eine* fehlende Hälfte zeigten:
+  ein Speicher-Schreiber ohne Aufrufer, eine als unerreicht begründete
+  Fähigkeit (`picoDepotState` — „die Depotzeilen im Fenster zeigen es nicht")
+  und eine Operationsliste ohne Annahme. Der Fetch schrieb das Angebot,
+  niemand konnte es sehen, niemand es annehmen. `home.depot.offer.accept` ist
+  jetzt die 48. Operation, der Lesevorgang trägt das Zustandswort des Moduls,
+  und das Fenster stellt die Frage über den beiden Schaltern — ein Angebot ist
+  eine gestellte Frage, die Schalter sind Einstellungen. Beide Begründungen in
+  den Prüfern haben ihren Gegenstand verloren und sind entfernt; einer von
+  beiden hat das selbst gemeldet.
+
+  Ein Fehler wurde erst durch die Erreichbarkeit sichtbar: die Annahme löschte
+  das Angebot nicht, also hätte die Fläche weiter „es gibt etwas Neues" über
+  genau den Commit gesagt, den die Person gerade angenommen hatte.
 - `setPicoRuleDecision` (ADR 0140 RL4, „half implemented"): Die gebaute Hälfte
   ist die Verweigerung — kein Effekt, keine Host-Konfiguration erreicht eine
   Regel. Der Kommentar der Methode sagt, eine Regeländerung komme „über eine

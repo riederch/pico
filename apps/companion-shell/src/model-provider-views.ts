@@ -904,6 +904,16 @@ export function renderPicoCompanionDepots(
   act: (input: { remote: string; mayFetch: boolean; mayFetchUnasked: boolean }) => void,
   /** ADR 0143 DP8. Ends the attachment, and the working copy with it. */
   remove?: (remote: string) => void,
+  /**
+   * ADR 0143 DP1. Nimmt ein Angebot an, indem sie seinen Commit nennt.
+   *
+   * **Zuletzt in der Liste, wie bei den Recalls und aus demselben Grund**: die
+   * beiden Rückrufe davor haben andere Formen, aber ein neuer Platz vor einem
+   * bestehenden deutet jeden Aufrufer stillschweigend um. Neue Parameter
+   * hinten (am 2026-08-25 einmal falsch herum gebaut und von einem Test
+   * gefunden).
+   */
+  acceptOffer?: (input: { remote: string; acceptedCommit: string }) => void,
 ): void {
   const depots = parsePicoCompanionDepots(value);
   root.section.hidden = depots.length === 0;
@@ -932,7 +942,32 @@ export function renderPicoCompanionDepots(
       mayFetchUnasked: depot.mayFetch ? false : depot.mayFetchUnasked,
     }));
 
-    item.append(headline, detail, fetch);
+    item.append(headline, detail);
+
+    /**
+     * ADR 0143 DP1. **Vor den Schaltern**, weil das hier eine gestellte Frage
+     * ist und die beiden darunter Einstellungen sind, die weiter entschieden
+     * werden. Wer eine Frage unter zwei Schalter setzt, lässt sie übersehen.
+     */
+    if (line.offer !== undefined && acceptOffer !== undefined) {
+      const offered = line.offer;
+      const offerDetail = root.document.createElement('p');
+      offerDetail.className = 'detail';
+      offerDetail.textContent = offered.detail;
+
+      const accept = root.document.createElement('button');
+      accept.type = 'button';
+      accept.textContent = offered.acceptActionLabel;
+      accept.addEventListener('click', () => acceptOffer({
+        remote: depot.remote,
+        // Der Commit reist mit dem Knopf, nicht aus einer späteren Lesung:
+        // was die Person gesehen hat, ist das, wozu sie zusagt.
+        acceptedCommit: offered.acceptedCommit,
+      }));
+      item.append(offerDetail, accept);
+    }
+
+    item.append(fetch);
 
     if (line.unaskedActionLabel !== undefined) {
       const unaskedDetail = root.document.createElement('p');

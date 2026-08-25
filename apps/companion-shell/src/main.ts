@@ -1125,6 +1125,19 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    picoCompanionIpcChannels.acceptDepotOffer,
+    async (event: IpcMainInvokeEvent, remote: unknown, acceptedCommit: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof remote !== 'string' || typeof acceptedCommit !== 'string') {
+        throw new Error('invalid_depot_offer_acceptance');
+      }
+      await runtime.acceptDepotOffer(remote, acceptedCommit);
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.forgetModelProvider,
     async (event: IpcMainInvokeEvent, entryId: unknown) => {
       assertRendererSender(event);

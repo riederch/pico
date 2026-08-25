@@ -1090,6 +1090,60 @@ describe('everything a person added, taken back - and never mistaken for a setti
     expect(removed).toEqual(['git-library']);
   });
 
+  it('stellt die Frage über die Schalter und schickt den gesehenen Commit zurück', () => {
+    /**
+     * ADR 0143 DP1. Ein Angebot ist eine gestellte Frage, die beiden Schalter
+     * darunter sind Einstellungen, die weiter entschieden werden - wer eine
+     * Frage unter zwei Schalter setzt, lässt sie übersehen.
+     *
+     * Und der Commit reist mit dem Knopf, nicht aus einer späteren Lesung:
+     * was die Person gesehen hat, ist das, wozu sie zusagt. Ein Fetch
+     * zwischen Frage und Antwort wird dadurch zu einer Ablehnung.
+     */
+    const root = fakeDocument();
+    const accepted: Array<{ remote: string; acceptedCommit: string }> = [];
+    renderPicoCompanionDepots(root, [{
+      remote: 'file:///srv/depots/notes',
+      commit: 'a'.repeat(40),
+      mayFetch: true,
+      mayFetchUnasked: false,
+      state: 'offered',
+      offeredCommit: 'b'.repeat(40),
+    }], () => {}, () => {}, (input) => accepted.push(input));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    const labels = buttons.map((button) => String(button.textContent));
+    expect(labels[0]).toContain('bbbbbbbbbbbb');
+
+    (buttons[0] as unknown as { click(): void }).click();
+    expect(accepted).toEqual([{
+      remote: 'file:///srv/depots/notes',
+      acceptedCommit: 'b'.repeat(40),
+    }]);
+  });
+
+  it('zeigt keine Frage, wo das Home keine stellt', () => {
+    // Ein Depot ohne stehendes Angebot bekommt keinen Knopf, der nichts tut.
+    const root = fakeDocument();
+    renderPicoCompanionDepots(root, [{
+      remote: 'file:///srv/depots/notes',
+      commit: 'a'.repeat(40),
+      mayFetch: true,
+      mayFetchUnasked: false,
+      state: 'running',
+    }], () => {}, () => {}, () => {});
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    for (const button of line.children.filter((child) => child.tag === 'button')) {
+      expect(String(button.textContent)).not.toContain('instead');
+    }
+  });
+
   it('removes a depot by its remote, which is what the decision names', () => {
     const root = fakeDocument();
     const removed: string[] = [];

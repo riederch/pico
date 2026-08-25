@@ -7029,8 +7029,22 @@ export class EventStore {
       offer: input.offer,
       acceptedCommit: input.acceptedCommit,
     });
+    /**
+     * **Und das Angebot geht mit**, gefunden am 2026-08-25, als diese Methode
+     * zum ersten Mal erreichbar wurde. Ohne das bliebe `offered_commit` auf
+     * dem Commit stehen, der jetzt läuft, und `picoDepotState` sagte weiter
+     * `offered`: „es gibt etwas Neues" über genau das, was die Person gerade
+     * angenommen hat. Ein angenommenes Angebot ist keins mehr - dieselbe
+     * absichtliche Vergesslichkeit, mit der `acceptPicoDepotOffer` einen
+     * gewöhnlichen Pin zurückgibt, der nichts davon weiß, ein Angebot gewesen
+     * zu sein.
+     */
     this.db
-      .prepare('UPDATE pico_depot_attachment SET running_commit = ?, accepted_at = ? WHERE remote = ?')
+      .prepare(`
+        UPDATE pico_depot_attachment
+        SET running_commit = ?, accepted_at = ?, offered_commit = NULL
+        WHERE remote = ?
+      `)
       .run(pin.commit, input.acceptedAt, pin.remote);
     return this.picoDepotAttachment(pin.remote)!;
   }

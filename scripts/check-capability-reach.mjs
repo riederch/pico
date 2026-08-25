@@ -139,12 +139,6 @@ const arguedModuleNames = [
       + 'und niemand baut es woanders nach',
   ],
   [
-    'picoDepotState',
-    'ADR 0143. Das Zustandswort eines Depots für eine Person - `never_fetched`, `unreachable` - '
-      + 'mit der einen Stelle, an der ein Grund eine Folge überholt. Die Depotzeilen im Fenster '
-      + 'zeigen es nicht; auch hier fragt das Produkt nicht, statt es nachzubauen',
-  ],
-  [
     'toPicoHomeAssistantObservations',
     'ADR 0128 H4. Der Connector-Eingang, dessen Transport die Matrix als deklariert und '
       + 'nicht implementiert führt',

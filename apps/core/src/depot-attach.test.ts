@@ -1,9 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
+import { PicoDepotWorkspace } from './depot-workspace.js';
+import { EventStore } from './event-store.js';
 import { openPicoHomeWithDevice, sendPicoLinkDirectRequest } from './test-claimed-home.js';
 
 /**
@@ -32,11 +34,12 @@ const commit = 'a'.repeat(40);
 async function claimedHome() {
   const dir = mkdtempSync(join(tmpdir(), 'pico-depot-attach-'));
   dirs.push(dir);
+  const databasePath = join(dir, 'pico.sqlite');
   const logLines: string[] = [];
   const app = await buildApp({
     host: '127.0.0.1',
     port: 0,
-    databasePath: join(dir, 'pico.sqlite'),
+    databasePath,
     deviceId: 'pico-core',
     logDestination: new Writable({
       write(chunk: Buffer, _encoding, callback) {
@@ -69,8 +72,31 @@ async function claimedHome() {
       hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
       hostKeyAgreementPublicKeyHex: setup.host.keyAgreementPublicKeyHex,
     });
-  return { app, send };
+  return { app, send, databasePath };
 }
+
+const remote = 'https://example.invalid/corpus.git';
+const newer = 'b'.repeat(40);
+
+/**
+ * Was ein Fetch gelernt hat, ohne einen Fetch: die Zeile bekommt ihr Angebot
+ * über dieselbe eine Tür, die das Produkt benutzt, und die Arbeitskopie wird
+ * angelegt, weil `materialised` eine Tatsache über das Dateisystem ist, die
+ * der Kern liest und dem Modul reicht.
+ */
+const aFetchSaw = async (databasePath: string, offeredCommit: string) => {
+  mkdirSync(
+    join(PicoDepotWorkspace.defaultRoot(databasePath), PicoDepotWorkspace.directoryName(remote)),
+    { recursive: true },
+  );
+  const store = await EventStore.open(databasePath, {});
+  store.recordPicoDepotFetchOutcome({
+    remote,
+    at: '2026-08-25T10:00:00.000Z',
+    offeredCommit,
+  } as never);
+  store.close();
+};
 
 describe('ADR 0143 DP1 - attaching from the person\'s own device', () => {
   it('attaches at a commit and reaches nothing', async () => {
@@ -93,6 +119,10 @@ describe('ADR 0143 DP1 - attaching from the person\'s own device', () => {
       mayFetch: false,
       mayFetchUnasked: false,
       acceptedAt: expect.any(String),
+      // ADR 0143 DP1: das Zustandswort des Moduls, das bis zum 2026-08-25
+      // nirgendwo ankam. Nichts darf geholt werden, also ist auch nichts
+      // geholt worden - und das erklärt alles andere.
+      state: 'never_fetched',
     }]);
   });
 
@@ -174,5 +204,82 @@ describe('ADR 0143 DP1 - attaching from the person\'s own device', () => {
       mayReachOutside: true,
       mayReachUnasked: true,
     });
+  });
+});
+
+describe('ADR 0143 DP1 - ein neuerer Commit wartet auf eine Person', () => {
+  /**
+   * Der Befund, aus dem das kam (Roadmap B22, 2026-08-25): der Fetch schrieb
+   * das Angebot, `picoDepotState` konnte `offered` sagen, `acceptPicoDepotOffer`
+   * war gebaut - und keine Operation erreichte eines davon. DP1s Zusage war
+   * wahr über eine Datenbankzeile und nicht über ein Pico.
+   */
+  const offering = async () => {
+    const home = await claimedHome();
+    await home.send('home.depot.attach', { remote, commit });
+    await home.send('home.depot.reach.decide', {
+      remote, mayFetch: true, mayFetchUnasked: false,
+    });
+    await aFetchSaw(home.databasePath, newer);
+    return home;
+  };
+
+  it('zeigt das Angebot und nimmt es an, wenn die Person seinen Commit nennt', async () => {
+    const { send } = await offering();
+
+    const before = ((await send('home.depots.read', {})).result as {
+      depots: Array<Record<string, unknown>>;
+    }).depots[0]!;
+    expect(before.state).toBe('offered');
+    expect(before.offeredCommit).toBe(newer);
+    // Und der Pin steht noch da, wo er stand: ein Angebot ändert nichts.
+    expect(before.commit).toBe(commit);
+
+    const accepted = await send('home.depot.offer.accept', { remote, acceptedCommit: newer });
+    expect(accepted.response.outcome).toBe('ok');
+    expect(accepted.result).toEqual({ remote, commit: newer });
+
+    const after = ((await send('home.depots.read', {})).result as {
+      depots: Array<Record<string, unknown>>;
+    }).depots[0]!;
+    expect(after.commit).toBe(newer);
+    // Ein angenommenes Angebot ist keins mehr. Bliebe es stehen, sagte die
+    // Fläche „es gibt etwas Neues" über genau das, was gerade läuft.
+    expect(after.state).toBe('running');
+    expect(after.offeredCommit).toBeUndefined();
+  });
+
+  it('lehnt einen anderen Commit ab, statt das Neueste zu nehmen', async () => {
+    /**
+     * Der Unterschied zwischen „ich habe zugestimmt, diesen Code auszuführen"
+     * und „ich habe zugestimmt, auszuführen, was gerade das Neueste war". Ein
+     * Fetch, der zwischen der Frage und der Antwort landet, wird hier durch
+     * Vergleich gefangen und nicht durch Reihenfolge geglaubt.
+     */
+    const { send, databasePath } = await offering();
+    await aFetchSaw(databasePath, 'c'.repeat(40));
+
+    const stale = await send('home.depot.offer.accept', { remote, acceptedCommit: newer });
+    expect(stale.response.outcome).toBe('invalid_arguments');
+    expect(stale.result.refusal).toBe('pico_depot_acceptance_mismatch');
+
+    const after = ((await send('home.depots.read', {})).result as {
+      depots: Array<Record<string, unknown>>;
+    }).depots[0]!;
+    expect(after.commit).toBe(commit);
+  });
+
+  it('antwortet ohne Angebot wie über ein Depot, das es nicht gibt', async () => {
+    // ADR 0077 C4. Beide Male gibt es nichts anzunehmen, und ein Nein, das die
+    // beiden Fälle unterscheidet, beantwortet die Frage „gibt es dieses Depot?".
+    const { send } = await claimedHome();
+    await send('home.depot.attach', { remote, commit });
+
+    const noOffer = await send('home.depot.offer.accept', { remote, acceptedCommit: newer });
+    const noDepot = await send('home.depot.offer.accept', {
+      remote: 'https://example.invalid/never.git', acceptedCommit: newer,
+    });
+    expect(noOffer.result).toEqual(noDepot.result);
+    expect(noOffer.result.refusal).toBe('no_offer_standing');
   });
 });

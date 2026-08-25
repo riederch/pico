@@ -76,23 +76,19 @@ const withoutAProductCaller = [
   ],
   [
     'setPicoSupplierCredential',
-    'ADR 0138 CO1, whose own gate text says "part implemented": the half that '
-    + 'is a decision - a scope, and that a credential exists - is here, and '
-    + 'where the secret lives at rest is stated as open in the ADR rather than '
-    + 'guessed at. A submit surface would have to put the secret somewhere, so '
-    + 'it waits on that decision. **A person cannot record a supplier '
-    + 'credential today**; `home.model.provider.credential.submit` is the '
-    + 'model-provider surface next door and does not reach suppliers. Recorded '
-    + '2026-08-25 as Roadmap finding B22.',
-  ],
-  [
-    'acceptPicoDepotOffer',
-    'ADR 0143 DP1. The offer is computed (`picoDepotOffer` off the attachment) '
-    + 'and the acceptance names the commit it was computed against, so this is '
-    + 'the half that decides. The closed operation list has `home.depot.attach`, '
-    + '`home.depot.reach.decide`, `home.depot.detach` and `home.depot.fetch.ask` '
-    + 'and no acceptance, so **a depot cannot be moved to a newer commit by a '
-    + 'person today** - it runs at the commit it was attached at. Recorded '
+    'ADR 0138 CO1, and the reason is a consumer rather than a decision - '
+    + 'corrected 2026-08-25, because the first version of this entry said it '
+    + 'waits on where the secret lives, and that was settled long ago: a '
+    + 'supplier credential lives in the domain its supplier attached into, '
+    + 'wrapped by that domain\'s KEK, so a domain shred takes it. '
+    + '`SupplierCredentialCrypto` is built and tested against its three '
+    + 'refusals. What is missing is anybody to hand a credential to: the only '
+    + 'supplier that exists is a local git working copy whose own header says '
+    + 'it needs none, and wiring this would also need a slot in ADR 0136 BR2\'s '
+    + 'closed supplier transport for handing one over for one use. The ADR '
+    + 'states it as a decision - building it now adds a second unused mechanism '
+    + 'beside the one it already reports. So **a person cannot record a '
+    + 'supplier credential today** and no supplier is asking for one. Recorded '
     + '2026-08-25 as Roadmap finding B22.',
   ],
   [

@@ -148,7 +148,11 @@ import {
 } from './action-path.js';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
 import { picoDepotModuleManifest } from '@pico/module-depot/manifest';
-import { picoDepotFetchIntent, type PicoDepotView } from '@pico/module-depot/depot';
+import {
+  picoDepotFetchIntent,
+  picoDepotState,
+  type PicoDepotView,
+} from '@pico/module-depot/depot';
 import {
   defaultPicoDepotFetchIntervalMs,
   parsePicoDepotTask,
@@ -4417,6 +4421,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 mayFetch: attachment.mayFetch,
                 mayFetchUnasked: attachment.mayFetchUnasked,
                 acceptedAt: attachment.acceptedAt,
+                /**
+                 * ADR 0143 DP1. Das Zustandswort kommt aus dem Modul, nicht
+                 * von hier - und bis zum 2026-08-25 kam es nirgendwo an:
+                 * `picoDepotState` war gebaut, geprüft und im ganzen Produkt
+                 * unerreicht, also war `offered` ein Zustand, den ein Typ
+                 * kannte und ein Mensch nie sah.
+                 *
+                 * Das Wort reist, der Satz nicht. Welche Worte daraus werden,
+                 * entscheidet die Fläche - `check-one-voice` hält fest, dass
+                 * hier nichts formuliert wird.
+                 */
+                state: picoDepotState(picoDepotViewFor(attachment)),
+                ...(attachment.offeredCommit === undefined
+                  ? {}
+                  : { offeredCommit: attachment.offeredCommit }),
               })),
             } as unknown as Record<string, unknown>,
           };
@@ -4643,6 +4662,57 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           store.append(depotDetached);
           broadcast(depotDetached);
           return { outcome: 'ok', result: { detached: true } };
+        }
+        /**
+         * ADR 0143 DP1. Ein Angebot annehmen, indem man seinen Commit nennt.
+         *
+         * Der Home baut das Angebot aus dem, was er gespeichert hat, und
+         * vergleicht es mit dem, was die Person genannt hat. Ein Fetch, der
+         * zwischen der Frage und der Antwort gelandet ist, erzeugt damit einen
+         * Unterschied und wird abgelehnt - das ist der Unterschied zwischen
+         * „ich habe zugestimmt, diesen Code auszuführen" und „ich habe
+         * zugestimmt, auszuführen, was gerade das Neueste war".
+         *
+         * Kein Fetch hier. Das Annehmen bewegt den Pin; das Holen ist ADR 0138
+         * CO3/CO4s eigene Entscheidung und läuft über den Sweep, der sie liest.
+         */
+        case 'home.depot.offer.accept': {
+          if (principal === undefined
+            || typeof args.remote !== 'string'
+            || typeof args.acceptedCommit !== 'string'
+            || Object.keys(args).length !== 2) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const attachment = store.picoDepotAttachment(args.remote);
+          if (attachment === undefined || attachment.offeredCommit === undefined) {
+            // Ein Depot, das es nicht gibt, und eines ohne Angebot bekommen
+            // dasselbe Wort: das Nein ist kein Verzeichnis (ADR 0077 C4), und
+            // beide Male gibt es nichts anzunehmen.
+            return { outcome: 'invalid_arguments', result: { refusal: 'no_offer_standing' } };
+          }
+          try {
+            const offer = store.picoDepotOffer({
+              remote: args.remote,
+              seenCommit: attachment.offeredCommit,
+            });
+            if (offer === null) {
+              return { outcome: 'invalid_arguments', result: { refusal: 'no_offer_standing' } };
+            }
+            const moved = store.acceptPicoDepotOffer({
+              offer,
+              acceptedCommit: args.acceptedCommit,
+              acceptedAt: new Date().toISOString(),
+            });
+            return {
+              outcome: 'ok',
+              result: { remote: moved.pin.remote, commit: moved.pin.commit },
+            };
+          } catch (refused) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: refused instanceof Error ? refused.message : 'refused' },
+            };
+          }
         }
         case 'home.depot.fetch.ask': {
           if (principal === undefined
