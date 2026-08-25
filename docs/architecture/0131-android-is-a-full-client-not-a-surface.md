@@ -1899,6 +1899,39 @@ local-first product's most security-critical moment.
   the client, when it comes, inherits the sentence instead of writing a second
   one.
 
+  **A7 ist zu, am 2026-08-25, auf einem A34.** Der laufende Client sagt es
+  jetzt: `ReachabilityConditionService` entsiegelt die Passphrase über den
+  Plattform-Keystore, macht **einen authentifizierten Lebenszyklus-Lesevorgang**
+  und lässt `picoCompanionConditionsFor` entscheiden und benennen.
+  `ReachabilityJobService`, der bisher nur maß, *ob das System ihn laufen
+  ließ*, trägt jetzt auch die Frage.
+
+  Drei Zustände, alle drei am Gerät gemessen. Antwortendes Home:
+  `home_answered`, keine Bedingung, und die Fläche sagt **nichts** - kein
+  erfundenes "alles in Ordnung". Stummes Home, das zurückkehrt:
+  `link_rejected:400:request_expired`, weil das Gültigkeitsfenster des
+  Umschlags verstrichen ist. Totes Home: `read_timed_out`. In beiden letzten
+  Fällen steht der Satz des Kerns auf dem Schirm - "Home not reached. Your
+  Home is not answering, so this is not a report that nothing is waiting."
+
+  **Die Worte gehören dem Kern, und zwar als Format, nicht als Disziplin.**
+  Der Kern schreibt die fertige Zeile in eine Datei, die Java anzeigt; ein
+  Bildschirm, der aus `kind` einen eigenen Satz machen wollte, hätte dort
+  nichts, woraus. Was Android beisteuert, ist eine Tatsache: ob das System ein
+  Netz sieht. Sagt es nichts, bleibt der Wert `unknown` und der Kern lässt
+  `no_network` weg, statt es zu raten.
+
+  **Was der Weg dorthin gekostet hat, gehört dazu**, weil jeder dieser Fehler
+  erst am Gerät sichtbar wurde: zwei Prozesse auf einem AF_UNIX-Socket, was
+  wie ein Wettlauf aussieht und ein Namenskonflikt ist; ein Prüfdienst, der
+  während der Zeremonie loslief; eine fehlende Manifest-Berechtigung, die
+  `getActiveNetwork` werfen ließ und den Dienst vor Node mitriss; ein Warten,
+  das die Socket-*Datei* prüfte statt den Dienst - die Datei überlebt ihn; und
+  ein fehlendes `hello`, aus dem dieses Skript "dein Home antwortet nicht"
+  machte. Der letzte ist der lehrreichste: ein **lokaler** Fehler, als Aussage
+  über das Home ausgegeben, ist dieselbe Verwechslung, die dieses Gate
+  verbietet - nur in die andere Richtung.
+
   **Der Beitritt spricht die Grenze jetzt** (2026-08-22) - der Beitritt, nicht
   der laufende Client. Der Unterschied gehört in denselben Satz, weil dieses
   Gate mehr verlangt: eine Fläche, die *im Betrieb* sagt, dass das Home nicht
