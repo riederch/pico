@@ -2,6 +2,45 @@
 
 ## Status
 
+Status note, 2026-08-25: **RL4s dauerhafte Hälfte war seit dem 2026-08-11 da,
+und niemand konnte sie erreichen.** Gefunden als Roadmap-Befund B22, nachdem
+ein berichtigter Prüfer 82 statt 47 Schreibmethoden sah: `setPicoRuleDecision`
+hatte außerhalb seiner Tests keinen Aufrufer, `picoRuleDecisions` trug den
+Kommentar „for a surface that shows them" neben einer Fläche, die es nicht
+gab, und `home.rule_decision_changed` stand in beiden geschlossenen
+Ereignislisten, ohne dass irgendetwas es anhängte. Der eine Leser einer Regel
+im ganzen Produkt ist der Depot-Sweep, und ohne stehende Regel findet er nie
+einen Menschen - also tat der planmäßige Lauf seit seinem Bau nichts.
+
+`home.rule.decide` und `home.rule.forget` schließen das. Zurücknehmen ist ein
+eigener Vorgang und nicht „auf `require_approval` zurückstellen": abwesend ist
+nicht `deny`, und für einen `local_write` Effekt wäre diese Einstellung
+*strenger* als vorher - eine Rücknahme, die verschärft. Eine Regel gilt nur
+über einen Effekt, dem jemand zugestimmt hat; eine über einen Namen, den kein
+Modul erklärt, spräche über nichts und stünde da, bis irgendwann ein Modul ihn
+benutzt.
+
+**Kein `home.rules.read` daneben**, und das ist die Lehre desselben Tages: ADR
+0138 CO1 hält fest, dass ein zweiter ungenutzter Mechanismus schlechter ist als
+eine benannte Lücke. Was steht, zeigt der Lesevorgang, an dem es hängt -
+`home.depots.read` trägt die Regel für `depot.fetch` samt der Domäne, in der
+dieser Home sie entscheidet, und das Fenster macht daraus einen Schalter. Eine
+allgemeine Regelliste bekommt ihren Vorgang, wenn ein zweiter Effekt eine Regel
+tragen kann.
+
+**Und eine Aussage in diesem ADR war stärker als das, was gilt.** Der Satz „a
+recorded rule refines and never grants" stand über einer Testgruppe, die zwei
+Dinge bewies - eine Regel überstimmt den RL3-Boden nicht und schafft keine
+Reichweite, die ADR 0138 CO3 nie erlaubt hat - und den Fall dazwischen nie
+prüfte. Dort *gewährt* eine Regel sehr wohl: sie macht aus der Frage, die
+`external_write` hergibt, eine Erlaubnis, und genau das ist der Mechanismus,
+mit dem ADR 0143 DP8 einen unbeaufsichtigten Lauf handeln lässt. Der Nutzer hat
+das am 2026-08-25 bestätigt, nachdem beide Möglichkeiten nebeneinander lagen.
+Was eine Regel *nicht* kann, ist unverändert und wird vor der Regel entschieden:
+Boden und Reichweitenbedingung werden zu `deny`, und keine Regel kommt daran
+vorbei. Die Regel selbst heißt jetzt `applyPicoRulesRecordedDecision` statt
+eines blanken `??`, und der ungeprüfte Fall hat einen Test.
+
 Accepted as the decision contract for the action path. **RL1-RL6 are implemented**
 (2026-08-10, RL4 completed 2026-08-11), and this ADR is complete.
 

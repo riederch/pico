@@ -722,6 +722,33 @@ export const picoLinkDirectOperations = [
    * operation returning the drift *and* clearing it would make looking at the
    * question the same as answering it.
    */
+  /**
+   * ADR 0140 RL4. Was eine Person Pico erlaubt hat, ohne sie zu tun - lesen,
+   * setzen, zurücknehmen.
+   *
+   * **Die Tabelle war seit dem 2026-08-11 da und niemand konnte sie
+   * erreichen** (gefunden 2026-08-25 als Roadmap-Befund B22):
+   * `setPicoRuleDecision` hatte außerhalb seiner Tests keinen Aufrufer,
+   * `picoRuleDecisions` trug den Kommentar „for a surface that shows them"
+   * neben einer Fläche, die es nicht gab, und `home.rule_decision_changed`
+   * stand in beiden geschlossenen Ereignislisten, ohne dass irgendetwas es
+   * anhängte. Der eine Leser einer Regel im ganzen Produkt ist der
+   * Depot-Sweep, und ohne stehende Regel findet er nie einen Menschen.
+   *
+   * **Kein `home.rules.read` daneben**, und das ist die Lehre desselben Tages:
+   * ADR 0138 CO1 hält fest, dass ein zweiter ungenutzter Mechanismus schlechter
+   * ist als eine benannte Lücke. Was steht, zeigt der Lesevorgang, an dem es
+   * hängt - `home.depots.read` trägt die Regel für `depot.fetch` samt der
+   * Domäne, in der dieser Home sie entscheidet. Eine allgemeine Regelliste
+   * bekommt ihren Vorgang, wenn ein zweiter Effekt eine Regel tragen kann.
+   *
+   * Eine Regeländerung ist **kein Effekt** und läuft deshalb nicht über den
+   * Aktionspfad: wäre sie von dem Pfad aus erreichbar, den Regeln regieren,
+   * wäre die wertvollste Anfrage im System die, die den Aufseher entfernt.
+   * Sie kommt über diese authentifizierte Fläche oder gar nicht.
+   */
+  'home.rule.decide',
+  'home.rule.forget',
   'home.modules.consent.read',
   'home.modules.consent.record',
 ] as const;

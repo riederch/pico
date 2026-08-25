@@ -53,8 +53,6 @@ const argued = [
   ['pico_link_relay_identity', 'PRIMARY KEY CHECK (id = 1) - one row'],
   ['memory_domain_custody', 'PRIMARY KEY (privacy_domain) - one row per domain'],
   ['pico_module_activation', 'PRIMARY KEY (identifier) over ADR 0127\'s closed module list'],
-  ['pico_rule_decision', 'PRIMARY KEY (effect_name, privacy_domain) - bounded by the effect '
-    + 'catalogue times the domains, not by how often a rule is asked'],
   ['pico_home_device_recovery', 'one row per recovery ceremony, and ADR 0110 makes each one '
     + 'time-locked, person-initiated and replacing the whole device set'],
   ['pico_identity_root_rotation', 'one row per root rotation, which is the rarest act ADR '

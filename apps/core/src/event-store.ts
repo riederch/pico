@@ -7562,6 +7562,27 @@ export class EventStore {
     return row?.decision as 'allow' | 'require_approval' | 'deny' | undefined;
   }
 
+  /**
+   * ADR 0140 RL4. Nimmt eine Regel zurück, so dass wieder keine gilt.
+   *
+   * **Zurücknehmen ist nicht `deny`**, und deshalb braucht es diesen Weg: die
+   * ADR 0139 AC4 Zustimmung sagt bereits, dass dieser Effekt existieren darf,
+   * und eine abwesende Regel überlässt die Antwort dem Risiko. Wer nur auf
+   * `require_approval` zurückstellen könnte, hätte für einen `local_write`
+   * Effekt etwas *Strengeres* hinterlassen als vorher - eine Rücknahme, die
+   * eine Verschärfung ist.
+   */
+  public forgetPicoRuleDecision(input: {
+    effectName: string;
+    privacyDomain: string;
+  }): 'forgotten' | 'no_rule' {
+    this.ensureOpen();
+    const removed = this.db
+      .prepare('DELETE FROM pico_rule_decision WHERE effect_name = ? AND privacy_domain = ?')
+      .run(input.effectName, input.privacyDomain);
+    return removed.changes > 0 ? 'forgotten' : 'no_rule';
+  }
+
   /** ADR 0140 RL4. Every recorded rule, for a surface that shows them. */
   public picoRuleDecisions(): ReadonlyArray<{
     effectName: string;

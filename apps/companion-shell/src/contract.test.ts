@@ -58,6 +58,8 @@ import {
   parsePicoCompanionSuppliers,
   picoCompanionDepotLines,
   parsePicoCompanionDepots,
+  parsePicoCompanionUnattendedFetching,
+  picoCompanionUnattendedFetchingLine,
   picoCompanionProviderProvesItself,
 } from './contract.js';
 
@@ -560,6 +562,64 @@ describe('ADR 0143 DP1 - a depot asks the same two questions', () => {
     expect(line?.offer?.detail).not.toContain('b'.repeat(40));
     expect(line?.offer?.acceptActionLabel).not.toContain('b'.repeat(40));
     expect(line?.offer?.acceptedCommit).toBe('b'.repeat(40));
+  });
+
+  it('sagt beim Abschalten, was an die Stelle tritt, statt „verboten"', () => {
+    /**
+     * ADR 0140 RL4. Abwesend ist nicht `deny`: die Zustimmung sagt weiter,
+     * dass ein Depot-Fetch stattfinden darf - er braucht dann wieder jemanden,
+     * der gefragt werden kann. Ein Satz, der „verboten" sagte, beschriebe
+     * einen Zustand, den es nicht gibt.
+     */
+    const off = picoCompanionUnattendedFetchingLine({
+      effectName: 'depot.fetch', privacyDomain: 'private',
+    });
+    expect(off.allowing).toBe(false);
+    expect(off.detail).toContain('while you are here');
+    expect(off.detail).not.toMatch(/forbidden|not allowed|denied/iu);
+    // Und er sagt, warum ein planmäßiger Lauf dann nichts tut - sonst liest
+    // sich „ungefragt holen" an der Zeile darunter als Zusage.
+    expect(off.detail).toContain('nobody to ask');
+
+    const on = picoCompanionUnattendedFetchingLine({
+      effectName: 'depot.fetch', privacyDomain: 'private', decision: 'allow',
+    });
+    expect(on.allowing).toBe(true);
+    // Die Grenze reist mit: geholt wird der angenommene Commit, ein neuerer
+    // wartet (ADR 0143 DP1).
+    expect(on.detail).toContain('you accepted');
+    expect(on.detail).toContain('newer one still waits');
+    expect(on.actionLabel).not.toBe(off.actionLabel);
+  });
+
+  it('behandelt eine Regel, die nicht `allow` ist, wie keine', () => {
+    // `require_approval` und `deny` sind Verschärfungen. Für die Frage „darf
+    // ein Lauf ohne dich handeln?" ist beides ein Nein, und ein Schalter, der
+    // bei `deny` „an" zeigte, wäre schlicht falsch.
+    for (const decision of ['require_approval', 'deny'] as const) {
+      expect(picoCompanionUnattendedFetchingLine({
+        effectName: 'depot.fetch', privacyDomain: 'private', decision,
+      }).allowing, decision).toBe(false);
+    }
+  });
+
+  it('weist einen Lesevorgang zurück, der keine Domäne nennt', () => {
+    // Ohne Domäne könnte das Fenster nur eine erfinden - und wäre damit die
+    // zweite Stelle, an der steht, wo dieser Home entscheidet.
+    expect(() => parsePicoCompanionUnattendedFetching({ depots: [] }))
+      .toThrow('invalid_pico_companion_unattended_fetching');
+    expect(() => parsePicoCompanionUnattendedFetching({
+      unattendedFetching: { effectName: 'depot.fetch' },
+    })).toThrow('invalid_pico_companion_unattended_fetching');
+    expect(() => parsePicoCompanionUnattendedFetching({
+      unattendedFetching: { effectName: 'depot.fetch', privacyDomain: 'private', decision: 'ja' },
+    })).toThrow('invalid_pico_companion_unattended_fetching');
+  });
+
+  it('liest die Depotliste aus dem Lesevorgang, in dem sie jetzt steckt', () => {
+    // Der Home antwortet mit beidem in einem Zug. Eine Liste, die daneben
+    // nochmal reiste, wäre eine Wahrheit, die zweimal geschrieben wird.
+    expect(parsePicoCompanionDepots({ depots: [depot] })).toHaveLength(1);
   });
 
   it('refuses a depot row that is missing what a line needs', () => {

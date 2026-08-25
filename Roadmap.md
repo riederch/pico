@@ -1353,13 +1353,33 @@ verschwiegen — nur ungeprüft:
   Ein Fehler wurde erst durch die Erreichbarkeit sichtbar: die Annahme löschte
   das Angebot nicht, also hätte die Fläche weiter „es gibt etwas Neues" über
   genau den Commit gesagt, den die Person gerade angenommen hatte.
-- `setPicoRuleDecision` (ADR 0140 RL4, „half implemented"): Die gebaute Hälfte
-  ist die Verweigerung — kein Effekt, keine Host-Konfiguration erreicht eine
-  Regel. Der Kommentar der Methode sagt, eine Regeländerung komme „über eine
-  authentifizierte Fläche oder gar nicht", und es gibt keine solche Fläche.
-  **Also gar nicht: jeder Effekt wird dauerhaft mit seinem Standard
-  beantwortet.** Fail-closed und nicht offen, deshalb begründet statt
-  dringend.
+- `setPicoRuleDecision` (ADR 0140 RL4): **Gebaut, am selben Tag** — und der
+  Befund war größer als er aussah. Der Kommentar der Methode sagte, eine
+  Regeländerung komme „über eine authentifizierte Fläche oder gar nicht", und
+  es gab keine solche Fläche. Dazu passte, dass `picoRuleDecisions` den
+  Kommentar „for a surface that shows them" trug und
+  `home.rule_decision_changed` in beiden geschlossenen Ereignislisten stand,
+  ohne dass irgendetwas es anhängte. Der eine Leser einer Regel im ganzen
+  Produkt ist der Depot-Sweep — **der planmäßige Lauf tat seit seinem Bau
+  nichts**, weil er ohne stehende Regel einen Menschen sucht und keinen findet.
+
+  `home.rule.decide` und `home.rule.forget` schließen das, und im Fenster steht
+  über den Depotzeilen ein Satz, der sagt, was ohne ihn geschieht: *Pico
+  fetches only while you are here to be asked. A scheduled run has nobody to
+  ask, so it does nothing.* Zurücknehmen ist ein eigener Vorgang, weil abwesend
+  nicht `deny` ist. Kein `home.rules.read` daneben — die Lehre vom
+  Lieferanten-Zugang desselben Tages: ein zweiter ungenutzter Mechanismus ist
+  schlechter als eine benannte Lücke.
+
+  **Und ein ADR-Satz war stärker als das, was gilt.** „A recorded rule refines
+  and never grants" stand über einer Testgruppe, die zwei Dinge bewies und den
+  Fall dazwischen nie prüfte — dort gewährt eine Regel sehr wohl, und das ist
+  der Zweck. Dieselbe Klasse wie die gedruckten Zahlen: eine Aussage, die
+  vollständig klingt, über eine Teilmenge bewiesen. Ich habe daraufhin zuerst
+  das Falsche gebaut (nur verschärfen), weil ich die Frage auf zwei falschen
+  Prämissen gestellt hatte — der unbeaufsichtigte Sweep ist gebaut und
+  getestet, und er holt nur Commits, denen schon zugestimmt wurde. Beides
+  berichtigt, bevor entschieden wurde.
 
 Jede der drei steht jetzt mit diesem Satz in der Begründungsliste des Prüfers,
 damit die Lücke bei jedem Lauf auf dem Bildschirm steht statt in einer Zahl zu

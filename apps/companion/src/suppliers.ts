@@ -186,18 +186,41 @@ export interface PicoCompanionDepotView {
   offeredCommit?: string;
 }
 
+/**
+ * ADR 0140 RL4 mit ADR 0143 DP8. Ob ein planmäßiger Lauf ohne Anwesende
+ * handeln darf, und in welcher Domäne der Home das entscheidet.
+ *
+ * Die Domäne kommt mit dem Lesevorgang, statt hier zu stehen: ADR 0143 DP6
+ * sagt, ein Depot lebt in keinem Raum, und welchen der Home für RL6 wählt, ist
+ * seine Sache. Ein Client, der ihn mitschriebe, wäre die zweite Stelle, an der
+ * er steht - und die, die abweichen kann.
+ */
+export interface PicoCompanionUnattendedFetching {
+  effectName: string;
+  privacyDomain: string;
+  decision?: 'allow' | 'require_approval' | 'deny';
+}
+
 export async function readPicoCompanionDepots(input: {
   livingDeviceLinkClient: PicoLinkDirectClient;
-}): Promise<readonly PicoCompanionDepotView[]> {
+}): Promise<{
+  depots: readonly PicoCompanionDepotView[];
+  unattendedFetching: PicoCompanionUnattendedFetching;
+}> {
   const read = await input.livingDeviceLinkClient.request('home.depots.read', {});
   if (read.outcome !== 'ok') {
     throw new Error(`depots_read_rejected:${read.outcome}`);
   }
-  const depots = (read.result as { depots?: unknown }).depots;
-  if (!Array.isArray(depots)) {
+  const result = read.result as { depots?: unknown; unattendedFetching?: unknown };
+  if (!Array.isArray(result.depots)
+    || typeof result.unattendedFetching !== 'object'
+    || result.unattendedFetching === null) {
     throw new Error('invalid_pico_depots_read');
   }
-  return Object.freeze(depots as PicoCompanionDepotView[]);
+  return Object.freeze({
+    depots: Object.freeze(result.depots as PicoCompanionDepotView[]),
+    unattendedFetching: result.unattendedFetching as PicoCompanionUnattendedFetching,
+  });
 }
 
 /**
@@ -222,6 +245,46 @@ export async function attachPicoCompanionDepot(input: {
     throw new Error('invalid_pico_depot_attach_result');
   }
   return { remote: result.remote, commit: result.commit };
+}
+
+/**
+ * ADR 0140 RL4. Zeichnet auf, was eine Anfrage nach diesem Effekt beantwortet.
+ *
+ * Die Domäne kommt vom Home und wird hier durchgereicht: welchen Raum er für
+ * einen Effekt nennt, ist seine Sache, und ein Client, der sie mitschriebe,
+ * wäre die zweite Stelle, an der sie steht.
+ */
+export async function decidePicoCompanionRule(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  effectName: string;
+  privacyDomain: string;
+  decision: 'allow' | 'require_approval' | 'deny';
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.rule.decide', {
+    effectName: input.effectName,
+    privacyDomain: input.privacyDomain,
+    decision: input.decision,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `rule_decide_${answer.outcome}`);
+  }
+}
+
+/** ADR 0140 RL4. Nimmt eine Regel zurück, so dass wieder keine gilt. */
+export async function forgetPicoCompanionRule(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  effectName: string;
+  privacyDomain: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.rule.forget', {
+    effectName: input.effectName,
+    privacyDomain: input.privacyDomain,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `rule_forget_${answer.outcome}`);
+  }
 }
 
 /**

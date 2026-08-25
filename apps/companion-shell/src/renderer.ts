@@ -84,6 +84,12 @@ declare global {
       detachSupplier(identifier: string): Promise<void>;
       detachDepot(remote: string): Promise<void>;
       acceptDepotOffer(remote: string, acceptedCommit: string): Promise<void>;
+      decideRule(
+        effectName: string,
+        privacyDomain: string,
+        decision: string,
+      ): Promise<void>;
+      forgetRule(effectName: string, privacyDomain: string): Promise<void>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
@@ -720,6 +726,24 @@ function refreshDepots(): void {
             refreshDepots();
           }, (error: unknown) => {
             depotStatus.textContent = refusalText(error, 'That was not accepted.');
+          });
+        },
+        (rule) => {
+          /**
+           * ADR 0140 RL4. Der Satz sagt, was jetzt gilt - und beim Abschalten,
+           * was an seine Stelle tritt: nicht „verboten", sondern wieder die
+           * Frage, die die Risikoklasse ohnehin stellt.
+           */
+          const answered = rule.allowing
+            ? window.picoCompanion.decideRule(rule.effectName, rule.privacyDomain, 'allow')
+            : window.picoCompanion.forgetRule(rule.effectName, rule.privacyDomain);
+          void answered.then(() => {
+            depotStatus.textContent = rule.allowing
+              ? 'Pico will keep these at the revision you accepted, on its own.'
+              : 'Pico will ask you again before it fetches.';
+            refreshDepots();
+          }, (error: unknown) => {
+            depotStatus.textContent = refusalText(error, 'That was not changed.');
           });
         },
       );

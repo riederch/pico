@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
+import { picoDepotModuleManifest } from '@pico/module-depot/manifest';
 import { PicoDepotWorkspace } from './depot-workspace.js';
 import { EventStore } from './event-store.js';
 import { openPicoHomeWithDevice, sendPicoLinkDirectRequest } from './test-claimed-home.js';
@@ -281,5 +282,100 @@ describe('ADR 0143 DP1 - ein neuerer Commit wartet auf eine Person', () => {
     });
     expect(noOffer.result).toEqual(noDepot.result);
     expect(noOffer.result.refusal).toBe('no_offer_standing');
+  });
+});
+
+/**
+ * ADR 0140 RL4, Roadmap-Befund B22. Die Tabelle gab es seit dem 2026-08-11,
+ * und niemand konnte sie erreichen: `setPicoRuleDecision` hatte außerhalb
+ * seiner Tests keinen Aufrufer, `picoRuleDecisions` trug den Kommentar „for a
+ * surface that shows them" neben einer Fläche, die es nicht gab, und
+ * `home.rule_decision_changed` stand in beiden geschlossenen Ereignislisten,
+ * ohne dass irgendetwas es anhängte.
+ *
+ * Der eine Leser einer Regel im ganzen Produkt ist der Depot-Sweep. Ohne
+ * stehende Regel muss jeder Pfad einen Menschen finden - und ein planmäßiger
+ * Lauf hat keinen.
+ */
+/**
+ * Was die Person dem Depot-Modul zugesagt hat, in den Worten des Manifests -
+ * eine Regel gilt nur über einen Effekt, dem jemand zugestimmt hat.
+ */
+const agreedToDepotEffects = async (databasePath: string) => {
+  const store = await EventStore.open(databasePath, {});
+  store.setPicoModuleActivation({
+    changes: [{ identifier: 'depot', active: true, effects: picoDepotModuleManifest.effects }],
+    decidedAt: '2026-08-25T08:00:00.000Z',
+  } as never);
+  store.close();
+};
+
+describe('ADR 0140 RL4 - was Pico ohne dich tun darf', () => {
+  it('sagt beim Lesen, in welcher Domäne der Home das entscheidet', async () => {
+    const { send } = await claimedHome();
+    const read = (await send('home.depots.read', {})).result as {
+      unattendedFetching: { effectName: string; privacyDomain: string; decision?: string };
+    };
+    // Die Domäne kommt vom Home. Ein Fenster, das sie mitschriebe, wäre die
+    // zweite Stelle, an der sie steht - und die, die abweichen kann.
+    expect(read.unattendedFetching.effectName).toBe('depot.fetch');
+    expect(read.unattendedFetching.privacyDomain).toBe('private');
+    // Nichts steht: abwesend ist nicht `deny`, sondern gar keine Regel.
+    expect(read.unattendedFetching.decision).toBeUndefined();
+  });
+
+  it('zeichnet eine Regel auf, zeigt sie und nimmt sie wieder zurück', async () => {
+    const { send, databasePath } = await claimedHome();
+    await agreedToDepotEffects(databasePath);
+
+    expect((await send('home.rule.decide', {
+      effectName: 'depot.fetch', privacyDomain: 'private', decision: 'allow',
+    })).response.outcome).toBe('ok');
+
+    /**
+     * Gesehen wird die Regel dort, wo sie wirkt - **es gibt keine allgemeine
+     * Regelliste**, und das ist die Lehre desselben Tages: ADR 0138 CO1 hält
+     * fest, dass ein zweiter ungenutzter Mechanismus schlechter ist als eine
+     * benannte Lücke. Ein Vorgang, den kein Fenster liest, wäre genau das.
+     */
+    const standing = (await send('home.depots.read', {})).result as {
+      unattendedFetching: { decision?: string };
+    };
+    expect(standing.unattendedFetching.decision).toBe('allow');
+
+    expect((await send('home.rule.forget', {
+      effectName: 'depot.fetch', privacyDomain: 'private',
+    })).response.outcome).toBe('ok');
+
+    // Zurückgenommen heißt: wieder keine Regel, nicht `deny`.
+    const after = (await send('home.depots.read', {})).result as {
+      unattendedFetching: { decision?: string };
+    };
+    expect(after.unattendedFetching.decision).toBeUndefined();
+  });
+
+  it('weist eine Regel über einen Effekt zurück, dem niemand zugestimmt hat', async () => {
+    /**
+     * Eine Regel über etwas, das kein Modul erklärt hat, spricht über nichts -
+     * und sie stünde da, bis irgendwann ein Modul den Namen benutzt. Dann
+     * gälte eine Entscheidung, die niemand über *diesen* Effekt getroffen hat.
+     */
+    const { send, databasePath } = await claimedHome();
+    await agreedToDepotEffects(databasePath);
+    const refused = await send('home.rule.decide', {
+      effectName: 'depot.erfunden', privacyDomain: 'private', decision: 'allow',
+    });
+    expect(refused.response.outcome).toBe('invalid_arguments');
+    expect(refused.result.refusal).toBe('effect_not_consented');
+  });
+
+  it('weist das Zurücknehmen einer Regel zurück, die nicht steht', async () => {
+    // Sonst meldete ein Zurücknehmen Erfolg über etwas, das es nie gab.
+    const { send } = await claimedHome();
+    const nothing = await send('home.rule.forget', {
+      effectName: 'depot.fetch', privacyDomain: 'private',
+    });
+    expect(nothing.response.outcome).toBe('invalid_arguments');
+    expect(nothing.result.refusal).toBe('no_rule');
   });
 });

@@ -92,18 +92,6 @@ const withoutAProductCaller = [
     + '2026-08-25 as Roadmap finding B22.',
   ],
   [
-    'setPicoRuleDecision',
-    'ADR 0140 RL4, whose gate text says "half implemented". The half that is '
-    + 'built is the refusal: no effect and no host configuration can reach a '
-    + 'rule, and `module:check` refuses a module that even links against the '
-    + 'decision contract. The method\'s own comment says a rule change "arrives '
-    + 'over an authenticated surface or not at all" - and there is no such '
-    + 'surface, so today it is not at all: **every effect is answered by its '
-    + 'default, permanently.** That is fail-closed rather than open, which is '
-    + 'why it is argued rather than urgent. Recorded 2026-08-25 as Roadmap '
-    + 'finding B22.',
-  ],
-  [
     'deletePicoObservations',
     'ADR 0129 SR2. Drops exactly the readings a condensation pass consumed, '
     + 'and there is no condensation pass because there are no readings - the '

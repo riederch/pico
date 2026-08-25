@@ -129,7 +129,16 @@ describe('ADR 0140 RL4 - a rule is a durable person decision', () => {
   });
 });
 
-describe('ADR 0140 RL4 - a recorded rule refines, and never grants', () => {
+/**
+ * **Der Titel war stärker als seine Tests** (berichtigt 2026-08-25). Er hieß
+ * „a recorded rule refines, and never grants" und bewies zweimal, dass eine
+ * Regel den RL3-Boden und die CO3-Reichweite nicht überstimmt. Der Fall
+ * dazwischen - eine `allow` bei sauberem Boden und erlaubter Reichweite - war
+ * ungeprüft, und dort *gewährt* eine Regel sehr wohl. Das ist kein Versehen im
+ * Code, sondern der Zweck der Sache: eine stehende Regel ist, was einen
+ * unbeaufsichtigten Lauf überhaupt handeln lässt.
+ */
+describe('ADR 0140 RL4 - eine aufgezeichnete Regel wählt, was der Boden übrig lässt', () => {
   it('leaves the risk-derived answer alone when nobody decided', () => {
     // Absent is not deny: the AC4 consent record already carries a decision
     // that this effect may exist.
@@ -143,6 +152,50 @@ describe('ADR 0140 RL4 - a recorded rule refines, and never grants', () => {
 
   it('lets a recorded rule deny what the risk class would have allowed', () => {
     expect(decide({ recordedRule: 'deny' }).decided.decision).toBe('deny');
+  });
+
+  it('macht aus einer Frage eine Erlaubnis, und genau dafür ist sie da', () => {
+    /**
+     * **Der Fall, den diese Gruppe nie geprüft hat** (gefunden 2026-08-25).
+     *
+     * `depot.fetch` ist `external_write` und ergibt aus der Risikoklasse
+     * allein `require_approval` - die richtige Vorgabe für den einzigen
+     * Effekt im Baum, der Code installiert. Eine aufgezeichnete `allow` macht
+     * daraus eine Erlaubnis, und das ist der Mechanismus, mit dem ADR 0143 DP8
+     * einen planmäßigen Lauf überhaupt handeln lässt: ohne stehende Regel muss
+     * jeder Pfad einen Menschen finden.
+     *
+     * Was der Lauf damit tut, ist begrenzt und gehört zum Bild: er bringt das
+     * Depot auf **den Commit, den die Person angenommen hat**. Ein neuerer ist
+     * ein Angebot und wartet (ADR 0143 DP1), seit dem 2026-08-25 auch sichtbar.
+     */
+    const { decided } = decide({
+      requested: {
+        effectName: 'depot.fetch',
+        arguments: [{ name: 'remote', value: 'https://example.invalid/x.git' }],
+      },
+      argumentSources: { remote: ['own_pico'] },
+      declaredEffectNames: ['depot.fetch'],
+      consentedEffects: [{
+        name: 'depot.fetch',
+        description: 'Brings a depot to the commit you accepted.',
+        risk: 'external_write',
+      }],
+      reachesOutside: true,
+      reachPermitted: true,
+      recordedRule: 'allow',
+    });
+    expect(decided.decision).toBe('allow');
+    // Und der Boden hat nicht abgelehnt - das ist der Unterschied zu den
+    // beiden Tests darunter, die auf `deny` enden.
+    expect(decided.reasons).toEqual([]);
+  });
+
+  it('lässt eine Regel dort erlauben, wo das Risiko es ohnehin täte', () => {
+    // `local_write` ergibt `allow`, die Regel sagt dasselbe - und ändert damit
+    // nichts. Der Test steht hier, weil er die Grenze der Aussage oben zieht:
+    // gewährt wird unter dem Boden, nicht an ihm vorbei.
+    expect(decide({ recordedRule: 'allow' }).decided.decision).toBe('allow');
   });
 
   it('cannot grant what the floor refused', () => {

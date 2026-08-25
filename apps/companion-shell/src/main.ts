@@ -1125,6 +1125,39 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    picoCompanionIpcChannels.decideRule,
+    async (
+      event: IpcMainInvokeEvent,
+      effectName: unknown,
+      privacyDomain: unknown,
+      decision: unknown,
+    ) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof effectName !== 'string'
+        || typeof privacyDomain !== 'string'
+        || (decision !== 'allow' && decision !== 'require_approval' && decision !== 'deny')) {
+        throw new Error('invalid_rule_decision');
+      }
+      await runtime.decideRule({ effectName, privacyDomain, decision });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.forgetRule,
+    async (event: IpcMainInvokeEvent, effectName: unknown, privacyDomain: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof effectName !== 'string' || typeof privacyDomain !== 'string') {
+        throw new Error('invalid_rule_reference');
+      }
+      await runtime.forgetRule({ effectName, privacyDomain });
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.acceptDepotOffer,
     async (event: IpcMainInvokeEvent, remote: unknown, acceptedCommit: unknown) => {
       assertRendererSender(event);

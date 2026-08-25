@@ -36,6 +36,8 @@ const channels = Object.freeze({
   decideDepotReach: 'pico:depot-reach:decide',
   fetchDepotsNow: 'pico:depot-fetch:ask',
   acceptDepotOffer: 'pico:depot-offer:accept',
+  decideRule: 'pico:rule:decide',
+  forgetRule: 'pico:rule:forget',
   getPendingActions: 'pico:pending-actions:get',
   resolvePendingAction: 'pico:pending-action:resolve',
   getModuleConsent: 'pico:module-consent:get',
@@ -171,6 +173,16 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     acceptedCommit: string,
   ): Promise<void> => {
     await ipcRenderer.invoke(channels.acceptDepotOffer, remote, acceptedCommit);
+  },
+  decideRule: async (
+    effectName: string,
+    privacyDomain: string,
+    decision: string,
+  ): Promise<void> => {
+    await ipcRenderer.invoke(channels.decideRule, effectName, privacyDomain, decision);
+  },
+  forgetRule: async (effectName: string, privacyDomain: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.forgetRule, effectName, privacyDomain);
   },
   forgetModelProvider: async (entryId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.forgetModelProvider, entryId);

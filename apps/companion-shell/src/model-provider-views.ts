@@ -34,6 +34,8 @@ import {
   parsePicoCompanionDeclaredSuppliers,
   picoCompanionDepotLines,
   parsePicoCompanionDepots,
+  parsePicoCompanionUnattendedFetching,
+  picoCompanionUnattendedFetchingLine,
   picoCompanionModuleConsentLines,
   parsePicoCompanionModuleConsent,
   picoCompanionApprovalLines,
@@ -914,10 +916,49 @@ export function renderPicoCompanionDepots(
    * gefunden).
    */
   acceptOffer?: (input: { remote: string; acceptedCommit: string }) => void,
+  /**
+   * ADR 0140 RL4. Schreibt die eine Regel, die dieser Home lesen kann - oder
+   * nimmt sie zurück. Zuletzt, wie jeder neue Rückruf in dieser Datei.
+   */
+  decideUnattended?: (input: {
+    effectName: string;
+    privacyDomain: string;
+    allowing: boolean;
+  }) => void,
 ): void {
   const depots = parsePicoCompanionDepots(value);
   root.section.hidden = depots.length === 0;
   root.list.replaceChildren();
+
+  /**
+   * **Eine Zeile für alle, nicht eine je Depot**, weil die Regel für den
+   * Effekt in einer Domäne gilt und nicht für ein Depot. Die beiden Schalter
+   * an jeder Zeile bleiben, was sie sind: ob *dieses* Depot geholt werden
+   * darf, und ob ungefragt. Beide müssen gelten, und diese hier sagt, ob
+   * „ungefragt" überhaupt etwas bewirken kann.
+   */
+  if (decideUnattended !== undefined && depots.length > 0) {
+    const standing = parsePicoCompanionUnattendedFetching(value);
+    const line = picoCompanionUnattendedFetchingLine(standing);
+    const item = root.document.createElement('li');
+    item.className = 'supplier-line';
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const button = root.document.createElement('button');
+    button.type = 'button';
+    button.textContent = line.actionLabel;
+    button.addEventListener('click', () => decideUnattended({
+      effectName: standing.effectName,
+      privacyDomain: standing.privacyDomain,
+      allowing: !line.allowing,
+    }));
+
+    item.append(detail, button);
+    root.list.append(item);
+  }
 
   for (const [index, line] of picoCompanionDepotLines(depots).entries()) {
     const depot = depots[index]!;

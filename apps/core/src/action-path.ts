@@ -15,6 +15,7 @@ import {
 } from '@pico/protocol/instance-selection';
 import type { PicoModuleEffect } from '@pico/protocol/module';
 import {
+  applyPicoRulesRecordedDecision,
   escalatePicoRulesDecision,
   picoRulesFloorOutcome,
   picoRulesMissingInput,
@@ -272,10 +273,15 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
   // RL3 refused for want of an input or what ADR 0138 CO3 never permitted.
   const decided: PicoRulesDecisionValue = floor !== null || reachRefused
     ? 'deny'
-    : input.recordedRule
-      ?? (consented.risk === 'read_only' || consented.risk === 'local_write'
+    // ADR 0140 RL4. Nur verschärfend, seit dem 2026-08-25 auch im Code und
+    // nicht nur im Titel der Testgruppe daneben: eine Regel kann nichts
+    // erlauben, was ohne sie eine Frage gewesen wäre.
+    : applyPicoRulesRecordedDecision(
+      consented.risk === 'read_only' || consented.risk === 'local_write'
         ? 'allow'
-        : 'require_approval');
+        : 'require_approval',
+      input.recordedRule,
+    );
   // ADR 0143 DP8. Applied last and only ever tightening, so a recorded rule
   // cannot cancel an escalation and an escalation cannot cancel the floor.
   const decision = escalatePicoRulesDecision(decided, input.escalations ?? []);

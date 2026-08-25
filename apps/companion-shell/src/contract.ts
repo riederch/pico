@@ -56,6 +56,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   decideDepotReach: 'pico:depot-reach:decide',
   fetchDepotsNow: 'pico:depot-fetch:ask',
   acceptDepotOffer: 'pico:depot-offer:accept',
+  decideRule: 'pico:rule:decide',
+  forgetRule: 'pico:rule:forget',
   /**
    * ADR 0141 RN4, and deliberately not `decideApproval` above.
    *
@@ -3102,11 +3104,89 @@ export function picoCompanionFetchBlockedLine(blocked: string): string {
     : 'Nothing was fetched.';
 }
 
+/**
+ * ADR 0140 RL4 mit ADR 0143 DP8. Ob ein planmäßiger Lauf ohne Anwesende
+ * handeln darf - und in welcher Domäne dieser Home das entscheidet.
+ *
+ * Die Domäne kommt vom Home und steht hier nirgends: ADR 0143 DP6 sagt, ein
+ * Depot lebt in keinem Raum, und welchen er für ADR 0140 RL6 wählt, ist seine
+ * Sache. Eine Fläche, die ihn mitschriebe, wäre die zweite Stelle, an der er
+ * steht - und die, die abweichen kann.
+ */
+export interface PicoCompanionUnattendedFetching {
+  effectName: string;
+  privacyDomain: string;
+  decision?: 'allow' | 'require_approval' | 'deny';
+}
+
+export function parsePicoCompanionUnattendedFetching(
+  value: unknown,
+): PicoCompanionUnattendedFetching {
+  const read = typeof value === 'object' && value !== null
+    ? (value as { unattendedFetching?: unknown }).unattendedFetching
+    : undefined;
+  if (typeof read !== 'object' || read === null) {
+    throw new Error('invalid_pico_companion_unattended_fetching');
+  }
+  const record = read as Record<string, unknown>;
+  if (typeof record.effectName !== 'string'
+    || typeof record.privacyDomain !== 'string'
+    || (record.decision !== undefined
+      && record.decision !== 'allow'
+      && record.decision !== 'require_approval'
+      && record.decision !== 'deny')) {
+    throw new Error('invalid_pico_companion_unattended_fetching');
+  }
+  return Object.freeze({
+    effectName: record.effectName,
+    privacyDomain: record.privacyDomain,
+    ...(record.decision === undefined
+      ? {}
+      : { decision: record.decision as 'allow' | 'require_approval' | 'deny' }),
+  });
+}
+
+/**
+ * ADR 0140 RL4. Der Satz für den einen Schalter, der eine Regel schreibt.
+ *
+ * **Er sagt, was ohne ihn passiert**, und nicht nur, was er anschaltet: ein
+ * Depot-Fetch ist `external_write` - der einzige Effekt im Baum, der Code
+ * installiert - und ergibt aus seiner Risikoklasse allein eine Frage. Wer
+ * niemanden fragt, weil niemand da ist, tut nichts. Das ist der Zustand, aus
+ * dem heraus jemand hier entscheidet.
+ *
+ * Und er sagt die Grenze mit: geholt wird der Commit, den die Person
+ * angenommen hat. Ein neuerer ist ein Angebot und wartet (ADR 0143 DP1).
+ */
+export function picoCompanionUnattendedFetchingLine(
+  standing: PicoCompanionUnattendedFetching,
+): { detail: string; actionLabel: string; allowing: boolean } {
+  const allowing = standing.decision === 'allow';
+  return Object.freeze({
+    detail: allowing
+      ? 'Pico keeps these at the revision you accepted on its own. A newer one '
+        + 'still waits for you.'
+      : 'Pico fetches only while you are here to be asked. A scheduled run has '
+        + 'nobody to ask, so it does nothing.',
+    actionLabel: allowing ? 'Ask me each time' : 'Let Pico do this on its own',
+    allowing,
+  });
+}
+
 export function parsePicoCompanionDepots(value: unknown): readonly PicoCompanionDepot[] {
-  if (!Array.isArray(value)) {
+  /**
+   * Das Ergebnis des Lesevorgangs, nicht die Liste darin: der Home antwortet
+   * seit dem 2026-08-25 mit beidem - was angehängt ist und was ohne Anwesende
+   * geschehen darf -, und beides aus einem Zug zu lesen ist eine Wahrheit
+   * weniger, die zweimal reisen muss.
+   */
+  const depots = typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as { depots?: unknown }).depots
+    : value;
+  if (!Array.isArray(depots)) {
     throw new Error('invalid_pico_companion_depots');
   }
-  return Object.freeze(value.map((entry) => {
+  return Object.freeze(depots.map((entry) => {
     if (typeof entry !== 'object' || entry === null) {
       throw new Error('invalid_pico_companion_depot');
     }

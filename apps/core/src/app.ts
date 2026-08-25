@@ -1815,6 +1815,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const declaredModuleEffectNames = picoDeclaredEffectNames(shippedModuleManifests);
 
   /**
+   * ADR 0140 RL4 mit ADR 0139 AC4. Jeder Effekt, dem jemand zugestimmt hat.
+   *
+   * Über die geschlossene Modulliste gebildet und nicht über eine zweite
+   * Abfrage: welche Module es gibt, ist ADR 0127s Entscheidung, und eine
+   * eigene Liste daneben wäre eine, die von ihr abweichen kann. Was pro Modul
+   * zugestimmt wurde, steht im Speicher - ein Modul, dem niemand zugestimmt
+   * hat, trägt hier nichts bei.
+   */
+  const consentedModuleEffects = () => shippedModuleManifests
+    .flatMap((manifest) => store.picoModuleEffectConsent(manifest.identifier));
+
+  /**
    * Said once per process, not once per tick. A precondition that has not
    * changed is not news, and a line per due appointment per tick would bury
    * the log it is trying to be visible in.
@@ -4437,6 +4449,32 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                   ? {}
                   : { offeredCommit: attachment.offeredCommit }),
               })),
+              /**
+               * ADR 0140 RL4 mit ADR 0143 DP8. Ob ein planmäßiger Lauf ohne
+               * Anwesende handeln darf - und **in welcher Domäne** der Home
+               * das entscheidet.
+               *
+               * Die Domäne reist mit, statt dass das Fenster sie kennt: ADR
+               * 0143 DP6 sagt, ein Depot lebt in keinem Raum, und ADR 0140 RL6
+               * verlangt trotzdem, dass jede Entscheidung ihren nennt. Welchen
+               * der Home dafür wählt, ist seine Sache; eine Fläche, die ihn
+               * mitschreibt, wäre die zweite Stelle, an der er steht.
+               */
+              unattendedFetching: {
+                effectName: 'depot.fetch',
+                privacyDomain: depotFetchPrivacyDomain,
+                ...(store.picoRuleDecision({
+                  effectName: 'depot.fetch',
+                  privacyDomain: depotFetchPrivacyDomain,
+                }) === undefined
+                  ? {}
+                  : {
+                    decision: store.picoRuleDecision({
+                      effectName: 'depot.fetch',
+                      privacyDomain: depotFetchPrivacyDomain,
+                    }),
+                  }),
+              },
             } as unknown as Record<string, unknown>,
           };
         }
@@ -4554,6 +4592,88 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * something did. `declares` carries the sentences themselves, because
          * a list of effect names is not a thing a person can agree to.
          */
+        /**
+         * ADR 0140 RL4. Eine Regel aufzeichnen.
+         *
+         * Nur über einen Effekt, dem jemand zugestimmt hat: eine Regel über
+         * etwas, das kein Modul erklärt hat, spricht über nichts, und sie
+         * stünde da, bis irgendwann ein Modul den Namen benutzt - dann gälte
+         * eine Entscheidung, die niemand über *diesen* Effekt getroffen hat.
+         */
+        case 'home.rule.decide': {
+          if (principal === undefined
+            || typeof args.effectName !== 'string'
+            || typeof args.privacyDomain !== 'string'
+            || args.privacyDomain.trim() === ''
+            || (args.decision !== 'allow'
+              && args.decision !== 'require_approval'
+              && args.decision !== 'deny')
+            || Object.keys(args).length !== 3) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (!consentedModuleEffects().some((effect) => effect.name === args.effectName)) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'effect_not_consented' } };
+          }
+          store.setPicoRuleDecision({
+            effectName: args.effectName,
+            privacyDomain: args.privacyDomain,
+            decision: args.decision,
+            decidedAt: new Date().toISOString(),
+          });
+          // Inhaltsfrei, in derselben Form wie Aktivierung und Aufzeichnung:
+          // welcher Effekt, welche Domäne, welche der drei Antworten. Wofür
+          // die Person das entschieden hat, geht niemanden etwas an.
+          const ruledEvent = factory.create({
+            deviceId: config.deviceId,
+            type: 'home.rule_decision_changed',
+            payload: {
+              effectName: args.effectName,
+              privacyDomain: args.privacyDomain,
+              decision: args.decision,
+            },
+          });
+          store.append(ruledEvent);
+          broadcast(ruledEvent);
+          return { outcome: 'ok', result: { decided: true } };
+        }
+        /**
+         * ADR 0140 RL4. Eine Regel zurücknehmen, so dass wieder keine gilt.
+         *
+         * Abwesend ist nicht `deny`: die Zustimmung sagt weiter, dass dieser
+         * Effekt existieren darf, und die Antwort fällt wieder aus der
+         * Risikoklasse. Deshalb ein eigener Vorgang statt „auf require_approval
+         * zurückstellen" - das wäre für einen `local_write` Effekt strenger als
+         * vorher, also eine Rücknahme, die eine Verschärfung ist.
+         */
+        case 'home.rule.forget': {
+          if (principal === undefined
+            || typeof args.effectName !== 'string'
+            || typeof args.privacyDomain !== 'string'
+            || Object.keys(args).length !== 2) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const forgotten = store.forgetPicoRuleDecision({
+            effectName: args.effectName,
+            privacyDomain: args.privacyDomain,
+          });
+          if (forgotten !== 'forgotten') {
+            return { outcome: 'invalid_arguments', result: { refusal: 'no_rule' } };
+          }
+          const forgottenEvent = factory.create({
+            deviceId: config.deviceId,
+            type: 'home.rule_decision_changed',
+            payload: {
+              effectName: args.effectName,
+              privacyDomain: args.privacyDomain,
+              // Was jetzt gilt, ist keine Regel - und `none` sagt das, statt
+              // die Abwesenheit als `require_approval` zu verkleiden.
+              decision: 'none',
+            },
+          });
+          store.append(forgottenEvent);
+          broadcast(forgottenEvent);
+          return { outcome: 'ok', result: { forgotten: true } };
+        }
         case 'home.modules.consent.read': {
           if (principal === undefined) {
             return { outcome: 'invalid_arguments', result: {} };

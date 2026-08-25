@@ -45,6 +45,8 @@ import {
   detachPicoCompanionDepot,
   detachPicoCompanionSupplier,
   decidePicoCompanionSupplierReach,
+  decidePicoCompanionRule,
+  forgetPicoCompanionRule,
   readPicoCompanionDepots,
   readPicoCompanionModuleConsent,
   readPicoCompanionPendingApprovals,
@@ -204,8 +206,19 @@ export interface PicoCompanionShellRuntime {
     mayReachOutside: boolean;
     mayReachUnasked: boolean;
   }): Promise<void>;
-  /** ADR 0143 DP1. What is pinned, a new pin, and whether Pico may fetch it. */
-  readDepots(): Promise<readonly unknown[]>;
+  /**
+   * ADR 0143 DP1. What is pinned, a new pin, and whether Pico may fetch it -
+   * und seit dem 2026-08-25 daneben, ob ein planmäßiger Lauf ohne Anwesende
+   * handeln darf (ADR 0140 RL4).
+   */
+  readDepots(): Promise<unknown>;
+  /** ADR 0140 RL4. Was Pico ohne Anwesende tun darf, gesetzt und zurückgenommen. */
+  decideRule(input: {
+    effectName: string;
+    privacyDomain: string;
+    decision: 'allow' | 'require_approval' | 'deny';
+  }): Promise<void>;
+  forgetRule(input: { effectName: string; privacyDomain: string }): Promise<void>;
   attachDepot(pin: Record<string, unknown>): Promise<{ remote: string; commit: string }>;
   decideDepotReach(input: {
     remote: string;
@@ -843,6 +856,30 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           entryId,
+        });
+      }),
+      decideRule: async (decision) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await decidePicoCompanionRule({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...decision,
+        });
+      }),
+      forgetRule: async (rule) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await forgetPicoCompanionRule({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...rule,
         });
       }),
       readDepots: async () => await serialized(async () => {

@@ -50,6 +50,39 @@ const decisionStrictness: Readonly<Record<PicoRulesDecisionValue, number>> =
   Object.freeze({ allow: 0, require_approval: 1, deny: 2 });
 
 /**
+ * ADR 0140 RL4. Wendet eine aufgezeichnete Regel an: sie **wählt**, was der
+ * Boden übrig gelassen hat.
+ *
+ * **Benannt statt inline, seit dem 2026-08-25**, weil hier ein blankes
+ * `recordedRule ?? derived` stand und daneben eine Testgruppe namens „a
+ * recorded rule refines, and never grants". Die bewies zwei Dinge - eine Regel
+ * überstimmt den RL3-Boden nicht und schafft keine Reichweite, die ADR 0138
+ * CO3 nie erlaubt hat - und ließ den Fall dazwischen ungeprüft. Ihr Titel las
+ * sich als Aussage über alle drei.
+ *
+ * **Was gilt, genau gesagt.** Eine Regel entscheidet unter den Antworten, die
+ * nach dem Boden und nach der Reichweitenbedingung übrig sind, und das schließt
+ * beide Richtungen ein: sie kann ein `allow`, das die Risikoklasse hergäbe, zu
+ * einer Frage oder einem Verbot machen, **und** sie kann eine Frage, die aus
+ * `external_write` folgt, zu einer Erlaubnis machen. Das zweite ist nicht die
+ * Lücke, es ist der Zweck: eine stehende Regel ist das, was einen
+ * unbeaufsichtigten Lauf überhaupt handeln lässt (ADR 0143 DP8), und ohne sie
+ * muss jeder Pfad einen Menschen finden.
+ *
+ * **Was sie nicht kann**, steht eine Ebene höher und nicht hier: der Boden und
+ * ADR 0138 CO3 werden vor dieser Funktion zu `deny`, und keine Regel kommt
+ * daran vorbei. Vom Nutzer am 2026-08-25 bestätigt, nachdem beide
+ * Möglichkeiten nebeneinander lagen - und nachdem die erste Frage danach auf
+ * zwei falschen Prämissen stand, die ich berichtigt habe.
+ */
+export function applyPicoRulesRecordedDecision(
+  derived: PicoRulesDecisionValue,
+  recorded?: PicoRulesDecisionValue,
+): PicoRulesDecisionValue {
+  return recorded ?? derived;
+}
+
+/**
  * ADR 0143 DP8. Applies escalations, and **only ever tightens**.
  *
  * A `deny` stays a `deny` and a `require_approval` never becomes an `allow`,
