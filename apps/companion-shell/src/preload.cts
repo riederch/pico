@@ -23,6 +23,7 @@ const channels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  forgetRecall: 'pico:recall:forget',
   forgetMemory: 'pico:memory:forget',
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
@@ -261,6 +262,9 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     await ipcRenderer.invoke(channels.revokeRelayAccount, { baseUrl, accountRef }),
   forgetRelay: async (baseUrl: string): Promise<void> => {
     await ipcRenderer.invoke(channels.forgetRelay, baseUrl);
+  },
+  forgetRecall: async (jobId: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.forgetRecall, jobId);
   },
   keepRecall: async (jobId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.keepRecall, jobId);

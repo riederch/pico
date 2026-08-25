@@ -1260,6 +1260,94 @@ zu wachsen. Diese antwortet, dass sie es nicht tut, in der Begründungsliste des
 Prüfers selbst: eine Ausnahme, die vorgibt, wäre schlimmer als keine, und so
 steht die Antwort bei jedem Lauf auf dem Bildschirm statt nirgends.
 
+**Entschieden und gebaut (2026-08-25).** Der Nutzer hat die dritte Möglichkeit
+gewählt: die Zeile bleibt, ihre Worte gehen. `home.recall.forget` ist die 47.
+Link-Operation, Migration `0025_pico_model_job_forgotten` trägt die Spalte,
+und im Fenster steht neben jedem abgeschlossenen Austausch ein zweiter Knopf:
+*Take this exchange back*. Er darf neben *Forget this* stehen — Behalten und
+Vergessen schließen einander aus, das Zurücknehmen des Austausches ist eine
+Frage über etwas anderes. Genau dafür ist er da: die Notiz behalten und den
+Chat loswerden.
+
+Zwei Dinge, die erst beim Bauen sichtbar wurden, und beide sind der Grund,
+warum es sich gelohnt hat, den Fall statt nur die Fläche zu bauen:
+
+- **Ein laufender Job kommt zurück.** Die Fläche bietet das Zurücknehmen für
+  eine wartende Zeile nicht an, der Vorgang kann es trotzdem. Der Anbieter
+  antwortete danach und schrieb seine Antwort in `result_json` einer Zeile,
+  deren Worte gerade gelöscht worden waren — die Historie hätte sie nicht
+  gezeigt, die Platte hätte sie gehabt. `settle` schreibt jetzt nur, solange
+  `forgotten_at` leer ist, und das Zurücknehmen schließt eine laufende Zeile
+  als `taken_back` ab, damit nichts auf Arbeit wartet, die niemand mehr will.
+- **Zwei Rückrufe mit derselben Form.** `takeBack` und `forget` sind beide
+  `(id: string) => void`. Der neue Parameter stand zuerst *vor* dem alten,
+  also hat jeder bestehende Aufrufer sein Vergessen stillschweigend als
+  Zurücknehmen übergeben — getypt und falsch. Ein Test auf beide Knöpfe einer
+  Zeile, jeder mit seinem eigenen Bezeichner, fand es; der neue Parameter steht
+  jetzt am Ende. Im Fenster wäre das ein Knopf gewesen, der etwas anderes tut,
+  als er sagt.
+
+Die Begründung im Deckel-Prüfer ist entsprechend neu geschrieben und sagt
+weiterhin *unbegrenzt*: Zeilen werden nach wie vor nicht gelöscht und tragen
+keine Q5-Obergrenze. Was sich geändert hat, ist, dass die Worte in einer Zeile
+jetzt der Person gehören. Was noch wächst, sind leere Zeilen, die sie gewählt
+hat, und volle, die sie nicht gewählt hat.
+
+**B22 — Der Schreiber-Prüfer sah 47 von 82 Methoden und sagte „jede"
+(2026-08-25).** Beim Nachtragen der Zahlen für B17 fiel auf, dass
+`check-store-writers.mjs` weiterhin 47 Schreibmethoden meldete, obwohl
+`forgetRecall` eine neue ist und `UPDATE` ausführt. Der Grund steht in der
+Signatur:
+
+```ts
+  public forgetRecall(input: {
+    jobId: string;
+  }): 'forgotten' | 'not_yours' {   // <- hier hörte der Prüfer auf zu lesen
+```
+
+Er las den Rumpf zeilenweise bis zur ersten `}` auf zwei Leerzeichen — und
+genau so schließt ein mehrzeiliger Parametertyp. Jede Methode dieser Form hatte
+für ihn einen leeren Rumpf, kein `UPDATE` darin und existierte nicht: **31 in
+`event-store.ts` allein**, dazu `enqueue`, `markKept` und `forgetRecall` der
+Warteschlange sowie vier weitere. Die bestandene Zeile sagte „47
+Schreibmethoden, jede erreichbar" — wahr über die 47, die er sah, und gelesen
+als Aussage über den Speicher. Ein toter Schreiber in dieser Form wäre nie
+gemeldet worden.
+
+Dieselbe Klasse wie die vier Zählungen vom 2026-08-24 (72 von 119 Wire-Labels,
+22 Home-Umgebungswerte, „produktweit" ohne `modules/`, elf Stores samt des
+Prüfers selbst): **eine gedruckte Zahl, die vollständig klingt und einen Teil
+misst.** Der Prüfer zählt jetzt Klammern statt Zeilen — Parametertiefe, dann
+Rumpftiefe —, was exakt und nicht länger ist als die Schätzung davor.
+Falsifiziert im Vergleich: dieselbe gepflanzte Methode wird von der
+Klammerzählung gemeldet und von der Zeilenlesung nicht gesehen.
+
+**Und die Berichtigung fand sofort drei Merkmale, die niemand erreichen kann.**
+Alle drei sind in ihrem ADR als halb umgesetzt verzeichnet, keines war
+verschwiegen — nur ungeprüft:
+
+- `setPicoSupplierCredential` (ADR 0138 CO1, „part implemented"): Umfang und
+  Vorhandensein eines Zugangs sind entschieden, wo das Geheimnis ruht, ist im
+  ADR offen. **Ein Zugangswort für einen Lieferanten kann heute niemand
+  hinterlegen**; `home.model.provider.credential.submit` ist die Fläche
+  nebenan und erreicht keine Lieferanten.
+- `acceptPicoDepotOffer` (ADR 0143 DP1): Das Angebot wird berechnet, die
+  Annahme nennt den Commit — und die geschlossene Operationsliste hat keine
+  Annahme. **Ein Depot lässt sich heute nicht auf einen neueren Commit
+  bewegen**; es läuft auf dem, an dem es angehängt wurde.
+- `setPicoRuleDecision` (ADR 0140 RL4, „half implemented"): Die gebaute Hälfte
+  ist die Verweigerung — kein Effekt, keine Host-Konfiguration erreicht eine
+  Regel. Der Kommentar der Methode sagt, eine Regeländerung komme „über eine
+  authentifizierte Fläche oder gar nicht", und es gibt keine solche Fläche.
+  **Also gar nicht: jeder Effekt wird dauerhaft mit seinem Standard
+  beantwortet.** Fail-closed und nicht offen, deshalb begründet statt
+  dringend.
+
+Jede der drei steht jetzt mit diesem Satz in der Begründungsliste des Prüfers,
+damit die Lücke bei jedem Lauf auf dem Bildschirm steht statt in einer Zahl zu
+verschwinden. Ob eine davon gebaut wird, ist eine Entscheidung, keine
+Aufräumarbeit.
+
 **B18 — Der Code machte die Arbeit des Satzes, an zwei Stellen (2026-08-24).**
 `picoCompanionPublicServiceErrorReason` verengt jeden Fehlschlag auf vier
 öffentliche Gründe, und das ist richtig: eine Meldung aus einem Daemon ist kein

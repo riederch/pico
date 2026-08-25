@@ -3969,6 +3969,41 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           return { outcome: 'ok', result: { forgotten: true } };
         }
         /**
+         * ADR 0049 mit ADR 0071. Eine Person nimmt einen Austausch zurück.
+         *
+         * `home.memory.forget` hebt die *Erinnerung* auf, die aus einer
+         * Antwort behalten wurde. Bis heute gab es nichts, was den Austausch
+         * selbst zurücknimmt - Frage und Antwort standen weiter in der
+         * Recall-Historie, im Klartext, und ein Vergessen-Knopf daneben hob
+         * nur die Notiz auf. Zwei Handlungen, von denen es eine gab.
+         *
+         * Die Zeile bleibt als Handhabe für ein behaltenes Item; geleert
+         * werden die Worte. Der Vermerk ist inhaltsfrei: welche Jobkennung,
+         * und sonst nichts - ein Eintrag, der die Frage aufbewahrte, wäre die
+         * Kopie, die das Vergessen aufhebt.
+         */
+        case 'home.recall.forget': {
+          if (principal === undefined || typeof args.jobId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const forgotten = store.picoModelJobQueue().forgetRecall({
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            jobId: args.jobId,
+            at: new Date().toISOString(),
+          });
+          if (forgotten !== 'forgotten') {
+            return { outcome: 'invalid_arguments', result: { refusal: forgotten } };
+          }
+          const record = factory.create({
+            deviceId: config.deviceId,
+            type: 'memory.recall_forgotten',
+            payload: { jobId: args.jobId },
+          });
+          store.append(record);
+          broadcast(record);
+          return { outcome: 'ok', result: { forgotten: true } };
+        }
+        /**
          * ADR 0116 W5. One answer becomes a memory item, because a person said
          * so.
          *

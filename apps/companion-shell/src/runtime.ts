@@ -166,6 +166,10 @@ export interface PicoCompanionShellRuntime {
   readRecalls(): Promise<readonly PicoCompanionRecallView[]>;
   /** ADR 0116 W5. The person's own write: this answer becomes a memory. */
   keepRecall(jobId: string): Promise<string>;
+  /**
+   * ADR 0049 mit ADR 0071. Nimmt den Austausch zurück, nicht die Notiz daraus.
+   */
+  forgetRecall(jobId: string): Promise<void>;
   /** ADR 0071. The person's own unwrite: that memory stops being one. */
   forgetMemory(memoryItemId: string): Promise<void>;
   /**
@@ -1287,6 +1291,19 @@ export async function startPicoCompanionShellRuntime(input: {
         forgetPicoCompanionRelay({
           path: defaultPicoCompanionRelayOperatorsPath(profilePath),
           baseUrl,
+        });
+      }),
+      forgetRecall: async (jobId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { forgetPicoCompanionRecall } = await import('@pico/companion/model-providers');
+        await forgetPicoCompanionRecall({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          jobId,
         });
       }),
       keepRecall: async (jobId) => await serialized(async () => {

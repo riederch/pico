@@ -661,12 +661,16 @@ describe('ADR 0116 W5 - the press is the write', () => {
       outcome: 'answered',
       foundInMemory: false,
       answer: 'Nothing here says.',
-    }], () => {});
+    }], () => {}, () => {}, () => {});
 
     const line = (root.list as unknown as {
       children: Array<{ children: Array<Record<string, unknown>> }>;
     }).children[0]!;
-    expect(line.children.some((child) => child.tag === 'button')).toBe(false);
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    // Zurücknehmen schon: ein Austausch, der nichts fand, ist trotzdem einer,
+    // den jemand loswerden können soll. Behalten nicht.
+    expect(buttons.map((button) => button.textContent))
+      .toEqual(['Take this exchange back']);
   });
 });
 
@@ -962,18 +966,65 @@ describe('ADR 0071 - the line that made a memory is the line that unmakes it', (
       foundInMemory: true,
       answer: 'Bergstrasse, bay 114.',
       keptAs: { memoryItemId: 'mem_recall_0001', privacyDomain: 'domain-private' },
-    }], () => {}, (memoryItemId) => forgotten.push(memoryItemId));
+    }], () => {}, (memoryItemId) => forgotten.push(memoryItemId), () => {});
 
     const line = (root.list as unknown as {
       children: Array<{ children: Array<Record<string, unknown>> }>;
     }).children[0]!;
-    const buttons = line.children.filter((child) => child.tag === 'button');
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0]?.textContent).toBe('Forget this');
+    const labels = line.children
+      .filter((child) => child.tag === 'button')
+      .map((button) => String(button.textContent));
+    // Genau eine der beiden Erinnerungshandlungen. Das Zurücknehmen des
+    // Austausches darf daneben stehen: es ist keine dritte Antwort auf
+    // dieselbe Frage, sondern eine Frage über etwas anderes.
+    expect(labels).toContain('Forget this');
+    expect(labels).not.toContain('Keep this answer');
+    const buttons = line.children.filter((child) => child.textContent === 'Forget this');
     // The state says what is true now, so the control reads as an undo.
     expect(String(line.children[1]?.textContent)).toContain('kept');
 
     (buttons[0] as unknown as { click(): void }).click();
+    expect(forgotten).toEqual(['mem_recall_0001']);
+  });
+
+  it('trennt das Zurücknehmen vom Vergessen, jedes mit seinem eigenen Bezeichner', () => {
+    /**
+     * ADR 0049 mit ADR 0071. Der Test, der die Vertauschung findet: beide
+     * Rückrufe haben die Form `(id: string) => void`, also hätte ein falscher
+     * Platz in der Parameterliste getypt und trotzdem den falschen Knopf
+     * bedient. Gefunden wurde das genau hier, am 2026-08-25, weil ein neuer
+     * Rückruf *vor* dem alten stand.
+     *
+     * Die zwei Bezeichner sind der Beweis: eine Job-Kennung ist kein
+     * Erinnerungsstück, und wer sie verwechselt, nimmt entweder den falschen
+     * Austausch zurück oder vergisst nichts.
+     */
+    const root = fakeDocument();
+    const takenBack: string[] = [];
+    const forgotten: string[] = [];
+    renderPicoCompanionRecalls(root, [{
+      jobId: 'job_kept',
+      question: 'where did I park?',
+      askedAt: '2026-08-17T10:00:00.000Z',
+      settledAt: '2026-08-17T10:00:05.000Z',
+      outcome: 'answered',
+      foundInMemory: true,
+      answer: 'Bergstrasse, bay 114.',
+      keptAs: { memoryItemId: 'mem_recall_0001', privacyDomain: 'domain-private' },
+    }], () => {}, (memoryItemId) => forgotten.push(memoryItemId),
+    (jobId) => takenBack.push(jobId));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const press = (label: string) => {
+      const button = line.children.find((child) => child.textContent === label);
+      (button as unknown as { click(): void }).click();
+    };
+    press('Take this exchange back');
+    press('Forget this');
+
+    expect(takenBack).toEqual(['job_kept']);
     expect(forgotten).toEqual(['mem_recall_0001']);
   });
 
@@ -987,13 +1038,16 @@ describe('ADR 0071 - the line that made a memory is the line that unmakes it', (
       outcome: 'answered',
       foundInMemory: true,
       answer: 'Bergstrasse, bay 114.',
-    }], () => {}, () => {});
+    }], () => {}, () => {}, () => {});
 
     const line = (root.list as unknown as {
       children: Array<{ children: Array<Record<string, unknown>> }>;
     }).children[0]!;
-    const buttons = line.children.filter((child) => child.tag === 'button');
-    expect(buttons.map((button) => button.textContent)).toEqual(['Keep this answer']);
+    const labels = line.children
+      .filter((child) => child.tag === 'button')
+      .map((button) => String(button.textContent));
+    expect(labels).toContain('Keep this answer');
+    expect(labels).not.toContain('Forget this');
   });
 });
 

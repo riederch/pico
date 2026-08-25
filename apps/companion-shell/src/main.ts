@@ -912,6 +912,20 @@ function registerIpc(): void {
    * ADR 0116 W5. A keep that fails must not be quiet: somebody pressed a
    * button and is waiting to be told their answer was kept.
    */
+  /** ADR 0049 mit ADR 0071. Den Austausch zurücknehmen, nicht die Notiz. */
+  ipcMain.handle(
+    picoCompanionIpcChannels.forgetRecall,
+    async (event: IpcMainInvokeEvent, jobId: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof jobId !== 'string') {
+        throw new Error('invalid_recall_forget');
+      }
+      await runtime.forgetRecall(jobId);
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.keepRecall,
     async (event: IpcMainInvokeEvent, jobId: unknown) => {

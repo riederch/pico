@@ -41,6 +41,7 @@ export const picoCompanionIpcChannels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  forgetRecall: 'pico:recall:forget',
   /** ADR 0071. One memory item, unmade by the person who made it. */
   forgetMemory: 'pico:memory:forget',
   getSuppliers: 'pico:suppliers:get',
@@ -1220,6 +1221,19 @@ export interface PicoCompanionRecallLine {
    */
   forgettable?: { memoryItemId: string; label: string };
   /**
+   * ADR 0049 mit ADR 0071, ab 2026-08-25. Den Austausch zurücknehmen - die
+   * Frage und die Antwort, nicht die Notiz daraus.
+   *
+   * **Neben `forgettable` erlaubt**, anders als `keepable`: das sind zwei
+   * verschiedene Dinge, die eine Person auch nacheinander wollen kann. Wer
+   * die Notiz behält und den Chat loswird, hat genau den Fall, für den es
+   * diese Zeile gibt.
+   *
+   * Fehlt, solange nichts geantwortet hat: eine Frage, die noch unterwegs
+   * ist, zurückzunehmen hieße, einem laufenden Job die Worte zu entziehen.
+   */
+  takeBackable?: true;
+  /**
    * ADR 0117 X5. The answer, and never without its label.
    *
    * A model's words about a person's material are not something Pico knows.
@@ -1251,6 +1265,7 @@ export function picoCompanionRecallLines(
         // question that did not get answered, not a Home that stopped.
         state: 'Your provider did not answer this one. Nothing else is affected, '
           + 'and asking again is free.',
+        takeBackable: true as const,
       });
     }
     if (recall.foundInMemory === false) {
@@ -1261,11 +1276,13 @@ export function picoCompanionRecallLines(
         // to look elsewhere instead of reading a confident sentence about
         // nothing.
         state: 'Nothing in what it read answers that.',
+        takeBackable: true as const,
       });
     }
     return Object.freeze({
       jobId: recall.jobId,
       question: recall.question,
+      takeBackable: true as const,
       state: recall.keptAs === undefined
         ? 'Answered from what you remember.'
         // Said as what is true now rather than as what happened: the sentence

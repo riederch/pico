@@ -167,6 +167,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.recall.ask',
       'home.recall.read',
       'home.recall.keep',
+      'home.recall.forget',
       'home.memory.forget',
       // ADR 0116 W5: what is waiting, and the explicit keep that persists it.
       'home.model.reads.read',

@@ -533,6 +533,31 @@ export async function forgetPicoCompanionMemory(input: {
 }
 
 /**
+ * ADR 0049 mit ADR 0071. Nimmt einen Austausch zurück, nicht die Notiz daraus.
+ *
+ * Der Nachbar darüber hebt die **Erinnerung** auf, die jemand aus einer
+ * Antwort behalten hat. Diese Operation hebt den **Austausch** auf: die Frage,
+ * die Antwort und den erinnerten Kontext. Das sind zwei Handlungen, und bis
+ * zum 2026-08-25 gab es nur eine - wer seinen Chat loswerden wollte, musste
+ * die Notiz opfern, und wer die Notiz behielt, behielt den Chat.
+ *
+ * Nur die Jobkennung reist. Was dabei geleert wird und was als Handhabe
+ * stehen bleibt, entscheidet das Home auf der Zeile, die es dazu führt.
+ */
+export async function forgetPicoCompanionRecall(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  jobId: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.recall.forget', {
+    jobId: input.jobId,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `recall_forget_${answer.outcome}`);
+  }
+}
+
+/**
  * ADR 0142 PE1. Forgets a measured machine, and every decision about it.
  *
  * The decisions go with it on the Home's side rather than being revoked one

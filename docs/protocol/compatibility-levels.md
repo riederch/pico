@@ -62,6 +62,7 @@ memory.recorded
 memory.time_bound_entry_recorded
 memory.time_bound_entry_due
 memory.tombstone
+memory.recall_forgotten
 memory.domain_shredded
 auth.operator_bootstrapped
 auth.credential_changed

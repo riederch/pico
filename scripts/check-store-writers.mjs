@@ -75,6 +75,39 @@ const withoutAProductCaller = [
     + 'was deliberately not built.',
   ],
   [
+    'setPicoSupplierCredential',
+    'ADR 0138 CO1, whose own gate text says "part implemented": the half that '
+    + 'is a decision - a scope, and that a credential exists - is here, and '
+    + 'where the secret lives at rest is stated as open in the ADR rather than '
+    + 'guessed at. A submit surface would have to put the secret somewhere, so '
+    + 'it waits on that decision. **A person cannot record a supplier '
+    + 'credential today**; `home.model.provider.credential.submit` is the '
+    + 'model-provider surface next door and does not reach suppliers. Recorded '
+    + '2026-08-25 as Roadmap finding B22.',
+  ],
+  [
+    'acceptPicoDepotOffer',
+    'ADR 0143 DP1. The offer is computed (`picoDepotOffer` off the attachment) '
+    + 'and the acceptance names the commit it was computed against, so this is '
+    + 'the half that decides. The closed operation list has `home.depot.attach`, '
+    + '`home.depot.reach.decide`, `home.depot.detach` and `home.depot.fetch.ask` '
+    + 'and no acceptance, so **a depot cannot be moved to a newer commit by a '
+    + 'person today** - it runs at the commit it was attached at. Recorded '
+    + '2026-08-25 as Roadmap finding B22.',
+  ],
+  [
+    'setPicoRuleDecision',
+    'ADR 0140 RL4, whose gate text says "half implemented". The half that is '
+    + 'built is the refusal: no effect and no host configuration can reach a '
+    + 'rule, and `module:check` refuses a module that even links against the '
+    + 'decision contract. The method\'s own comment says a rule change "arrives '
+    + 'over an authenticated surface or not at all" - and there is no such '
+    + 'surface, so today it is not at all: **every effect is answered by its '
+    + 'default, permanently.** That is fail-closed rather than open, which is '
+    + 'why it is argued rather than urgent. Recorded 2026-08-25 as Roadmap '
+    + 'finding B22.',
+  ],
+  [
     'deletePicoObservations',
     'ADR 0129 SR2. Drops exactly the readings a condensation pass consumed, '
     + 'and there is no condensation pass because there are no readings - the '
@@ -125,25 +158,77 @@ if (storeFiles.length === 0) {
   errors.push('No store found. This check reads a class holding `private readonly db`.');
 }
 
+/**
+ * Where a method's body starts and ends, by counting brackets.
+ *
+ * **Read by lines, this check saw 47 of 82 writing methods** (found
+ * 2026-08-25). It took every line up to the first `}` at two spaces as the
+ * body - and a method whose parameter is a multi-line object type closes that
+ * type on exactly such a line:
+ *
+ * ```ts
+ *   public forgetRecall(input: {
+ *     jobId: string;
+ *   }): 'forgotten' | 'not_yours' {   // <- the scan stopped here
+ * ```
+ *
+ * So every writer written in that shape had an empty body, no `UPDATE` in it,
+ * and never existed for this check: 31 in `event-store.ts` alone, plus
+ * `enqueue`, `markKept` and `forgetRecall` on the job queue. The passing line
+ * said "47 writing methods, each reachable" - true of the 47 it could see,
+ * and read as a statement about the store. A dead writer with a multi-line
+ * parameter would never have been reported.
+ *
+ * Counting brackets is exact and no longer than the guess it replaces: skip
+ * the parameter list by paren depth, then take the body by brace depth.
+ */
+const methodBody = (source, from) => {
+  let depth = 0;
+  let cursor = from;
+  for (; cursor < source.length; cursor += 1) {
+    if (source[cursor] === '(') {
+      depth += 1;
+    } else if (source[cursor] === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        cursor += 1;
+        break;
+      }
+    }
+  }
+  const opens = source.indexOf('{', cursor);
+  if (opens === -1) {
+    return '';
+  }
+  depth = 0;
+  for (let scan = opens; scan < source.length; scan += 1) {
+    if (source[scan] === '{') {
+      depth += 1;
+    } else if (source[scan] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(opens, scan);
+      }
+    }
+  }
+  return source.slice(opens);
+};
+
 /** Public methods whose body changes what is stored. */
 const writers = [];
 for (const file of storeFiles) {
-  const lines = text.get(file).split('\n');
+  const source = text.get(file);
+  const lines = source.split('\n');
+  let offset = 0;
   for (let index = 0; index < lines.length; index += 1) {
     const declared = /^ {2}public\s+([a-zA-Z][a-zA-Z0-9]*)\s*[(<]/u.exec(lines[index]);
-    if (declared === null || declared[1] === 'constructor') {
-      continue;
-    }
-    let body = '';
-    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      if (/^ {2}\}/u.test(lines[cursor])) {
-        break;
+    if (declared !== null && declared[1] !== 'constructor') {
+      const body = methodBody(source, offset + lines[index].indexOf('('));
+      if (/\b(?:INSERT|UPDATE|DELETE)\b/iu.test(body)) {
+        writers.push({ file, name: declared[1] });
       }
-      body += `${lines[cursor]}\n`;
     }
-    if (/\b(?:INSERT|UPDATE|DELETE)\b/iu.test(body)) {
-      writers.push({ file, name: declared[1] });
-    }
+    offset += lines[index].length + 1;
   }
 }
 

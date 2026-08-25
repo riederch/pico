@@ -130,6 +130,7 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `pico.link.direct` `home.recall.keep` | Internal | ADR 0116 W5. Persists one recall answer as a memory item derived from what it read. Refused when the answer found nothing, when there were no sources, and when a source has since been deleted - a summary that outlived the note it was about would be a memory nobody wrote. |
 | `pico.link.direct` `home.recall.ask` / `home.recall.read` | Internal | ADR 0116 W1. A person asks about a privacy domain they may read, from their own device; the answer arrives with the question rather than being withheld like a library read, because a recall is the delivery of something just asked for. The allowance is not chosen - it falls out of the origins of what was included. |
 | `pico.link.direct` `home.memory.forget` | Internal | ADR 0071 with ADR 0116 W5. One memory item, unmade by the person who made it. **The half of deletion that had no surface**: a retention policy deletes by age and a domain shred takes everything, and deleting one thing had no path at all - found by `store:check` as `MemoryStore.deleteInDomain` having no caller. The item is reached through the job that holds it, scoped to the requesting identity, so naming an arbitrary memory item cannot tell a caller whether it exists (ADR 0077 C4), and the domain comes off that row rather than from the caller. Deleting nulls the content and drops the key envelope; the `memory.tombstone` event is what makes it survive a restore, because ADR 0070's reconcile re-applies recorded deletions at boot. The job keeps its answer and offers to keep it again - they have an answer and did not keep it, which is the honest state. |
+| `pico.link.direct` `home.recall.forget` | Internal | ADR 0049 with ADR 0071, decided 2026-08-25. One exchange, taken back by the person who had it. `home.memory.forget` unmakes the *memory* kept from an answer; until this operation existed nothing unmade the exchange, so the question and the answer stayed in the recall history in the clear and a forget control beside them removed only the note. **The row survives and its words do not**: a kept item is found through its job, so removing the row would take the handle off the item - the same link that stopped a person making a memory they could never unmake. `job_json` is emptied, `result_json` and the recall context are dropped, `forgotten_at` records that it happened rather than leaving it to be read off an empty field, and the row leaves both lists. What stays is a library read's provenance - supplier and commit are statements about a source, not the person's words. The `memory.recall_forgotten` event carries the job id and nothing else: an entry that kept the question would be the copy that undoes the forgetting. |
 | `pico.link.direct` `home.model.provider.credential.submit` | Internal | ADR 0151 PV1. The one operation in the closed set that carries a secret, from the person who holds it to the Home that seals it. The reply is the reference; there is no read-back operation, and that absence is the design. |
 | `pico.link.direct` `home.model.reads.read` / `home.model.read.keep` | Internal | ADR 0116 W5 on the device: what a read produced and nobody kept, **without the values**, and the explicit keep that persists one. The list carries a supplier, a short revision and a time; the answer arrives only on the keep. |
 | `GET /api/model/providers/mine` | experimental foundation administration surface | Lists the providers this person has decided about. Requires an identity session; an operator session is refused, because the decision is a resident's. |
@@ -296,6 +297,7 @@ memory.recorded
 memory.time_bound_entry_recorded
 memory.time_bound_entry_due
 memory.tombstone
+memory.recall_forgotten
 memory.domain_shredded
 auth.operator_bootstrapped
 auth.credential_changed
@@ -329,6 +331,7 @@ Server-synthesized foundation event types (exported as `serverSynthesizedFoundat
 
 ```text
 memory.domain_shredded
+memory.recall_forgotten
 memory.time_bound_entry_due
 auth.operator_bootstrapped
 auth.credential_changed
@@ -363,6 +366,8 @@ home.version_changed
 `memory.tombstone` is the append-only deletion marker for a deleteable memory item (ADR 0014 / ADR 0068). Its payload is `{ memoryItemId, privacyDomain, reason? }` and carries no sensitive content. Writing one transitions a matching `deleted` memory item to `tombstoned` on a best-effort basis; the event log stays the source of truth.
 
 `memory.domain_shredded` is the append-only crypto-shred audit record for a privacy domain (ADR 0071 step 4, ADR 0037 audit style). Its payload is `{ privacyDomain, removedKeyVersions, reason? }` and carries no content or key material; the actor and time are the event's `deviceId` and `wallTime`. It is appended by the server's crypto-shred operation and rejected on the client write path, so a client cannot forge a shred record.
+
+`memory.recall_forgotten` is the append-only record that a person took one exchange back (ADR 0049 with ADR 0071). Its payload is `{ jobId }` and deliberately nothing else: an entry repeating the question would be the copy that undoes the forgetting, which is the same reason `memory.tombstone` carries a reference rather than the content. It is server-synthesized and refused on the client write path - a caller able to claim somebody forgot something could invent a retraction that never happened. The event says that it happened; the row it names no longer says what.
 
 The `auth.*` types are the append-only Foundation Operator audit trail (ADR 0076, ADR 0037 audit style): `auth.operator_bootstrapped` (payload `{}`) when the first operator credential is established, `auth.credential_changed` (payload `{}`) when the passphrase is replaced, `auth.operator_reset` (payload `{ reason? }`) when a local reset clears the operator, and `auth.sessions_revoked` (payload `{ revokedSessions }`) when all sessions are revoked at once. They carry no credential material, no session identifiers and no content; the actor and time are the event's `deviceId` and `wallTime`. All four are server-synthesized and rejected on the client write path. Individual logins, logouts, failed logins and rate-limit hits are deliberately **not** recorded here: they are attacker-triggerable and stay in bounded operational logging so the append-only log cannot be flooded (ADR 0075 A9).
 

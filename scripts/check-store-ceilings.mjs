@@ -59,16 +59,18 @@ const argued = [
     + 'time-locked, person-initiated and replacing the whole device set'],
   ['pico_identity_root_rotation', 'one row per root rotation, which is the rarest act ADR '
     + '0114 defines'],
-  ['pico_model_job_queue', '**unbounded, and this entry says so rather than covering it.** '
-    + 'One row per model job, holding the person\'s question (`job_json`), the answer '
-    + '(`result_json`) and the recall context, all as plain text. Nothing deletes a row, no '
-    + 'Q5 ceiling names the store, `home.memory.forget` clears only the pointer to the kept '
-    + 'item, `domain-shred.ts` never names the table, and the ADR 0072 encryption posture a '
-    + 'memory item carries does not exist here. Recorded 2026-08-24 in ADR 0049\'s status '
-    + 'note and as Roadmap finding B17. This is the recall history the person is shown - '
-    + '`recallsFor` returns the question and the answer, `home.recall.read` serves it - and '
-    + 'the closed operation list has no `home.recall.forget`, so bounding it is a missing '
-    + 'operation rather than a wiring job'],
+  ['pico_model_job_queue', '**unbounded in rows, and this entry says so rather than covering '
+    + 'it.** One row per model job. Nothing deletes a row, no Q5 ceiling names the store, and '
+    + '`domain-shred.ts` never names the table, so the row count still grows with use. What '
+    + 'changed on 2026-08-25 is the half that held words: `home.recall.forget` clears '
+    + '`job_json`, `result_json` and `recall_context_json` and stamps `forgotten_at`, so a '
+    + 'person can take an exchange back and what is left is a handle without a sentence. The '
+    + 'row survives on purpose - it is what `jobKeepingMemoryItem` finds, and deleting it '
+    + 'would make a kept memory item unreachable by the only operation that unmakes it, which '
+    + 'is `memory-forget.test.ts` planting `kept_memory_item_id = NULL` and watching '
+    + '`home.memory.forget` refuse. So the growth that is left is empty rows the person '
+    + 'chose, and full rows they have not. Recorded 2026-08-24 in ADR 0049\'s status note and '
+    + 'as Roadmap finding B17'],
 ];
 
 const migrations = readFileSync(join(coreRoot, 'migrations.ts'), 'utf8');

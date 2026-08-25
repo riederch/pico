@@ -55,6 +55,40 @@ Held from now on by `scripts/check-store-ceilings.mjs`, which asks every table
 how it stops growing. This one answers that it does not, in the check's own
 argument list, so the answer is on screen at every run rather than absent.
 
+**Status note 2026-08-25: decided, and the words now go.** The question the
+note above left open - refuse, take the item with it, or leave the link and
+clear only the words - was put to the person this Home belongs to, and they
+chose the third. `home.recall.forget` now exists as the forty-seventh Link
+operation and migration `0025_pico_model_job_forgotten` adds the column that
+records it.
+
+What it does: `job_json` is emptied, `result_json` and `recall_context_json`
+are dropped, `forgotten_at` is stamped, and the row leaves both `recallsFor`
+and `answeredFor`, so it disappears from the history rather than standing in
+it as a husk. What it does **not** do is delete the row - `jobKeepingMemoryItem`
+finds a kept item through exactly this row, and a test plants
+`kept_memory_item_id = NULL` to watch `home.memory.forget` refuse afterwards.
+Taking the handle would recreate the fault ADR 0126's note was written about:
+a memory somebody made and can never unmake.
+
+Two things this needed that the surface alone would not have shown:
+
+- **A settled row is not the only kind.** A recall still with the provider can
+  be taken back, and the answer came back afterwards and wrote itself into
+  `result_json` of a row whose words had just been cleared. The history would
+  not have shown it and the disk would have held it, after the person was told
+  it was gone. `settle` now writes `result_json` only while `forgotten_at` is
+  null, and `forgetRecall` settles a running row as `taken_back` so nothing is
+  left waiting for work nobody wants.
+- **The refusal stays a refusal.** A job that belongs to somebody else and one
+  that never existed both answer `not_yours`, and the test compares the two
+  results rather than checking one word (ADR 0077 C4).
+
+The store-ceiling argument is rewritten accordingly and still says the table is
+unbounded: rows have no sweep and no Q5 ceiling. What changed is that the words
+inside a row are now the person's to remove. What is left to grow is empty rows
+they chose and full rows they have not.
+
 ## Context
 
 ADR 0048 allows Pico to delegate model inference or planning to a trusted model capability provider, such as a stronger Pico Home, desktop Pico Vault, peer endpoint or mediated cloud connector.

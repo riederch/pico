@@ -64,6 +64,7 @@ declare global {
       getRecalls(): Promise<unknown>;
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
+      forgetRecall(jobId: string): Promise<void>;
       forgetMemory(memoryItemId: string): Promise<void>;
       askModelProviderMeasurement(
         reach: string,
@@ -1281,6 +1282,21 @@ function refreshRecalls(): void {
             refreshRecalls();
           }, (error: unknown) => {
             recallStatus.textContent = refusalText(error, 'That was not forgotten.');
+          });
+        },
+        (jobId) => {
+          /**
+           * ADR 0049 mit ADR 0071. Der Austausch, nicht die Notiz daraus. Der
+           * Satz sagt, was jetzt gilt, und nennt beim Namen, was *nicht* mit
+           * weggeht - sonst liest ihn jemand als "meine Notiz ist auch weg".
+           */
+          void window.picoCompanion.forgetRecall(jobId).then(() => {
+            recallStatus.textContent =
+              'Taken back. The question and the answer are gone from here; '
+              + 'anything you kept from it stays.';
+            refreshRecalls();
+          }, (error: unknown) => {
+            recallStatus.textContent = refusalText(error, 'That was not taken back.');
           });
         },
       );

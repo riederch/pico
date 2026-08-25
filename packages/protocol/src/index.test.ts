@@ -134,6 +134,7 @@ describe('Pico protocol types', () => {
       'memory.time_bound_entry_recorded',
       'memory.time_bound_entry_due',
       'memory.tombstone',
+      'memory.recall_forgotten',
       'memory.domain_shredded',
       'auth.operator_bootstrapped',
       'auth.credential_changed',
@@ -166,6 +167,7 @@ describe('Pico protocol types', () => {
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
+      'memory.recall_forgotten',
       'memory.time_bound_entry_due',
       'auth.operator_bootstrapped',
       'auth.credential_changed',
@@ -273,6 +275,19 @@ describe('Pico protocol types', () => {
     expect(validateFoundationEventPayload('memory.tombstone', { memoryItemId: 'mem-1', privacyDomain: 'domain-private', content: 'secret' })).toEqual({
       ok: false,
       error: 'memory.tombstone payload has unexpected field: content.',
+    });
+    expect(validateFoundationEventPayload('memory.recall_forgotten', { jobId: 'job_1' })).toEqual({
+      ok: true, payload: { jobId: 'job_1' },
+    });
+    expect(validateFoundationEventPayload('memory.recall_forgotten', {})).toEqual({
+      ok: false,
+      error: 'memory.recall_forgotten payload requires jobId.',
+    });
+    // Die Frage darf hier nicht mitreisen: ein Eintrag, der sie festhält, ist
+    // die Kopie, die das Vergessen rückgängig macht.
+    expect(validateFoundationEventPayload('memory.recall_forgotten', { jobId: 'job_1', question: 'where did I park?' })).toEqual({
+      ok: false,
+      error: 'memory.recall_forgotten payload has unexpected field: question.',
     });
     expect(validateFoundationEventPayload('memory.domain_shredded', { privacyDomain: 'domain-private', removedKeyVersions: 2 })).toEqual({
       ok: true,

@@ -198,6 +198,18 @@ export function renderPicoCompanionRecalls(
   keep: (jobId: string) => void,
   /** ADR 0071. The press *is* the deletion, on the line that made the memory. */
   forget?: (memoryItemId: string) => void,
+  /**
+   * ADR 0049 mit ADR 0071. Nimmt den Austausch zurück - Frage und Antwort -,
+   * und lässt eine daraus behaltene Notiz stehen.
+   *
+   * **Zuletzt, und das ist keine Stilfrage.** Beide Rückrufe daneben haben die
+   * Form `(id: string) => void`, also hätte ein neuer Platz vor `forget` jeden
+   * bestehenden Aufrufer stillschweigend umgedeutet: sein Vergessen wäre zum
+   * Zurücknehmen geworden, typgeprüft und falsch. Ein Test hat es hier
+   * gefunden; im Fenster wäre es ein Knopf gewesen, der etwas anderes tut, als
+   * er sagt.
+   */
+  takeBack?: (jobId: string) => void,
 ): void {
   const recalls = parsePicoCompanionRecalls(value);
   root.list.replaceChildren();
@@ -236,6 +248,28 @@ export function renderPicoCompanionRecalls(
       button.textContent = 'Keep this answer';
       button.addEventListener('click', () => {
         keep(line.jobId);
+      });
+      item.append(button);
+    }
+
+    /**
+     * ADR 0049 mit ADR 0071, seit 2026-08-25. **Neben allem anderen erlaubt**,
+     * anders als Behalten und Vergessen zueinander: den Austausch
+     * zurückzunehmen ist eine dritte Sache, die eine Person auch zusätzlich
+     * wollen kann - die Notiz behalten und den Chat loswerden ist genau der
+     * Fall, für den es diesen Knopf gibt.
+     *
+     * Der Satz nennt das Zurückgenommene und nicht die Handlung: „diesen
+     * Austausch zurücknehmen" sagt, was verschwindet, während „löschen" eine
+     * Person fragen ließe, was alles.
+     */
+    if (line.takeBackable === true && takeBack !== undefined) {
+      const button = root.document.createElement('button');
+      button.type = 'button';
+      button.className = 'secondary';
+      button.textContent = 'Take this exchange back';
+      button.addEventListener('click', () => {
+        takeBack(line.jobId);
       });
       item.append(button);
     }

@@ -262,6 +262,20 @@ export const picoPresenceSwitchMigrationId =
 export const picoModelJobKeptMemoryMigrationId =
   '0024_pico_model_job_kept_memory' as const;
 
+/**
+ * ADR 0049 mit ADR 0071. Wann eine Person diesen Austausch zurückgenommen hat.
+ *
+ * Eine Spalte statt eines gelöschten Satzes, weil die Zeile tragend ist: ein
+ * behaltenes Item wird über seinen Job gefunden, und wer die Zeile entfernt,
+ * nimmt dem Item die Handhabe. Die Worte gehen, die Verbindung bleibt.
+ *
+ * `forgotten_at` statt „job_json ist leer": ein Zustand, den man an einem
+ * geleerten Feld ablesen muss, ist von einem kaputten Feld nicht zu
+ * unterscheiden.
+ */
+export const picoModelJobForgottenMigrationId =
+  '0025_pico_model_job_forgotten' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1595,6 +1609,16 @@ const migrations: readonly MigrationDefinition[] = [
 
         ALTER TABLE pico_model_job_queue
         ADD COLUMN kept_privacy_domain TEXT NULL;
+      `);
+    },
+  },
+  {
+    id: picoModelJobForgottenMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_model_job_queue
+        ADD COLUMN forgotten_at TEXT NULL;
       `);
     },
   },

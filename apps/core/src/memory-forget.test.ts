@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -285,5 +286,181 @@ describe('ADR 0077 C4 - the refusal is not an inventory', () => {
     const untouched = store.memory().getInDomain('mem_somebody_elses', 'domain-other');
     store.close();
     expect(untouched?.deletionState).toBe('active');
+  });
+});
+
+/**
+ * ADR 0049 mit ADR 0071 - der Austausch, zurückgenommen.
+ *
+ * Vom Nachbarn oben unterschieden, und das ist der ganze Punkt: dort hebt
+ * jemand die **Erinnerung** auf, die er aus einer Antwort behalten hat. Hier
+ * nimmt er den **Austausch** zurück - die Frage, die Antwort, den erinnerten
+ * Kontext. Bis zum 2026-08-25 gab es nur die erste Handlung, also musste, wer
+ * seinen Chat loswerden wollte, die Notiz opfern.
+ *
+ * Entschieden vom Nutzer am 2026-08-25: die Zeile bleibt als Handhabe stehen,
+ * ihre Worte gehen, und sie verschwindet aus der Historie.
+ */
+const rowIn = (databasePath: string) => {
+  const db = new Database(databasePath, { readonly: true });
+  const row = db.prepare(`
+    SELECT job_json AS jobJson, result_json AS resultJson,
+           recall_context_json AS recallContextJson, forgotten_at AS forgottenAt,
+           kept_memory_item_id AS keptMemoryItemId
+    FROM pico_model_job_queue WHERE job_id = ?
+  `).get(jobId) as {
+    jobJson: string; resultJson: string | null; recallContextJson: string | null;
+    forgottenAt: string | null; keptMemoryItemId: string | null;
+  };
+  db.close();
+  return row;
+};
+
+describe('ADR 0049 mit ADR 0071 - der Austausch, zurückgenommen', () => {
+  it('nimmt die Worte und lässt die Handhabe stehen', async () => {
+    const { send, databasePath } = await homeWithAKeptAnswer();
+
+    const before = rowIn(databasePath);
+    expect(before.jobJson).toContain('where did I park?');
+    expect(before.resultJson).toContain(sentence);
+
+    expect((await send('home.recall.forget', { jobId })).response.outcome).toBe('ok');
+
+    const after = rowIn(databasePath);
+    // Die Frage, die Antwort und der erinnerte Kontext sind fort.
+    expect(after.jobJson).not.toContain('where did I park?');
+    expect(after.jobJson).not.toContain(sentence);
+    expect(after.resultJson).toBeNull();
+    expect(after.recallContextJson).toBeNull();
+    // Dass es zurückgenommen wurde, steht als Tatsache da und nicht als Leere.
+    expect(after.forgottenAt).not.toBeNull();
+    // Und die Handhabe bleibt: ohne sie wäre die behaltene Notiz unaufhebbar.
+    expect(after.keptMemoryItemId).toBe(memoryItemId);
+  });
+
+  it('lässt die behaltene Notiz danach noch aufheben', async () => {
+    const { send, databasePath } = await homeWithAKeptAnswer();
+    expect((await send('home.recall.forget', { jobId })).response.outcome).toBe('ok');
+
+    // Der Fall, für den der Nutzer sich entschieden hat: den Chat loswerden
+    // und die Notiz behalten - und sie später trotzdem aufheben können.
+    expect(await itemIn(databasePath)).toBeDefined();
+    expect((await send('home.memory.forget', { memoryItemId })).response.outcome).toBe('ok');
+    expect((await itemIn(databasePath))?.deletionState).toBe('tombstoned');
+  });
+
+  it('verschwindet aus der Historie, statt als Hülle darin zu stehen', async () => {
+    const { send } = await homeWithAKeptAnswer();
+    const before = (await send('home.recall.read', {})).result as { recalls: unknown[] };
+    expect(before.recalls).toHaveLength(1);
+
+    await send('home.recall.forget', { jobId });
+
+    const after = (await send('home.recall.read', {})).result as { recalls: unknown[] };
+    // Die Liste ist, was jemand gefragt hat. Das hat er zurückgenommen.
+    expect(after.recalls).toHaveLength(0);
+  });
+
+  it('lässt die Antwort nicht zurückkommen, wenn der Lauf noch unterwegs war', async () => {
+    /**
+     * Der Fall, den die Fläche nicht anbietet und der Vorgang trotzdem kann:
+     * zurückgenommen, während der Anbieter noch daran arbeitet. Er kommt
+     * zurück und will seine Antwort ablegen. Zugesagt war, dass sie weg ist.
+     */
+    const { send, databasePath, person } = await homeWithAKeptAnswer({ kept: false });
+    const writing = await EventStore.open(databasePath, {});
+    const queue = writing.picoModelJobQueue();
+    queue.enqueue({
+      job: picoRecallJob({
+        jobId: 'job_still_running',
+        question: 'where did I park?',
+        items: [] as never,
+        nowMs: Date.parse('2026-08-17T10:00:00.000Z'),
+      }),
+      picoIdentityFingerprintHex: person,
+      entryId: 'an-entry',
+      at: '2026-08-17T10:00:00.000Z',
+      kind: 'recall',
+      recallContext: { privacyDomain, memoryItemIds: [] },
+    } as never);
+    writing.close();
+
+    expect((await send('home.recall.forget', { jobId: 'job_still_running' })).response.outcome)
+      .toBe('ok');
+
+    /**
+     * Vor dem Abschluss gemessen, weil danach nichts mehr zu messen wäre: der
+     * `settle` unten setzt `settled_at` ohnehin, und eine Pflanzung, die die
+     * Zeile wartend zurücklässt, wäre an dieser Stelle unsichtbar geblieben.
+     * Zurückgenommen heißt fertig - sonst wartete etwas, das niemand mehr
+     * wissen will (ADR 0118 O4 andersherum).
+     */
+    const waiting = await EventStore.open(databasePath, {});
+    expect(waiting.picoModelJobQueue().pendingCount()).toBe(0);
+    waiting.close();
+
+    const settling = await EventStore.open(databasePath, {});
+    settling.picoModelJobQueue().settle({
+      jobId: 'job_still_running',
+      outcome: 'answered',
+      result: { values: { answer: 'In der Tiefgarage, Ebene 2.' } },
+      at: '2026-08-17T10:00:05.000Z',
+    });
+    settling.close();
+
+    const db = new Database(databasePath, { readonly: true });
+    const row = db.prepare(`
+      SELECT result_json AS resultJson, settled_at AS settledAt
+      FROM pico_model_job_queue WHERE job_id = 'job_still_running'
+    `).get() as { resultJson: string | null; settledAt: string | null };
+    db.close();
+    expect(row.resultJson).toBeNull();
+    expect(row.settledAt).not.toBeNull();
+  });
+
+  it('weist ein zweites Zurücknehmen zurück, statt zweimal Erfolg zu melden', async () => {
+    const { send } = await homeWithAKeptAnswer();
+    expect((await send('home.recall.forget', { jobId })).response.outcome).toBe('ok');
+    const again = await send('home.recall.forget', { jobId });
+    expect(again.response.outcome).toBe('invalid_arguments');
+    expect((again.result as { refusal?: unknown }).refusal).toBe('already_forgotten');
+  });
+
+  it('antwortet für einen fremden Job wie für einen, den es nie gab', async () => {
+    /**
+     * ADR 0077 C4: eine Ablehnung ist kein Verzeichnis. Ein Nein, das für
+     * einen fremden Job anders klingt als für einen erfundenen, beantwortet
+     * die Frage „gibt es diesen Austausch?" für jeden, der raten will - und
+     * genau das ist die Frage, die niemand stellen können soll.
+     */
+    const { send, databasePath } = await homeWithAKeptAnswer();
+    const writing = await EventStore.open(databasePath, {});
+    writing.picoModelJobQueue().enqueue({
+      job: picoRecallJob({
+        jobId: 'job_somebody_elses',
+        question: 'where did they park?',
+        items: [] as never,
+        nowMs: Date.parse('2026-08-17T10:00:00.000Z'),
+      }),
+      picoIdentityFingerprintHex: 'somebody-else',
+      entryId: 'another-entry',
+      at: '2026-08-17T10:00:00.000Z',
+      kind: 'recall',
+      recallContext: { privacyDomain: 'domain-other', memoryItemIds: [] },
+    } as never);
+    writing.close();
+
+    const real = await send('home.recall.forget', { jobId: 'job_somebody_elses' });
+    const invented = await send('home.recall.forget', { jobId: 'job_that_never_was' });
+    expect(real.response.outcome).toBe('invalid_arguments');
+    expect(real.result).toEqual(invented.result);
+    expect((real.result as { refusal?: unknown }).refusal).toBe('not_yours');
+
+    // Und das fremde bleibt, wie es war: eine Ablehnung, die trotzdem löscht,
+    // wäre die schlimmere Hälfte von beidem.
+    const reading = await EventStore.open(databasePath, {});
+    const untouched = reading.picoModelJobQueue().recallsFor('somebody-else');
+    reading.close();
+    expect(untouched).toHaveLength(1);
   });
 });

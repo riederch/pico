@@ -192,10 +192,24 @@ export class PicoModelJobQueue {
     `).run(at, jobId);
   }
 
+  /**
+   * **Nie auf eine zurückgenommene Zeile schreiben.**
+   *
+   * Ein Lauf, der schon beim Anbieter war, als die Person ihn zurücknahm,
+   * kommt mit seiner Antwort zurück - und schrieb sie ohne diese Bedingung in
+   * `result_json` einer Zeile, deren Worte gerade gelöscht worden waren. Die
+   * Historie hätte sie nicht gezeigt (`recallsFor` lässt zurückgenommene aus),
+   * auf der Platte hätten sie gestanden. Zugesagt war, dass sie weg sind.
+   *
+   * Die Zeile wird trotzdem abgeschlossen: das Verweigern des ganzen `UPDATE`
+   * ließe sie ewig als wartend gelten, und „etwas wartet" über nichts ist
+   * derselbe Fehler in die andere Richtung (ADR 0118 O4).
+   */
   public settle(input: { jobId: string; outcome: string; result?: unknown; at: string }): void {
     this.db.prepare(`
       UPDATE pico_model_job_queue
-      SET settled_at = ?, outcome = ?, result_json = ?
+      SET settled_at = ?, outcome = ?,
+          result_json = CASE WHEN forgotten_at IS NULL THEN ? ELSE NULL END
       WHERE job_id = ?
     `).run(
       input.at,
@@ -296,6 +310,7 @@ export class PicoModelJobQueue {
         AND kind = 'library_read'
         AND outcome = 'answered'
         AND result_json IS NOT NULL
+        AND forgotten_at IS NULL
       ORDER BY settled_at, job_id
     `).all(picoIdentityFingerprintHex) as Array<{
       jobId: string;
@@ -355,6 +370,10 @@ export class PicoModelJobQueue {
       FROM pico_model_job_queue
       WHERE pico_identity_fingerprint_hex = ?
         AND kind = 'recall'
+        -- ADR 0049, 2026-08-25: eine zurückgenommene Zeile ist keine Historie
+        -- mehr. Sie bleibt als Handhabe für ein behaltenes Item stehen und
+        -- verschwindet aus der Liste dessen, was jemand gefragt hat.
+        AND forgotten_at IS NULL
       ORDER BY enqueued_at DESC, job_id DESC
     `).all(picoIdentityFingerprintHex) as Array<{
       jobId: string;
@@ -421,6 +440,58 @@ export class PicoModelJobQueue {
         WHERE job_id = ?
       `)
       .run(input.memoryItemId, input.privacyDomain, input.jobId);
+  }
+
+  /**
+   * ADR 0049 mit ADR 0071. Eine Person nimmt einen Austausch zurück.
+   *
+   * **Die Worte gehen, die Zeile bleibt.** Sie ist tragend: ein behaltenes
+   * Item wird über seinen Job gefunden, und wer die Zeile entfernt, nimmt dem
+   * Item die Handhabe - genau die Verbindung, vor der eine Person eine
+   * Erinnerung machen und nie wieder aufheben konnte.
+   *
+   * Was geleert wird, ist alles, worin die Worte stehen: die Frage und die
+   * Einheiten im Job, die Antwort, der Recall-Kontext. `job_json` ist
+   * `NOT NULL`, bekommt also ein leeres Objekt statt eines Nullwerts - und
+   * dass die Zeile zurückgenommen wurde, sagt `forgotten_at` und nicht die
+   * Leere.
+   *
+   * Was bleibt, ist die Provenienz eines Library-Reads (Zulieferer, Commit):
+   * sie ist keine Aussage der Person, sondern eine über eine Quelle.
+   */
+  public forgetRecall(input: {
+    picoIdentityFingerprintHex: string;
+    jobId: string;
+    at: string;
+  }): 'forgotten' | 'not_yours' | 'already_forgotten' {
+    const row = this.db.prepare(`
+      SELECT forgotten_at AS forgottenAt
+      FROM pico_model_job_queue
+      WHERE job_id = ? AND pico_identity_fingerprint_hex = ?
+    `).get(input.jobId, input.picoIdentityFingerprintHex) as
+      { forgottenAt: string | null } | undefined;
+    if (row === undefined) {
+      return 'not_yours';
+    }
+    if (row.forgottenAt !== null) {
+      return 'already_forgotten';
+    }
+    /**
+     * Und eine noch laufende Zeile wird dabei abgeschlossen. Ohne das bliebe
+     * sie wartend: `next()` griffe sie, fände `{}` statt eines Auftrags,
+     * scheiterte am Parser - und bis dahin hätte `pendingCount()` gesagt, es
+     * warte etwas, das niemand mehr wissen will. `COALESCE`, weil eine bereits
+     * beantwortete Zeile ihren eigenen Zeitpunkt behält.
+     */
+    this.db.prepare(`
+      UPDATE pico_model_job_queue
+      SET job_json = '{}', result_json = NULL, recall_context_json = NULL,
+          forgotten_at = ?,
+          settled_at = COALESCE(settled_at, ?),
+          outcome = COALESCE(outcome, 'taken_back')
+      WHERE job_id = ? AND pico_identity_fingerprint_hex = ?
+    `).run(input.at, input.at, input.jobId, input.picoIdentityFingerprintHex);
+    return 'forgotten';
   }
 
   /** ADR 0071. Which job, if any, holds this memory item for this person. */

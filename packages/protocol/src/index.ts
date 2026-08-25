@@ -26,6 +26,14 @@ export const foundationEventTypes = [
    */
   'memory.time_bound_entry_due',
   'memory.tombstone',
+  /**
+   * ADR 0049 mit ADR 0071. Eine Person hat einen Austausch zurückgenommen.
+   *
+   * Inhaltsfrei mit Absicht: die Jobkennung und sonst nichts. Was vergessen
+   * wurde, ist gerade das, was hier nicht stehen darf - ein Protokolleintrag,
+   * der die Frage aufbewahrt, wäre die Kopie, die das Vergessen aufhebt.
+   */
+  'memory.recall_forgotten',
   'memory.domain_shredded',
   'auth.operator_bootstrapped',
   'auth.credential_changed',
@@ -130,6 +138,9 @@ export type FoundationEventType = typeof foundationEventTypes[number];
 // append-only log cannot be flooded (ADR 0075 A9).
 export const serverSynthesizedFoundationEventTypes = [
   'memory.domain_shredded',
+  // Nur das Home hängt ihn an: wer behaupten dürfte, jemand habe etwas
+  // vergessen, könnte eine Rücknahme erfinden, die nie stattfand.
+  'memory.recall_forgotten',
   // ADR 0118 O1. Appended by the scheduler from the clock, never by a client:
   // a caller claiming an entry came due would be claiming something only the
   // process watching the instant can know.
@@ -565,6 +576,7 @@ export const picoLinkDirectOperations = [
    * they say so.
    */
   'home.recall.keep',
+  'home.recall.forget',
   /**
    * ADR 0071 with ADR 0116 W5. One memory item, unmade by the person who made
    * it.
@@ -2015,6 +2027,17 @@ export interface MemoryTombstonePayload {
   reason?: string;
 }
 
+/**
+ * ADR 0049 mit ADR 0071. Eine Person hat einen Austausch zurückgenommen.
+ *
+ * Nur die Jobkennung: was vergessen wurde, ist gerade das, was hier nicht
+ * stehen darf. Ein Protokolleintrag, der die Frage aufbewahrt, wäre die
+ * Kopie, die das Vergessen aufhebt.
+ */
+export interface MemoryRecallForgottenPayload {
+  jobId: string;
+}
+
 // Append-only crypto-shred audit record for a privacy domain (ADR 0071 step 4,
 // ADR 0037 audit style: a decision and references, never content or key
 // material). It records which domain was shredded, how many KEK versions were
@@ -2099,6 +2122,7 @@ export type FoundationEventPayload =
   | AvatarStateChangedPayload
   | MemoryRecordedPayload
   | MemoryTombstonePayload
+  | MemoryRecallForgottenPayload
   | MemoryDomainShreddedPayload
   | AuthOperatorBootstrappedPayload
   | AuthCredentialChangedPayload
@@ -2211,6 +2235,20 @@ export function validateFoundationEventPayload(
         ...(payload.summary === undefined ? {} : { summary: payload.summary }),
       },
     };
+  }
+
+  if (type === 'memory.recall_forgotten') {
+    const extraKey = firstUnexpectedKey(payload, ['jobId']);
+    if (extraKey !== undefined) {
+      return {
+        ok: false,
+        error: `memory.recall_forgotten payload has unexpected field: ${extraKey}.`,
+      };
+    }
+    if (!isNonEmptyString(payload.jobId, 256)) {
+      return { ok: false, error: 'memory.recall_forgotten payload requires jobId.' };
+    }
+    return { ok: true, payload: { jobId: payload.jobId } };
   }
 
   if (type === 'memory.tombstone') {
