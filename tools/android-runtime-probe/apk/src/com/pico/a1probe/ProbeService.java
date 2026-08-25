@@ -30,6 +30,24 @@ public abstract class ProbeService extends Service {
    */
   protected boolean offersKeystorePort() { return false; }
 
+  /**
+   * Was das Skript an Tatsachen der Plattform braucht. Leer für alle, die
+   * keine brauchen - eine Sonde, die etwas misst, misst es selbst.
+   */
+  protected String[] scriptArguments() { return new String[0]; }
+
+  /**
+   * Wo dieser Dienst den Keystore anbietet.
+   *
+   * **Ein Server je Prozess, ein Pfad je Server** - am Gerät gelernt, am
+   * 2026-08-24. Als der A7-Dienst denselben Namen nahm wie der Beitritt, banden
+   * zwei Prozesse dasselbe AF_UNIX-Socket: der zweite hängte das erste aus, und
+   * der Beitritt bekam mitten im Lauf `ECONNREFUSED` auf einen Anschluss, den
+   * sein eigenes Protokoll drei Zeilen vorher als lauschend meldete. Der Fehler
+   * sieht aus wie ein Wettlauf und ist ein Namenskonflikt.
+   */
+  protected String keystoreSocket() { return "keystore.sock"; }
+
   @Override public int onStartCommand(Intent intent, int flags, int startId) {
     if (!started) {
       started = true;
@@ -47,12 +65,13 @@ public abstract class ProbeService extends Service {
         // Vor Node, nicht danach: der Anschluss muss stehen, bevor der erste
         // Frager kommt. Node wartet zwar, aber ein Warten, das nur meistens
         // reicht, ist ein Wettlauf mit gutem Ausgang.
-        KeystorePort.serve(new File(files, "keystore.sock"),
+        KeystorePort.serve(new File(files, keystoreSocket()),
           new File(files, "keystore-port.log"));
       }
       NodeRuntime.runScript(
         new File(files, script()).getAbsolutePath(),
-        new File(files, log()).getAbsolutePath());
+        new File(files, log()).getAbsolutePath(),
+        scriptArguments());
     }
     return START_STICKY;
   }

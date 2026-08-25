@@ -50,6 +50,7 @@ public final class JoinActivity extends Activity {
   private EditText answer;
   private Button send;
   private TextView status;
+  private TextView condition;
   private Button scan;
 
   private LocalSocket socket;
@@ -72,6 +73,46 @@ public final class JoinActivity extends Activity {
     startForegroundService(new Intent(this, JoinService.class));
     setContentView(buildView());
     new Thread(this::connect, "pico-ui-bridge").start();
+    watchConditions();
+  }
+
+  /**
+   * ADR 0131 A7: was gerade gilt, während nichts passiert.
+   *
+   * Einmal anstoßen und dann nachsehen - der Takt selbst gehört
+   * `ReachabilityJobService`, der dasselbe alle sechs Stunden tut. Hier geht
+   * es darum, dass eine Person, die hinsieht, nicht auf den nächsten Takt
+   * warten muss.
+   *
+   * Diese Methode liest eine Datei und zeigt sie. Sie kennt weder `kind` noch
+   * Vorrang: was zu sagen ist, hat der Kern entschieden und ausgeschrieben.
+   */
+  private void watchConditions() {
+    /**
+     * Erst wenn es etwas zu prüfen gibt. Ohne Profil hätte der Dienst kein
+     * Home zu fragen und keine Passphrase zu entsiegeln - er würde nur einen
+     * zweiten Node-Prozess neben eine laufende Zeremonie stellen, und das war
+     * am 2026-08-24 genau der Fehler, den das Gerät zurückgemeldet hat.
+     */
+    if (new java.io.File(getFilesDir(), "profile.json").isFile()) {
+      startForegroundService(new Intent(this, ReachabilityConditionService.class));
+    }
+    final android.os.Handler handler = new android.os.Handler(getMainLooper());
+    handler.postDelayed(new Runnable() {
+      @Override public void run() {
+        java.io.File written = new java.io.File(getFilesDir(), "condition.txt");
+        if (written.isFile()) {
+          try {
+            condition.setText(new String(
+              java.nio.file.Files.readAllBytes(written.toPath()), "UTF-8").trim());
+          } catch (java.io.IOException unreadable) {
+            // Eine unlesbare Datei ist kein Satz über das Home. Nichts zeigen
+            // ist hier richtiger als etwas zu erfinden.
+          }
+        }
+        handler.postDelayed(this, 5_000);
+      }
+    }, 3_000);
   }
 
   private View buildView() {
@@ -133,6 +174,15 @@ public final class JoinActivity extends Activity {
 
     status = text(column, 13, Color.parseColor("#8b949e"), Typeface.DEFAULT);
     status.setText("Starting Pico on this device...");
+
+    /**
+     * ADR 0131 A7. Was gerade gilt, wenn nichts passiert - und der Satz dazu
+     * kommt aus dem Kern, nicht von hier. Diese Zeile gibt wieder, was
+     * `picoCompanionConditionsFor` gesagt hat; sie wählt nichts aus und
+     * formuliert nichts nach.
+     */
+    condition = text(column, 13, Color.parseColor("#d29922"), Typeface.DEFAULT);
+    condition.setText("");
 
     ScrollView scroller = new ScrollView(this);
     scroller.addView(column);

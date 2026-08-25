@@ -7,6 +7,10 @@
        loop spends two minutes deciding the Home never answered. The Home was
        answering; nothing was allowed to ask. -->
   <uses-permission android:name="android.permission.INTERNET" />
+  <!-- ADR 0131 A7: ob dieses Telefon ein Netz sieht, ist eine Tatsache des
+       Systems. Ohne diese Berechtigung wirft `getActiveNetwork`, und der
+       Dienst stirbt vor Node - am 2026-08-24 genau so am Gerät gesehen. -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -80,6 +84,14 @@
     <service android:name=".ReachabilityJobService" android:process=":reach"
         android:exported="false"
         android:permission="android.permission.BIND_JOB_SERVICE" />
+    <!-- ADR 0131 A7: der Lauf, der das Home wirklich fragt. Eigener Prozess,
+         weil nodejs-mobile eine Node-Instanz je Prozess hält und der
+         Vault-Daemon in `:custody` schon eine hat. -->
+    <service android:name=".ReachabilityConditionService" android:process=":conditions"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a7_reachability_conditions" />
+    </service>
     <!-- ADR 0131 A3: no Node, no stage - pure platform API, so it neither
          loads libnode nor shares a process with anything that does. -->
     <service android:name=".KeystoreProbeService" android:process=":keystore"

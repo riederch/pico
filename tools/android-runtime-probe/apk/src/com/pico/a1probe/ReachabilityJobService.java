@@ -27,6 +27,20 @@ public final class ReachabilityJobService extends JobService {
       + ",\"powerSave\":" + (power != null && power.isPowerSaveMode())
       + ",\"standbyBucket\":" + (usage == null ? -1 : usage.getAppStandbyBucket())
       + ",\"interactive\":" + (power != null && power.isInteractive()));
+    /**
+     * ADR 0131 A7, seit dem 2026-08-24: der Takt trägt jetzt auch die Frage.
+     *
+     * Bis hierher war dieser Job eine Messung über sich selbst - er hielt
+     * fest, dass das System ihn laufen ließ, und tat kein Link-Werk. Damit
+     * war die Kadenz beantwortet und die Aussage nicht: ein Telefon, dessen
+     * Home nicht antwortet, sah aus wie eines, dessen Home nichts zu sagen
+     * hat. Genau das verbietet A7.
+     *
+     * Der Daemon zuerst, weil ohne ihn nichts zu entsiegeln ist; er läuft in
+     * seinem eigenen Prozess und ist harmlos, wenn er schon läuft.
+     */
+    startForegroundService(new android.content.Intent(this, CustodyService.class));
+    startForegroundService(new android.content.Intent(this, ReachabilityConditionService.class));
     // Nothing asynchronous: the work is the record.
     return false;
   }
