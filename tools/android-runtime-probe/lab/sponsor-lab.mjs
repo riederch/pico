@@ -307,10 +307,24 @@ async function startHome() {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   remember(child, CORE);
+  /**
+   * **Auch auf die Platte, nicht nur in diese Variable** (2026-08-25).
+   *
+   * Das Home antwortete einem Sponsor mit `500`, der Sponsor starb an der
+   * Ausnahme, und mit ihm verschwand die einzige Stelle, an der stand,
+   * *warum*: seine Worte lagen in `output` und nirgends sonst. Ein Absturz muss
+   * seine Erklärung hinterlassen, sonst kostet jeder Fehlschlag einen zweiten
+   * Durchgang, nur um ihn noch einmal zu sehen.
+   */
+  const homeLog = join(data, 'core.log');
   for (const stream of [child.stdout, child.stderr]) {
     stream.setEncoding('utf8');
-    stream.on('data', (chunk) => { output += chunk; });
+    stream.on('data', (chunk) => {
+      output += chunk;
+      appendFileSync(homeLog, chunk);
+    });
   }
+  say(`   the Home writes to ${homeLog}`);
   await waitFor(
     () => output.includes('picoHomeMoveInCode') && output.includes('Server listening at'),
     'core_start',
@@ -336,10 +350,15 @@ async function startDaemon() {
     '--foundation-backup', temp('pico-lab-backup-'),
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
   remember(child, CLI);
+  const daemonLog = join(vaultHomePath, 'daemon.log');
   for (const stream of [child.stdout, child.stderr]) {
     stream.setEncoding('utf8');
-    stream.on('data', (chunk) => { output += chunk; });
+    stream.on('data', (chunk) => {
+      output += chunk;
+      appendFileSync(daemonLog, chunk);
+    });
   }
+  say(`   the vault daemon writes to ${daemonLog}`);
   await waitFor(() => output.includes('socketPath'), 'daemon_start');
   return JSON.parse(output.split('\n').find((line) => line.includes('socketPath'))).socketPath;
 }

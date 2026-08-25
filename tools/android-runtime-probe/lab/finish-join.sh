@@ -22,6 +22,13 @@ set -euo pipefail
 #     zurück, und `begin` zeigt wieder die offene Frage -, aber der Umweg
 #     kostet einen Durchgang.
 #   * `KEYCODE_ENTER` im Passphrasefeld schickt nicht ab.
+#   * **Ein zweites CONTINUE zerstört das Angebot** (2026-08-25). Der Schirm,
+#     der den Angebotscode zeigt, *ist* zugleich die Frage nach dem Grant:
+#     ein Textfeld und derselbe Knopf darunter. Wer dort noch einmal tippt,
+#     schickt eine leere Antwort ab; der Code wird gelöscht und kommt auch
+#     durch einen Neustart der Activity nicht zurück, weil er nie irgendwo
+#     anders stand. Nach der Passphrase also genau einmal CONTINUE - danach
+#     übernimmt dieses Skript.
 #
 # Der Grant hat seine eigenen Fallen, und die stehen weiter unten an ihrer
 # Stelle. Gemeinsam ist beiden: nach dem Tippen nachsehen, was auf dem Schirm
