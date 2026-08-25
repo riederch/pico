@@ -19,6 +19,8 @@ import type { PicoVaultDaemonClient } from './client.js';
 import {
   createPicoLinkDirectClient,
   MAX_PICO_LINK_DIRECT_CLIENT_RESPONSE_CHARS,
+  PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS,
+  picoLinkDirectAnswerBoundMs,
   type PicoLinkDirectHostPin,
   type PicoLinkDirectSender,
 } from './link-direct-client.js';
@@ -340,6 +342,141 @@ describe('Pico Link direct client (ADR 0107 D3)', () => {
 
     await expect(client.request('home.setup.read', {}))
       .rejects.toThrow('link_home_did_not_answer:ECONNREFUSED');
+  });
+
+  it('gibt ein schweigendes Home auf, statt für immer zu warten', async () => {
+    /**
+     * Roadmap-Befund B21. Ein Home, das *ablehnt*, meldet sich sofort - der
+     * Test darüber. Ein Home, das *schweigt*, ließ jeden Aufrufer hängen: der
+     * Alarm-Carrier auf dem Desktop, ein Vordergrunddienst auf dem Telefon.
+     * Eine Prüfung, die hängt, sagt nie „dein Home antwortet nicht".
+     *
+     * Mit gestellter Uhr gemessen, damit die Grenze selbst geprüft wird und
+     * nicht nur, dass irgendwann etwas geschieht: eine Sekunde davor wartet
+     * die Anfrage noch.
+     */
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      const requestFetch = vi.fn(async (_url: unknown, init: { signal?: AbortSignal }) =>
+        await new Promise<never>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(init.signal?.reason as Error);
+          });
+        })) as unknown as typeof fetch;
+      const client = await createPicoLinkDirectClient({
+        sodium: vaultSodium,
+        daemonClient: f.daemonClient,
+        coreUrl: 'http://carrier.invalid',
+        host: f.host,
+        sender: f.sender,
+        fetch: requestFetch,
+      });
+
+      const asked = client.request('home.setup.read', {});
+      const settled = vi.fn();
+      void asked.then(settled, settled);
+
+      await vi.advanceTimersByTimeAsync(PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS - 1_000);
+      expect(settled).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(asked).rejects.toThrow('link_home_did_not_answer:timed_out');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gibt auch ein Home auf, das Kopfzeilen schickt und dann verstummt', async () => {
+    /**
+     * Der Fall, der beim ersten Anlauf durchrutschte: der Wecker wurde
+     * gelöscht, sobald die Antwort *begann*. Ein Home, das antwortet und den
+     * Rumpf nie zu Ende schickt, hing damit wieder für immer - während der
+     * Kommentar danebenstand, dieser Fall sei gedeckt.
+     */
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      const requestFetch = vi.fn(async (_url: unknown, init: { signal?: AbortSignal }) => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        // Kopfzeilen sofort, Rumpf nie - und der Strom bricht ab, wenn das
+        // Signal fällt, wie es ein echtes `fetch` tut.
+        body: new ReadableStream({
+          start(controller) {
+            init.signal?.addEventListener('abort', () => {
+              controller.error(init.signal?.reason as Error);
+            });
+          },
+        }),
+      })) as unknown as typeof fetch;
+      const client = await createPicoLinkDirectClient({
+        sodium: vaultSodium,
+        daemonClient: f.daemonClient,
+        coreUrl: 'http://carrier.invalid',
+        host: f.host,
+        sender: f.sender,
+        fetch: requestFetch,
+      });
+
+      const asked = client.request('home.setup.read', {});
+      const settled = vi.fn();
+      void asked.then(settled, settled);
+
+      await vi.advanceTimersByTimeAsync(PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS - 1_000);
+      expect(settled).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(asked).rejects.toThrow('link_home_did_not_answer:timed_out');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('wartet auf eine Freigabe länger, weil sie ihre Arbeit im Request tut', () => {
+    /**
+     * `home.action.approval.resolve` führt bei einer Depot-Freigabe
+     * `fetchPicoDepot` aus, und das ruft `git` mit 120 s je Aufruf. Dreißig
+     * Sekunden schnitten hier eine Freigabe ab, die gerade tut, was die Person
+     * wollte - und ein Abschneiden mitten in einer Freigabe sagt der Person
+     * nicht, ob sie geschehen ist.
+     */
+    expect(picoLinkDirectAnswerBoundMs('home.action.approval.resolve'))
+      .toBeGreaterThan(2 * 120_000);
+    // Und der gewöhnliche Fall ist die Lebensdauer des Umschlags selbst, keine
+    // zweite Zahl daneben: länger zu warten hieße, auf die Antwort zu einer
+    // Anfrage zu warten, die das Home als abgelaufen zurückwiese.
+    expect(picoLinkDirectAnswerBoundMs('home.setup.read'))
+      .toBe(PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS);
+  });
+
+  it('nennt eine zu große Antwort weiterhin zu groß und nicht ausbleibend', async () => {
+    // Ein Home, das zu viel sagt, ist nicht eines, das nichts sagt. Der neue
+    // Umschlag um den Rumpf darf nur das Schweigen umbenennen.
+    const f = fixture();
+    const requestFetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-length': String(64 * 1024 * 1024) }),
+      text: async () => '',
+      body: null,
+    })) as unknown as typeof fetch;
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid',
+      host: f.host,
+      sender: f.sender,
+      fetch: requestFetch,
+    });
+
+    // Genau, nicht enthalten: `toThrow` prüft auf Teilzeichenkette, und
+    // `link_home_did_not_answer:link_response_too_large` enthält den gesuchten
+    // Text - die lockere Fassung dieses Tests ließ genau die Umbenennung
+    // durch, gegen die er geschrieben ist (gefunden beim Pflanzen, 2026-08-25).
+    await expect(client.request('home.setup.read', {}))
+      .rejects.toThrow(/^link_response_too_large$/u);
   });
 
   it('falls back to the message when a transport failure carries no code', async () => {

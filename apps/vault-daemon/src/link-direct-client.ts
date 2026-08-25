@@ -17,6 +17,53 @@ import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from './client.js';
 
 export const PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS = 30_000;
+
+/**
+ * Wie lange auf eine Antwort gewartet wird - und warum das keine neue Zahl ist.
+ *
+ * **Bis zum 2026-08-25 gab es hier gar keine Grenze** (Roadmap-Befund B21).
+ * Ein Home, das die Verbindung *ablehnt*, meldet sich sofort und heißt seit
+ * dem 2026-08-22 `link_home_did_not_answer`. Ein Home, das *schweigt* -
+ * angehalten, überlastet, hinter einer Brücke, die annimmt und nicht
+ * weiterreicht -, ließ jeden Aufrufer warten, ohne Ende: auf dem Desktop ein
+ * hängender Alarm-Carrier, auf dem Telefon ein Vordergrunddienst, der nicht
+ * zurückkommt. Eine Prüfung, die hängt, sagt nie „dein Home antwortet nicht",
+ * und genau das ist der Satz, für den sie da ist.
+ *
+ * Die Voreinstellung ist die Lebensdauer des Umschlags selbst, nicht eine
+ * zweite Zahl daneben: länger zu warten hieße, auf die Antwort zu einer
+ * Anfrage zu warten, die das Home als abgelaufen zurückweisen würde, wenn es
+ * sie erst jetzt in die Hand nähme. Eine Wahrheit, die zweimal geschrieben
+ * wird, driftet.
+ */
+export const picoLinkDirectAnswerBoundMs = (
+  operation: PicoLinkDirectOperation,
+): number => picoLinkDirectLongAnswers.get(operation)
+  ?? PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS;
+
+/**
+ * Die Operationen, die ihre Arbeit **im Request** tun, mit dem Grund daneben.
+ *
+ * Der Typ ist `PicoLinkDirectOperation`, nicht `string`: ein Name, der die
+ * geschlossene Liste verlässt, scheitert damit an der Typprüfung statt hier
+ * als Ausnahme für etwas stehen zu bleiben, das es nicht mehr gibt.
+ *
+ * Wächst diese Liste, ist das sichtbar - und jeder Eintrag ist ein Hinweis,
+ * dass eine Operation lange Arbeit in eine Antwort legt, statt sie
+ * anzustoßen und den Fortschritt abfragbar zu machen.
+ */
+const picoLinkDirectLongAnswers = new Map<PicoLinkDirectOperation, number>([
+  [
+    /**
+     * Eine Depot-Freigabe führt `fetchPicoDepot` im Request aus, und das ruft
+     * `git` als externes Programm - mit 120 s Budget je Aufruf und mehreren
+     * Aufrufen für Holen und Auschecken. Dreißig Sekunden würden hier eine
+     * Freigabe abschneiden, die gerade tut, was die Person wollte.
+     */
+    'home.action.approval.resolve',
+    300_000,
+  ],
+]);
 export const MAX_PICO_LINK_DIRECT_CLIENT_RESPONSE_CHARS = 512 * 1024;
 
 export interface PicoLinkDirectHostPin {
@@ -198,19 +245,73 @@ export async function createPicoLinkDirectClient(
          * `picoCompanionEnrolmentRefusalLine` am Namen davor.
          */
         let response;
+        /**
+         * Ein Signal statt einer Hoffnung. Es deckt auch das Lesen des
+         * Rumpfes: ein Home, das Kopfzeilen schickt und dann verstummt, ist
+         * dasselbe Schweigen einen Schritt später.
+         *
+         * Ein eigener Controller statt `AbortSignal.timeout`, aus zwei
+         * Gründen: der Wecker wird nach der Antwort **gelöscht** - sonst hinge
+         * an jeder erledigten Anfrage noch dreißig Sekunden ein Timer im
+         * Daemon -, und eine gestellte Uhr kann ihn stellen, sodass ein Test
+         * die Grenze selbst prüfen kann statt nur, dass irgendwann etwas
+         * geschieht.
+         */
+        const silence = new AbortController();
+        const givingUp = setTimeout(() => {
+          silence.abort(Object.assign(
+            new Error('link_home_timed_out'),
+            { name: 'TimeoutError' },
+          ));
+        }, picoLinkDirectAnswerBoundMs(operation));
+        const noAnswerFrom = (failed: unknown): Error => {
+          // `timed_out` ist eine eigene Auskunft: „es hat zu lange geschwiegen"
+          // ist etwas anderes als „es hat abgelehnt", und beide sind etwas
+          // anderes als „niemand hat nachgesehen".
+          const cause = failed instanceof Error && failed.name === 'TimeoutError'
+            ? 'timed_out'
+            : failed instanceof Error
+              ? (failed.cause as { code?: string } | undefined)?.code ?? failed.message
+              : String(failed);
+          return new Error(`link_home_did_not_answer:${cause}`);
+        };
+        let responseText;
         try {
-          response = await requestFetch(linkUrl, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(envelope),
-          });
-        } catch (noAnswer) {
-          const cause = noAnswer instanceof Error
-            ? (noAnswer.cause as { code?: string } | undefined)?.code ?? noAnswer.message
-            : String(noAnswer);
-          throw new Error(`link_home_did_not_answer:${cause}`);
+          try {
+            response = await requestFetch(linkUrl, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(envelope),
+              signal: silence.signal,
+            });
+          } catch (noAnswer) {
+            throw noAnswerFrom(noAnswer);
+          }
+          try {
+            responseText = await readBoundedResponseText(response);
+          } catch (noAnswer) {
+            /**
+             * Nur das Schweigen wird hier umbenannt. `link_response_too_large`
+             * ist eine eigene Auskunft und keine ausbleibende Antwort - sie
+             * durchzureichen wäre der Fehler, den diese Zeile verhindert: ein
+             * Home, das zu viel sagt, als eines auszugeben, das nichts sagt.
+             */
+            if (!(noAnswer instanceof Error) || noAnswer.name === 'TimeoutError') {
+              throw noAnswerFrom(noAnswer);
+            }
+            throw noAnswer;
+          }
+        } finally {
+          /**
+           * **Erst wenn der Rumpf gelesen ist**, nicht wenn die Kopfzeilen da
+           * sind. Der erste Anlauf löschte den Wecker im `finally` des `fetch`
+           * - und ein Home, das Kopfzeilen schickt und dann verstummt, hing
+           * wieder für immer, während der Kommentar daneben behauptete, genau
+           * dieser Fall sei gedeckt. Was danach kommt - Öffnen, Signatur
+           * prüfen - ist eigene Arbeit und wartet auf niemanden.
+           */
+          clearTimeout(givingUp);
         }
-        const responseText = await readBoundedResponseText(response);
         let parsed: unknown;
         try {
           parsed = responseText === '' ? {} : JSON.parse(responseText);

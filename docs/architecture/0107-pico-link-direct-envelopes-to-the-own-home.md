@@ -29,6 +29,34 @@ Direct-Client würde für jeden Aufrufer gelten, und wie lang sie sein soll -
 eine Zahl für ein Heimnetz, eine andere über einen Relay - ist die
 Entscheidung, die dieses ADR noch nicht getroffen hat.
 
+**Entschieden und gebaut, noch am 2026-08-25.** Die Grenze sitzt im
+Direct-Client, gilt damit für jeden Aufrufer, und die Voreinstellung ist keine
+neue Zahl: sie *ist* `PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS`, die
+Lebensdauer des Umschlags. Länger zu warten hieße, auf die Antwort zu einer
+Anfrage zu warten, die dieses Home als abgelaufen zurückwiese, wenn es sie erst
+jetzt in die Hand nähme - genau die Antwort, die das angehaltene Home nach zwei
+Minuten gab. Eine Wahrheit, die zweimal geschrieben wird, driftet; deshalb steht
+sie einmal.
+
+Eine benannte Ausnahme, mit ihrem Grund daneben:
+`home.action.approval.resolve` führt bei einer Depot-Freigabe `fetchPicoDepot`
+**im Request** aus, und das ruft `git` mit 120 s Budget je Aufruf. Die Liste ist
+über `PicoLinkDirectOperation` typisiert, also scheitert ein Name, der die
+geschlossene Liste verlässt, an der Typprüfung, statt als Ausnahme für etwas
+stehen zu bleiben, das es nicht mehr gibt. Wächst diese Liste, ist das ein
+Hinweis, dass eine Operation lange Arbeit in eine Antwort legt, statt sie
+anzustoßen und abfragbar zu machen.
+
+Die Unterscheidung, die dabei entsteht, ist der Punkt: `timed_out` heißt „es hat
+zu lange geschwiegen" und ist etwas anderes als eine Ablehnung und etwas anderes
+als „niemand hat nachgesehen". Eine zu große Antwort heißt weiterhin
+`link_response_too_large` - ein Home, das zu viel sagt, ist nicht eines, das
+nichts sagt.
+
+Über den Relay ist damit nichts anderes entschieden: der Umschlag hat dieselbe
+Lebensdauer, gleich welchen Weg er nimmt, und ein Weg, der länger braucht als
+der Umschlag gilt, liefert eine Anfrage aus, die das Home ohnehin zurückweist.
+
 
 Status note, 2026-08-17: **"remote capability is opt-in per operation" now
 has something enforcing it.**

@@ -1459,6 +1459,28 @@ sie sie heute brauchte. Wo sie hingehört, ist der Direct-Client, und wie lang
 sie sein soll — eine Zahl fürs Heimnetz, eine andere über einen Relay — hat
 ADR 0107 nicht entschieden. Das steht dort als datierte Notiz.
 
+**Entschieden und gebaut, noch am selben Tag.** Die Grenze sitzt jetzt im
+Direct-Client und gilt damit für jeden Aufrufer — den Alarm-Carrier
+eingeschlossen. Die Voreinstellung ist keine neue Zahl, sondern die Lebensdauer
+des Umschlags selbst (30 s): länger zu warten hieße, auf die Antwort zu einer
+Anfrage zu warten, die das Home als abgelaufen zurückwiese — genau die Antwort,
+die das angehaltene Home nach zweieinhalb Minuten gab. Eine benannte Ausnahme
+steht daneben, mit ihrem Grund: `home.action.approval.resolve` führt bei einer
+Depot-Freigabe `git` im Request aus, mit 120 s je Aufruf, und wird deshalb fünf
+Minuten lang erwartet. Die Liste ist über `PicoLinkDirectOperation` typisiert,
+also kann kein Name darin stehenbleiben, den es nicht mehr gibt.
+
+Zwei Dinge fand erst das Pflanzen:
+
+- **Der Wecker stand zu früh auf.** Er wurde gelöscht, sobald die Antwort
+  *begann* — ein Home, das Kopfzeilen schickt und den Rumpf nie zu Ende, hing
+  damit wieder für immer, während der Kommentar daneben behauptete, genau
+  dieser Fall sei gedeckt. Jetzt fällt er erst, wenn der Rumpf gelesen ist.
+- **`toThrow` prüft auf Teilzeichenkette.** Der Test, der festhält, dass eine
+  zu große Antwort weiterhin `link_response_too_large` heißt, ließ die
+  Umbenennung nach `link_home_did_not_answer:link_response_too_large` durch —
+  gegen die er geschrieben war. Er verlangt den Namen jetzt genau.
+
 **Und ein zweiter Fund aus demselben Lauf, über das Labor statt über das
 Produkt:** das Home schrieb seine Worte nur in eine Variable des
 Sponsorprozesses. Als der an einer Ausnahme starb, verschwand die einzige

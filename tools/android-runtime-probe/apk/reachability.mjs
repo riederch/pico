@@ -145,14 +145,19 @@ try {
      *
      * Ein Home, das die Verbindung *ablehnt*, meldet sich sofort. Ein Home,
      * das *schweigt* - angehalten, überlastet, hinter einer Brücke, die
-     * annimmt und nicht weiterreicht - lässt jeden Aufrufer warten:
-     * `link-direct-client.ts` kennt keinen Timeout, und die Companion gibt
-     * keinen mit. Auf dem Desktop heißt das ein hängender Hintergrundlauf;
-     * auf einem Telefon ein Vordergrunddienst, der nicht mehr zurückkommt.
+     * annimmt und nicht weiterreicht - ließ jeden Aufrufer warten. Diese
+     * Grenze hier war am 2026-08-25 die einzige im Haus, und daraus wurde
+     * Roadmap-Befund B21: `link-direct-client.ts` kannte keinen Timeout, also
+     * hing auf dem Desktop der Alarm-Carrier genauso.
+     *
+     * **Der Client hat seit dem 2026-08-25 eine eigene Grenze** - dreißig
+     * Sekunden, die Lebensdauer des Umschlags -, und diese hier bleibt
+     * trotzdem stehen: eine Prüfung, die auf einem Takt läuft, will schneller
+     * antworten als der allgemeine Fall es zusagt. Zwanzig Sekunden sind
+     * reichlich für ein Heimnetz und kurz genug, um eine Antwort zu sein.
      *
      * Eine Prüfung, die hängt, sagt nie „dein Home antwortet nicht" - und
-     * genau das ist der Satz, für den sie da ist. Zwanzig Sekunden sind
-     * reichlich für ein Heimnetz und kurz genug, um eine Antwort zu sein.
+     * genau das ist der Satz, für den sie da ist.
      */
     const snapshot = await Promise.race([
       readLifecycle(),
