@@ -647,7 +647,7 @@ einer Entscheidung von heute statt auf einer Tatsache von gestern. Wer diese
 Zeile das nächste Mal liest, muss die Frage nicht erneut aufmachen, um zu
 erfahren, ob sie schon gestellt wurde.
 
-### Phase 5 — Android-Ceremonies (ADR 0131 A5, A3)
+### Phase 5 — Android-Ceremonies (ADR 0131 A5, A3) — abgeschlossen am 2026-08-25
 
 Die Vertikalen aus Phase 1 und 2 auf Android, in derselben Reihenfolge. Am
 2026-08-19 vorab vermessen: E2, E3 und E4 sind zusammen rund 1.500 Zeilen Kern,
@@ -729,6 +729,19 @@ weil Autorität zu schaffen heißt, mit der Wurzel zu unterschreiben. Das ist
 Wiederöffnen, von denen keine „Android-Arbeit" heißt. Die Zeile ist damit
 keine Aufgabe dieser Phase, sondern eine Folge einer Entscheidung, die
 woanders getroffen wurde.
+
+**Abgeschlossen am 2026-08-25.** Was diese Phase führte, ist zu: die
+Gradle-Frage war falsch gestellt, die erste Vertikale läuft, Keystore und
+Passphrase liegen im TEE, die Sprache gehört bis in die Ablehnungen dem Kern,
+A6 ist geschlossen und keine Android-Arbeit — und A7 hat heute seine laufende
+Hälfte bekommen: ein periodischer Dienst entsiegelt, liest authentifiziert
+beim Home und zeigt den Satz, den der Kern dazu schreibt. Antwortendes,
+stummes und totes Home sind am Gerät unterschieden (A34, RZCW300DTEX).
+
+Was **nicht** zu ist und auch nie zu dieser Phase gehörte: ein ausgelieferter
+Android-Client. Das Artefakt bleibt ein Laborartefakt; was es beweist, ist,
+dass die Zeremonien und die Sprache dort tragen, nicht dass jemand die App
+bekommt.
 
 Wie ein Telefon das Home erreicht: **nicht** über den Foundation-Port, der per
 Default an `127.0.0.1` bindet. Der Weg ist der eigene Link-Intake-Listener
