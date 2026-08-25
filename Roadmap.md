@@ -1339,6 +1339,32 @@ galt damit als Relay-Klassifikation und wurde sofort als veraltet gemeldet.
 Der Prüfer hatte recht, der Schnitt war falsch; er endet jetzt an der nächsten
 Notiz.
 
+**B21 — Ein abgelehntes Home meldet sich, ein stummes hängt (2026-08-25).**
+Gefunden beim Schließen von ADR 0131 A7 auf einem A34: ein per `SIGSTOP`
+angehaltenes Home ließ die Erreichbarkeitsprüfung des Telefons zweieinhalb
+Minuten warten und hätte es weiter getan. Weder `link-direct-client.ts` noch
+die Companion setzen eine Zeitgrenze; `link_home_did_not_answer` deckt nur den
+Fall ab, in dem `fetch` wirft.
+
+**Die Folge trägt weiter als Android.** ADR 0112s Alarm-Carrier leitet
+`reportHomeReachable(false)` aus einem geworfenen Lesevorgang ab — ein
+stummes Home wirft nicht, also fällt die Meldung nie. Damit gibt es eine
+dritte Möglichkeit neben „es wartet nichts" und „niemand hat nachgesehen":
+**der Lauf hängt noch** — und von außen sieht das aus wie die erste. Genau
+diese Verwechslung verbietet ADR 0118 O4.
+
+Die Sonde setzt sich ihre Grenze selbst (20 Sekunden, `read_timed_out`), weil
+sie sie heute brauchte. Wo sie hingehört, ist der Direct-Client, und wie lang
+sie sein soll — eine Zahl fürs Heimnetz, eine andere über einen Relay — hat
+ADR 0107 nicht entschieden. Das steht dort als datierte Notiz.
+
+**Und ein zweiter Fund aus demselben Lauf, über das Labor statt über das
+Produkt:** das Home schrieb seine Worte nur in eine Variable des
+Sponsorprozesses. Als der an einer Ausnahme starb, verschwand die einzige
+Stelle, an der stand, warum es mit `500` geantwortet hatte — und der
+Fehlschlag kostete einen ganzen Durchgang, nur um ihn noch einmal zu erzeugen.
+Ein Absturz muss seine Erklärung hinterlassen.
+
 ## Pflegeanweisung für Aktualisierungen
 
 Wenn der Auftrag „aktualisiere die Roadmap" lautet:

@@ -2,6 +2,34 @@
 
 ## Status
 
+Status note, 2026-08-25: **ein abgelehntes Home meldet sich, ein stummes
+nicht.** `link_home_did_not_answer` deckt den Fall ab, in dem die Verbindung
+scheitert - `fetch` wirft, der Grund wird benannt, der Aufrufer weiß es
+sofort. Für ein Home, das *annimmt und schweigt*, gibt es nichts: weder
+`link-direct-client.ts` noch die Companion setzen eine Zeitgrenze, also wartet
+jeder Aufrufer unbegrenzt.
+
+Am Gerät gefunden, beim Schließen von ADR 0131 A7: ein per `SIGSTOP`
+angehaltenes Home ließ die Erreichbarkeitsprüfung eines Telefons zweieinhalb
+Minuten hängen und hätte es weiter getan. Erst als das Home zurückkam,
+antwortete es der wartenden Anfrage mit `link_rejected:400:request_expired` -
+richtig, und Minuten zu spät.
+
+Die Folge trägt weiter als Android. ADR 0112s Alarm-Carrier meldet
+`reportHomeReachable(false)` aus einem geworfenen Lesevorgang; ein stummes
+Home wirft nicht, also fällt diese Meldung nie. **Ein hängender Lauf ist die
+dritte Möglichkeit neben "es wartet nichts" und "niemand hat nachgesehen", und
+von außen sieht sie aus wie die erste** - was ADR 0118 O4 genau zu verhindern
+versucht.
+
+Die Sonde in `tools/android-runtime-probe` setzt sich ihre Grenze deshalb
+selbst (20 Sekunden, `read_timed_out`). Das ist die Stelle, an der es heute
+gebraucht wurde, und nicht die, an der es hingehört: eine Grenze im
+Direct-Client würde für jeden Aufrufer gelten, und wie lang sie sein soll -
+eine Zahl für ein Heimnetz, eine andere über einen Relay - ist die
+Entscheidung, die dieses ADR noch nicht getroffen hat.
+
+
 Status note, 2026-08-17: **"remote capability is opt-in per operation" now
 has something enforcing it.**
 
