@@ -586,7 +586,7 @@ Linux- und ein Android-Client, ohne Terminal installierbar und bedienbar, die
 mindestens Termine und Spatial Recall tragen. Der sprechende Companion liegt
 bewusst dahinter.
 
-### Fixpunkt: Electron 44, vor dem 2026-08-25
+### Fixpunkt: Electron 44, vor dem 2026-08-25 — erledigt; der nächste ist der 2026-10-20
 
 Terminiert und nicht verhandelbar. `apps/companion-shell/electron-support.json`
 läuft am 2026-08-25 ab und blockiert danach `release:verify`. Die Pin-Policy
@@ -598,6 +598,22 @@ Am 2026-08-18 vorab gemessen: `44.0.0-beta.5` gepackt und im selben
 99.635.200 gegen 100.339.712 bei 43.4.0 — also gefallen, bei einem Budget von
 110.000.000. `verify:linux` lief auf der Beta mit Exit 0 durch. Eine Beta ist
 nicht das Release; die Aussage ist „wahrscheinlich billig", nicht „erledigt".
+
+**Erledigt am 2026-08-25, und die Vorabmessung war richtungsfalsch.** Electron
+44.0.0 erschien an seinem Termin (Chromium 152, Node 24.18.1); Pin und Beleg
+stehen darauf, die unterstützten Hauptversionen sind 42–44, und die nächste
+Frist ist der 2026-10-20, das geplante Datum von Electron 45. `release:verify`
+Exit 0 mit 2.838 Tests, Paketgate eingeschlossen.
+
+Der Speicher ist **gestiegen statt gefallen**: 101.244.928 Byte
+`Private_Dirty + Private_Hugetlb` gegen 110.000.000, wo dasselbe Paket auf
+43.4.1 heute zwischen 99.893.248 und 100.892.672 lag. Der PSS-Wert der
+`user_namespace`-Probe geht von rund 222–223 MB auf 226.916.352 Byte. Beides
+hält, und beides widerlegt das „wahrscheinlich billig" der Beta — weshalb der
+Absatz darüber es als Vermutung geschrieben hat und nicht als Ergebnis.
+
+Die nächste Frist trägt dieselbe Form: der Beleg läuft am 2026-10-20 ab und
+blockiert danach die Kette.
 
 ### Phase 3 — die Zustandsgrenze (ADR 0126 P3)
 
