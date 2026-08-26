@@ -190,6 +190,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.action.approval.resolve',
       'home.rule.decide',
       'home.rule.forget',
+      'home.observations.submit',
       'home.modules.consent.read',
       'home.modules.consent.record',
     ]);

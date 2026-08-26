@@ -135,6 +135,11 @@ import { EventFactory } from './event-factory.js';
 // edge points one way, or the two packages form a cycle.
 import { picoCalendarDueEntriesView } from '@pico/module-calendar/calendar';
 import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitments';
+import { maxPicoObservationSubmission } from '@pico/protocol/observation';
+import {
+  parsePicoLocationFix,
+  parsePicoMobilitySample,
+} from '@pico/protocol/spatial-recall';
 import { parsePicoPlace } from '@pico/protocol/place';
 import { picoDeclaredEffectNames, type PicoActionRequest } from '@pico/protocol/action';
 import type { PicoLinkDirectOperation } from '@pico/protocol';
@@ -1950,6 +1955,16 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * under.
    */
   const depotFetchPrivacyDomain = 'private';
+
+  /**
+   * ADR 0129 SR5 mit SR2. In welchem Raum die Messungen eines Geräts liegen.
+   *
+   * Der Home nennt ihn, nicht der Absender. Die Domäne ist die einzige
+   * Custody, die eine Beobachtung trägt - an ihr hängt die Shred-Kaskade -,
+   * und ein Gerät, das seine eigene nennen dürfte, legte seine Messungen in
+   * den Raum eines anderen oder in einen, den kein Shred je erreicht.
+   */
+  const spatialCapturePrivacyDomain = 'private';
 
   /**
    * ADR 0149. The relay this Home uses, or nothing.
@@ -4673,6 +4688,75 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           store.append(forgottenEvent);
           broadcast(forgottenEvent);
           return { outcome: 'ok', result: { forgotten: true } };
+        }
+        /**
+         * ADR 0129 SR5. Der Port bekommt sein anderes Ende.
+         *
+         * **Zwei Dinge entscheidet der Home und nicht das Gerät.** Ob
+         * überhaupt aufgeschrieben werden darf, steht in der SR6-Entscheidung
+         * - ein Home, das Messungen annimmt, weil sie ankommen, hätte sie dem
+         * Sensoradapter überlassen. Und in welchem Raum sie liegen, entscheidet
+         * er auch: die Domäne ist die einzige Custody, die eine Beobachtung
+         * trägt, und wer seine eigene nennen dürfte, legte seine Messungen in
+         * den Raum eines anderen. Dieselbe Regel, mit der ADR 0116 W1 den
+         * Ursprung beim Eingang setzt statt ihn zu glauben.
+         *
+         * Die Messungen selbst gehen durch die Parser des Protokolls, bevor
+         * irgendetwas aus ihnen wird - der Speicher tut es gleich noch einmal,
+         * und das ist keine Doppelung, sondern die Grenze: hier scheitert eine
+         * kaputte Übergabe mit einem Namen, den ein Absender lesen kann.
+         */
+        case 'home.observations.submit': {
+          if (principal === undefined
+            || !Array.isArray(args.observations)
+            || Object.keys(args).length !== 1) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (!store.picoCapturingModules().includes('spatial-recall')) {
+            // Nicht „nichts angekommen": das Home sagt, warum es nichts
+            // aufschreibt, damit ein Gerät nicht weiter misst und sendet.
+            return { outcome: 'invalid_arguments', result: { refusal: 'capture_not_consented' } };
+          }
+          if (args.observations.length > maxPicoObservationSubmission) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'too_many_observations' } };
+          }
+          let appended;
+          try {
+            appended = store.appendPicoObservations(args.observations.map((entry) => {
+              const reading = entry as { kind?: unknown; payload?: unknown };
+              if (typeof reading.payload !== 'string') {
+                throw new Error('invalid_pico_observation_payload');
+              }
+              /**
+               * **Der Zeitpunkt wird gelesen, nicht mitgeschickt.** Er steht
+               * schon in der Messung; ihn daneben zu übergeben hieße, dieselbe
+               * Wahrheit zweimal zu schreiben, und die beiden könnten
+               * auseinanderlaufen - ein Absender könnte eine Messung von heute
+               * als gestern ablegen.
+               */
+              const parsed: { at: string } = reading.kind === 'location_fix'
+                ? parsePicoLocationFix(JSON.parse(reading.payload))
+                : parsePicoMobilitySample(JSON.parse(reading.payload));
+              return {
+                kind: reading.kind,
+                privacyDomain: spatialCapturePrivacyDomain,
+                observedAt: parsed.at,
+                payload: reading.payload,
+              };
+            }));
+          } catch (refused) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: refused instanceof Error ? refused.message : 'refused' },
+            };
+          }
+          /**
+           * Wie viele angekommen sind, nicht wie viele geschickt wurden. Der
+           * Deckel nach ADR 0119 Q5 kann weniger annehmen als angeboten
+           * wurden, und ein Absender, der „alles gut" liest, während der
+           * Puffer voll ist, misst weiter ins Leere.
+           */
+          return { outcome: 'ok', result: { appended } };
         }
         case 'home.modules.consent.read': {
           if (principal === undefined) {

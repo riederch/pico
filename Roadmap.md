@@ -754,8 +754,34 @@ Authentifizierung im Umschlag sitzt.
 
 Hängt vollständig an Phase 3.
 
-- **ADR 0129 SR5-Erfassung** auf dem Telefon — der Sensoradapter hinter dem Port,
-  der seit SR5 deklariert und leer ist.
+- ~~**ADR 0129 SR5-Erfassung** auf dem Telefon~~ — **erledigt am 2026-08-26, am
+  Gerät bewiesen.** Der Port war deklariert und leer, mit einem Grund, der ein
+  Zustand der Welt war: „wer ihn füllt, ist eine mobile Laufzeit, die es nicht
+  gibt". Es gibt sie. `home.observations.submit` ist die 51. Operation, und der
+  Home behält beide Entscheidungen, die zählen: **ob** aufgeschrieben werden
+  darf (SR6) und **in welchem Raum** es liegt — die Domäne reist nicht mit,
+  weil ein Absender, der seine eigene nennen dürfte, seine Messungen in den
+  Raum eines anderen legte.
+
+  SR5s tragender Satz gilt weiter, jetzt als Bauform: Java misst und schreibt
+  eine Zeile, Node liest eine Datei. `capture.mjs` könnte gar kein
+  Standort-API erreichen.
+
+  In dieser Reihenfolge gemessen: mit ausgeschalteter Erfassung lehnt das Home
+  mit `capture_not_consented` ab und der Puffer bleibt leer; nach dem
+  Einschalten kamen sieben echte `LocationManager`-Fixes an. Die lokale Datei
+  wird erst geleert, wenn das Home **alle** hat.
+
+  **Eine Grenze, die erst der Wagen zeigte:** die kanonische Form der
+  Link-Argumente lässt nur ganze Zahlen zu — damit zwei Implementierungen
+  dieselben Bytes hashen —, und Koordinaten sind Fließkomma. Die Übergabe
+  spricht deshalb die Sprache des Puffers.
+
+  **Was noch fehlt, ist kleiner und heißt jetzt anders**: die Ableitung hat
+  weiter keinen Aufrufer, aber nicht mangels Messungen. Es fehlt ihre zweite
+  Eingabehälfte — Bewegungsarten kommen aus den Play-Diensten, die diese
+  handgebaute Sonde nicht hat, und ohne den Übergang von „fahrend" zu „gehend"
+  hat ein Parkplatz kein Merkmal.
 - ~~**Termine auf dem Telefon**~~ — **erledigt am 2026-08-26, am Gerät
   bewiesen.** `entries.mjs` fragt `home.time_bound_entries.read` über den
   authentifizierten Link, `renderPicoCompanionDueEntries` schreibt den Satz,

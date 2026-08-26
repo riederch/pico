@@ -68,6 +68,20 @@ export interface PicoObservation {
  */
 export const maxPicoObservationPayloadChars = 4_096;
 
+/**
+ * ADR 0129 SR5. Wie viele Messungen eine Übergabe tragen darf.
+ *
+ * Der Deckel je Nutzlast oben hindert einen Erzeuger daran, ein Dokument zu
+ * schreiben; dieser hindert ihn daran, viele davon auf einmal zu schicken. Bei
+ * einem Takt von Sekunden deckt zweihundert eine gute halbe Stunde ab, und ein
+ * Telefon, das länger nichts abgeben konnte, schickt eben zweimal.
+ *
+ * **Abgelehnt statt gekürzt.** Eine Übergabe, die stillschweigend die Hälfte
+ * behielte, sähe für den Absender wie ein Erfolg aus, und die fehlenden
+ * Messungen wären genau die, aus denen die Ableitung ihren Schluss zieht.
+ */
+export const maxPicoObservationSubmission = 200;
+
 export function parsePicoObservation(value: unknown): PicoObservation {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('invalid_pico_observation');

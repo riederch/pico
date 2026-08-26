@@ -749,6 +749,30 @@ export const picoLinkDirectOperations = [
    */
   'home.rule.decide',
   'home.rule.forget',
+  /**
+   * ADR 0129 SR5. Was ein Gerät gemessen hat, auf dem Weg in den Puffer.
+   *
+   * **Die Messung reist als Text.** Die kanonische Form der Link-Argumente
+   * lässt nur ganze Zahlen zu - damit zwei Implementierungen dieselben Bytes
+   * hashen -, und ein Standortmesswert hat Fließkomma-Koordinaten. Die
+   * Übergabe spricht deshalb die Sprache des Puffers: `kind` und `payload`,
+   * wie eine Beobachtung ohnehin gespeichert wird. Der Home liest den
+   * Zeitpunkt aus der Messung, statt ihn danebenzunehmen; zweimal geschrieben
+   * könnten die beiden auseinanderlaufen.
+   *
+   * **Das Gerät nennt seine Domäne nicht.** Es reicht Messungen, und der Home
+   * entscheidet, welcher Raum sie regiert - dieselbe Regel, mit der ADR 0116
+   * W1 den Ursprung eines Ereignisses beim Eingang setzt statt ihn zu glauben:
+   * wer seine eigene Domäne nennen dürfte, könnte seine Messungen in den Raum
+   * eines anderen legen, und die einzige Custody, die eine Beobachtung trägt,
+   * ist genau diese.
+   *
+   * **Und ohne SR6-Erfassung wird abgelehnt.** Ob Pico aufschreiben darf, wo
+   * eine Person hingeht, ist eine dauerhafte Entscheidung über ihr Leben und
+   * keine Eigenschaft eines Sensoradapters. Ein Home, das Messungen annimmt,
+   * weil sie ankommen, hätte diese Entscheidung dem Gerät überlassen.
+   */
+  'home.observations.submit',
   'home.modules.consent.read',
   'home.modules.consent.record',
 ] as const;

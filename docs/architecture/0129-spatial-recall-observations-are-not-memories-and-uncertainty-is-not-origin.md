@@ -2,6 +2,45 @@
 
 ## Status
 
+Status note, 2026-08-26: **SR5s Port hat sein anderes Ende, und es lief auf
+einem A34.** Das Gate erklärte die Erfassung für unimplementiert und gab dafür
+einen Grund an, der ein Zustand der Welt war: *„whoever fills this port is a
+mobile runtime that does not exist, and an adapter that cannot be run against a
+real device would be code nobody can verify."* Beide Hälften sind eingelöst.
+
+`home.observations.submit` ist die 51. Link-Operation. **Zwei Dinge entscheidet
+der Home und nicht das Gerät**, und beide sind geprüft: ob überhaupt
+aufgeschrieben werden darf, steht in der SR6-Entscheidung - ein Home, das
+Messungen annimmt, weil sie ankommen, hätte sie einem Sensoradapter überlassen -
+und in welchem Raum sie liegen, entscheidet er auch, weil die Domäne die
+einzige Custody ist, die eine Beobachtung trägt. Dieselbe Regel, mit der ADR
+0116 W1 den Ursprung eines Ereignisses beim Eingang setzt statt ihn zu glauben.
+
+**SR5s tragender Satz gilt weiter, jetzt als Bauform statt als Vorsatz.** Java
+misst und schreibt eine Zeile, Node liest eine Datei; `capture.mjs` könnte gar
+kein Standort-API erreichen. Der Übergang vom System nach Pico ist genau eine
+Stelle, und das familienweite Verbot in `offline-floor.json` bleibt, was es war.
+
+Am Gerät bewiesen, in dieser Reihenfolge: mit ausgeschalteter Erfassung lehnt
+das Home mit `capture_not_consented` ab und der Puffer bleibt leer; nach dem
+Einschalten über die Operator-Fläche kamen sieben echte `LocationManager`-Fixes
+an, in der Domäne, die der Home nennt. Die lokale Datei wird erst geleert, wenn
+das Home **alle** hat - ein Puffer, der sich leert, weil ein Teil ankam,
+verliert genau die Messungen, aus denen eine Ableitung ihren Schluss zieht.
+
+**Eine Grenze, die erst der Wagen zeigte:** die kanonische Form der
+Link-Argumente lässt nur ganze Zahlen zu, damit zwei Implementierungen dieselben
+Bytes hashen, und ein Standortmesswert hat Fließkomma-Koordinaten. Die Übergabe
+spricht deshalb die Sprache des Puffers - `kind` und `payload` als Text -, und
+der Home liest den Zeitpunkt aus der Messung, statt ihn danebenzunehmen.
+
+**Was noch fehlt, ist kleiner geworden und heißt jetzt anders.**
+`picoDeriveParkingCandidate` hat weiterhin keinen Aufrufer, aber nicht mehr,
+weil es keine Messungen gibt - die gibt es. Es fehlt die zweite Hälfte der
+Eingabe: Bewegungsarten kommen bei Android aus den Play-Diensten, die diese
+handgebaute Sonde nicht hat, und ohne den Übergang von „fahrend" zu „gehend" hat
+ein Parkplatz kein Merkmal, an dem er zu erkennen wäre.
+
 Accepted as a storage-shape, degradation and answer-honesty constraint;
 the use case arrived as issue #3 from the user on 2026-08-07. SR1-SR6 are implemented. What is not built is the mobile runtime that
 would fill the capture port, which is a product decision rather than a

@@ -67,14 +67,6 @@ const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
  */
 const withoutAProductCaller = [
   [
-    'appendPicoObservations',
-    'ADR 0129 SR2. Location and motion come from a phone, and the ADR is '
-    + 'explicit that the mobile capture runtime is out of scope: "the '
-    + 'derivation is testable today, against synthetic sample sequences, with '
-    + 'no phone". The one path into the buffer is waiting for a producer that '
-    + 'was deliberately not built.',
-  ],
-  [
     'setPicoSupplierCredential',
     'ADR 0138 CO1, and the reason is a consumer rather than a decision - '
     + 'corrected 2026-08-25, because the first version of this entry said it '
@@ -93,9 +85,15 @@ const withoutAProductCaller = [
   ],
   [
     'deletePicoObservations',
-    'ADR 0129 SR2. Drops exactly the readings a condensation pass consumed, '
-    + 'and there is no condensation pass because there are no readings - the '
-    + 'same absent producer, one step downstream.',
+    'ADR 0129 SR2. Drops exactly the readings a condensation pass consumed. Der '
+    + 'Erzeuger davor ist seit dem 2026-08-26 da - `home.observations.submit` '
+    + 'füllt den Puffer von einem Telefon aus, am Gerät bewiesen -, und was '
+    + 'jetzt fehlt, ist der Verdichtungslauf selbst: der Schritt, der aus '
+    + 'Messungen eine gewöhnliche Erinnerung macht und die verbrauchten '
+    + 'Ablesungen wegnimmt. Ohne ihn räumt nur die 48-Stunden-Grenze auf, und '
+    + 'das ist die Grenze und keine Verdichtung. Der Grund hat sich damit '
+    + 'verschoben und ist kleiner geworden: nicht mehr „es gibt keine '
+    + 'Messungen", sondern „es gibt sie und niemand liest sie aus".',
   ],
 ];
 

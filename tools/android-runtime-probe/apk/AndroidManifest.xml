@@ -24,6 +24,11 @@
        minutes, so the camera is the path rather than a convenience. -->
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-feature android:name="android.hardware.camera" android:required="false" />
+  <!-- ADR 0129 SR5. Ohne diese Zeile wirft `getCurrentLocation` eine
+       SecurityException, und eine fehlende Zeile im Manifest wuerde zu einer
+       Sonde, die nichts sagt. -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <application android:label="Pico A1 Probe" android:debuggable="true"
       android:extractNativeLibs="true">
     <service android:name=".CustodyService" android:process=":custody"
@@ -106,6 +111,12 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_o1_due_entry_acknowledge" />
     </service>
+    <!-- ADR 0129 SR5: die eine Stelle, an der ein Standort-API vorkommt.
+         Eigener Prozess wie jede Sonde; der Vordergrundtyp ist `location`,
+         weil Android genau dafuer einen eigenen kennt und `specialUse` hier
+         eine Verschleierung waere. -->
+    <service android:name=".LocationCaptureService" android:process=":capture"
+        android:exported="true" android:foregroundServiceType="location" />
     <!-- ADR 0131 A3: no Node, no stage - pure platform API, so it neither
          loads libnode nor shares a process with anything that does. -->
     <service android:name=".KeystoreProbeService" android:process=":keystore"

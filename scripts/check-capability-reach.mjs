@@ -150,13 +150,21 @@ const arguedModuleNames = [
   ],
   [
     'picoDeriveParkingCandidate',
-    'ADR 0129 SR2/SR5, Befund B4. "Wo habe ich geparkt" braucht Beobachtungen, und '
-      + '`appendPicoObservations` hat außerhalb seiner Tests keinen Aufrufer - die Vertagung '
-      + 'ist die des Nutzers vom 2026-08-16',
+    'ADR 0129 SR2/SR5, Befund B4 - **und der Grund ist seit dem 2026-08-26 ein anderer, '
+      + 'kleinerer**. Er lautete: "Wo habe ich geparkt" braucht Beobachtungen, und '
+      + '`appendPicoObservations` hat außerhalb seiner Tests keinen Aufrufer. Den hat es '
+      + 'jetzt: `home.observations.submit` füllt den Puffer von einem Telefon aus, am Gerät '
+      + 'bewiesen, mit echten Messungen des `LocationManager`. Was der Ableitung fehlt, ist '
+      + 'die zweite Hälfte ihrer Eingabe - Bewegungsarten. Die kommen bei Android aus den '
+      + 'Play-Diensten, die diese handgebaute Sonde nicht hat, und ohne den Übergang von '
+      + '"fahrend" zu "gehend" hat ein Parkplatz kein Merkmal, an dem er zu erkennen wäre. '
+      + 'Ein Aufrufer, der sie ohne diesen Übergang fragte, bekäme "nichts gefunden" und '
+      + 'nicht "hier war es"',
   ],
   [
     'picoParkingAnswer',
-    'ADR 0129, dieselbe Vertagung: die Antwort auf eine Ableitung, die nichts speist',
+    'ADR 0129, dieselbe Stelle: die Antwort auf eine Ableitung, deren Eingabe zur Hälfte da '
+      + 'ist. Die Messungen kommen an, die Bewegungsarten nicht',
   ],
 ];
 
