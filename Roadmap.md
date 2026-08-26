@@ -827,6 +827,43 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B26 — Der Raum konnte niemanden hereinlassen, und der Grund lag drei
+Schichten tiefer (2026-08-26).** Nachdem der Schreibweg stand, war die
+naheliegende Frage „wie wird ein Leser benannt?". Sie war die falsche.
+
+Gemessen: `recordReaderGrant` prüft Domäne, Mitgliedschaft — und dann die
+**Frische** des Leserschlüssels. Der Auswähler verlangt einen von der
+Identitätswurzel des Lesers signierten Nachweis, bei *jeder* Prüfung neu, und
+im ganzen Baum gab es beide Verwendungen des Signatur-Bauers nur auf der
+**prüfenden** Seite. Jeder Leser-Grant scheiterte mit `freshness_unavailable`.
+
+**ADR 0085 sagt das selbst** in seinen Konsequenzen: *„Production still needs
+deployment-specific owner-side checkpoint publication."* Es fehlten genau zwei
+Dinge, und keines war Kryptographie: der Erzeuger stand seit jeher in
+`@pico/vault` und hatte nur Tests als Aufrufer, und die Ablage aus ADR 0089
+hatte für ein Gerät keine Tür.
+
+**Wessen Wurzel unterschreibt, entscheidet, wer wach sein muss.** Das eigene
+zweite Gerät braucht dieselbe Wurzel, die im eigenen Vault liegt — niemand
+sonst muss antworten. Eine andere Person hereinzulassen verlangt, dass *ihr*
+Gerät innerhalb derselben fünf Minuten antwortet. Vom Nutzer am 2026-08-26
+entschieden: nur den ersten Fall bauen, den zweiten als benannte Lücke stehen
+lassen.
+
+Zwei Vorgänge (`home.reader_key.freshness.submit`,
+`home.reader_custody.reader_grant.submit`), ein Knopf im Fenster, und der
+Zugang gilt **ab jetzt und nicht rückwirkend** (ADR 0088s `from_version`) —
+der Satz daneben sagt das, weil eine Person sonst später nach etwas suchte,
+das dort nie stehen wird.
+
+**Und eine Wahrheit, die zweimal geschrieben stand.**
+`PicoHomeDeviceLifecycleDeviceView` war in `apps/core` und in
+`apps/vault-daemon` erklärt — dieselbe Form, zwei Erklärungen —, und sie liefen
+auseinander, sobald eine von beiden ein Feld bekam. Sie wohnt jetzt im
+Protokoll; die äußere Ansicht darf sich weiter unterscheiden, weil der Home
+Wartendes und Uhrabweichung darauf legt, ein Gerät aber auf beiden Seiten
+dasselbe ist.
+
 **B25 — Die Laborfläche fragte ein beigetretenes Telefon nach seiner
 Passphrase (2026-08-26).** Auf dem Bildschirmfoto von Phase 6 stand *„Choose a
 Vault passphrase for this device"* über einem Gerät, das seit Tagen beigetreten

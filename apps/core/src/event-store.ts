@@ -54,6 +54,7 @@ import type {
   PicoHomeMembershipLifecycleRecord,
   PicoHomeDomainReadGrantLifecycleRecord,
   PicoHomeDomainReadGrantRecord,
+  PicoHomeDeviceLifecycleDeviceView,
   PicoHomeDeviceLifecycleRecord,
   PicoHomeDeviceLifecycleSubmission,
   PicoHomeDeviceLifecycleReceiptSignatureInput,
@@ -145,6 +146,7 @@ import {
   type PicoHomeRecoveryAnchor,
 } from './recovery-anchor.js';
 
+
 /**
  * ADR 0120 N2. The durable floor, or `null` when no anchor is available -
  * which refuses every objection window rather than defaulting one open.
@@ -170,7 +172,6 @@ export const PICO_HOME_DEVICE_RECOVERY_DELAY_MS =
   picoHomeDeviceRecoveryTiming.vetoDelayMs;
 export const PICO_HOME_DEVICE_RECOVERY_COMPLETION_WINDOW_MS =
   picoHomeDeviceRecoveryTiming.completionWindowMs;
-
 export type AppendResult = PicoEventAppendResult;
 
 export interface EventCursor {
@@ -279,15 +280,6 @@ export interface PicoHomeDeviceLifecycleSponsor {
   deviceSigningKeyFingerprintHex: string;
   deviceKeyAgreementKeyFingerprintHex: string;
   delegationId: string;
-}
-
-export interface PicoHomeDeviceLifecycleDeviceView {
-  delegationId: string;
-  deviceSigningKeyFingerprintHex: string;
-  deviceKeyAgreementKeyFingerprintHex: string;
-  lifecycleOrder: string;
-  validUntil: string;
-  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
 }
 
 export interface PicoHomeDeviceLifecycleView {
@@ -2146,6 +2138,8 @@ export class EventStore {
         delegationId: row.delegationId,
         deviceSigningKeyFingerprintHex: row.deviceSigningKeyFingerprintHex,
         deviceKeyAgreementKeyFingerprintHex: row.deviceKeyAgreementKeyFingerprintHex,
+        deviceKeyAgreementKeyRecord:
+          JSON.parse(row.keyJson) as PicoIdentityKeyRecordSignatureInput,
         lifecycleOrder: lookup.delegation.lifecycleOrder,
         validUntil: lookup.delegation.validUntil,
         status: rootAuthorityEnded && lookup.status === 'active'

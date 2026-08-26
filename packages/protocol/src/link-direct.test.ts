@@ -190,6 +190,8 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.action.approval.resolve',
       'home.rule.decide',
       'home.rule.forget',
+      'home.reader_key.freshness.submit',
+      'home.reader_custody.reader_grant.submit',
       'home.reader_custody.domain.submit',
       'home.reader_custody.writer_grant.submit',
       'home.reader_custody.item.submit',

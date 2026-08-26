@@ -202,6 +202,12 @@
       <label for="reader-custody-text">What to write</label>
       <input id="reader-custody-text" maxlength="4096" autocomplete="off">
       <button id="reader-custody-write" type="button">Write it there</button>
+      <!--
+        ADR 0085 mit ADR 0088. Das zweite Gerät derselben Person hereinlassen -
+        der einzige Fall, für den es heute reicht: dieselbe Identitätswurzel
+        unterschreibt den Frische-Nachweis, also muss niemand sonst wach sein.
+      -->
+      <button id="reader-custody-let-other" type="button">Let my other device read this</button>
       <p id="reader-custody-status" class="detail"></p>
     </section>
     <section id="depot-attach" class="form-card">

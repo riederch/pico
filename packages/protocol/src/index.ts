@@ -793,6 +793,33 @@ export const picoLinkDirectOperations = [
    * schicken ist nicht Umständlichkeit, sondern die Reihenfolge: ein Item
    * ohne sein Recht wird abgelehnt, und das Recht ohne seine Domäne auch.
    */
+  /**
+   * ADR 0085 mit ADR 0089. Der Frische-Nachweis, vom Gerät seines Besitzers.
+   *
+   * **Die Schublade war da und hatte keine Tür für ein Gerät.** ADR 0089 füllt
+   * die Transport-Nahtstelle mit einer Ablage im Speicher, und ihr Kopf sagt,
+   * warum sie so aussieht: der Vault-Daemon hat nach ADR 0097 keine Netzfläche,
+   * das Home kann also nicht *ziehen* - der Besitzer schiebt. Ihr einziger
+   * Eingang war bis zum 2026-08-26 eine `home-authority-relay`-Route, also ein
+   * zweites Home oder eine Betreiber-Sitzung. Das Gerät der Person, deren
+   * Identitätswurzel als einzige unterschreiben darf, kam nicht hinein.
+   *
+   * Der Home prüft unverändert: nur die exakte Wurzel des benannten Lesers,
+   * exakte Bindung, höchstens fünf Minuten, kein Zwischenspeicher. Diese
+   * Operation trägt Bytes und entscheidet nichts.
+   */
+  'home.reader_key.freshness.submit',
+  /**
+   * ADR 0086 mit ADR 0088. Wer eine Reader-Custody-Domäne lesen darf.
+   *
+   * Der erste Fall, für den das reicht, ist **das zweite Gerät derselben
+   * Person**: dieselbe Identität, also unterschreibt ihre eigene Wurzel den
+   * Frische-Nachweis, und niemand sonst muss dafür wach sein. Eine andere
+   * Person hereinzulassen verlangt, dass *ihr* Gerät in genau diesem Moment
+   * antwortet - dafür gibt es noch keinen Weg, und das ist eine benannte
+   * Lücke und kein Versehen.
+   */
+  'home.reader_custody.reader_grant.submit',
   'home.reader_custody.domain.submit',
   'home.reader_custody.writer_grant.submit',
   'home.reader_custody.item.submit',
@@ -1725,6 +1752,34 @@ export interface PicoHomeDeviceLifecycleReceiptSignatureInput {
   resultingLifecycleOrder: string;
   acceptedAt: string;
   leavesNoActiveDevice: boolean;
+}
+
+/**
+ * ADR 0109 mit ADR 0085. Ein Gerät dieser Identität, wie das Home es sieht.
+ *
+ * **Hier, weil es zweimal stand** (2026-08-26): einmal in `apps/core` als das,
+ * was der Speicher berechnet, und einmal in `apps/vault-daemon` als das, was
+ * ein Client liest. Dieselbe Form, zwei Erklärungen - und sie sind
+ * auseinandergelaufen, als eine von beiden ein Feld bekam. Die äußere Ansicht
+ * darf sich unterscheiden (der Home legt Wartendes und Uhrabweichung darauf);
+ * ein Gerät ist auf beiden Seiten dasselbe.
+ */
+export interface PicoHomeDeviceLifecycleDeviceView {
+  delegationId: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  /**
+   * ADR 0085 mit ADR 0088. Der volle Leserschlüssel, nicht nur sein
+   * Fingerabdruck: wer sein zweites Gerät in eine Reader-Custody-Domäne lassen
+   * will, packt den KEK in genau diesen öffentlichen Schlüssel.
+   *
+   * Wahlfrei, weil ein älteres Home ihn nicht mitschickt - und das ist etwas
+   * anderes als ein Gerät ohne Leserschlüssel.
+   */
+  deviceKeyAgreementKeyRecord?: PicoIdentityKeyRecordSignatureInput;
+  lifecycleOrder: string;
+  validUntil: string;
+  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
 }
 
 export interface PicoHomeDeviceLifecycleRecord {

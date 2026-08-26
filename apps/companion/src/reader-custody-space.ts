@@ -8,7 +8,9 @@ import { createPicoCompanionLifecycleReader } from './lifecycle-reader.js';
 import type { PicoCompanionProfile } from './profile.js';
 import { createPicoCompanionLinkClient } from './recovery-controller.js';
 import {
+  publishPicoCompanionReaderKeyFreshness,
   submitPicoCompanionReaderCustodyRecords,
+  submitPicoCompanionReaderGrant,
   writePicoCompanionReaderCustodyItem,
 } from './reader-custody.js';
 
@@ -200,4 +202,95 @@ export async function writePicoCompanionReaderCustodyNote(input: {
     plaintext: input.text,
     createdAt: new Date().toISOString(),
   });
+}
+
+/**
+ * ADR 0085 mit ADR 0088 - das zweite Gerät derselben Person hereinlassen.
+ *
+ * **Der erste Fall, für den es reicht, und der einzige.** ADR 0085 lässt nur
+ * die Identitätswurzel des Lesers einen Frische-Nachweis unterschreiben. Bei
+ * einem eigenen zweiten Gerät ist das dieselbe Wurzel, sie liegt im eigenen
+ * Vault, und niemand sonst muss dafür wach sein. Eine andere Person
+ * hereinzulassen verlangt, dass *ihr* Gerät in genau diesem Moment antwortet -
+ * der Nachweis lebt vier Minuten und wird bei jeder Prüfung neu nachgeschlagen.
+ * Dafür gibt es noch keinen Weg, und das ist eine benannte Lücke.
+ *
+ * Drei Schritte in dieser Reihenfolge: den Nachweis schieben, das Recht
+ * erteilen, das Recht abgeben. Umgekehrt lehnte das Home mit
+ * `freshness_unavailable` ab - richtig, aber die Person sähe eine Ablehnung
+ * für etwas, das sie gerade richtig gemacht hat.
+ */
+export async function letPicoCompanionOtherDeviceRead(input: {
+  daemonClient: PicoVaultDaemonClient;
+  profile: PicoCompanionProfile;
+  profilePath: string;
+  sodium: VaultSodium;
+  fetch?: typeof fetch;
+}): Promise<{ readerDelegationId: string }> {
+  const space = readPicoCompanionReaderCustodySpace(input.profilePath);
+  if (space === undefined) {
+    throw new Error('no_reader_custody_space');
+  }
+  const readLifecycle = await createPicoCompanionLifecycleReader({
+    profile: input.profile,
+    profilePath: input.profilePath,
+    daemonClient: input.daemonClient,
+    sodium: input.sodium,
+    ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+  });
+  const snapshot = await readLifecycle();
+  /**
+   * Das andere Gerät: aktiv, und nicht dieses. „Aktiv" ist die Bedingung, an
+   * der es auch das Home misst - ein abgelaufenes oder widerrufenes Gerät
+   * hereinzulassen wäre eine Zusage, die beim ersten Lesen bricht.
+   */
+  const other = (snapshot.devices ?? []).find((device) => device.status === 'active'
+    && device.deviceKeyAgreementKeyFingerprintHex
+      !== input.profile.device.keyAgreementKeyFingerprintHex);
+  if (other === undefined) {
+    // Benannt, nicht stumm: „du hast nur dieses eine Gerät" ist etwas, worauf
+    // eine Person handeln kann.
+    throw new Error('no_other_active_device');
+  }
+
+  const linkClient = await createPicoCompanionLinkClient({
+    profile: input.profile,
+    daemonClient: input.daemonClient,
+    sodium: input.sodium,
+    ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+  });
+  await publishPicoCompanionReaderKeyFreshness({
+    daemonClient: input.daemonClient,
+    linkClient,
+    identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    identityPublicKeyHex: input.profile.identity.publicKeyHex,
+    homeId: snapshot.homeId,
+    device: other,
+  });
+
+  const now = new Date();
+  const { readerGrantRecord } = await input.daemonClient.ceremonyCreateReaderGrant({
+    signerKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    agreementKeyFingerprintHex: input.profile.device.keyAgreementKeyFingerprintHex,
+    domainRecord: space.domainRecord,
+    rotationRecords: [],
+    readerKeyRecord: other.deviceKeyAgreementKeyRecord,
+    readerGrantId: `reader_${randomUUID()}`,
+    readerIdentityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    readerDeviceSigningKeyFingerprintHex: other.deviceSigningKeyFingerprintHex,
+    readerDelegationId: other.delegationId,
+    /**
+     * ADR 0088: von dieser Fassung an, nicht rückwirkend. Was vor dem
+     * Hereinlassen geschrieben wurde, bleibt dem zweiten Gerät verborgen -
+     * die vorsichtige Wahl, und die einzige, die eine Person nicht überrascht.
+     */
+    accessMode: 'from_version',
+    firstKekVersion: 1,
+    validFrom: now.toISOString(),
+    validUntil: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000).toISOString(),
+    lifecycleOrder: 'seq:0000000000000003',
+  } as never);
+
+  await submitPicoCompanionReaderGrant({ linkClient, record: readerGrantRecord });
+  return { readerDelegationId: other.delegationId };
 }

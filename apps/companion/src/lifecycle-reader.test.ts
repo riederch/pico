@@ -369,6 +369,9 @@ describe('Companion lifecycle reader self-heal (ADR 0115 U4)', () => {
       // ADR 0086, seit dem 2026-08-26: welches Home geantwortet hat, reist
       // mit - eine Reader-Custody-Domäne wird darauf signiert.
       homeId: expect.any(String) as unknown as string,
+      // ADR 0085 mit ADR 0088: die Geräte reisen mit, damit eine Person ihr
+      // zweites benennen kann.
+      devices: expect.any(Array) as unknown as [],
       pendingRecovery: null,
     });
     expect(recorder.rotated).toEqual([{

@@ -218,6 +218,8 @@ export interface PicoCompanionShellRuntime {
    */
   createReaderCustodySpace(): Promise<void>;
   writeReaderCustodyNote(text: string): Promise<{ memoryItemId: string }>;
+  /** ADR 0085 mit ADR 0088. Das zweite Gerät derselben Person hereinlassen. */
+  letOtherDeviceReadReaderCustody(): Promise<{ readerDelegationId: string }>;
   /** ADR 0140 RL4. Was Pico ohne Anwesende tun darf, gesetzt und zurückgenommen. */
   decideRule(input: {
     effectName: string;
@@ -888,6 +890,19 @@ export async function startPicoCompanionShellRuntime(input: {
           profilePath,
           sodium: input.sodium,
           text,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+      }),
+      letOtherDeviceReadReaderCustody: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { letPicoCompanionOtherDeviceRead } =
+          await import('@pico/companion/reader-custody-space');
+        return await letPicoCompanionOtherDeviceRead({
+          daemonClient,
+          profile,
+          profilePath,
+          sodium: input.sodium,
           ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
         });
       }),

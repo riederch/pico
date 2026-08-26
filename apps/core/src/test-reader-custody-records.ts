@@ -254,3 +254,111 @@ function signHex(input: Uint8Array, privateKey: Uint8Array): string {
     'hex',
   );
 }
+
+/**
+ * ADR 0086 mit ADR 0088. Wer die Domäne lesen darf - mit dem Umschlag, der
+ * ihm den KEK reicht.
+ *
+ * Herausgehoben am 2026-08-26 aus demselben Grund wie die Fabrik darüber: der
+ * Link-Test braucht ihn gegen ein echtes Home, und dessen Bezeichner stehen
+ * erst zur Laufzeit fest.
+ */
+export function makeReaderCustodyReaderGrant(
+  records: ReaderCustodyRecords,
+  input: {
+    readerIdentityFingerprintHex: string;
+    readerDeviceSigningKeyFingerprintHex: string;
+    readerKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    /** Ohne Angabe der feste Wert, den die Speicher-Tests erwarten. */
+    readerDelegationId?: string;
+    readerGrantId?: string;
+    lifecycleOrder?: string;
+    validUntil?: string;
+  },
+): PicoReaderCustodyReaderGrantRecord {
+  const domain = records.domain.domain;
+  const grant = {
+    suite: picoMemoryContentSuite,
+    readerGrantId: input.readerGrantId ?? 'reader_grant_0001',
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    readerIdentityKeyFingerprintHex: input.readerIdentityFingerprintHex,
+    readerDeviceSigningKeyFingerprintHex:
+      input.readerDeviceSigningKeyFingerprintHex,
+    readerKeyFingerprintHex: fingerprint(input.readerKeyRecord),
+    readerDelegationId: input.readerDelegationId ?? 'reader_delegation_0001',
+    accessMode: 'from_version' as const,
+    firstKekVersion: 1,
+    validFrom: records.domain.domain.authorizedAt,
+    validUntil: input.validUntil ?? '2026-08-27T10:00:00.000Z',
+    lifecycleOrder: input.lifecycleOrder ?? 'seq:0000000000000003',
+  };
+  return {
+    schema: picoReaderCustodyReaderGrantRecordSchema,
+    grant,
+    ownerIdentityKeyRecord: records.domain.ownerIdentityKeyRecord,
+    readerKeyRecord: input.readerKeyRecord,
+    envelopes: [
+      makeReaderCustodyEnvelope(records, {
+        grantId: grant.readerGrantId,
+        kekVersion: 1,
+        readerKeyRecord: input.readerKeyRecord,
+        grantedAt: grant.validFrom,
+      }),
+    ],
+    ownerSignatureHex: signHex(
+      buildPicoReaderCustodyReaderGrantSignatureInput(grant),
+      records.identityKeypair.privateKey,
+    ),
+    receivedAt: grant.validFrom,
+  };
+}
+
+export function makeReaderCustodyEnvelope(
+  records: ReaderCustodyRecords,
+  input: {
+    grantId: string;
+    kekVersion: number;
+    readerKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    grantedAt: string;
+  },
+): PicoShareEnvelopeRecord {
+  const domain = records.domain.domain;
+  const readerKeyFingerprintHex = fingerprint(input.readerKeyRecord);
+  const wrap = buildPicoShareWrapPayload({
+    suite: picoShareSuite,
+    domainId: domain.domainId,
+    kekVersion: input.kekVersion,
+    readerKeyFingerprintHex,
+    kekHex: 'dd'.repeat(32),
+  });
+  const sealedWrap = sodium.crypto_box_seal(
+    wrap,
+    Buffer.from(input.readerKeyRecord.publicKeyHex, 'hex'),
+  );
+  const envelope = {
+    suite: picoShareSuite,
+    grantId: input.grantId,
+    domainId: domain.domainId,
+    kekVersion: input.kekVersion,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    issuerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    readerKeyFingerprintHex,
+    wrapDigestHex: hashHex(sealedWrap),
+    grantedAt: input.grantedAt,
+  };
+  return {
+    schema: picoShareEnvelopeRecordSchema,
+    envelope,
+    sealedWrapHex: Buffer.from(sealedWrap).toString('hex'),
+    issuerIdentityKeyRecord: records.domain.ownerIdentityKeyRecord,
+    issuerSignatureHex: signHex(
+      buildPicoShareEnvelopeSignatureInput(envelope),
+      records.identityKeypair.privateKey,
+    ),
+    createdAt: input.grantedAt,
+  };
+}

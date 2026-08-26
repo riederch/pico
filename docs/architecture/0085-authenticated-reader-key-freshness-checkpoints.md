@@ -2,6 +2,34 @@
 
 ## Status
 
+Status note, 2026-08-26: **die besitzerseitige Veröffentlichung gibt es jetzt -
+für den einen Fall, für den sie ohne Verabredung auskommt.** Die Konsequenz
+unten sagte: *„Production still needs deployment-specific owner-side checkpoint
+publication."* Gemessen fehlten dafür genau zwei Dinge, und keines davon war
+Kryptographie: der Erzeuger `createPicoIdentityReaderKeyFreshnessCheckpoint`
+stand seit jeher in `@pico/vault` und hatte **nur Tests als Aufrufer**, und die
+Ablage aus ADR 0089 hatte für ein Gerät keine Tür - ihr einziger Eingang war
+eine `home-authority-relay`-Route, also ein zweites Home oder eine
+Betreiber-Sitzung.
+
+`home.reader_key.freshness.submit` ist diese Tür. Der Prüfer ist unverändert:
+exakte Wurzel, exakte Bindung, höchstens fünf Minuten, Rückroll-Böden, kein
+Zwischenspeicher.
+
+**Wessen Wurzel unterschreibt, entscheidet, wer wach sein muss** - und das war
+die Erkenntnis, die den Zuschnitt bestimmt hat. Diese ADR lässt nur die Wurzel
+des *Lesers* unterschreiben. Bei einem eigenen zweiten Gerät ist das dieselbe
+Wurzel, sie liegt im eigenen Vault, und niemand sonst muss antworten. Bei einer
+anderen Person muss *ihr* Gerät innerhalb derselben fünf Minuten antworten;
+dafür gibt es keinen Weg, und das bleibt eine benannte Lücke statt einer
+stillen.
+
+Der Nachweis wird über die zustimmungsfreie `sign`-Familie erzeugt, und das ist
+richtig: er schafft keine Autorität, er stellt fest, dass keine spätere Aussage
+die Bindung ungültig macht, und er muss alle fünf Minuten wiederholbar sein.
+Vier Minuten statt fünf beim Ausstellen, weil ein Nachweis am Deckel von jeder
+Uhrabweichung zu einem wird, der abgelaufen ankommt.
+
 Accepted and implemented for the ADR 0083
 `PicoIdentityReaderKeyFreshnessSource` boundary. This ADR defines canonical
 identity-root-signed checkpoint bytes and a fail-closed Registry/Sync adapter.

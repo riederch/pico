@@ -42,6 +42,8 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { runMigrations } from './migrations.js';
 import { ReaderCustodyStore } from './reader-custody.js';
 import {
+  makeReaderCustodyEnvelope,
+  makeReaderCustodyReaderGrant,
   makeReaderCustodyRecords,
   type ReaderCustodyRecords,
 } from './test-reader-custody-records.js';
@@ -514,54 +516,8 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
   });
 });
 
-function makeReaderGrant(
-  records: ReaderCustodyRecords,
-  input: {
-    readerIdentityFingerprintHex: string;
-    readerDeviceSigningKeyFingerprintHex: string;
-    readerKeyRecord: PicoIdentityKeyRecordSignatureInput;
-  },
-): PicoReaderCustodyReaderGrantRecord {
-  const domain = records.domain.domain;
-  const grant = {
-    suite: picoMemoryContentSuite,
-    readerGrantId: 'reader_grant_0001',
-    domainAuthorityId: domain.domainAuthorityId,
-    homeId: domain.homeId,
-    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
-    domainId: domain.domainId,
-    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
-    readerIdentityKeyFingerprintHex: input.readerIdentityFingerprintHex,
-    readerDeviceSigningKeyFingerprintHex:
-      input.readerDeviceSigningKeyFingerprintHex,
-    readerKeyFingerprintHex: fingerprint(input.readerKeyRecord),
-    readerDelegationId: 'reader_delegation_0001',
-    accessMode: 'from_version' as const,
-    firstKekVersion: 1,
-    validFrom: AUTHORIZED_AT,
-    validUntil: '2026-08-27T10:00:00.000Z',
-    lifecycleOrder: 'seq:0000000000000003',
-  };
-  return {
-    schema: picoReaderCustodyReaderGrantRecordSchema,
-    grant,
-    ownerIdentityKeyRecord: records.domain.ownerIdentityKeyRecord,
-    readerKeyRecord: input.readerKeyRecord,
-    envelopes: [
-      makeEnvelope(records, {
-        grantId: grant.readerGrantId,
-        kekVersion: 1,
-        readerKeyRecord: input.readerKeyRecord,
-        grantedAt: grant.validFrom,
-      }),
-    ],
-    ownerSignatureHex: signHex(
-      buildPicoReaderCustodyReaderGrantSignatureInput(grant),
-      records.identityKeypair.privateKey,
-    ),
-    receivedAt: grant.validFrom,
-  };
-}
+/** Die Fabrik liegt seit dem 2026-08-26 in `test-reader-custody-records.ts`. */
+const makeReaderGrant = makeReaderCustodyReaderGrant;
 
 function makeReaderLifecycle(
   records: ReaderCustodyRecords,
@@ -653,51 +609,7 @@ function makeRotation(
   };
 }
 
-function makeEnvelope(
-  records: ReaderCustodyRecords,
-  input: {
-    grantId: string;
-    kekVersion: number;
-    readerKeyRecord: PicoIdentityKeyRecordSignatureInput;
-    grantedAt: string;
-  },
-): PicoShareEnvelopeRecord {
-  const domain = records.domain.domain;
-  const readerKeyFingerprintHex = fingerprint(input.readerKeyRecord);
-  const wrap = buildPicoShareWrapPayload({
-    suite: picoShareSuite,
-    domainId: domain.domainId,
-    kekVersion: input.kekVersion,
-    readerKeyFingerprintHex,
-    kekHex: 'dd'.repeat(32),
-  });
-  const sealedWrap = sodium.crypto_box_seal(
-    wrap,
-    Buffer.from(input.readerKeyRecord.publicKeyHex, 'hex'),
-  );
-  const envelope = {
-    suite: picoShareSuite,
-    grantId: input.grantId,
-    domainId: domain.domainId,
-    kekVersion: input.kekVersion,
-    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
-    issuerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
-    readerKeyFingerprintHex,
-    wrapDigestHex: hashHex(sealedWrap),
-    grantedAt: input.grantedAt,
-  };
-  return {
-    schema: picoShareEnvelopeRecordSchema,
-    envelope,
-    sealedWrapHex: Buffer.from(sealedWrap).toString('hex'),
-    issuerIdentityKeyRecord: records.domain.ownerIdentityKeyRecord,
-    issuerSignatureHex: signHex(
-      buildPicoShareEnvelopeSignatureInput(envelope),
-      records.identityKeypair.privateKey,
-    ),
-    createdAt: input.grantedAt,
-  };
-}
+const makeEnvelope = makeReaderCustodyEnvelope;
 
 function makeWriterVersion(
   records: ReaderCustodyRecords,

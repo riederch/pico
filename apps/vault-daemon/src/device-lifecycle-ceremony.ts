@@ -17,7 +17,21 @@ import {
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationReasonCategory,
   type PicoIdentityRevocationSignatureInput,
+  type PicoHomeDeviceLifecycleDeviceView,
 } from '@pico/protocol';
+
+/**
+ * ADR 0109 mit ADR 0085. Die Geräte-Ansicht wohnt seit dem 2026-08-26 im
+ * Protokoll und wird hier nur weitergereicht.
+ *
+ * **Sie stand zweimal**: einmal hier als das, was ein Client liest, und
+ * einmal in `apps/core` als das, was der Speicher berechnet. Dieselbe Form,
+ * zwei Erklärungen - und sie sind auseinandergelaufen, als eine von beiden
+ * ein Feld bekam. Die äußere Ansicht darf sich unterscheiden (der Home legt
+ * Wartendes und Uhrabweichung darauf); ein Gerät ist auf beiden Seiten
+ * dasselbe.
+ */
+export type { PicoHomeDeviceLifecycleDeviceView };
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from './client.js';
 import type {
@@ -31,14 +45,6 @@ import type {
 const TARGET_ACTIVATION_LIFETIME_MS = 4 * 60 * 1_000;
 const lifecycleOrderPattern = /^seq:([0-9]{16})$/;
 
-export interface PicoHomeDeviceLifecycleDeviceView {
-  delegationId: string;
-  deviceSigningKeyFingerprintHex: string;
-  deviceKeyAgreementKeyFingerprintHex: string;
-  lifecycleOrder: string;
-  validUntil: string;
-  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
-}
 
 export interface PicoHomeDeviceLifecycleView {
   homeId: string;

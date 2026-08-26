@@ -4707,6 +4707,50 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * kaputte Übergabe mit einem Namen, den ein Absender lesen kann.
          */
         /**
+         * ADR 0085 mit ADR 0089. Der Frische-Nachweis, in die Ablage.
+         *
+         * Dieselbe eine Tür wie die Route daneben: `publishReaderKeyFreshnessCheckpoint`
+         * prüft die Form und legt die Bytes ab, und **geurteilt wird erst beim
+         * nächsten Autoritätsschritt**, im unveränderten Prüfer - Wurzel,
+         * exakte Bindung, Fünf-Minuten-Fenster, Rückroll-Böden. Diese Zeilen
+         * fügen keine zweite Meinung hinzu; sie öffnen die Tür für das Gerät
+         * der Person, deren Wurzel als einzige unterschreiben darf.
+         */
+        case 'home.reader_key.freshness.submit': {
+          if (principal === undefined || Object.keys(args).length !== 1) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const published = publishReaderKeyFreshnessCheckpoint(args.checkpoint);
+          return published.statusCode === 202
+            ? { outcome: 'ok', result: { accepted: true } }
+            : {
+              outcome: 'invalid_arguments',
+              result: { refusal: (published.body as { error?: string }).error ?? 'refused' },
+            };
+        }
+        /**
+         * ADR 0086 mit ADR 0088. Wer die Domäne lesen darf.
+         *
+         * `recordReaderGrant` prüft, was zu prüfen ist - und schlägt dabei den
+         * Frische-Nachweis nach, der oben abgelegt wurde. Ohne ihn heißt die
+         * Antwort `freshness_unavailable`, und das ist die richtige Antwort
+         * auf eine leere Ablage und keine, die eine Fläche wegdrücken darf.
+         */
+        case 'home.reader_custody.reader_grant.submit': {
+          if (principal === undefined
+            || typeof args.record !== 'object'
+            || args.record === null
+            || Array.isArray(args.record)
+            || Object.keys(args).length !== 1) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const granted = await readerCustody.recordReaderGrant(args.record as never);
+          if (!granted.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: granted.reason } };
+          }
+          return { outcome: 'ok', result: { inserted: granted.inserted } };
+        }
+        /**
          * ADR 0086. Die Domäne und das Schreibrecht, vom eigenen Gerät.
          *
          * Dünn mit Absicht: `recordDomain` und `recordWriterGrant` prüfen seit

@@ -92,6 +92,7 @@ declare global {
       forgetRule(effectName: string, privacyDomain: string): Promise<void>;
       createReaderCustodySpace(): Promise<void>;
       writeReaderCustodyNote(text: string): Promise<unknown>;
+      letOtherDeviceRead(): Promise<unknown>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
@@ -691,6 +692,7 @@ const readerCustodyDetail = requireElement('reader-custody-detail');
 const readerCustodyCreate = requireButton('reader-custody-create');
 const readerCustodyText = requireInput('reader-custody-text');
 const readerCustodyWrite = requireButton('reader-custody-write');
+const readerCustodyLetOther = requireButton('reader-custody-let-other');
 const readerCustodyStatus = requireElement('reader-custody-status');
 
 /**
@@ -708,6 +710,24 @@ readerCustodyCreate.addEventListener('click', () => {
       'The space is there. Who may read it is next door, and nobody may yet.';
   }, (error: unknown) => {
     readerCustodyStatus.textContent = refusalText(error, 'That space was not made.');
+  });
+});
+
+readerCustodyLetOther.addEventListener('click', () => {
+  /**
+   * ADR 0085. Der einzige Fall, für den es heute reicht - und der Satz sagt,
+   * was danach gilt und was nicht: von hier an, nicht rückwirkend. Was vor
+   * dem Hereinlassen geschrieben wurde, bleibt dem zweiten Gerät verborgen
+   * (ADR 0088s `from_version`), und eine Person, der man das verschwiege,
+   * suchte später nach einem Satz, den sie dort nie finden wird.
+   */
+  readerCustodyStatus.textContent = 'Asking your Home about your devices...';
+  void window.picoCompanion.letOtherDeviceRead().then(() => {
+    readerCustodyStatus.textContent =
+      'Your other device may read this space from now on. What you wrote '
+      + 'before stays only here.';
+  }, (error: unknown) => {
+    readerCustodyStatus.textContent = refusalText(error, 'That device was not let in.');
   });
 });
 

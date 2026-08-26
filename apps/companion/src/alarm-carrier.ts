@@ -1,4 +1,5 @@
 import type {
+  PicoHomeDeviceLifecycleDeviceView,
   PicoClockDivergence,
   PicoHomeDeviceRecoveryPendingView,
   PicoHomeStorageConditionView,
@@ -31,6 +32,16 @@ export interface PicoCompanionLifecycleSnapshot {
   picoIdentityFingerprintHex: string;
   /** ADR 0086. Welches Home geantwortet hat - eine Domäne wird darauf signiert. */
   homeId: string;
+  /**
+   * ADR 0085 mit ADR 0088, seit dem 2026-08-26. Die Geräte dieser Identität,
+   * wie das Home sie sieht - samt ihrem öffentlichen Leserschlüssel.
+   *
+   * Der Lesevorgang holt sie ohnehin; er hat sie bisher fallen lassen. Wer
+   * sein zweites Gerät in eine Reader-Custody-Domäne lassen will, muss es
+   * benennen können, und ein Fingerabdruck genügt dafür nicht: der Umschlag
+   * wird in den öffentlichen Schlüssel gepackt.
+   */
+  devices?: readonly PicoHomeDeviceLifecycleDeviceView[];
   pendingRecovery: PicoHomeDeviceRecoveryPendingView | null;
   /** ADR 0120 N5. Clock movement the Home detected, when it reports any. */
   clockDivergence?: PicoClockDivergence | null;

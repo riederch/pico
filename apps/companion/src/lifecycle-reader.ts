@@ -87,6 +87,9 @@ export async function createPicoCompanionLifecycleReader(input: {
        * dieser Zeile beigetreten ist, hätte sie dort nicht.
        */
       homeId: view.homeId,
+      // ADR 0085 mit ADR 0088: dieselbe Antwort trug sie schon, und dieser
+      // Leser liess sie fallen.
+      devices: view.devices,
       pendingRecovery: view.pendingRecovery,
       ...(view.clockDivergence === undefined
         ? {}
