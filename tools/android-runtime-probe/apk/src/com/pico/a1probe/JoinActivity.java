@@ -54,6 +54,7 @@ public final class JoinActivity extends Activity {
   private TextView due;
   private Button seen;
   private Button scan;
+  private boolean joined;
 
   private LocalSocket socket;
   private OutputStream out;
@@ -72,7 +73,21 @@ public final class JoinActivity extends Activity {
      * made Back end a ceremony that another device was waiting on.
      */
     startForegroundService(new Intent(this, CustodyService.class));
-    startForegroundService(new Intent(this, JoinService.class));
+    /**
+     * **Nur, wenn es noch keinen Beitritt gibt** (am 2026-08-26 auf dem
+     * Bildschirm gesehen). Der Beitritt lief bei jedem Öffnen, also stand
+     * „Choose a Vault passphrase for this device" über einem Gerät, das seit
+     * Tagen beigetreten war - eine Frage nach etwas, das längst entschieden
+     * ist, direkt neben einem Termin, den dasselbe Gerät gerade aus seinem
+     * Home gelesen hatte.
+     *
+     * Dieselbe Bedingung, die `watchConditions()` unten schon stellt: ohne
+     * Profil gibt es nichts zu fragen und nichts zu prüfen.
+     */
+    joined = new java.io.File(getFilesDir(), "profile.json").isFile();
+    if (!joined) {
+      startForegroundService(new Intent(this, JoinService.class));
+    }
     setContentView(buildView());
     new Thread(this::connect, "pico-ui-bridge").start();
     watchConditions();
@@ -178,6 +193,17 @@ public final class JoinActivity extends Activity {
     title.setText("Add this phone to your Home");
     body = text(column, 15, Color.parseColor("#9aa7b4"), Typeface.DEFAULT);
     body.setText("Your other device grants this one. Nothing is sent until you say so.");
+    /**
+     * **Ein beigetretenes Gerät wird nicht gefragt.** Die Einladung wird
+     * ausgeblendet statt umgeschrieben: was hier stünde, wäre ein zweiter
+     * Satz über einen Moment, den der Kern besitzt, und `check-one-voice`
+     * zählt genau solche Sätze. Was danach bleibt, ist, was der Kern
+     * geschrieben hat - die Bedingung und die Termine darunter.
+     */
+    if (joined) {
+      title.setVisibility(View.GONE);
+      body.setVisibility(View.GONE);
+    }
 
     code = text(column, 13, Color.parseColor("#7ee787"), Typeface.MONOSPACE);
     code.setTextIsSelectable(true);
@@ -207,7 +233,14 @@ public final class JoinActivity extends Activity {
     column.addView(scan, wide());
 
     status = text(column, 13, Color.parseColor("#8b949e"), Typeface.DEFAULT);
-    status.setText("Starting Pico on this device...");
+    /**
+     * Der Fortschritt der Zeremonie - und nur dann. Auf einem beigetretenen
+     * Gerät lief die Zeremonie nicht, also hätte dieser Satz für immer
+     * „Starting Pico on this device..." gesagt: einmal wahr, nie
+     * zurückgenommen. Dieselbe Klasse wie die Bedingung von vorgestern, die
+     * neben einem gelesenen Termin behauptete, das Home antworte nicht.
+     */
+    status.setText(joined ? "" : "Starting Pico on this device...");
 
     /**
      * ADR 0131 A7. Was gerade gilt, wenn nichts passiert - und der Satz dazu

@@ -827,6 +827,23 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B25 — Die Laborfläche fragte ein beigetretenes Telefon nach seiner
+Passphrase (2026-08-26).** Auf dem Bildschirmfoto von Phase 6 stand *„Choose a
+Vault passphrase for this device"* über einem Gerät, das seit Tagen beigetreten
+war — direkt neben einem Termin, den dasselbe Gerät gerade aus seinem Home
+gelesen hatte. Die Fläche startete den Beitrittsdienst bei jedem Öffnen, ohne
+zu fragen, ob es schon einen Beitritt gibt.
+
+Dieselbe Bedingung, die `watchConditions()` daneben längst stellt, steht jetzt
+auch davor. Und die Einladung wird **ausgeblendet statt umgeschrieben**: was
+dort sonst stünde, wäre ein zweiter Satz über einen Moment, den der Kern
+besitzt, und `check-one-voice` zählt genau solche Sätze.
+
+Beim Nachsehen fiel der zweite Satz auf: die Statuszeile sagte auf einem
+beigetretenen Gerät für immer *„Starting Pico on this device…"* — einmal wahr,
+nie zurückgenommen, dieselbe Klasse wie B23. Sie schweigt jetzt, wenn keine
+Zeremonie läuft. Was bleibt, ist, was der Kern geschrieben hat.
+
 **B24 — `ensureUnlocked` scheiterte daran, dass schon entsperrt war
 (2026-08-26).** Zwei Sonden starteten zusammen, lasen beide einen leeren
 Vault-Status und entsperrten beide; die zweite bekam `already_unlocked` und
