@@ -90,6 +90,8 @@ declare global {
         decision: string,
       ): Promise<void>;
       forgetRule(effectName: string, privacyDomain: string): Promise<void>;
+      createReaderCustodySpace(): Promise<void>;
+      writeReaderCustodyNote(text: string): Promise<unknown>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
@@ -676,6 +678,57 @@ const depotRemote = requireInput('depot-remote');
 const depotCommit = requireInput('depot-commit');
 const depotAttachSubmit = requireButton('depot-attach-submit');
 const depotStatus = requireElement('depot-status');
+
+/**
+ * ADR 0086 mit ADR 0130 E5. Ein Raum, den nur diese Person und die Leute
+ * lesen können, die sie wählt.
+ *
+ * **Der Ast bekommt sein Subjekt** (Befund B5): die Leserschaft nebenan zeigt
+ * seit dem 2026-08-24, wer lesen darf, und es gab nichts zu lesen. Hier
+ * entsteht das, worüber sie spricht.
+ */
+const readerCustodyDetail = requireElement('reader-custody-detail');
+const readerCustodyCreate = requireButton('reader-custody-create');
+const readerCustodyText = requireInput('reader-custody-text');
+const readerCustodyWrite = requireButton('reader-custody-write');
+const readerCustodyStatus = requireElement('reader-custody-status');
+
+/**
+ * Der Satz sagt, was die beiden Knöpfe kosten - eine Zustimmung je Zeremonie,
+ * und keine fürs Schreiben. Wer das nicht weiß, klickt die erste weg.
+ */
+readerCustodyDetail.textContent =
+  'Making the space asks you twice: once for the space itself, once for '
+  + 'permission to write in it. Writing into it afterwards asks nothing.';
+
+readerCustodyCreate.addEventListener('click', () => {
+  readerCustodyStatus.textContent = 'Waiting for your two answers...';
+  void window.picoCompanion.createReaderCustodySpace().then(() => {
+    readerCustodyStatus.textContent =
+      'The space is there. Who may read it is next door, and nobody may yet.';
+  }, (error: unknown) => {
+    readerCustodyStatus.textContent = refusalText(error, 'That space was not made.');
+  });
+});
+
+readerCustodyWrite.addEventListener('click', () => {
+  const text = readerCustodyText.value.trim();
+  if (text === '') {
+    // Ein leerer Satz ist kein Satz, und die Fläche sagt das, statt ihn
+    // wegzuschicken und eine Ablehnung zurückzubekommen.
+    readerCustodyStatus.textContent = 'Write something first.';
+    return;
+  }
+  void window.picoCompanion.writeReaderCustodyNote(text).then(() => {
+    readerCustodyText.value = '';
+    // Was jetzt gilt, nicht dass ein Vorgang gelang: die Person will wissen,
+    // wo der Satz steht und wer ihn sehen kann.
+    readerCustodyStatus.textContent =
+      'Written. Only you can read it until you let somebody in.';
+  }, (error: unknown) => {
+    readerCustodyStatus.textContent = refusalText(error, 'That was not written.');
+  });
+});
 
 /** ADR 0143 DP1 with ADR 0138 CO3/CO4. Material, and whether Pico may go for it. */
 function refreshDepots(): void {

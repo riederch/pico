@@ -2,6 +2,27 @@
 
 ## Status
 
+Status note, 2026-08-26: **E5s andere Hälfte ist nicht mehr blockiert, weil der
+Ast ein Subjekt hat.** Die Notiz darunter hielt fest, dass Domänen anzulegen
+und Leser zu berechtigen Bedienelemente wären, deren gewöhnliche Wirkung
+niemand beobachten kann - *„because nothing in the product writes
+reader-custody content"*. Das stimmt seit heute nicht mehr.
+
+Gemessen fehlten drei Stücke und nicht fünfzehn: der erzeugende Teil stand
+längst in `@pico/vault`, das Home prüfte und speicherte seit langem, und die
+einzige Route dorthin trug die Zugriffsklasse `home-authority-relay`. Gebaut
+wurden eine vierte Daemon-Zeremonie für das Schreibrecht, eine gewöhnliche
+Familie fürs Verschlüsseln im Daemon, drei Link-Operationen und ein Abschnitt
+im Fenster.
+
+**Was das für E5 heißt.** Wer jetzt eine Domäne anlegt, kann hineinschreiben,
+und die Leserschaft nebenan zeigt, dass niemand mitliest, bis jemand
+hereingelassen wird. Die beiden Sätze, die E5 nebeneinanderstellt - „wer die
+Werkzeuge benutzt hat, sieht das Ergebnis im Fenster" und „wer sie nicht
+benutzt hat, sieht, dass niemand seine Erinnerung liest" - sind damit nicht
+mehr die einzigen beiden; es gibt einen dritten Weg, und er führt durch das
+Produkt.
+
 **Status note 2026-08-24: E5's read half reaches the window.** The two
 capabilities built on 2026-08-23 - which domains exist with who may read them,
 and ending one reader's access from the device that granted it - had no caller

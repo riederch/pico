@@ -141,6 +141,14 @@
     "./observations": {
       "types": "./dist/observations.d.ts",
       "import": "./dist/observations.js"
+    },
+    "./reader-custody": {
+      "types": "./dist/reader-custody.d.ts",
+      "import": "./dist/reader-custody.js"
+    },
+    "./reader-custody-space": {
+      "types": "./dist/reader-custody-space.d.ts",
+      "import": "./dist/reader-custody-space.js"
     }
   },
   "scripts": {

@@ -41,6 +41,10 @@ import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { runMigrations } from './migrations.js';
 import { ReaderCustodyStore } from './reader-custody.js';
+import {
+  makeReaderCustodyRecords,
+  type ReaderCustodyRecords,
+} from './test-reader-custody-records.js';
 
 const tempDirs: string[] = [];
 const databases: Database.Database[] = [];
@@ -59,16 +63,6 @@ interface Harness {
     delegationId: string;
     keyRecord: PicoIdentityKeyRecordSignatureInput;
   }>;
-}
-
-interface Records {
-  domain: PicoReaderCustodyDomainRecord;
-  writerGrant: PicoReaderCustodyWriterGrantRecord;
-  item: PicoReaderCustodyItemRecord;
-  identityKeypair: { publicKey: Uint8Array; privateKey: Uint8Array };
-  ownerReaderKeypair: { publicKey: Uint8Array; privateKey: Uint8Array };
-  writerKeypair: { publicKey: Uint8Array; privateKey: Uint8Array };
-  writerIdentityFingerprint: string;
 }
 
 beforeAll(async () => {
@@ -152,145 +146,19 @@ function openHarness(): Harness {
   return { db, store, activeMembers, eligibleReaders };
 }
 
-function makeRecords(): Records {
-  const identityKeypair = sodium.crypto_sign_keypair();
-  const readerKeypair = sodium.crypto_box_keypair();
-  const writerKeypair = sodium.crypto_sign_keypair();
-  const identityKeyRecord = keyRecord('pico_identity', identityKeypair.publicKey);
-  const readerKeyRecord = keyRecord(
-    'device_key_agreement',
-    readerKeypair.publicKey,
-  );
-  const writerKeyRecord = keyRecord('device_signing', writerKeypair.publicKey);
-  const identityFingerprint = fingerprint(identityKeyRecord);
-  const writerIdentityFingerprint = 'aa'.repeat(32);
-  const readerFingerprint = fingerprint(readerKeyRecord);
-  const writerFingerprint = fingerprint(writerKeyRecord);
-  const domain = {
-    suite: picoMemoryContentSuite,
-    domainAuthorityId: 'reader_domain_auth_0001',
+/**
+ * Die Fabrik liegt seit dem 2026-08-26 in `test-reader-custody-records.ts`,
+ * weil der Link-Test daneben sie gegen ein *echtes* Home braucht - dessen
+ * `homeId` steht erst zur Laufzeit fest. Eine zweite daneben wäre eine zweite
+ * Auffassung davon, wie ein gültiger Satz Aufzeichnungen aussieht.
+ */
+function makeRecords(): ReaderCustodyRecords {
+  return makeReaderCustodyRecords({
     homeId: HOME_ID,
     hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
     domainId: DOMAIN_ID,
-    custodyClass: 'reader_custody' as const,
-    ownerIdentityKeyFingerprintHex: identityFingerprint,
-    ownerReaderKeyFingerprintHex: readerFingerprint,
-    kekVersion: 1,
     authorizedAt: AUTHORIZED_AT,
-    lifecycleOrder: 'seq:0000000000000001',
-  };
-  const kek = sodium.randombytes_buf(32);
-  const wrap = buildPicoShareWrapPayload({
-    suite: picoShareSuite,
-    domainId: DOMAIN_ID,
-    kekVersion: 1,
-    readerKeyFingerprintHex: readerFingerprint,
-    kekHex: Buffer.from(kek).toString('hex'),
   });
-  const sealedWrap = sodium.crypto_box_seal(wrap, readerKeypair.publicKey);
-  const envelope = {
-    suite: picoShareSuite,
-    grantId: domain.domainAuthorityId,
-    domainId: DOMAIN_ID,
-    kekVersion: 1,
-    hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
-    issuerIdentityKeyFingerprintHex: identityFingerprint,
-    readerKeyFingerprintHex: readerFingerprint,
-    wrapDigestHex: hashHex(sealedWrap),
-    grantedAt: AUTHORIZED_AT,
-  };
-  const domainRecord: PicoReaderCustodyDomainRecord = {
-    schema: picoReaderCustodyDomainRecordSchema,
-    domain,
-    ownerIdentityKeyRecord: identityKeyRecord,
-    ownerReaderKeyRecord: readerKeyRecord,
-    ownerEnvelope: {
-      schema: picoShareEnvelopeRecordSchema,
-      envelope,
-      sealedWrapHex: Buffer.from(sealedWrap).toString('hex'),
-      issuerIdentityKeyRecord: identityKeyRecord,
-      issuerSignatureHex: signHex(
-        buildPicoShareEnvelopeSignatureInput(envelope),
-        identityKeypair.privateKey,
-      ),
-      createdAt: AUTHORIZED_AT,
-    },
-    ownerSignatureHex: signHex(
-      buildPicoReaderCustodyDomainSignatureInput(domain),
-      identityKeypair.privateKey,
-    ),
-    receivedAt: AUTHORIZED_AT,
-  };
-  const grant = {
-    suite: picoMemoryContentSuite,
-    writerGrantId: 'reader_writer_grant_0001',
-    domainAuthorityId: domain.domainAuthorityId,
-    homeId: HOME_ID,
-    hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
-    domainId: DOMAIN_ID,
-    kekVersion: 1,
-    ownerIdentityKeyFingerprintHex: identityFingerprint,
-    writerIdentityKeyFingerprintHex: writerIdentityFingerprint,
-    writerDeviceSigningKeyFingerprintHex: writerFingerprint,
-    validFrom: AUTHORIZED_AT,
-    validUntil: '2026-08-27T10:00:00.000Z',
-    lifecycleOrder: 'seq:0000000000000002',
-  };
-  const writerGrant: PicoReaderCustodyWriterGrantRecord = {
-    schema: picoReaderCustodyWriterGrantRecordSchema,
-    grant,
-    ownerIdentityKeyRecord: identityKeyRecord,
-    writerDeviceSigningKeyRecord: writerKeyRecord,
-    ownerSignatureHex: signHex(
-      buildPicoReaderCustodyWriterGrantSignatureInput(grant),
-      identityKeypair.privateKey,
-    ),
-    receivedAt: AUTHORIZED_AT,
-  };
-  const contentCiphertext = sodium.randombytes_buf(64);
-  const wrappedDek = sodium.randombytes_buf(48);
-  const item = {
-    suite: picoMemoryContentSuite,
-    packageId: 'reader_item_package_0001',
-    domainAuthorityId: domain.domainAuthorityId,
-    writerGrantId: grant.writerGrantId,
-    homeId: HOME_ID,
-    hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
-    domainId: DOMAIN_ID,
-    memoryItemId: 'memory_reader_0001',
-    contentType: 'text/plain',
-    kekVersion: 1,
-    writerIdentityKeyFingerprintHex: writerIdentityFingerprint,
-    writerDeviceSigningKeyFingerprintHex: writerFingerprint,
-    contentNonceHex: '22'.repeat(24),
-    contentCiphertextDigestHex: hashHex(contentCiphertext),
-    dekWrapNonceHex: '33'.repeat(24),
-    wrappedDekDigestHex: hashHex(wrappedDek),
-    createdAt: '2026-07-27T10:01:00.000Z',
-  };
-  const itemRecord: PicoReaderCustodyItemRecord = {
-    schema: picoReaderCustodyItemRecordSchema,
-    item,
-    contentCiphertextHex: Buffer.from(contentCiphertext).toString('hex'),
-    wrappedDekHex: Buffer.from(wrappedDek).toString('hex'),
-    writerDeviceSigningKeyRecord: writerKeyRecord,
-    writerSignatureHex: signHex(
-      buildPicoReaderCustodyItemSignatureInput(item),
-      writerKeypair.privateKey,
-    ),
-    receivedAt: item.createdAt,
-  };
-  sodium.memzero(kek);
-  sodium.memzero(wrap);
-  return {
-    domain: domainRecord,
-    writerGrant,
-    item: itemRecord,
-    identityKeypair,
-    ownerReaderKeypair: readerKeypair,
-    writerKeypair,
-    writerIdentityFingerprint,
-  };
 }
 
 describe('ReaderCustodyStore (ADR 0086)', () => {
@@ -647,7 +515,7 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
 });
 
 function makeReaderGrant(
-  records: Records,
+  records: ReaderCustodyRecords,
   input: {
     readerIdentityFingerprintHex: string;
     readerDeviceSigningKeyFingerprintHex: string;
@@ -696,7 +564,7 @@ function makeReaderGrant(
 }
 
 function makeReaderLifecycle(
-  records: Records,
+  records: ReaderCustodyRecords,
   readerGrant: PicoReaderCustodyReaderGrantRecord,
 ): PicoReaderCustodyReaderGrantLifecycleRecord {
   const domain = records.domain.domain;
@@ -730,7 +598,7 @@ function makeReaderLifecycle(
 }
 
 function makeRotation(
-  records: Records,
+  records: ReaderCustodyRecords,
   input: {
     rotationId: string;
     previousKekVersion: number;
@@ -786,7 +654,7 @@ function makeRotation(
 }
 
 function makeEnvelope(
-  records: Records,
+  records: ReaderCustodyRecords,
   input: {
     grantId: string;
     kekVersion: number;
@@ -832,7 +700,7 @@ function makeEnvelope(
 }
 
 function makeWriterVersion(
-  records: Records,
+  records: ReaderCustodyRecords,
   kekVersion: number,
   input: {
     writerGrantId: string;
@@ -863,7 +731,7 @@ function makeWriterVersion(
 }
 
 function makeItemVersion(
-  records: Records,
+  records: ReaderCustodyRecords,
   writerGrant: PicoReaderCustodyWriterGrantRecord,
   kekVersion: number,
   input: {
@@ -899,7 +767,7 @@ function makeItemVersion(
   };
 }
 
-function makeLifecycle(records: Records): PicoReaderCustodyWriterGrantLifecycleRecord {
+function makeLifecycle(records: ReaderCustodyRecords): PicoReaderCustodyWriterGrantLifecycleRecord {
   const grant = records.writerGrant.grant;
   const lifecycle = {
     suite: picoMemoryContentSuite,

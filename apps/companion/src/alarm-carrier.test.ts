@@ -58,7 +58,7 @@ function recordingAdapter(): RecordingAdapter {
 function snapshot(
   pendingRecovery: PicoHomeDeviceRecoveryPendingView | null,
 ): PicoCompanionLifecycleSnapshot {
-  return { picoIdentityFingerprintHex: identityFingerprintHex, pendingRecovery };
+  return { picoIdentityFingerprintHex: identityFingerprintHex, homeId: 'home_alarm', pendingRecovery };
 }
 
 describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () => {

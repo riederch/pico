@@ -366,6 +366,9 @@ describe('Companion lifecycle reader self-heal (ADR 0115 U4)', () => {
     const snapshot = await reader();
     expect(snapshot).toEqual({
       picoIdentityFingerprintHex: device.identityFingerprintHex,
+      // ADR 0086, seit dem 2026-08-26: welches Home geantwortet hat, reist
+      // mit - eine Reader-Custody-Domäne wird darauf signiert.
+      homeId: expect.any(String) as unknown as string,
       pendingRecovery: null,
     });
     expect(recorder.rotated).toEqual([{

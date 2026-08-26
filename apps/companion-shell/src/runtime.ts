@@ -212,6 +212,12 @@ export interface PicoCompanionShellRuntime {
    * handeln darf (ADR 0140 RL4).
    */
   readDepots(): Promise<unknown>;
+  /**
+   * ADR 0086 mit ADR 0130 E5. Ein Raum, den nur diese Person und die Leute
+   * lesen können, die sie wählt - und ein Satz darin.
+   */
+  createReaderCustodySpace(): Promise<void>;
+  writeReaderCustodyNote(text: string): Promise<{ memoryItemId: string }>;
   /** ADR 0140 RL4. Was Pico ohne Anwesende tun darf, gesetzt und zurückgenommen. */
   decideRule(input: {
     effectName: string;
@@ -856,6 +862,33 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           entryId,
+        });
+      }),
+      createReaderCustodySpace: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { createPicoCompanionReaderCustodySpace } =
+          await import('@pico/companion/reader-custody-space');
+        await createPicoCompanionReaderCustodySpace({
+          daemonClient,
+          profile,
+          profilePath,
+          sodium: input.sodium,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+      }),
+      writeReaderCustodyNote: async (text) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { writePicoCompanionReaderCustodyNote } =
+          await import('@pico/companion/reader-custody-space');
+        return await writePicoCompanionReaderCustodyNote({
+          daemonClient,
+          profile,
+          profilePath,
+          sodium: input.sodium,
+          text,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
         });
       }),
       decideRule: async (decision) => await serialized(async () => {

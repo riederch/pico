@@ -56,6 +56,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   decideDepotReach: 'pico:depot-reach:decide',
   fetchDepotsNow: 'pico:depot-fetch:ask',
   acceptDepotOffer: 'pico:depot-offer:accept',
+  createReaderCustodySpace: 'pico:reader-custody:create',
+  writeReaderCustodyNote: 'pico:reader-custody:write',
   decideRule: 'pico:rule:decide',
   forgetRule: 'pico:rule:forget',
   /**

@@ -1158,6 +1158,31 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    picoCompanionIpcChannels.createReaderCustodySpace,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      await runtime.createReaderCustodySpace();
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.writeReaderCustodyNote,
+    async (event: IpcMainInvokeEvent, text: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof text !== 'string' || text.trim() === '') {
+        // Ein leerer Satz ist kein Satz. Ihn anzunehmen hiesse, eine
+        // Erinnerung anzulegen, die nichts erinnert.
+        throw new Error('empty_reader_custody_note');
+      }
+      return await runtime.writeReaderCustodyNote(text);
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.acceptDepotOffer,
     async (event: IpcMainInvokeEvent, remote: unknown, acceptedCommit: unknown) => {
       assertRendererSender(event);

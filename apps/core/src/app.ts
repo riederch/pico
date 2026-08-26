@@ -4706,6 +4706,73 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * und das ist keine Doppelung, sondern die Grenze: hier scheitert eine
          * kaputte Übergabe mit einem Namen, den ein Absender lesen kann.
          */
+        /**
+         * ADR 0086. Die Domäne und das Schreibrecht, vom eigenen Gerät.
+         *
+         * Dünn mit Absicht: `recordDomain` und `recordWriterGrant` prüfen seit
+         * langem alles, was zu prüfen ist - dass der Besitzer ein aktives
+         * Mitglied dieses Homes ist, dass die Unterschriften halten, dass die
+         * Bindung an *dieses* Home stimmt. Diese Zeilen fügen keine zweite
+         * Meinung hinzu; sie öffnen nur die Tür, durch die bisher nur ein
+         * zweites Home kam.
+         */
+        case 'home.reader_custody.domain.submit':
+        case 'home.reader_custody.writer_grant.submit': {
+          if (principal === undefined
+            || typeof args.record !== 'object'
+            || args.record === null
+            || Array.isArray(args.record)
+            || Object.keys(args).length !== 1) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const written = operation === 'home.reader_custody.domain.submit'
+            ? readerCustody.recordDomain(args.record as never)
+            : readerCustody.recordWriterGrant(args.record as never);
+          if (!written.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: written.reason } };
+          }
+          return { outcome: 'ok', result: { inserted: written.inserted } };
+        }
+        /**
+         * ADR 0086 mit ADR 0130 E5. Der Ast bekommt sein Subjekt.
+         *
+         * Das Prüfen und Speichern kann dieser Home seit langem - was fehlte,
+         * war ein Weg dorthin von einem Gerät statt von einem zweiten Home.
+         * `recordItem` bleibt der einzige Eingang: die Unterschrift des
+         * Schreibers, sein Schreibrecht, die Domäne und die KEK-Version werden
+         * dort geprüft, und diese Zeile fügt keine zweite Meinung dazu hinzu.
+         *
+         * **Der Grund der Ablehnung reist mit.** Ein „nein" ohne Namen ließe
+         * ein Gerät raten, ob sein Recht abgelaufen ist, die Domäne rotiert
+         * wurde oder es die falsche Home fragt - und die drei verlangen
+         * verschiedene Antworten von der Person.
+         */
+        case 'home.reader_custody.item.submit': {
+          if (principal === undefined
+            || typeof args.record !== 'object'
+            || args.record === null
+            || Array.isArray(args.record)
+            || Object.keys(args).length !== 1) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const recorded = readerCustody.recordItem(
+            args.record as unknown as PicoReaderCustodyItemRecord,
+          );
+          if (!recorded.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: recorded.reason } };
+          }
+          /**
+           * `inserted` sagt, ob dies das erste Mal war. Ein Gerät, das nach
+           * einem Abbruch erneut abgibt, ist kein Fehler und soll auch keinen
+           * lesen - aber „schon da" ist etwas anderes als „gerade
+           * angekommen", und nur das erste erlaubt ihm, den Klartext lokal
+           * loszuwerden.
+           */
+          return {
+            outcome: 'ok',
+            result: { inserted: recorded.inserted, memoryItemId: recorded.value.memoryItemId },
+          };
+        }
         case 'home.observations.submit': {
           if (principal === undefined
             || !Array.isArray(args.observations)

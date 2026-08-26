@@ -186,6 +186,24 @@
       <ul id="module-consent-list" class="provider-list"></ul>
       <p id="module-consent-status" class="detail"></p>
     </section>
+    <!--
+      ADR 0086 mit ADR 0130 E5. Ein Raum, den nur diese Person und die Leute
+      lesen können, die sie wählt.
+
+      **Der Ast hatte kein Subjekt** (Befund B5): fünfzehn ADRs waren gebaut,
+      und nichts im Produkt schrieb je Inhalt unter dieser Verwahrung. Die
+      Leserschaft nebenan zeigt seit dem 2026-08-24, wer lesen darf; hier
+      entsteht das, worüber sie spricht.
+    -->
+    <section id="reader-custody" class="form-card">
+      <h2>Write something only chosen readers can see</h2>
+      <p id="reader-custody-detail" class="detail"></p>
+      <button id="reader-custody-create" type="button">Make such a space</button>
+      <label for="reader-custody-text">What to write</label>
+      <input id="reader-custody-text" maxlength="4096" autocomplete="off">
+      <button id="reader-custody-write" type="button">Write it there</button>
+      <p id="reader-custody-status" class="detail"></p>
+    </section>
     <section id="depot-attach" class="form-card">
       <h2>Give Pico material</h2>
       <label for="depot-remote">Where it lives</label>

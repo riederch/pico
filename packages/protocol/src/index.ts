@@ -772,6 +772,30 @@ export const picoLinkDirectOperations = [
    * keine Eigenschaft eines Sensoradapters. Ein Home, das Messungen annimmt,
    * weil sie ankommen, hätte diese Entscheidung dem Gerät überlassen.
    */
+  /**
+   * ADR 0086 mit ADR 0130 E5. Eine Erinnerung unter Reader-Custody, vom
+   * eigenen Gerät.
+   *
+   * **Der Ast hatte kein Subjekt** (Roadmap-Befund B5): ADR 0078 und 0082-0096
+   * sind gebaut und geprüft, und nichts im Produkt schrieb je Inhalt unter
+   * dieser Verwahrung - die einzige Route, die einen Item-Record annahm, war
+   * Home-zu-Home. ADR 0130 E5 nennt die Folge beim Namen: Domänen anzulegen und
+   * Leser zu berechtigen wären Bedienelemente, deren gewöhnliche Wirkung
+   * niemand beobachten kann, solange nichts schreibt.
+   *
+   * Das Home prüft und speichert, was es immer schon konnte. Was hier
+   * dazukommt, ist der Weg dorthin von einem Gerät, das die Person in der Hand
+   * hält - und nicht von einem zweiten Home.
+   *
+   * **Drei Vorgänge, weil eine Verwahrung drei Aufzeichnungen braucht**: die
+   * Domäne sagt, wem der Raum gehört, das Schreibrecht, wessen Unterschrift
+   * darin angenommen wird, und das Item ist der Inhalt. Sie einzeln zu
+   * schicken ist nicht Umständlichkeit, sondern die Reihenfolge: ein Item
+   * ohne sein Recht wird abgelehnt, und das Recht ohne seine Domäne auch.
+   */
+  'home.reader_custody.domain.submit',
+  'home.reader_custody.writer_grant.submit',
+  'home.reader_custody.item.submit',
   'home.observations.submit',
   'home.modules.consent.read',
   'home.modules.consent.record',

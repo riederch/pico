@@ -29,6 +29,8 @@ export interface PicoCompanionLifecycleSnapshot {
    * separate setting that could drift.
    */
   picoIdentityFingerprintHex: string;
+  /** ADR 0086. Welches Home geantwortet hat - eine Domäne wird darauf signiert. */
+  homeId: string;
   pendingRecovery: PicoHomeDeviceRecoveryPendingView | null;
   /** ADR 0120 N5. Clock movement the Home detected, when it reports any. */
   clockDivergence?: PicoClockDivergence | null;

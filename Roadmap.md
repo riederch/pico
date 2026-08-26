@@ -843,8 +843,31 @@ geraten — beide Richtungen haben einen Test.
 
 ### Aus der Prüfung entstanden
 
-- **Ein Schreibweg für Reader-Custody-Inhalt** — ohne ihn bleiben fünfzehn
-  implementierte ADRs ein Ast ohne Subjekt. *Verweist auf Befund B5.*
+- ~~**Ein Schreibweg für Reader-Custody-Inhalt**~~ — **gebaut am 2026-08-26.**
+  Gemessen fehlten drei Stücke statt fünfzehn: der erzeugende Teil stand längst
+  in `@pico/vault`, das Home prüfte und speicherte seit langem, und die einzige
+  Route dorthin war Home-zu-Home.
+
+  Jetzt: eine vierte Daemon-Zeremonie erteilt das **Schreibrecht** (eine
+  Zustimmung, eine Sitzung — sie trägt keinen KEK); eine gewöhnliche Familie
+  **verschlüsselt im Daemon**, damit der KEK ihn nicht verlässt; drei
+  Link-Operationen tragen Domäne, Schreibrecht und Item vom Gerät zum Home; und
+  im Fenster steht ein Abschnitt, in dem eine Person einen solchen Raum anlegt
+  und hineinschreibt. Die Leserschaft daneben zeigt seit dem 2026-08-24, wer
+  lesen darf — jetzt gibt es etwas zu lesen.
+
+  Zwei Dinge fielen dabei auf. Der Lebenszyklus-Lesevorgang warf die `homeId`
+  weg, die das Home mitschickt und die eine Domäne in ihrer Unterschrift
+  braucht; sie reist jetzt mit, statt ins Profil geschrieben zu werden — das
+  wäre eine zweite Stelle, an der sie steht, und ein früher beigetretenes Gerät
+  hätte sie dort nicht. Und die Aufzeichnungs-Fabrik des Kern-Tests wurde
+  herausgehoben, weil der Link-Test sie gegen ein *echtes* Home braucht: eine
+  zweite Fabrik wäre eine zweite Auffassung davon, wie ein gültiger Satz
+  Aufzeichnungen aussieht.
+
+  Damit ist ADR 0130 E5s andere Hälfte nicht mehr blockiert: Domänen anlegen
+  und Leser berechtigen sind jetzt Bedienelemente, deren gewöhnliche Wirkung
+  jemand beobachten kann.
 
 ### Außerhalb dieser Roadmap
 

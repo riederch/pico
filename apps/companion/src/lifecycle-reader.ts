@@ -79,6 +79,14 @@ export async function createPicoCompanionLifecycleReader(input: {
     // it without a second source of truth (ADR 0112).
     return {
       picoIdentityFingerprintHex: profile.identity.keyFingerprintHex,
+      /**
+       * ADR 0086, seit dem 2026-08-26. Das Home schickt sie mit, und dieser
+       * Leser hat sie bisher fallen lassen; wer eine Reader-Custody-Domäne
+       * anlegt, braucht sie in der Unterschrift. Sie ins Profil zu schreiben
+       * wäre eine zweite Stelle, an der sie steht - und ein Gerät, das vor
+       * dieser Zeile beigetreten ist, hätte sie dort nicht.
+       */
+      homeId: view.homeId,
       pendingRecovery: view.pendingRecovery,
       ...(view.clockDivergence === undefined
         ? {}
