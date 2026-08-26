@@ -14,6 +14,8 @@ import {
   type PicoVaultDaemonCeremonyCreateReaderGrantRequest,
   type PicoVaultDaemonCeremonyCreateWriterGrantRequest,
   type PicoVaultDaemonCeremonyCreateWriterGrantResult,
+  type PicoVaultDaemonReaderCustodyEncryptItemRequest,
+  type PicoVaultDaemonReaderCustodyEncryptItemResult,
   type PicoVaultDaemonCeremonyCreateReaderGrantResult,
   type PicoVaultDaemonCeremonyIssueRecoveryCardRequest,
   type PicoVaultDaemonCeremonyIssueRecoveryCardResult,
@@ -66,6 +68,10 @@ export interface PicoVaultDaemonClient {
   ceremonyCreateWriterGrant(
     input: Omit<PicoVaultDaemonCeremonyCreateWriterGrantRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonCeremonyCreateWriterGrantResult>;
+  /** ADR 0086 mit ADR 0094. Eine Erinnerung unter Reader-Custody schreiben. */
+  readerCustodyEncryptItem(
+    input: Omit<PicoVaultDaemonReaderCustodyEncryptItemRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonReaderCustodyEncryptItemResult>;
   ceremonyIssueRecoveryCard(
     input: Omit<PicoVaultDaemonCeremonyIssueRecoveryCardRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonCeremonyIssueRecoveryCardResult>;
@@ -211,6 +217,10 @@ export async function connectPicoVaultDaemonClient(
       family: picoVaultDaemonRequestFamilies.ceremonyRotateDomain,
       ...ceremonyInput,
     }) as unknown as PicoVaultDaemonCeremonyRotateDomainResult,
+    readerCustodyEncryptItem: async (encryptInput) => await request({
+      family: picoVaultDaemonRequestFamilies.readerCustodyEncryptItem,
+      ...encryptInput,
+    }) as unknown as PicoVaultDaemonReaderCustodyEncryptItemResult,
     ceremonyCreateWriterGrant: async (ceremonyInput) => await request({
       family: picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant,
       ...ceremonyInput,

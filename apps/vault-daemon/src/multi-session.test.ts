@@ -462,6 +462,103 @@ describe('Two-role reader-grant ceremony (ADR 0102 M4/M5)', () => {
     expect(auditText).not.toContain(PLAINTEXT);
   }, 60_000);
 
+  it('verschlüsselt im Daemon, damit der KEK ihn nicht verlässt', async () => {
+    /**
+     * ADR 0086 mit ADR 0094, seit dem 2026-08-26. Der Klartext reist zum
+     * Daemon und nicht der Schlüssel zum Aufrufer: wer den KEK bekäme, hielte
+     * den Schlüssel zu allem in dieser Domäne, um einen Satz zu schreiben.
+     *
+     * **Eine Familie und keine Zeremonie**: eine Zeremonie erzeugt Autorität,
+     * das hier benutzt sie. Wer bei jedem Satz gefragt würde, den er
+     * aufschreibt, finge an wegzuklicken - und die eine Zustimmung, die
+     * zählt, wäre entwertet.
+     */
+    // Der Schreiberschlüssel liegt beim Daemon, nicht daneben: das ist der
+    // ganze Punkt dieser Familie.
+    const { daemon, audit } = await startDaemon([ownerIdentity, ownerAgreement, writerSigning]);
+    const identityHold = await holdUnlock(daemon, ownerIdentity);
+    await holdUnlock(daemon, ownerAgreement);
+    await holdUnlock(daemon, writerSigning);
+    const consumer = await openClient(daemon);
+    const domainRecord = localDomain();
+
+    const { waiting } = await startApprovalWait(identityHold, audit);
+    const granting = consumer.ceremonyCreateWriterGrant({
+      signerKeyFingerprintHex: ownerIdentity.result.keyFingerprintHex,
+      domainRecord: domainRecord as never,
+      rotationRecords: [],
+      writerDeviceSigningKeyRecord: {
+        suite: picoIdentitySuite,
+        keyRole: 'device_signing',
+        publicKeyHex: writerSigning.result.publicKeyHex,
+      },
+      writerGrantId: 'ms_writer_grant_0003',
+      writerIdentityKeyFingerprintHex: ownerIdentity.result.keyFingerprintHex,
+      validFrom: '2026-07-27T10:00:00.000Z',
+      validUntil: '2027-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000005',
+    } as never);
+    const pending = await waiting;
+    await identityHold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: true,
+    });
+    const writerGrantRecord = (await granting).writerGrantRecord;
+
+    const { itemRecord } = await consumer.readerCustodyEncryptItem({
+      agreementKeyFingerprintHex: ownerAgreement.result.keyFingerprintHex,
+      writerSigningKeyFingerprintHex: writerSigning.result.keyFingerprintHex,
+      domainRecord: domainRecord as never,
+      writerGrantRecord,
+      packageId: 'ms_package_0003',
+      memoryItemId: 'ms_memory_0003',
+      contentType: 'text/plain',
+      plaintext: PLAINTEXT,
+      createdAt: '2026-07-27T10:05:00.000Z',
+    });
+
+    // Es trägt: was der Daemon verschlüsselt hat, öffnet sich mit dem Schlüssel
+    // des Besitzers - und keine zweite Zustimmung war nötig.
+    expect(decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: openLocal(ownerAgreement),
+      domainRecord,
+      readerGrantRecord: undefined as never,
+      writerGrantRecord: writerGrantRecord as never,
+      itemRecord: itemRecord as never,
+    })).toBe(PLAINTEXT);
+
+    const auditText = audit.join('');
+    expect(auditText.split('"event":"approval_decided"').length - 1).toBe(1);
+    // **Das Protokoll streift den Klartext nicht.** Eine Zeile, die ihn
+    // nennte, machte die Grenze darüber eine Ebene tiefer wieder auf.
+    expect(auditText).not.toContain(PLAINTEXT);
+    expect(auditText).toContain('"event":"reader_custody_item_encrypted","outcome":"ok"');
+  }, 60_000);
+
+  it('lehnt das Verschlüsseln mit der falschen Rolle ab, bevor es beginnt', async () => {
+    // Eine Verschlüsselung, die mit der falschen Rolle anfängt, scheitert
+    // später und sagt dann etwas über den Inhalt, obwohl der nie das Problem
+    // war. Die Rolle wird deshalb zuerst geprüft.
+    const { daemon } = await startDaemon();
+    await holdUnlock(daemon, ownerIdentity);
+    await holdUnlock(daemon, ownerAgreement);
+    const consumer = await openClient(daemon);
+
+    await expect(consumer.readerCustodyEncryptItem({
+      // Die Identitätswurzel statt der Schlüsselvereinbarung.
+      agreementKeyFingerprintHex: ownerIdentity.result.keyFingerprintHex,
+      writerSigningKeyFingerprintHex: ownerIdentity.result.keyFingerprintHex,
+      domainRecord: localDomain() as never,
+      writerGrantRecord: {},
+      packageId: 'ms_package_0004',
+      memoryItemId: 'ms_memory_0004',
+      contentType: 'text/plain',
+      plaintext: PLAINTEXT,
+      createdAt: '2026-07-27T10:05:00.000Z',
+    })).rejects.toThrow('key_role_cannot_open_envelope');
+  }, 60_000);
+
   it('routes the approval to the signing key holder, not another holder', async () => {
     const { daemon, audit } = await startDaemon(undefined, 400);
     const identityHold = await holdUnlock(daemon, ownerIdentity);

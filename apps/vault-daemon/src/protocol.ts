@@ -53,6 +53,19 @@ export const picoVaultDaemonRequestFamilies = {
    * Zustimmung da.
    */
   ceremonyCreateWriterGrant: 'pico.vault.daemon.ceremony.create-writer-grant.v1',
+  /**
+   * ADR 0086 mit ADR 0094. Eine Erinnerung unter Reader-Custody schreiben.
+   *
+   * **Eine Familie und keine Zeremonie**, und der Unterschied ist ADR 0099s:
+   * eine Zeremonie erzeugt Autorität, das hier benutzt sie. Wer bei jedem Satz
+   * gefragt würde, den er aufschreibt, hörte auf zu fragen und fing an
+   * wegzuklicken - und die eine Zustimmung, die zählt, wäre entwertet.
+   *
+   * Sie läuft hier, weil der KEK hier bleibt: das Verschlüsseln öffnet ihn aus
+   * dem Umschlag des Besitzers, und ein Aufrufer, der ihn bekäme, hielte den
+   * Schlüssel zu allem in dieser Domäne, um einen Satz zu schreiben.
+   */
+  readerCustodyEncryptItem: 'pico.vault.daemon.reader-custody.encrypt-item.v1',
   ceremonyIssueRecoveryCard: 'pico.vault.daemon.ceremony.issue-recovery-card.v1',
   recoveryBootstrap: 'pico.vault.daemon.recovery.bootstrap.v1',
   /**
@@ -335,6 +348,30 @@ export interface PicoVaultDaemonCeremonyCreateWriterGrantResult {
 }
 
 /**
+ * ADR 0086 mit ADR 0094. Was hineingeht, um eine Erinnerung zu schreiben.
+ *
+ * Der Klartext reist zum Daemon und nicht der Schlüssel zum Aufrufer - das ist
+ * die Richtung, in der ADR 0094 diese Grenze zieht.
+ */
+export interface PicoVaultDaemonReaderCustodyEncryptItemRequest {
+  family: typeof picoVaultDaemonRequestFamilies.readerCustodyEncryptItem;
+  requestId: string;
+  agreementKeyFingerprintHex: string;
+  writerSigningKeyFingerprintHex: string;
+  domainRecord: Record<string, unknown>;
+  writerGrantRecord: Record<string, unknown>;
+  packageId: string;
+  memoryItemId: string;
+  contentType: string;
+  plaintext: string;
+  createdAt: string;
+}
+
+export interface PicoVaultDaemonReaderCustodyEncryptItemResult {
+  itemRecord: Record<string, unknown>;
+}
+
+/**
  * ADR 0110's one named seed-export exception. The mandatory PIN enters only
  * this approval-bound issuance frame and is neither rendered nor audited.
  */
@@ -482,6 +519,7 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonCeremonyRotateDomainRequest
   | PicoVaultDaemonCeremonyCreateReaderGrantRequest
   | PicoVaultDaemonCeremonyCreateWriterGrantRequest
+  | PicoVaultDaemonReaderCustodyEncryptItemRequest
   | PicoVaultDaemonCeremonyIssueRecoveryCardRequest
   | PicoVaultDaemonRecoveryBootstrapRequest
   | PicoVaultDaemonFoundingBootstrapRequest
@@ -977,6 +1015,33 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         ...(parsed.receivedAt === undefined
           ? {}
           : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.readerCustodyEncryptItem: {
+      assertExactKeys(parsed, [
+        'family', 'requestId', 'agreementKeyFingerprintHex',
+        'writerSigningKeyFingerprintHex', 'domainRecord', 'writerGrantRecord',
+        'packageId', 'memoryItemId', 'contentType', 'plaintext', 'createdAt',
+      ]);
+      if (typeof parsed.plaintext !== 'string') {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.readerCustodyEncryptItem,
+        requestId,
+        agreementKeyFingerprintHex: requireFingerprintHex(parsed, 'agreementKeyFingerprintHex'),
+        writerSigningKeyFingerprintHex:
+          requireFingerprintHex(parsed, 'writerSigningKeyFingerprintHex'),
+        domainRecord: requireRecord(parsed, 'domainRecord'),
+        writerGrantRecord: requireRecord(parsed, 'writerGrantRecord'),
+        packageId: requireBoundedString(parsed, 'packageId'),
+        memoryItemId: requireBoundedString(parsed, 'memoryItemId'),
+        contentType: requireBoundedString(parsed, 'contentType'),
+        // Nicht `requireBoundedString`: der Klartext ist der Inhalt, und seine
+        // Grenze ist die des Rahmens - eine zweite hier wäre eine Zahl, die
+        // niemand entschieden hat.
+        plaintext: parsed.plaintext,
+        createdAt: requireBoundedString(parsed, 'createdAt'),
       };
     }
     case picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant: {

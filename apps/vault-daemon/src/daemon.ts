@@ -8,6 +8,7 @@ import {
   createPicoReaderCustodyDomain,
   createPicoReaderCustodyReaderGrant,
   createPicoReaderCustodyWriterGrant,
+  encryptPicoReaderCustodyItem,
   createPicoVaultReaderCustodySyncAccessSession,
   openPicoVaultKeyfile,
   picoVaultCanSignLabel,
@@ -689,6 +690,69 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             }) as unknown as Record<string, unknown>,
           }),
         });
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.readerCustodyEncryptItem: {
+        /**
+         * ADR 0086 mit ADR 0094. Der Klartext kommt herein, der KEK bleibt.
+         *
+         * Zwei Sitzungen, beide entsperrt: die Schlüsselvereinbarung öffnet
+         * den KEK aus dem Umschlag des Besitzers, die Signaturschlüssel
+         * unterschreibt das Item. Rollen werden geprüft, bevor irgendetwas
+         * geschieht - eine Verschlüsselung, die mit der falschen Rolle
+         * beginnt, scheitert später und sagt dann etwas über den Inhalt,
+         * obwohl der nie das Problem war.
+         */
+        const agreement = this.#requireUnlocked(
+          socket, request.requestId, request.agreementKeyFingerprintHex,
+        );
+        if (agreement === null) {
+          return;
+        }
+        if (agreement.keyRole !== 'device_key_agreement') {
+          this.#respondError(socket, request.requestId, 'key_role_cannot_open_envelope');
+          return;
+        }
+        const writer = this.#requireUnlocked(
+          socket, request.requestId, request.writerSigningKeyFingerprintHex,
+        );
+        if (writer === null) {
+          return;
+        }
+        if (writer.keyRole !== 'device_signing') {
+          this.#respondError(socket, request.requestId, 'key_role_cannot_sign');
+          return;
+        }
+        try {
+          const itemRecord = encryptPicoReaderCustodyItem(this.#sodium, {
+            readerKeyAgreementSession: agreement.session,
+            writerSigningSession: writer.session,
+            domainRecord: request.domainRecord as never,
+            writerGrantRecord: request.writerGrantRecord as never,
+            packageId: request.packageId,
+            memoryItemId: request.memoryItemId,
+            contentType: request.contentType,
+            plaintext: request.plaintext,
+            createdAt: request.createdAt,
+          });
+          /**
+           * Der Prüfeintrag nennt, welches Item - und nie, was darin steht.
+           * Ein Protokoll, das den Klartext streift, macht aus der Grenze
+           * oben eine Zeile weiter unten wieder auf.
+           */
+          this.#audit('reader_custody_item_encrypted', {
+            outcome: 'ok',
+            memoryItemId: request.memoryItemId,
+            contentType: request.contentType,
+          });
+          this.#respondOk(socket, request.requestId, {
+            itemRecord: itemRecord as unknown as Record<string, unknown>,
+          });
+        } catch (refused) {
+          const reason = refused instanceof Error ? refused.message : 'encrypt_failed';
+          this.#audit('reader_custody_item_encrypted', { outcome: 'error', reason });
+          this.#respondError(socket, request.requestId, reason);
+        }
         return;
       }
       case picoVaultDaemonRequestFamilies.readerAccessOpen: {
