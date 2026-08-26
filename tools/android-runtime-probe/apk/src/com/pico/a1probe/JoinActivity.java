@@ -51,6 +51,8 @@ public final class JoinActivity extends Activity {
   private Button send;
   private TextView status;
   private TextView condition;
+  private TextView due;
+  private Button seen;
   private Button scan;
 
   private LocalSocket socket;
@@ -96,6 +98,8 @@ public final class JoinActivity extends Activity {
      */
     if (new java.io.File(getFilesDir(), "profile.json").isFile()) {
       startForegroundService(new Intent(this, ReachabilityConditionService.class));
+      // ADR 0118 O1. Dasselbe Vorher: ohne Profil gäbe es kein Home zu fragen.
+      startForegroundService(new Intent(this, DueEntriesService.class));
     }
     final android.os.Handler handler = new android.os.Handler(getMainLooper());
     handler.postDelayed(new Runnable() {
@@ -110,9 +114,39 @@ public final class JoinActivity extends Activity {
             // ist hier richtiger als etwas zu erfinden.
           }
         }
+        showDue();
         handler.postDelayed(this, 5_000);
       }
     }, 3_000);
+  }
+
+  /**
+   * ADR 0118 O1. Zeigt, was der Kern geschrieben hat - und den Knopf nur, wenn
+   * es etwas zu quittieren gibt.
+   *
+   * Leer heißt leer: eine Zeile wie „nichts steht an" wäre eine zweite
+   * Aussage, die niemand entschieden hat, und ein Knopf ohne Eintrag böte eine
+   * Handlung an, die nichts tut.
+   */
+  private void showDue() {
+    java.io.File written = new java.io.File(getFilesDir(), "entries.txt");
+    String words = "";
+    if (written.isFile()) {
+      try {
+        words = new String(
+          java.nio.file.Files.readAllBytes(written.toPath()), "UTF-8").trim();
+      } catch (java.io.IOException unreadable) {
+        // Unlesbar ist keine Aussage über Termine. Nichts zeigen ist richtiger
+        // als etwas erfinden.
+        return;
+      }
+    }
+    due.setText(words);
+    seen.setVisibility(words.isEmpty() ? View.GONE : View.VISIBLE);
+    if (!words.isEmpty()) {
+      // Ein neuer Eintrag nach einer Quittung: der Knopf gehört wieder ihm.
+      seen.setEnabled(true);
+    }
   }
 
   private View buildView() {
@@ -183,6 +217,32 @@ public final class JoinActivity extends Activity {
      */
     condition = text(column, 13, Color.parseColor("#d29922"), Typeface.DEFAULT);
     condition.setText("");
+
+    /**
+     * ADR 0118 O1. Was fällig ist - der erste Grund, dieses Ding dabeizuhaben.
+     *
+     * Auch dieser Satz kommt fertig aus dem Kern: dieselbe Funktion, aus der
+     * der Desktop seine Benachrichtigung baut. Zwei Flächen, ein Wortlaut -
+     * die Drift, die `check-one-voice` beim Beitritt gemessen hat, fängt genau
+     * so an.
+     */
+    due = text(column, 15, Color.parseColor("#e6edf3"), Typeface.DEFAULT_BOLD);
+    due.setText("");
+
+    /**
+     * **Der Knopf ist die Quittung**, nicht das Anzeigen. Nur ein Gerät kann
+     * sagen, dass es jemanden erreicht hat, und eine geschriebene Datei ist
+     * kein gesehener Satz. Wer nichts drückt, bekommt den Eintrag wieder:
+     * Wiederholung ist der laute Fehlschlag, Schweigen der leise.
+     */
+    seen = new Button(this);
+    seen.setText("I have seen this");
+    seen.setVisibility(View.GONE);
+    seen.setOnClickListener(view -> {
+      seen.setEnabled(false);
+      startForegroundService(new Intent(this, DueEntryAcknowledgeService.class));
+    });
+    column.addView(seen, wide());
 
     ScrollView scroller = new ScrollView(this);
     scroller.addView(column);

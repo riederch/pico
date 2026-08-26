@@ -25,7 +25,7 @@ public final class NodeRuntime {
    * or a socket would be a second rule beside the system's.
    */
   public static void runScript(final String script, final String outPath,
-      final String... scriptArguments) {
+      final Runnable whenFinished, final String... scriptArguments) {
     // The preload is the embedder's half of hosting Node 18: the webcrypto
     // global that newer runtimes bring themselves.
     final String preload = new java.io.File(
@@ -39,6 +39,9 @@ public final class NodeRuntime {
     new Thread(new Runnable() {
       @Override public void run() {
         startNode(argv, outPath);
+        // Zurückgekehrt heißt fertig. Wer darauf wartet, entscheidet, was das
+        // bedeutet - hier wird nichts angenommen.
+        whenFinished.run();
       }
     }, "pico-node").start();
   }

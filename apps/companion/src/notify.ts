@@ -1,3 +1,4 @@
+import type { PicoHomeDueEntriesView } from '@pico/protocol/time-bound-entry';
 import { execFile } from 'node:child_process';
 import type {
   PicoCompanionClockDivergenceAlarm,
@@ -149,3 +150,48 @@ export function createLinuxNotifySendAdapter(
   };
 }
 
+/**
+ * ADR 0118 O1 mit ADR 0131. Was einer Person gesagt wird, wenn etwas fällig
+ * ist - **einmal geschrieben, für jede Fläche**.
+ *
+ * Bis zum 2026-08-26 stand dieser Satz im Electron-Adapter, also in einer
+ * Schale. Das war richtig, solange es eine Fläche gab; sobald das Telefon
+ * dieselbe Nachricht zeigt, ist es die Drift, vor der `check-one-voice`
+ * warnt - dort für den Beitritt gemessen, hier für den Termin. Die Fläche
+ * zeigt an, was hier steht, und setzt nichts zusammen.
+ *
+ * **Ein Termin, und es ist der genannte.** Die anderen wurden gezählt, nicht
+ * gezeigt: einen als mitgeteilt zu markieren, dessen Kennung die Person nie
+ * gesehen hat, nähme ihn dauerhaft aus dem Angebot.
+ *
+ * **Der Titel ist nur da, wo dieses Gerät die Domäne lesen darf.** Die beiden
+ * Formen sind keine Formatierungsfrage, sondern das, was die Custody-Regeln
+ * zugelassen haben. „Sieh in deinem Home nach" ist die ehrliche Auskunft, wenn
+ * die Worte zurückgehalten wurden; ein Platzhalter, der sich wie ein Titel
+ * läse, wäre es nicht.
+ */
+export function renderPicoCompanionDueEntries(
+  view: PicoHomeDueEntriesView,
+): { title: string; body: string; memoryItemId: string } | null {
+  if (view.entries.length === 0) {
+    return null;
+  }
+  const oldest = view.entries.reduce((left, right) =>
+    (Date.parse(left.dueAt) <= Date.parse(right.dueAt) ? left : right));
+  // ADR 0127 M5. Wie viele fällig sind, nicht wie viele aufgelistet wurden.
+  // Der Home deckelt die Liste; wer „50 Einträge sind fällig" liest, während
+  // sechzig es sind, liest eine Tatsache über den Deckel.
+  const count = view.total;
+  const named = oldest.title;
+  return {
+    title: count === 1
+      ? (named ?? 'Something you asked for is due')
+      : `${count} entries are due`,
+    body: named === undefined
+      ? `The oldest was due at ${picoDisplayInstant(oldest.dueAt)}. Open your Pico Home to see `
+        + 'what it is - this device was not given the words, only that an '
+        + 'entry is waiting.'
+      : `Due at ${picoDisplayInstant(oldest.dueAt)}.${count === 1 ? '' : ` ${count - 1} more waiting.`}`,
+    memoryItemId: oldest.memoryItemId,
+  };
+}

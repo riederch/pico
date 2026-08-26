@@ -13,6 +13,7 @@ import {
 } from '@pico/companion/host-repin';
 import {
   renderPicoCompanionClockDivergenceAlarm,
+  renderPicoCompanionDueEntries,
   renderPicoCompanionHostContinuityAlarm,
   renderPicoCompanionHostRotationNotice,
   renderPicoCompanionPendingRecoveryAlarm,
@@ -158,51 +159,49 @@ export function createPicoCompanionPresentationAdapter(
      * does not.
      */
     reportDueEntries: async (view) => {
-      if (view.entries.length === 0) {
+      /**
+       * **Die Worte kommen aus dem schalenfreien Kern**, seit dem 2026-08-26.
+       * Sie standen bis dahin hier, was richtig war, solange es eine Fläche
+       * gab - und genau die Drift geworden wäre, die `check-one-voice` beim
+       * Beitritt gemessen hat, sobald das Telefon dieselbe Nachricht zeigt.
+       * Diese Datei entscheidet noch, *wie dringend* es aussieht und ob es
+       * etwas verdrängen darf; was dasteht, entscheidet sie nicht.
+       */
+      const rendered = renderPicoCompanionDueEntries(view);
+      if (rendered === null) {
+        /**
+         * Eine leere Liste löscht die Anzeige nur, wenn gerade dies angezeigt
+         * wird. Eine Freigabe oder eine wartende Wiederherstellung zu
+         * überschreiben, weil nichts fällig ist, ersetzte etwas, das eine
+         * Entscheidung braucht, durch etwas, das keine braucht.
+         */
         if (currentKind === 'time_bound_entry_due') {
           await publish(picoCompanionIdlePresentation(now()), false);
         }
         return { told: [] };
       }
-      const oldest = view.entries.reduce((left, right) =>
-        (Date.parse(left.dueAt) <= Date.parse(right.dueAt) ? left : right));
-      // ADR 0127 M5. How many are due, not how many were listed. The Home caps
-      // the list; a person told "50 entries are due" when sixty are would be
-      // reading a fact about the cap.
-      const count = view.total;
-      // The title is present only where this device may read that domain, so
-      // the two shapes are not a formatting choice - they are what the custody
-      // rules allowed. Saying "open your Home to see what" when the words were
-      // withheld is the honest fallback; inventing a placeholder that read like
-      // a title would not be.
-      const named = oldest.title;
+      const { memoryItemId, ...words } = rendered;
       await publish({
         kind: 'time_bound_entry_due',
         severity: 'warning',
         symbol: '!',
         decision: 'none',
-        title: count === 1
-          ? (named ?? 'Something you asked for is due')
-          : `${count} entries are due`,
-        body: named === undefined
-          ? `The oldest was due at ${picoDisplayInstant(oldest.dueAt)}. Open your Pico Home to see `
-            + 'what it is - this device was not given the words, only that an '
-            + 'entry is waiting.'
-          : `Due at ${picoDisplayInstant(oldest.dueAt)}.${count === 1 ? '' : ` ${count - 1} more waiting.`}`,
+        ...words,
         observedAt: now().toISOString(),
       }, true);
       /**
-       * **One entry, and it is the one that was named.** The others were
-       * counted, not shown: marking them told would retire entries whose
-       * identity the person never saw, and they would never be offered again.
-       * Each gets its turn on a later check, which is the loud failure rather
-       * than the quiet one.
+       * **Ein Termin, und es ist der genannte.** Die anderen wurden gezählt,
+       * nicht gezeigt - einen als mitgeteilt zu markieren, dessen Kennung die
+       * Person nie gesehen hat, nähme ihn dauerhaft aus dem Angebot. Jeder
+       * kommt bei einer späteren Prüfung dran, was der laute Fehlschlag ist
+       * statt des leisen.
        *
-       * This is after the publish, so a surface that could not take the
-       * presentation acknowledges nothing - the exact trap the scheduler fell
-       * into when it marked an entry raised and then called a surface.
+       * Nach dem Veröffentlichen, damit eine Fläche, die die Anzeige nicht
+       * annehmen konnte, nichts quittiert - genau die Falle, in die der
+       * Scheduler lief, als er einen Eintrag als geweckt markierte und danach
+       * eine Fläche rief.
        */
-      return { told: [oldest.memoryItemId] };
+      return { told: [memoryItemId] };
     },
     notifyPendingRecovery: async (alarm: PicoCompanionPendingRecoveryAlarm) => {
       const rendered = renderPicoCompanionPendingRecoveryAlarm(alarm);

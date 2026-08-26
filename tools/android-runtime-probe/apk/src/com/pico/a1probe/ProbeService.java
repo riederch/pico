@@ -21,6 +21,29 @@ public abstract class ProbeService extends Service {
   protected abstract String log();
 
   /**
+   * Ob dieser Dienst weiterläuft, wenn sein Skript fertig ist.
+   *
+   * **Am 2026-08-26 auf dem Bildschirm gefunden.** `nodejs-mobile` hält eine
+   * Node-Instanz je Prozess, also darf ein Skript je Prozess einmal laufen -
+   * das ist der `started`-Wächter unten. Zusammen mit `START_STICKY` hieß das
+   * aber: der Dienst überlebt seinen Lauf, jeder spätere Start ist stillschweigend
+   * wirkungslos, und die Datei, die er geschrieben hat, bleibt stehen.
+   *
+   * Auf dem Telefon stand daraufhin „dein Home antwortet nicht" - richtig um
+   * 09:02, als es wirklich nicht antwortete - direkt über einem Termin, den
+   * dasselbe Home um 09:09 herausgegeben hatte. Zwei Aussagen über dasselbe,
+   * eine davon alt, und nichts, das die alte zurücknimmt. Genau die
+   * Verwechslung, die ADR 0118 O4 zwischen „nichts wartet" und „niemand hat
+   * nachgesehen" verbietet, nur eine Ebene tiefer: hier hatte jemand
+   * nachgesehen, und die Antwort war von gestern.
+   *
+   * Ein Lauf ist deshalb ein Lauf: wenn das Skript zurückkehrt, endet der
+   * Prozess, und der nächste Start bekommt einen frischen. Wer wohnen bleibt -
+   * der Vault-Daemon, dessen Skript nie zurückkehrt - sagt es hier.
+   */
+  protected boolean staysResident() { return false; }
+
+  /**
    * ADR 0131 A3. Ob dieser Dienst den Plattform-Keystore anbietet.
    *
    * Nur der Beitritt braucht ihn, weil nur dort eine Passphrase entsteht. Ein
@@ -71,9 +94,23 @@ public abstract class ProbeService extends Service {
       NodeRuntime.runScript(
         new File(files, script()).getAbsolutePath(),
         new File(files, log()).getAbsolutePath(),
+        () -> {
+          if (!staysResident()) {
+            /**
+             * **Der Prozess endet, nicht nur der Dienst.** `stopSelf()` allein
+             * ließe die Node-Instanz im Prozess stehen, und der nächste Start
+             * fände denselben Prozess mit derselben verbrauchten Instanz vor -
+             * die Lage, aus der dieser Kommentar entstanden ist.
+             */
+            stopSelf();
+            System.exit(0);
+          }
+        },
         scriptArguments());
     }
-    return START_STICKY;
+    // Nicht klebrig, weil ein Lauf kein Bewohner ist: ein Dienst, den Android
+    // nach dem Ende neu startet, liefe sein Skript in einer Schleife.
+    return staysResident() ? START_STICKY : START_NOT_STICKY;
   }
 
   @Override public IBinder onBind(Intent intent) { return null; }

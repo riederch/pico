@@ -2,6 +2,34 @@
 
 ## Status
 
+Status note, 2026-08-26: **O1 hat seine zweite Fläche, und sie ist ein
+Telefon.** `home.time_bound_entries.read` und `home.time_bound_entry.acknowledge`
+gab es seit langem; was fehlte, war ein Client, der beides benutzt, wo eine
+Person hinsieht. Auf einem A34 gemessen: null fällige Einträge ergeben eine
+leere Fläche, ein fälliger den Satz, den der Kern schreibt - ohne Titel, weil
+dieses Gerät die Domäne nicht lesen darf, und mit der Auskunft, dass das so
+ist.
+
+**Die Quittung kommt vom Knopf.** O1 sagt, nur ein Gerät kann sagen, dass es
+jemanden erreicht hat; eine geschriebene Datei ist kein gesehener Satz, und ein
+Skript, das nach dem Schreiben quittiert, ist genau die Falle, an der der
+Scheduler eine Zusage still verloren hat. Der Eintrag bleibt offen, bis ein
+Mensch drückt.
+
+**Und die Worte gehören jetzt dem schalenfreien Kern.**
+`renderPicoCompanionDueEntries` stand als Fließtext im Electron-Adapter, was
+richtig war, solange es eine Fläche gab. Ab der zweiten ist es die Drift, die
+`check-one-voice` beim Beitritt gemessen hat - dort elf Schritte gegen fünf,
+hier ein Satz, der sich unbemerkt verdoppelt hätte.
+
+**O4 eine Ebene tiefer, am selben Tag gefunden.** Auf dem Bildschirm stand „dein
+Home antwortet nicht" über einem Termin, den dasselbe Home sieben Minuten
+später herausgegeben hatte. Nicht falsch gemessen - richtig gemessen und nie
+zurückgenommen: der Android-Dienst lief einmal je Prozess und überlebte seinen
+Lauf, also blieb seine Datei liegen und las sich wie heute. „Nichts wartet" und
+„niemand hat nachgesehen" sind verschiedene Auskünfte, und „jemand hat
+nachgesehen, vorgestern" ist eine dritte.
+
 Status note, 2026-08-11: reading an attached ADR 0136 library belongs to
 `local_recall` rather than to a seventh family. The family already
 promises finding and reading what is already on the device, and a

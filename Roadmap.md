@@ -756,11 +756,64 @@ Hängt vollständig an Phase 3.
 
 - **ADR 0129 SR5-Erfassung** auf dem Telefon — der Sensoradapter hinter dem Port,
   der seit SR5 deklariert und leer ist.
-- **Termine auf dem Telefon** — `home.time_bound_entries.read` und die
-  Quittierung über die vorhandene Link-Operation.
+- ~~**Termine auf dem Telefon**~~ — **erledigt am 2026-08-26, am Gerät
+  bewiesen.** `entries.mjs` fragt `home.time_bound_entries.read` über den
+  authentifizierten Link, `renderPicoCompanionDueEntries` schreibt den Satz,
+  und der Bildschirm zeigt ihn an, ohne etwas zusammenzusetzen. Gemessen auf
+  einem A34: null fällige Einträge ergeben eine leere Fläche, ein fälliger
+  ergibt *„Something you asked for is due — The oldest was due at 2026-08-26
+  07:30. Open your Pico Home to see what it is — this device was not given the
+  words, only that an entry is waiting."* Der Titel fehlt, weil dieses Gerät
+  die Domäne nicht lesen darf; die Fläche sagt das, statt einen Platzhalter zu
+  zeigen.
+
+  **Die Quittung kommt vom Knopf, nicht vom Schreiben der Datei.** ADR 0118 O1
+  sagt, nur ein Gerät kann sagen, dass es jemanden erreicht hat — und eine
+  geschriebene Datei ist kein gesehener Satz. Wer nichts drückt, bekommt den
+  Eintrag wieder. Ganzer Kreis am Gerät gelaufen: fällig → angezeigt →
+  quittiert → beim nächsten Lesen nichts mehr fällig.
+
+  **Der Satz gehört jetzt dem schalenfreien Kern.** Er stand im
+  Electron-Adapter, was richtig war, solange es eine Fläche gab; ab der zweiten
+  ist es die Drift, die `check-one-voice` beim Beitritt gemessen hat. Beide
+  Flächen lesen dieselbe Funktion.
 
 Das ist der Punkt, an dem jemand das Ding vermissen würde, wenn man es wegnimmt.
 Die Zielmarke endet hier.
+
+**B23 — Ein Dienst lief einmal je Prozess, und der Bildschirm zeigte Vorgestern
+(2026-08-26).** Beim Messen dreimal darüber gestolpert, dann auf dem Telefon
+gesehen, warum es zählt: über dem eben gelesenen Termin stand *„Home not
+reached — Your Home is not answering"*. Beide Sätze über dasselbe Home, einer
+von 09:02 und einer von 09:09, und nichts, das den alten zurücknimmt.
+
+Die Ursache sitzt in `ProbeService`: `nodejs-mobile` hält eine Node-Instanz je
+Prozess, also darf ein Skript je Prozess einmal laufen — das ist der
+`started`-Wächter. Zusammen mit `START_STICKY` hieß das, dass der Dienst seinen
+Lauf überlebt und **jeder spätere Start stillschweigend wirkungslos** ist. Die
+Datei von damals bleibt liegen und liest sich wie heute. Dieselbe Verwechslung,
+die ADR 0118 O4 verbietet, eine Ebene tiefer: hier hatte jemand nachgesehen,
+und die Antwort war von gestern.
+
+Ein Lauf ist jetzt ein Lauf: kehrt das Skript zurück, endet der Prozess, und
+der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
+`CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
+`ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
+`System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B24 — `ensureUnlocked` scheiterte daran, dass schon entsperrt war
+(2026-08-26).** Zwei Sonden starteten zusammen, lasen beide einen leeren
+Vault-Status und entsperrten beide; die zweite bekam `already_unlocked` und
+meldete `read_failed` — von einer Methode, deren Zusage in diesem Moment
+erfüllt war. Die Reihenfolge in `platform-unlock.ts` gilt innerhalb eines
+Prozesses, und auf Android ist jede Sonde ein eigener.
+
+`already_unlocked` nennt genau den Schlüssel, um den es geht; es ist damit
+dieselbe Lage wie der Frühausstieg oben, nur im Wettlauf entstanden. Es wird
+jetzt **nachgesehen statt angenommen**: der Status wird erneut gelesen, und nur
+wenn der Schlüssel wirklich offen ist, gilt der Lauf als gelungen. Ein Erfolg,
+der aus einer Fehlermeldung geschlossen wird, ohne den Zustand zu prüfen, ist
+geraten — beide Richtungen haben einen Test.
 
 ### Aus der Prüfung entstanden
 

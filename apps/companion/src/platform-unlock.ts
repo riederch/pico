@@ -232,7 +232,39 @@ export function createPicoCompanionAutomaticVaultUnlock(input: {
           secrets: input.secrets,
         }, async (passphrase) => {
           for (const target of missing) {
-            const unlocked = await nextHold.unlock({ ...target, passphrase });
+            let unlocked;
+            try {
+              unlocked = await nextHold.unlock({ ...target, passphrase });
+            } catch (refused) {
+              /**
+               * **Zwei Prozesse, ein Daemon** - am Telefon gefunden, 2026-08-26.
+               *
+               * Die Reihenfolge oben gilt innerhalb dieses Prozesses. Auf
+               * Android hält nodejs-mobile eine Node-Instanz je Prozess, also
+               * ist jede Sonde ein eigener: zwei starteten zusammen, lasen
+               * beide einen leeren Status und entsperrten beide. Die zweite
+               * bekam `already_unlocked` und meldete daraufhin einen
+               * Fehlschlag - von einer Methode, die `ensureUnlocked` heißt und
+               * deren Zusage in diesem Moment erfüllt war.
+               *
+               * `already_unlocked` nennt genau diesen Schlüssel. Es ist damit
+               * dieselbe Lage wie der Frühausstieg oben, nur im Wettlauf
+               * entstanden - **und sie wird nachgesehen, nicht angenommen**:
+               * ein Erfolg, der aus einer Fehlermeldung geschlossen wird, ohne
+               * den Zustand zu prüfen, ist geraten.
+               */
+              const named = refused instanceof Error ? refused.message : String(refused);
+              if (!named.includes('already_unlocked')) {
+                throw refused;
+              }
+              const after = await readStatus(connect, input.socketPath);
+              if (!after.sessions.some((session) =>
+                session.keyRole === target.keyRole
+                && session.keyFingerprintHex === target.keyFingerprintHex)) {
+                throw refused;
+              }
+              continue;
+            }
             if (unlocked.keyRole !== target.keyRole
               || unlocked.keyFingerprintHex !== target.keyFingerprintHex) {
               throw new Error('platform_unlock_binding_mismatch');

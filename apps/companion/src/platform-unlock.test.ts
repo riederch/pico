@@ -177,6 +177,90 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
     })).rejects.toThrow('platform_keystore_attestation_unrooted');
   });
 
+  it('nimmt ein verlorenes Wettrennen als das, was es ist - und sieht nach', async () => {
+    /**
+     * **Zwei Prozesse, ein Daemon** - am Telefon gefunden, 2026-08-26.
+     *
+     * Auf Android hält nodejs-mobile eine Node-Instanz je Prozess, also ist
+     * jede Sonde ein eigener Prozess. Zwei starteten zusammen, lasen beide
+     * einen leeren Status und entsperrten beide; die zweite bekam
+     * `already_unlocked` und meldete einen Fehlschlag - von einer Methode, die
+     * `ensureUnlocked` heißt und deren Zusage in diesem Moment erfüllt war.
+     * Auf dem Bildschirm wurde daraus „read_failed".
+     */
+    const path = temporaryPath();
+    await writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets: androidPort('vault passphrase'),
+    });
+    const daemon = fakeDaemon();
+    const racing = {
+      ...daemon,
+      connect: async () => {
+        const client = await daemon.connect();
+        return {
+          ...client,
+          unlock: async (input: {
+            keyRole: 'pico_identity' | 'device_signing' | 'device_key_agreement';
+            keyFingerprintHex: string;
+            passphrase: string;
+          }) => {
+            // Der andere Prozess war schneller: der Schlüssel ist offen, und
+            // dieser Aufruf erfährt es als Fehler.
+            daemon.sessions.push({
+              ...input,
+              publicKeyHex: input.keyRole === 'device_signing' ? 'aa'.repeat(32) : 'bb'.repeat(32),
+            } as never);
+            throw new Error('already_unlocked');
+          },
+        } as unknown as PicoVaultDaemonClient;
+      },
+    };
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      secrets: androidPort('vault passphrase'),
+      connect: racing.connect,
+    });
+
+    await expect(automatic.ensureUnlocked()).resolves.toBeUndefined();
+    await automatic.close();
+  });
+
+  it('meldet ein `already_unlocked` weiter, hinter dem kein offener Schlüssel steht', async () => {
+    // Der Unterschied zwischen nachsehen und annehmen. Ein Erfolg, der aus
+    // einer Fehlermeldung geschlossen wird, ohne den Zustand zu prüfen, ist
+    // geraten - und hier ist nichts offen.
+    const path = temporaryPath();
+    await writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets: androidPort('vault passphrase'),
+    });
+    const daemon = fakeDaemon();
+    const lying = async () => {
+      const client = await daemon.connect();
+      return {
+        ...client,
+        unlock: async () => { throw new Error('already_unlocked'); },
+      } as unknown as PicoVaultDaemonClient;
+    };
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      secrets: androidPort('vault passphrase'),
+      connect: lying,
+    });
+
+    await expect(automatic.ensureUnlocked()).rejects.toThrow('already_unlocked');
+    await automatic.close();
+  });
+
   it('refuses to open what a different keystore level sealed', async () => {
     const path = temporaryPath();
     await writePicoCompanionPlatformUnlock({

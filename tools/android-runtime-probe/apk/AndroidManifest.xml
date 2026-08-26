@@ -92,6 +92,20 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a7_reachability_conditions" />
     </service>
+    <!-- ADR 0118 O1: was faellig ist, und die Quittung dafuer. Zwei Prozesse,
+         weil nodejs-mobile eine Node-Instanz je Prozess haelt - und getrennt
+         voneinander, weil das Lesen einem Takt folgt und die Quittung einem
+         Menschen. -->
+    <service android:name=".DueEntriesService" android:process=":entries"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_o1_due_entries" />
+    </service>
+    <service android:name=".DueEntryAcknowledgeService" android:process=":entryack"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_o1_due_entry_acknowledge" />
+    </service>
     <!-- ADR 0131 A3: no Node, no stage - pure platform API, so it neither
          loads libnode nor shares a process with anything that does. -->
     <service android:name=".KeystoreProbeService" android:process=":keystore"

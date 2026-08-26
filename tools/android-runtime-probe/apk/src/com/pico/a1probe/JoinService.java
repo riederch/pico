@@ -17,6 +17,15 @@ public final class JoinService extends ProbeService {
   @Override protected String log() { return "join.log"; }
 
   /**
+   * **Teilt den Prozess mit der Fläche** (Manifest: kein `android:process`),
+   * weil nodejs-mobile eine Node-Instanz je Prozess hält und die Zeremonie
+   * dieselbe braucht, an der das Fenster hängt. Damit darf hier nichts den
+   * Prozess beenden: `System.exit` nähme das Fenster mitten in einer
+   * Zeremonie mit, auf die ein zweites Gerät wartet.
+   */
+  @Override protected boolean staysResident() { return true; }
+
+  /**
    * ADR 0131 A3: hier entsteht die Passphrase, also hier steht der Keystore
    * offen. Der einzige Dienst, für den das gilt.
    */
