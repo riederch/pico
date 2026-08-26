@@ -39,6 +39,20 @@ export const picoVaultDaemonRequestFamilies = {
   ceremonyCreateDomain: 'pico.vault.daemon.ceremony.create-domain.v1',
   ceremonyRotateDomain: 'pico.vault.daemon.ceremony.rotate-domain.v1',
   ceremonyCreateReaderGrant: 'pico.vault.daemon.ceremony.create-reader-grant.v1',
+  /**
+   * ADR 0086 mit ADR 0101. Wer in eine Domäne schreiben darf.
+   *
+   * **Die vierte Zeremonie, und die ärmste** - sie trägt keinen KEK. Ein
+   * Leser-Grant verpackt den Schlüssel für jemanden, ein Schreib-Grant sagt
+   * nur, wessen Unterschrift das Home an einem Item annimmt. Deshalb verlangt
+   * sie eine Sitzung statt zweier: signieren ja, aufschließen nein.
+   *
+   * Trotzdem eine **Zeremonie** und keine gewöhnliche Familie: sie erzeugt
+   * Autorität (ADR 0099), nämlich die, dass fremde Bytes in eine Domäne
+   * kommen dürfen, die einer Person gehört. Genau dafür ist die eine
+   * Zustimmung da.
+   */
+  ceremonyCreateWriterGrant: 'pico.vault.daemon.ceremony.create-writer-grant.v1',
   ceremonyIssueRecoveryCard: 'pico.vault.daemon.ceremony.issue-recovery-card.v1',
   recoveryBootstrap: 'pico.vault.daemon.recovery.bootstrap.v1',
   /**
@@ -295,6 +309,32 @@ export interface PicoVaultDaemonCeremonyCreateReaderGrantResult {
 }
 
 /**
+ * ADR 0086 mit ADR 0101. Wer in eine Domäne schreiben darf.
+ *
+ * Ohne `agreementKeyFingerprintHex`, und das ist der ganze Unterschied zur
+ * Schwester darüber: ein Schreib-Grant verpackt keinen Schlüssel, er benennt
+ * eine Unterschrift, die das Home künftig annimmt.
+ */
+export interface PicoVaultDaemonCeremonyCreateWriterGrantRequest {
+  family: typeof picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant;
+  requestId: string;
+  signerKeyFingerprintHex: string;
+  domainRecord: Record<string, unknown>;
+  rotationRecords: Record<string, unknown>[];
+  writerDeviceSigningKeyRecord: Record<string, unknown>;
+  writerGrantId: string;
+  writerIdentityKeyFingerprintHex: string;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface PicoVaultDaemonCeremonyCreateWriterGrantResult {
+  writerGrantRecord: Record<string, unknown>;
+}
+
+/**
  * ADR 0110's one named seed-export exception. The mandatory PIN enters only
  * this approval-bound issuance frame and is neither rendered nor audited.
  */
@@ -441,6 +481,7 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonCeremonyCreateDomainRequest
   | PicoVaultDaemonCeremonyRotateDomainRequest
   | PicoVaultDaemonCeremonyCreateReaderGrantRequest
+  | PicoVaultDaemonCeremonyCreateWriterGrantRequest
   | PicoVaultDaemonCeremonyIssueRecoveryCardRequest
   | PicoVaultDaemonRecoveryBootstrapRequest
   | PicoVaultDaemonFoundingBootstrapRequest
@@ -932,6 +973,42 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         remainingReaderGrantRecords: requireRecordArray(parsed, 'remainingReaderGrantRecords'),
         rotationId: requireBoundedString(parsed, 'rotationId'),
         rotatedAt: requireBoundedString(parsed, 'rotatedAt'),
+        lifecycleOrder: requireBoundedString(parsed, 'lifecycleOrder'),
+        ...(parsed.receivedAt === undefined
+          ? {}
+          : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant: {
+      /**
+       * ADR 0086 mit ADR 0101. Ohne `agreementKeyFingerprintHex` und ohne
+       * `firstKekVersion`: ein Schreibrecht verpackt keinen Schlüssel, es
+       * benennt eine Unterschrift. Die Liste sagt das, statt es zu erlauben
+       * und zu ignorieren - ein Feld, das ankommen darf und nichts tut, ist
+       * eine Zusage, die niemand eingelöst hat.
+       */
+      assertExactKeysWithOptional(
+        parsed,
+        [
+          'family', 'requestId', 'signerKeyFingerprintHex', 'domainRecord',
+          'rotationRecords', 'writerDeviceSigningKeyRecord', 'writerGrantId',
+          'writerIdentityKeyFingerprintHex', 'validFrom', 'validUntil',
+          'lifecycleOrder',
+        ],
+        ['receivedAt'],
+      );
+      return {
+        family: picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant,
+        requestId,
+        signerKeyFingerprintHex: requireFingerprintHex(parsed, 'signerKeyFingerprintHex'),
+        domainRecord: requireRecord(parsed, 'domainRecord'),
+        rotationRecords: requireRecordArray(parsed, 'rotationRecords'),
+        writerDeviceSigningKeyRecord: requireRecord(parsed, 'writerDeviceSigningKeyRecord'),
+        writerGrantId: requireBoundedString(parsed, 'writerGrantId'),
+        writerIdentityKeyFingerprintHex:
+          requireFingerprintHex(parsed, 'writerIdentityKeyFingerprintHex'),
+        validFrom: requireBoundedString(parsed, 'validFrom'),
+        validUntil: requireInstant(parsed, 'validUntil'),
         lifecycleOrder: requireBoundedString(parsed, 'lifecycleOrder'),
         ...(parsed.receivedAt === undefined
           ? {}

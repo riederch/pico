@@ -5,6 +5,7 @@ import { picoIdentitySuite } from '@pico/protocol';
 import type {
   PicoReaderCustodyDomainRecord,
   PicoReaderCustodyReaderGrantRecord,
+  PicoReaderCustodyWriterGrantRecord,
 } from '@pico/protocol';
 import {
   createPicoReaderCustodyDomain,
@@ -371,6 +372,93 @@ describe('Two-role reader-grant ceremony (ADR 0102 M4/M5)', () => {
     const auditText = audit.join('');
     expect(auditText.split('"event":"approval_decided"').length - 1).toBe(1);
     expect(auditText).toContain('"event":"ceremony_completed","outcome":"ok"');
+    expect(auditText).not.toContain(PLAINTEXT);
+  }, 60_000);
+
+  it('erteilt ein Schreibrecht unter einer Zustimmung, und ein Item darunter öffnet', async () => {
+    /**
+     * ADR 0086 mit ADR 0101, seit dem 2026-08-26. Der Test daneben baut das
+     * Schreibrecht **lokal** - mit `openLocal(ownerIdentity)` -, weil es dafür
+     * keine Zeremonie gab. Damit unterschrieb, wer den Schlüssel gerade hielt,
+     * und niemand wurde gefragt.
+     *
+     * Ein Schreibrecht erzeugt Autorität: es sagt, dass fremde Bytes in eine
+     * Domäne kommen dürfen, die einer Person gehört. Genau dafür verlangt
+     * ADR 0099 eine Zustimmung, und genau eine.
+     *
+     * **Eine Sitzung statt zweier**, anders als beim Leser-Grant: hier wird
+     * unterschrieben und nichts aufgeschlossen, weil ein Schreibrecht keinen
+     * KEK trägt.
+     */
+    const { daemon, audit } = await startDaemon();
+    const identityHold = await holdUnlock(daemon, ownerIdentity);
+    await holdUnlock(daemon, ownerAgreement);
+    const consumer = await openClient(daemon);
+    const domainRecord = localDomain();
+
+    const { waiting } = await startApprovalWait(identityHold, audit);
+    const granting = consumer.ceremonyCreateWriterGrant({
+      signerKeyFingerprintHex: ownerIdentity.result.keyFingerprintHex,
+      domainRecord: domainRecord as never,
+      rotationRecords: [],
+      writerDeviceSigningKeyRecord: {
+        suite: picoIdentitySuite,
+        keyRole: 'device_signing',
+        publicKeyHex: writerSigning.result.publicKeyHex,
+      },
+      writerGrantId: 'ms_writer_grant_0002',
+      writerIdentityKeyFingerprintHex: ownerIdentity.result.keyFingerprintHex,
+      validFrom: '2026-07-27T10:00:00.000Z',
+      validUntil: '2027-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000004',
+    } as never).catch((error: unknown) => {
+      // Mit Namen scheitern statt als Nullzugriff: ohne diese Zeile las sich
+      // eine abgelehnte Zeremonie als „Cannot read properties of null", und
+      // der Grund - `unknown_request_family` - stand nirgends.
+      throw new Error(`ceremony_rejected:${error instanceof Error ? error.message : String(error)}`);
+    });
+    const pending = await waiting;
+    expect(pending!.label).toBe(picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant);
+    // Der Satz nennt, was danach anders ist - wer schreiben darf und bis wann.
+    expect(pending!.statement).toContain('write into domain ms_domain_0001');
+    expect(pending!.summary).toEqual({
+      domainId: 'ms_domain_0001',
+      writerGrantId: 'ms_writer_grant_0002',
+      historicalVersions: 0,
+    });
+    await identityHold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: true,
+    });
+
+    const writerGrantRecord =
+      (await granting).writerGrantRecord as unknown as PicoReaderCustodyWriterGrantRecord;
+
+    // Und es trägt: ein Item, das unter diesem Recht geschrieben wurde, öffnet
+    // sich für einen Leser der Domäne. Ein Recht, das nur gut aussieht, wäre
+    // an dieser Zeile gescheitert.
+    const itemRecord = encryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: openLocal(ownerAgreement),
+      writerSigningSession: openLocal(writerSigning),
+      domainRecord,
+      writerGrantRecord,
+      packageId: 'ms_package_0002',
+      memoryItemId: 'ms_memory_0002',
+      contentType: 'text/plain',
+      plaintext: PLAINTEXT,
+      createdAt: '2026-07-27T10:03:00.000Z',
+    });
+    expect(decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: openLocal(ownerAgreement),
+      domainRecord,
+      readerGrantRecord: undefined as never,
+      writerGrantRecord,
+      itemRecord,
+    })).toBe(PLAINTEXT);
+
+    const auditText = audit.join('');
+    expect(auditText.split('"event":"approval_decided"').length - 1).toBe(1);
     expect(auditText).not.toContain(PLAINTEXT);
   }, 60_000);
 

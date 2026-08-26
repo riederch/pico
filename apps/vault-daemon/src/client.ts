@@ -12,6 +12,8 @@ import {
   type PicoVaultDaemonCeremonyCreateDomainRequest,
   type PicoVaultDaemonCeremonyCreateDomainResult,
   type PicoVaultDaemonCeremonyCreateReaderGrantRequest,
+  type PicoVaultDaemonCeremonyCreateWriterGrantRequest,
+  type PicoVaultDaemonCeremonyCreateWriterGrantResult,
   type PicoVaultDaemonCeremonyCreateReaderGrantResult,
   type PicoVaultDaemonCeremonyIssueRecoveryCardRequest,
   type PicoVaultDaemonCeremonyIssueRecoveryCardResult,
@@ -60,6 +62,10 @@ export interface PicoVaultDaemonClient {
   ceremonyCreateReaderGrant(
     input: Omit<PicoVaultDaemonCeremonyCreateReaderGrantRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonCeremonyCreateReaderGrantResult>;
+  /** ADR 0086 mit ADR 0101. Wer in eine Domäne schreiben darf. */
+  ceremonyCreateWriterGrant(
+    input: Omit<PicoVaultDaemonCeremonyCreateWriterGrantRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonCeremonyCreateWriterGrantResult>;
   ceremonyIssueRecoveryCard(
     input: Omit<PicoVaultDaemonCeremonyIssueRecoveryCardRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonCeremonyIssueRecoveryCardResult>;
@@ -205,6 +211,10 @@ export async function connectPicoVaultDaemonClient(
       family: picoVaultDaemonRequestFamilies.ceremonyRotateDomain,
       ...ceremonyInput,
     }) as unknown as PicoVaultDaemonCeremonyRotateDomainResult,
+    ceremonyCreateWriterGrant: async (ceremonyInput) => await request({
+      family: picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant,
+      ...ceremonyInput,
+    }) as unknown as PicoVaultDaemonCeremonyCreateWriterGrantResult,
     ceremonyCreateReaderGrant: async (ceremonyInput) => await request({
       family: picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant,
       ...ceremonyInput,

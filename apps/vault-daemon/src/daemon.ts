@@ -7,6 +7,7 @@ import {
   createPicoVaultKeyfile,
   createPicoReaderCustodyDomain,
   createPicoReaderCustodyReaderGrant,
+  createPicoReaderCustodyWriterGrant,
   createPicoVaultReaderCustodySyncAccessSession,
   openPicoVaultKeyfile,
   picoVaultCanSignLabel,
@@ -647,6 +648,40 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
               readerDelegationId: request.readerDelegationId,
               accessMode: request.accessMode as never,
               firstKekVersion: request.firstKekVersion,
+              validFrom: request.validFrom,
+              validUntil: request.validUntil,
+              lifecycleOrder: request.lifecycleOrder,
+              ...(request.receivedAt === undefined ? {} : { receivedAt: request.receivedAt }),
+            }) as unknown as Record<string, unknown>,
+          }),
+        });
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.ceremonyCreateWriterGrant: {
+        this.#handleCeremony(socket, frame, request, {
+          summary: {
+            domainId: String((request.domainRecord as { domain?: { domainId?: unknown } })
+              .domain?.domainId ?? ''),
+            writerGrantId: request.writerGrantId,
+            historicalVersions: request.rotationRecords.length,
+          },
+          /**
+           * Der Satz nennt, was danach anders ist, und nicht die Handlung: ein
+           * Gerät darf in diese Domäne schreiben, bis wann. „Grant a writer
+           * grant" wäre die Bezeichnung des Vorgangs und nicht das, worüber
+           * jemand entscheidet.
+           */
+          statement: `Let ${picoDisplayFingerprint(request.writerIdentityKeyFingerprintHex)} write into domain ${String((request.domainRecord as { domain?: { domainId?: unknown } }).domain?.domainId ?? '')} until ${picoDisplayDate(request.validUntil)}.`,
+          // Eine Sitzung genügt: hier wird unterschrieben, nicht aufgeschlossen.
+          requires: [],
+          execute: (session) => ({
+            writerGrantRecord: createPicoReaderCustodyWriterGrant(this.#sodium, {
+              ownerIdentitySession: session,
+              domainRecord: request.domainRecord as never,
+              rotationRecords: request.rotationRecords as never,
+              writerDeviceSigningKeyRecord: request.writerDeviceSigningKeyRecord as never,
+              writerGrantId: request.writerGrantId,
+              writerIdentityKeyFingerprintHex: request.writerIdentityKeyFingerprintHex,
               validFrom: request.validFrom,
               validUntil: request.validUntil,
               lifecycleOrder: request.lifecycleOrder,
