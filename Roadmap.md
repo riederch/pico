@@ -827,6 +827,34 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B33 — Drei Tests bauten die Zeitregel nach, statt sie anzuwenden (2026-08-27).**
+Nachdem der Kalender-Befund die Uhr als Frage sichtbar gemacht hatte, lag die
+zweite auf der Hand: **wo** jemand steht. `when-display.ts` entscheidet seit
+dem 2026-08-20, wie Pico einer Person *wann* sagt - der Kalendertag der
+Leserin, aus ECMA-262-Kern, ohne ICU -, und der eigene Text dort warnt genau
+davor, einen ISO-Zeitpunkt auf zehn Zeichen zu kürzen: das ist das UTC-Datum
+ohne Etikett.
+
+Gemessen: die Testmenge lief unter `TZ=Pacific/Kiritimati` (UTC+14) und
+`TZ=Pacific/Niue` (UTC-11). Drei Tests fielen um - zwei in
+`contract.test.ts`, die den erwarteten Satz von Hand hinschrieben
+(`'It can act as you until 2027-01-01.'`), und einer, der an diesem Tag frisch
+dazugekommen war und `VALID_UNTIL.slice(0, 10)` benutzte. Alle drei waren in
+Wien grün. Ein Test, der eine Regel nachbaut, prüft seine eigene Nachbildung.
+
+Die Produktseite war dabei schon gehalten: `check-runtime-floor.mjs` verbietet
+`Intl` und `toLocaleDateString` in `@pico/protocol`, also gibt es keinen
+zweiten Weg, einen Tag zu bauen. Was niemand hielt, war die Testseite.
+
+Daraus wurde `scripts/check-display-zones.mjs`. Zwei Zonen, weil eine ein
+einziger Versatz ist: ein Zeitpunkt um 00:00Z liegt in UTC+14 am selben
+Kalendertag und in UTC-11 am Tag davor, um 10:00Z andersherum. Und nur dort,
+wo überhaupt ein Tag gezeigt wird - die Paketliste wird abgeleitet und nicht
+getippt: wer `when-display` nennt oder `Intl.DateTimeFormat` benutzt, wird
+gefahren. Das sind fünf; `apps/core` ist keines davon, das Home zeigt niemandem
+etwas. Gefälscht am 2026-08-27 durch Zurückschreiben eines Satzes von Hand:
+`pnpm test` blieb grün, und die Prüfung nannte Paket, Zone und Grund.
+
 **B32 — Hundertvierunddreißig Tests hingen am Kalender (2026-08-27).**
 An diesem Vormittag um 10:00 UTC wurden drei Tests im Kern rot, ohne dass
 jemand etwas geändert hatte. Der Grund war ein Datum: eine Vorrichtung gab dem

@@ -763,8 +763,19 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
     ]));
     expect(lines[0]?.headline).toBe('This device');
     expect(lines[1]?.headline).toBe('Another of your devices');
-    expect(lines[0]?.detail).toBe('It can act as you until 2027-01-01.');
-    expect(lines[1]?.detail).toContain('ran out on 2026-05-01');
+    /**
+     * **Der Tag durch dieselbe Regel gelesen, die ihn schreibt.** Ein
+     * abgeschriebenes `2027-01-01` ist das UTC-Datum ohne Etikett - genau das,
+     * wovor `when-display.ts` warnt -, und westlich von UTC ist der Kalendertag
+     * der Leserin ein anderer. Unter `TZ=Pacific/Niue` fiel diese Zeile um
+     * (gemessen am 2026-08-27). Ein Test, der eine Regel nachbaut, prüft seine
+     * eigene Nachbildung.
+     */
+    expect(lines[0]?.detail)
+      .toBe(`It can act as you until ${picoDisplayDate('2027-01-01T00:00:00.000Z')}.`);
+    // Wie oben: der Kalendertag der Leserin, nicht der von UTC.
+    expect(lines[1]?.detail)
+      .toContain(`ran out on ${picoDisplayDate('2026-05-01T00:00:00.000Z')}`);
     expect(lines[2]?.detail).toContain('You ended its authority');
     expect(lines[3]?.detail).toContain('cannot act as you yet');
     // Nothing anybody can end but the one that is still active.
@@ -1127,7 +1138,9 @@ describe('ADR 0130 E4 - the Home itself', () => {
     expect(lines[0]?.headline).toBe('You');
     expect(lines[0]?.detail).toContain('does not end');
     expect(lines[1]?.headline).toBe(`Another Pico (${picoDisplayFingerprint('ab'.repeat(32))})`);
-    expect(lines[1]?.detail).toBe('Lives here until 2027-01-01.');
+    // Wie oben: der Kalendertag der Leserin, nicht der von UTC.
+    expect(lines[1]?.detail)
+      .toBe(`Lives here until ${picoDisplayDate('2027-01-01T00:00:00.000Z')}.`);
     // Five of the six statuses mean the same thing to somebody reading a list.
     expect(lines[2]?.detail).toContain('No longer lives here');
     expect(lines[3]?.detail).toContain('no end date');

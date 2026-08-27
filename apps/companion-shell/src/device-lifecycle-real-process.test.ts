@@ -1,4 +1,5 @@
 import { picoTestValidityWindow } from '@pico/protocol';
+import { picoDisplayDate } from '@pico/protocol/when-display';
 // The window never sees the core's rows: the main process renders them on
 // their way across (ADR 0113 C2), and a test that skipped that step would be
 // checking a shape nobody is shown.
@@ -275,10 +276,19 @@ describe('ADR 0130 E3 - the device lifecycle from the Client', () => {
 
     const [line] = picoCompanionDeviceAuthorityLines(picoCompanionRenderedDeviceAuthority(view));
     expect(line?.headline).toBe('This device');
-    // Der Tag, den die Bevollmächtigung wirklich trägt - aus derselben
-    // Konstante, aus der sie gebaut wurde. Ein abgeschriebenes Datum sagte
-    // dasselbe nur so lange, wie beide zufällig übereinstimmten.
-    expect(line?.detail).toContain(VALID_UNTIL.slice(0, 10));
+    /**
+     * Der Tag, den die Bevollmächtigung wirklich trägt - **durch dieselbe
+     * Regel gelesen, die ihn geschrieben hat**.
+     *
+     * Zuerst stand hier `VALID_UNTIL.slice(0, 10)`, und das ist genau der
+     * Fehler, vor dem `when-display.ts` warnt: zehn Zeichen eines
+     * ISO-Zeitpunkts sind das *UTC*-Datum ohne Etikett, und die Fläche zeigt
+     * den Kalendertag der Leserin. In Wien stimmten die beiden zufällig
+     * überein; unter `TZ=Pacific/Kiritimati` fiel der Test um (gemessen am
+     * 2026-08-27). Ein Test, der eine Regel nachbaut statt sie anzuwenden,
+     * prüft seine eigene Nachbildung.
+     */
+    expect(line?.detail).toContain(picoDisplayDate(VALID_UNTIL));
     expect(line?.endLabel).not.toBeNull();
     // One device, and the sentence says what ending it costs before it is
     // ended rather than afterwards.
