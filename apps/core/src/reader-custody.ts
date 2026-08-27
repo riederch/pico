@@ -1992,6 +1992,87 @@ export class ReaderCustodyStore {
    * würde, machte diesen Speicher zur zweiten Meinung über etwas, das er
    * nicht entscheidet.
    */
+  /**
+   * ADR 0101 mit ADR 0130 E5 - was eine Rotation nennen muss, für die Person,
+   * der die Domäne gehört.
+   *
+   * **Warum das nicht im Lesebündel steht** (gebaut 2026-08-27). Das Bündel
+   * daneben bedient *Leser*, und die verbleibenden Leserrechte aufzuzählen
+   * wäre für sie eine Karte, wer sonst noch hineindarf - genau das, was
+   * `readingBundleFor` verweigert. Hier ist die Aufzählung dagegen der Inhalt:
+   * eine Rotation versiegelt den neuen KEK für jeden, der bleibt, und das Home
+   * prüft die Liste danach Zeichen für Zeichen gegen seine eigene.
+   *
+   * **Nur an die Besitzerin.** Kein Leserrecht öffnet diese Tür, auch kein
+   * gültiges: rotieren darf, wem die Domäne gehört.
+   *
+   * Die drei Listen sind genau die, gegen die `verifyKekRotation` prüft: die
+   * Aussagen, die seit der aktuellen Fassung offen sind - sie sind der
+   * *Anlass* -, und die Leserrechte, die dann noch gelten. Sie hier zu
+   * berechnen statt sie das Gerät raten zu lassen, ist der Unterschied
+   * zwischen einer Rotation, die angenommen wird, und einer, die mit
+   * `invalid_record` zurückkommt, ohne zu sagen, welche Liste falsch war.
+   */
+  public rotationBundleFor(input: {
+    domainAuthorityId: string;
+    ownerIdentityKeyFingerprintHex: string;
+    at?: string;
+  }): {
+    domain: PicoReaderCustodyDomainRecord;
+    rotations: PicoReaderCustodyKekRotationRecord[];
+    readerGrantLifecycles: PicoReaderCustodyReaderGrantLifecycleRecord[];
+    writerGrantLifecycles: PicoReaderCustodyWriterGrantLifecycleRecord[];
+    remainingReaderGrants: PicoReaderCustodyReaderGrantRecord[];
+  } | undefined {
+    const at = input.at ?? new Date().toISOString();
+    const domain = this.domainRecord(input.domainAuthorityId);
+    if (domain === undefined
+      || domain.domain.ownerIdentityKeyFingerprintHex
+        !== input.ownerIdentityKeyFingerprintHex) {
+      return undefined;
+    }
+    const authority = this.currentVersionAuthority(input.domainAuthorityId);
+    const causes = new Set(this.uncoveredLifecycleRecords(
+      input.domainAuthorityId,
+      authority.lifecycleOrder,
+      at,
+    ).map((cause) => cause.lifecycleId));
+
+    return {
+      domain,
+      rotations: (this.db
+        .prepare(`
+          SELECT rotation_record_json AS recordJson
+          FROM pico_reader_custody_kek_rotation
+          WHERE domain_authority_id = ?
+          ORDER BY kek_version, rotation_id
+        `)
+        .all(input.domainAuthorityId) as StoredJsonRow[])
+        .map((row) => parseJson<PicoReaderCustodyKekRotationRecord>(row)),
+      readerGrantLifecycles: (this.db
+        .prepare(`
+          SELECT lifecycle_record_json AS recordJson
+          FROM pico_reader_custody_reader_grant_lifecycle
+          WHERE domain_authority_id = ?
+          ORDER BY lifecycle_order, lifecycle_id
+        `)
+        .all(input.domainAuthorityId) as StoredJsonRow[])
+        .map((row) => parseJson<PicoReaderCustodyReaderGrantLifecycleRecord>(row))
+        .filter((record) => causes.has(record.lifecycle.lifecycleId)),
+      writerGrantLifecycles: (this.db
+        .prepare(`
+          SELECT lifecycle_record_json AS recordJson
+          FROM pico_reader_custody_writer_grant_lifecycle
+          WHERE domain_authority_id = ?
+          ORDER BY lifecycle_order, lifecycle_id
+        `)
+        .all(input.domainAuthorityId) as StoredJsonRow[])
+        .map((row) => parseJson<PicoReaderCustodyWriterGrantLifecycleRecord>(row))
+        .filter((record) => causes.has(record.lifecycle.lifecycleId)),
+      remainingReaderGrants: this.activeReaderGrantRecords(input.domainAuthorityId, at),
+    };
+  }
+
   public readingBundleFor(input: {
     domainAuthorityId: string;
     readerIdentityKeyFingerprintHex: string;

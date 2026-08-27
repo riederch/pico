@@ -51,6 +51,16 @@ describe('ADR 0113 C2 - a refusal reaches the person as a sentence', () => {
       'reader_key_not_unlocked',
       'device_signing_key_not_unlocked',
       'device_key_agreement_key_not_unlocked',
+      /**
+       * ADR 0101, dazugekommen am 2026-08-27. Die drei Worte des
+       * Schlosswechsels - und die beiden letzten treffen eine Person an genau
+       * der Stelle, an der sie sonst am selben Knopf stehen bliebe: das Home
+       * sagt „so nicht", und ohne Satz wüsste sie nicht, dass ein anderer
+       * Knopf daneben es löst.
+       */
+      'not_the_owner',
+      'inactive_writer_grant',
+      'rotation_required',
     ];
     for (const word of spoken) {
       const line = picoCompanionRefusalLine(word, 'That did not work.');

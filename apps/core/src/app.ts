@@ -4766,6 +4766,42 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           };
         }
         /**
+         * ADR 0101 mit ADR 0130 E5 - was eine Rotation nennen muss.
+         *
+         * **Eine eigene Tür und nicht das Lesebündel** (2026-08-27). Das
+         * bedient Leser, und ihnen die verbleibenden Leserrechte aufzuzählen
+         * wäre eine Karte, wer sonst noch hineindarf. Für die Besitzerin ist
+         * dieselbe Aufzählung der Inhalt: eine Rotation versiegelt den neuen
+         * KEK für jeden, der bleibt.
+         *
+         * Der Anlass kam von einem Durchlauf: seit einen Lesezugang zu beenden
+         * wirklich geht (Befund B34), verschließt jedes Beenden die Domäne mit
+         * `rotation_required` - und begleichen konnte das im Produkt niemand.
+         */
+        case 'home.reader_custody.rotation.read': {
+          if (principal === undefined
+            || typeof args.domainAuthorityId !== 'string'
+            || Object.keys(args).length !== 1) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const bundle = readerCustody.rotationBundleFor({
+            domainAuthorityId: args.domainAuthorityId,
+            ownerIdentityKeyFingerprintHex: principal.picoIdentityFingerprintHex,
+          });
+          if (bundle === undefined) {
+            /**
+             * Derselbe Satz für „gibt es nicht" und „gehört dir nicht": wer
+             * eine fremde Domäne errät, soll nicht daran merken, dass es sie
+             * gibt.
+             */
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_the_owner' } };
+          }
+          return {
+            outcome: 'ok',
+            result: bundle as unknown as Record<string, unknown>,
+          };
+        }
+        /**
          * ADR 0086 mit ADR 0130 E5. Der Ast bekommt sein Subjekt.
          *
          * Das Prüfen und Speichern kann dieser Home seit langem - was fehlte,

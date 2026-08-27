@@ -191,6 +191,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.rule.decide',
       'home.rule.forget',
       'home.reader_custody.read',
+      'home.reader_custody.rotation.read',
       'home.reader_custody.item.submit',
       'home.observations.submit',
       'home.modules.consent.read',

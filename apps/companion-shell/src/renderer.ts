@@ -93,6 +93,7 @@ declare global {
       createReaderCustodySpace(): Promise<void>;
       writeReaderCustodyNote(text: string): Promise<unknown>;
       letOtherDeviceRead(): Promise<unknown>;
+      rotateReaderCustodyDomain(): Promise<unknown>;
       readReaderCustodyNotes(): Promise<unknown>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
@@ -695,6 +696,7 @@ const readerCustodyText = requireInput('reader-custody-text');
 const readerCustodyWrite = requireButton('reader-custody-write');
 const readerCustodyLetOther = requireButton('reader-custody-let-other');
 const readerCustodyRead = requireButton('reader-custody-read');
+const readerCustodyRotate = requireButton('reader-custody-rotate');
 const readerCustodyList = requireElement('reader-custody-list');
 const readerCustodyStatus = requireElement('reader-custody-status');
 
@@ -741,6 +743,51 @@ readerCustodyRead.addEventListener('click', () => {
       : `${read.length} of them.`;
   }, (error: unknown) => {
     readerCustodyStatus.textContent = refusalText(error, 'That could not be read.');
+  });
+});
+
+readerCustodyRotate.addEventListener('click', () => {
+  /**
+   * ADR 0101 mit ADR 0130 E5. Das Schloss wechseln, nachdem jemand hinaus ist.
+   *
+   * **Der Satz sagt, was danach gilt.** Wer hinausgeworfen wurde, hält den
+   * alten Schlüssel; ohne Wechsel liefe alles Neue weiter unter genau ihm.
+   * Und was vorher drinsteht, bleibt lesbar für die, die geblieben sind - ein
+   * Schlosswechsel nimmt niemandem etwas weg, den man nicht hinausgeworfen
+   * hat.
+   *
+   * **Vier Antworten, nicht eine.** Rotiert; nur das eigene Recht erneuert
+   * (so steht dieses Gerät da, wenn ein anderes rotiert hat); nur die Kette
+   * nachgetragen; oder es war nichts zu tun. „Nichts zu tun" ist eine Aussage
+   * und keine Ablehnung - ADR 0118 O4s Unterschied zwischen „nichts wartet"
+   * und „niemand hat nachgesehen".
+   */
+  readerCustodyStatus.textContent = 'Asking your Home what has changed...';
+  void window.picoCompanion.rotateReaderCustodyDomain().then((answer) => {
+    const done = answer as {
+      rotated: boolean;
+      writerGrantRenewed: boolean;
+      chainCaughtUp: boolean;
+      remainingReaders: number;
+    };
+    if (done.rotated) {
+      readerCustodyStatus.textContent =
+        `The lock is changed. ${done.remainingReaders === 0
+          ? 'Nobody but you can read what you write from now on'
+          : `${done.remainingReaders} reader(s) kept their access`}, and this `
+        + 'device can write here again.';
+      return;
+    }
+    if (done.writerGrantRenewed) {
+      readerCustodyStatus.textContent =
+        'Somebody else changed the lock; this device can write here again.';
+      return;
+    }
+    readerCustodyStatus.textContent = done.chainCaughtUp
+      ? 'This device had fallen behind and has caught up. Nothing else needed changing.'
+      : 'Nothing needed changing: nobody has been let out since the last change.';
+  }, (error: unknown) => {
+    readerCustodyStatus.textContent = refusalText(error, 'The lock was not changed.');
   });
 });
 

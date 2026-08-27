@@ -210,6 +210,13 @@
       <button id="reader-custody-let-other" type="button">Let my other device read this</button>
       <!-- ADR 0094. Was drinsteht - für ein Gerät, das lesen darf. -->
       <button id="reader-custody-read" type="button">Show me what is in there</button>
+      <!--
+        ADR 0101 mit ADR 0130 E5. Wer jemanden hinauswirft, muss das Schloss
+        wechseln können: bis dahin weist das Home alles Neue ab, weil der
+        Hinausgeworfene den alten Schlüssel hält. Derselbe Knopf holt auch
+        dieses Gerät nach, wenn ein anderes gewechselt hat.
+      -->
+      <button id="reader-custody-rotate" type="button">Change the lock on this space</button>
       <ul id="reader-custody-list" class="provider-list"></ul>
       <p id="reader-custody-status" class="detail"></p>
     </section>

@@ -728,6 +728,9 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             readerKeyAgreementSession: agreement.session,
             writerSigningSession: writer.session,
             domainRecord: request.domainRecord as never,
+            ...(request.rotationRecords === undefined
+              ? {}
+              : { rotationRecords: request.rotationRecords as never }),
             writerGrantRecord: request.writerGrantRecord as never,
             packageId: request.packageId,
             memoryItemId: request.memoryItemId,

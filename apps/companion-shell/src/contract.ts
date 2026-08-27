@@ -59,6 +59,7 @@ export const picoCompanionIpcChannels = Object.freeze({
   createReaderCustodySpace: 'pico:reader-custody:create',
   writeReaderCustodyNote: 'pico:reader-custody:write',
   letOtherDeviceRead: 'pico:reader-custody:let-other-device-read',
+  rotateReaderCustodyDomain: 'pico:reader-custody:rotate',
   readReaderCustodyNotes: 'pico:reader-custody:read',
   decideRule: 'pico:rule:decide',
   forgetRule: 'pico:rule:forget',
@@ -576,6 +577,25 @@ export function picoCompanionRefusalLine(message: string, fallback: string): str
       'This is your only device right now. There is nobody to let in.',
     not_a_reader:
       'This device may not read that space. Someone has to let it in first.',
+    /**
+     * ADR 0101. Rotieren darf, wem die Domäne gehört - und dieselbe Antwort
+     * steht für „gibt es nicht", damit wer eine fremde Domäne errät, nicht
+     * daran merkt, dass es sie gibt.
+     */
+    not_the_owner:
+      'That space belongs to somebody else, or there is no such space. Only the '
+      + 'person it belongs to can change its lock.',
+    /**
+     * ADR 0101. Was der Vault sagt, wenn ein Schreibrecht zu einer Fassung
+     * gehört, die es nicht mehr gibt. Der Satz nennt die Handlung, die hilft -
+     * derselbe Knopf, der das Schloss wechselt, holt dieses Gerät auch nach.
+     */
+    inactive_writer_grant:
+      'The lock on that space has changed since this device last wrote there. '
+      + 'Change the lock once from here and this device catches up.',
+    rotation_required:
+      'Somebody was let out of that space, so its lock has to be changed before '
+      + 'anything new is written there. The button beside this does it.',
     freshness_unavailable:
       'Your Home has no current proof that this device\'s key still stands. It needs '
       + 'one from the identity that owns the device, and it only lasts minutes.',

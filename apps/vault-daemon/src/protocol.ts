@@ -360,6 +360,17 @@ export interface PicoVaultDaemonReaderCustodyEncryptItemRequest {
   agreementKeyFingerprintHex: string;
   writerSigningKeyFingerprintHex: string;
   domainRecord: Record<string, unknown>;
+  /**
+   * ADR 0101. Die Kette bis zur geltenden Fassung.
+   *
+   * **Nachgereicht am 2026-08-27**, an einem Durchlauf gefunden: nach einer
+   * Rotation gehört das Schreibrecht zur Fassung zwei, die Domäne nennt die
+   * eins, und ohne die Aufzeichnung dazwischen kann der Vault die beiden nicht
+   * verbinden - `invalid_reader_custody_writer_grant`, für ein Recht, das
+   * gerade erst richtig erteilt wurde. `encryptPicoReaderCustodyItem` kennt
+   * die Kette seit jeher; nur diese Familie reichte sie nicht durch.
+   */
+  rotationRecords?: Record<string, unknown>[];
   writerGrantRecord: Record<string, unknown>;
   packageId: string;
   memoryItemId: string;
@@ -1030,11 +1041,11 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.readerCustodyEncryptItem: {
-      assertExactKeys(parsed, [
+      assertExactKeysWithOptional(parsed, [
         'family', 'requestId', 'agreementKeyFingerprintHex',
         'writerSigningKeyFingerprintHex', 'domainRecord', 'writerGrantRecord',
         'packageId', 'memoryItemId', 'contentType', 'plaintext', 'createdAt',
-      ]);
+      ], ['rotationRecords']);
       if (typeof parsed.plaintext !== 'string') {
         throw new Error('invalid_request');
       }
@@ -1045,6 +1056,9 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         writerSigningKeyFingerprintHex:
           requireFingerprintHex(parsed, 'writerSigningKeyFingerprintHex'),
         domainRecord: requireRecord(parsed, 'domainRecord'),
+        ...(parsed.rotationRecords === undefined
+          ? {}
+          : { rotationRecords: requireRecordArray(parsed, 'rotationRecords') }),
         writerGrantRecord: requireRecord(parsed, 'writerGrantRecord'),
         packageId: requireBoundedString(parsed, 'packageId'),
         memoryItemId: requireBoundedString(parsed, 'memoryItemId'),

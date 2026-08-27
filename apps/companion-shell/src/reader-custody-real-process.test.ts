@@ -26,6 +26,7 @@ import {
   createPicoCompanionReaderCustodySpace,
   letPicoCompanionOtherDeviceRead,
   readPicoCompanionReaderCustodySpace,
+  rotatePicoCompanionReaderCustodyDomain,
   writePicoCompanionReaderCustodyNote,
 } from '@pico/companion/reader-custody-space';
 import {
@@ -385,23 +386,24 @@ describe('ADR 0130 E5 - ein Raum, in den nur Gewählte sehen', () => {
     expect(sameDomain?.readers[0]?.status).toBe('revoked');
   }, 300_000);
 
-  it('verschließt die Domäne, bis rotiert wird - und das kann heute niemand', async () => {
+  it('verschließt die Domäne, bis das Schloss gewechselt ist', async () => {
     /**
-     * **Eine benannte Sackgasse, gemessen am 2026-08-27.** Jede beendete
-     * Leserberechtigung erzeugt eine Rotationsschuld (ADR 0101), und solange
-     * sie besteht, weist das Home neue Items mit `rotation_required` ab. Das
-     * ist richtig: wer hinausgeworfen wurde, hält den alten KEK, und ohne
-     * Rotation liefe alles Neue weiter unter genau diesem Schlüssel.
+     * **Die Sackgasse und ihr Ausgang, beide an einem Stück.**
      *
-     * Falsch ist nur, dass es im Produkt keinen Weg gibt, sie zu begleichen.
-     * Der Vault kann rotieren, der Daemon hat die Zeremonie, das Home nimmt
-     * die Aufzeichnung an - der Companion hat keine Funktion dafür, und das
-     * Fenster keinen Knopf. E5s viertes Bedienelement fehlt, und dieser Test
-     * hält den Preis dafür fest, statt ihn zu behaupten.
+     * Jede beendete Leserberechtigung erzeugt eine Rotationsschuld (ADR 0101),
+     * und solange sie besteht, weist das Home neue Items mit
+     * `rotation_required` ab. Das ist richtig: wer hinausgeworfen wurde, hält
+     * den alten KEK, und ohne Rotation liefe alles Neue weiter unter genau
+     * diesem Schlüssel.
      *
-     * **Wenn das Rotieren gebaut ist, wird dieser Test zu seiner anderen
-     * Hälfte** - er endet dann nicht bei der Abweisung, sondern bei dem
-     * Satz, der danach doch hineingeschrieben werden kann.
+     * Bis zum 2026-08-27 hörte dieser Test hier auf, weil es im Produkt keinen
+     * Weg gab, die Schuld zu begleichen - der Vault konnte rotieren, der
+     * Daemon hatte die Zeremonie, das Home nahm die Aufzeichnung an, und
+     * dazwischen fehlte E5s viertes Bedienelement. Jetzt geht er weiter, und
+     * die zweite Hälfte ist die interessantere: **rotieren allein reicht
+     * nicht.** Danach gehört das Schreibrecht dieses Geräts zur alten Fassung,
+     * und die Domäne wäre eine Stufe später wieder zu. Der Durchlauf hat
+     * beides gefunden; hier steht beides.
      */
     await sodium.ready;
     const { profilePath, session } = await foundedDevice();
@@ -440,6 +442,30 @@ describe('ADR 0130 E5 - ein Raum, in den nur Gewählte sehen', () => {
       ...input,
       text: 'Nach dem Hinauswerfen.',
     })).rejects.toThrow('rotation_required');
+
+    const rotated = await rotatePicoCompanionReaderCustodyDomain(input);
+    expect(rotated.rotated).toBe(true);
+    // Die Fassung ist gestiegen, und das Recht dieses Geräts ist mitgegangen.
+    expect(rotated.kekVersion).toBe(2);
+    expect(rotated.writerGrantRenewed).toBe(true);
+    // Niemand bleibt: der eine Leser war der, der hinausgeworfen wurde.
+    expect(rotated.remainingReaders).toBe(0);
+
+    /**
+     * Und der Satz, um den es geht. Ohne ihn wäre der ganze Block eine
+     * Behauptung über Aufzeichnungen; mit ihm ist er die Aussage, dass eine
+     * Person nach dem Hinauswerfen weiterschreiben kann.
+     */
+    const after = await writePicoCompanionReaderCustodyNote({
+      ...input,
+      text: 'Nach dem Schlosswechsel.',
+    });
+    expect(after.memoryItemId).toMatch(/^mem_/u);
+
+    // Und ein zweites Drücken sagt, dass nichts zu tun ist, statt einen
+    // zweiten KEK zu erzeugen, den niemand verlangt hat.
+    const again = await rotatePicoCompanionReaderCustodyDomain(input);
+    expect(again).toMatchObject({ rotated: false, writerGrantRenewed: false });
   }, 300_000);
 
   it('setzt eine angefangene Anlage fort, statt sie zu verweigern', async () => {

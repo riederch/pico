@@ -222,6 +222,19 @@ export interface PicoCompanionShellRuntime {
   readReaderCustodyNotes(): Promise<readonly { memoryItemId: string; text: string }[]>;
   /** ADR 0085 mit ADR 0088. Das zweite Gerät derselben Person hereinlassen. */
   letOtherDeviceReadReaderCustody(): Promise<{ readerDelegationId: string }>;
+  /**
+   * ADR 0101 mit ADR 0130 E5. Das Schloss wechseln, nachdem jemand hinaus ist.
+   *
+   * Zwei Dinge in einer Handlung, weil eines nicht reicht: die offene
+   * Rotationsschuld begleichen *und* dieses Gerät wieder schreibfähig machen.
+   */
+  rotateReaderCustodyDomain(): Promise<{
+    rotated: boolean;
+    writerGrantRenewed: boolean;
+    chainCaughtUp: boolean;
+    kekVersion: number;
+    remainingReaders: number;
+  }>;
   /** ADR 0140 RL4. Was Pico ohne Anwesende tun darf, gesetzt und zurückgenommen. */
   decideRule(input: {
     effectName: string;
@@ -874,6 +887,19 @@ export async function startPicoCompanionShellRuntime(input: {
         const { createPicoCompanionReaderCustodySpace } =
           await import('@pico/companion/reader-custody-space');
         await createPicoCompanionReaderCustodySpace({
+          daemonClient,
+          profile,
+          profilePath,
+          sodium: input.sodium,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+      }),
+      rotateReaderCustodyDomain: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { rotatePicoCompanionReaderCustodyDomain } =
+          await import('@pico/companion/reader-custody-space');
+        return await rotatePicoCompanionReaderCustodyDomain({
           daemonClient,
           profile,
           profilePath,

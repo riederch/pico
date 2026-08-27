@@ -38,6 +38,8 @@ export async function writePicoCompanionReaderCustodyItem(input: {
   daemonClient: PicoVaultDaemonClient;
   linkClient: PicoLinkDirectClient;
   records: PicoCompanionReaderCustodyRecords;
+  /** ADR 0101. Die Kette bis zur geltenden Fassung; leer heißt, es gab keine. */
+  rotationRecords?: Record<string, unknown>[];
   agreementKeyFingerprintHex: string;
   writerSigningKeyFingerprintHex: string;
   packageId: string;
@@ -50,6 +52,9 @@ export async function writePicoCompanionReaderCustodyItem(input: {
     agreementKeyFingerprintHex: input.agreementKeyFingerprintHex,
     writerSigningKeyFingerprintHex: input.writerSigningKeyFingerprintHex,
     domainRecord: input.records.domainRecord,
+    ...(input.rotationRecords === undefined || input.rotationRecords.length === 0
+      ? {}
+      : { rotationRecords: input.rotationRecords }),
     writerGrantRecord: input.records.writerGrantRecord,
     packageId: input.packageId,
     memoryItemId: input.memoryItemId,
@@ -255,6 +260,50 @@ export interface PicoCompanionReaderCustodyBundle {
   writerGrants: Record<string, unknown>[];
   rotations: Record<string, unknown>[];
   items: Record<string, unknown>[];
+}
+
+/**
+ * ADR 0101 mit ADR 0130 E5 - was eine Rotation nennen muss, beim Home geholt.
+ *
+ * Die vier Listen darin sind nicht Beiwerk: das Home prüft die Anlässe und die
+ * verbleibenden Leser Zeichen für Zeichen gegen seine eigene Rechnung. Sie
+ * hier zu erraten hiesse, eine Rotation zu bauen, die mit `invalid_record`
+ * zurückkommt, ohne zu sagen, welche Liste falsch war.
+ */
+export interface PicoCompanionReaderCustodyRotationBundle {
+  domain: Record<string, unknown>;
+  rotations: Record<string, unknown>[];
+  readerGrantLifecycles: Record<string, unknown>[];
+  writerGrantLifecycles: Record<string, unknown>[];
+  remainingReaderGrants: Record<string, unknown>[];
+}
+
+export async function fetchPicoCompanionReaderCustodyRotationBundle(input: {
+  linkClient: PicoLinkDirectClient;
+  domainAuthorityId: string;
+}): Promise<PicoCompanionReaderCustodyRotationBundle> {
+  const answer = await input.linkClient.request('home.reader_custody.rotation.read', {
+    domainAuthorityId: input.domainAuthorityId,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(
+      typeof refusal === 'string' ? refusal : `reader_custody_rotation_read_${answer.outcome}`,
+    );
+  }
+  return answer.result as unknown as PicoCompanionReaderCustodyRotationBundle;
+}
+
+/** ADR 0101. Die neue Fassung abgeben, nachdem der Daemon sie unterschrieben hat. */
+export async function submitPicoCompanionKekRotation(input: {
+  linkClient: PicoLinkDirectClient;
+  record: Record<string, unknown>;
+}): Promise<void> {
+  await submitPicoCompanionAuthorityRecord({
+    linkClient: input.linkClient,
+    resource: 'reader_custody_kek_rotation',
+    record: input.record,
+  });
 }
 
 export async function fetchPicoCompanionReaderCustodyBundle(input: {

@@ -842,6 +842,7 @@ export const picoLinkDirectOperations = [
    * bestimmt, und eine Liste davon wäre eine Karte, wer wo hineindarf.
    */
   'home.reader_custody.read',
+  'home.reader_custody.rotation.read',
   'home.reader_custody.item.submit',
   'home.observations.submit',
   'home.modules.consent.read',

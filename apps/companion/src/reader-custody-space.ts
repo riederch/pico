@@ -8,6 +8,9 @@ import { createPicoCompanionLifecycleReader } from './lifecycle-reader.js';
 import type { PicoCompanionProfile } from './profile.js';
 import { createPicoCompanionLinkClient } from './recovery-controller.js';
 import {
+  fetchPicoCompanionReaderCustodyRotationBundle,
+  submitPicoCompanionAuthorityRecord,
+  submitPicoCompanionKekRotation,
   publishPicoCompanionReaderKeyFreshness,
   submitPicoCompanionReaderCustodyRecords,
   submitPicoCompanionReaderGrant,
@@ -36,6 +39,16 @@ import {
 export interface PicoCompanionReaderCustodySpace {
   domainRecord: Record<string, unknown>;
   writerGrantRecord: Record<string, unknown>;
+  /**
+   * ADR 0101. Die Fassungen zwischen der Domäne und dem geltenden Schreibrecht.
+   *
+   * **Nachgetragen am 2026-08-27**, an einem Durchlauf gefunden: nach einer
+   * Rotation nennt die Domäne die Fassung eins und das Schreibrecht die zwei,
+   * und ohne diese Kette kann der Vault die beiden nicht verbinden. Fehlt das
+   * Feld, gab es nie eine Rotation - eine Raumdatei von vor diesem Tag liest
+   * sich also richtig, statt ungültig zu sein.
+   */
+  rotationRecords?: Record<string, unknown>[];
   domainId: string;
   domainAuthorityId: string;
 }
@@ -249,6 +262,9 @@ export async function writePicoCompanionReaderCustodyNote(input: {
       domainRecord: space.domainRecord,
       writerGrantRecord: space.writerGrantRecord,
     },
+    // Ohne sie kann der Vault ein Recht der neuen Fassung nicht gegen eine
+    // Domäne der alten prüfen; leer heißt, es gab nie eine Rotation.
+    rotationRecords: space.rotationRecords ?? [],
     agreementKeyFingerprintHex: input.profile.device.keyAgreementKeyFingerprintHex,
     writerSigningKeyFingerprintHex: input.profile.device.signingKeyFingerprintHex,
     packageId: `package_${randomUUID()}`,
@@ -256,6 +272,206 @@ export async function writePicoCompanionReaderCustodyNote(input: {
     contentType: 'text/plain',
     plaintext: input.text,
     createdAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * ADR 0101 mit ADR 0130 E5 - das Schloss wechseln, nachdem jemand hinaus ist.
+ *
+ * **Warum es das geben muss.** Jede beendete Leserberechtigung erzeugt im Home
+ * eine Rotationsschuld, und solange sie besteht, weist es neue Items mit
+ * `rotation_required` ab. Das ist richtig: wer hinausgeworfen wurde, hält den
+ * alten KEK, und ohne Rotation liefe alles Neue weiter unter genau diesem
+ * Schlüssel. Bis zum 2026-08-27 konnte diese Schuld im Produkt niemand
+ * begleichen - der Vault konnte rotieren, der Daemon hatte die Zeremonie, das
+ * Home nahm die Aufzeichnung an, und dazwischen fehlte diese Funktion. Ein
+ * Raum, den man verschließen, aber nicht wieder aufschließen kann, ist
+ * schlimmer als einer ohne Schloss.
+ *
+ * **Die Listen kommen vom Home, nicht von hier.** Anlässe und verbleibende
+ * Leser werden dort gegen die eigene Rechnung geprüft; eine Rotation mit einer
+ * selbst zusammengesuchten Liste käme als `invalid_record` zurück, ohne zu
+ * sagen, welche falsch war.
+ *
+ * **Nichts zu tun ist eine Antwort.** Wer ohne offenen Anlass rotiert, würde
+ * einen zweiten KEK erzeugen, den niemand verlangt hat, und das Home lehnte
+ * ihn ab - die Person sähe eine Ablehnung für einen Knopf, der einfach nichts
+ * zu tun hatte. Deshalb sagt diese Funktion es vorher.
+ *
+ * **Und sie tut zwei Dinge, weil eines nicht reicht.** Nach der Rotation
+ * gehört das Schreibrecht dieses Geräts zur alten Fassung, und das Home weist
+ * es mit `inactive_writer_grant` ab - eine zweite Sackgasse, eine Stufe
+ * später. „Das Schloss wechseln" heißt für eine Person, danach wieder
+ * hineinschreiben zu können; also gehört das neue Recht in dieselbe Handlung.
+ */
+export async function rotatePicoCompanionReaderCustodyDomain(input: {
+  daemonClient: PicoVaultDaemonClient;
+  profile: PicoCompanionProfile;
+  profilePath: string;
+  sodium: VaultSodium;
+  fetch?: typeof fetch;
+}): Promise<{
+  rotated: boolean;
+  writerGrantRenewed: boolean;
+  /** Ob die Raumdatei Rotationen nachgetragen bekam, die sie nicht kannte. */
+  chainCaughtUp: boolean;
+  kekVersion: number;
+  remainingReaders: number;
+}> {
+  const space: PicoCompanionReaderCustodySpace | undefined =
+    readPicoCompanionReaderCustodySpace(input.profilePath);
+  if (space === undefined) {
+    throw new Error('no_reader_custody_space');
+  }
+  const linkClient = await createPicoCompanionLinkClient({
+    profile: input.profile,
+    daemonClient: input.daemonClient,
+    sodium: input.sodium,
+    ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+  });
+  const bundle = await fetchPicoCompanionReaderCustodyRotationBundle({
+    linkClient,
+    domainAuthorityId: space.domainAuthorityId,
+  });
+
+  /**
+   * **Die Kette zuerst nachtragen, bevor irgendetwas entschieden wird.**
+   *
+   * Rotationsaufzeichnungen sind öffentliche Aussagen des Homes, keine
+   * Zeremonie - sie hier zu übernehmen ist Buchhaltung. Eine Raumdatei von vor
+   * dem 2026-08-27 hat das Feld gar nicht, und eine, deren Gerät bei einer
+   * Rotation eines anderen Geräts nicht dabei war, hat es unvollständig. Ohne
+   * diesen Schritt sagte der Knopf „nichts zu tun" und das Schreiben blieb
+   * abgewiesen - am Durchlauf gefunden, an genau diesem Zustand.
+   */
+  const chainWasStale = (space.rotationRecords ?? []).length !== bundle.rotations.length;
+  if (chainWasStale) {
+    writeFileSync(
+      picoCompanionReaderCustodySpacePath(input.profilePath),
+      `${JSON.stringify({ ...space, rotationRecords: bundle.rotations }, null, 2)}\n`,
+      'utf8',
+    );
+    space.rotationRecords = bundle.rotations;
+  }
+
+  const versionOf = (record: unknown): number =>
+    (record as { rotation?: { kekVersion?: number } }).rotation?.kekVersion ?? 0;
+  const writerGrantVersion = (space.writerGrantRecord as {
+    grant?: { kekVersion?: number };
+  }).grant?.kekVersion ?? 1;
+  let version = Math.max(
+    (space.domainRecord as { domain?: { kekVersion?: number } }).domain?.kekVersion ?? 1,
+    ...bundle.rotations.map(versionOf),
+  );
+  const causes = bundle.readerGrantLifecycles.length + bundle.writerGrantLifecycles.length;
+
+  /**
+   * **Nichts zu tun ist eine Antwort, und sie hat zwei Bedingungen.**
+   *
+   * Ohne offenen Anlass zu rotieren erzeugte einen zweiten KEK, den niemand
+   * verlangt hat, und das Home lehnte ihn ab - die Person sähe eine Ablehnung
+   * für einen Knopf, der einfach nichts zu tun hatte.
+   *
+   * Aber ein Schreibrecht der alten Fassung ist *auch* etwas zu tun. So steht
+   * ein zweites Gerät da, nachdem das erste rotiert hat; ohne diesen Zweig
+   * bekäme es für immer `inactive_writer_grant` auf einen Knopf, der sagt,
+   * es sei nichts zu tun. Am Durchlauf gefunden (2026-08-27), an genau diesem
+   * Zustand.
+   */
+  if (causes === 0 && writerGrantVersion === version) {
+    return Object.freeze({
+      rotated: false,
+      writerGrantRenewed: false,
+      chainCaughtUp: chainWasStale,
+      kekVersion: version,
+      remainingReaders: bundle.remainingReaderGrants.length,
+    });
+  }
+
+  const now = new Date();
+  const rotations = [...bundle.rotations];
+  if (causes > 0) {
+    const { rotationRecord } = await input.daemonClient.ceremonyRotateDomain({
+      signerKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+      domainRecord: bundle.domain,
+      rotationRecords: bundle.rotations,
+      readerGrantLifecycleRecords: bundle.readerGrantLifecycles,
+      writerGrantLifecycleRecords: bundle.writerGrantLifecycles,
+      remainingReaderGrantRecords: bundle.remainingReaderGrants,
+      rotationId: `rotation_${randomUUID()}`,
+      rotatedAt: now.toISOString(),
+      /**
+       * Über allen Anlässen, die sie deckt - das Home verlangt genau das, und
+       * Millisekunden erfüllen es, weil die Anlässe vorher entstanden sind.
+       * Dieselbe Ordnung wie bei den Mitgliedschaften und den Leserrechten.
+       */
+      lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
+    });
+    await submitPicoCompanionKekRotation({
+      linkClient,
+      record: rotationRecord as unknown as Record<string, unknown>,
+    });
+    rotations.push(rotationRecord as unknown as Record<string, unknown>);
+    version = versionOf(rotationRecord);
+  }
+
+  /**
+   * **Und ein Schreibrecht für die geltende Fassung** - am Durchlauf gelernt
+   * (2026-08-27).
+   *
+   * Nach der Rotation stimmte die Schuld, und die Person konnte trotzdem
+   * nicht schreiben: `recordItem` verlangt, dass die Fassung des Items *und*
+   * die des Schreibrechts die aktuelle ist, und das alte Recht gehört zur
+   * alten. Eine Rotation ohne diesen zweiten Schritt wäre eine Sackgasse eine
+   * Stufe später - dieselbe Person, derselbe Raum, eine andere Ablehnung.
+   *
+   * Das gehört deshalb in dieselbe Handlung und nicht in einen zweiten Knopf:
+   * „das Schloss wechseln" heißt für eine Person, danach wieder
+   * hineinschreiben zu können.
+   */
+  const signing = (await input.daemonClient.status()).sessions.find((session) =>
+    session.keyFingerprintHex === input.profile.device.signingKeyFingerprintHex);
+  if (signing === undefined) {
+    throw new Error('device_signing_key_not_unlocked');
+  }
+  const { writerGrantRecord } = await input.daemonClient.ceremonyCreateWriterGrant({
+    signerKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    domainRecord: bundle.domain,
+    rotationRecords: rotations,
+    writerDeviceSigningKeyRecord: {
+      suite: picoIdentitySuite,
+      keyRole: 'device_signing',
+      publicKeyHex: signing.publicKeyHex,
+    },
+    writerGrantId: `writer_${randomUUID()}`,
+    writerIdentityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    validFrom: now.toISOString(),
+    validUntil: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000).toISOString(),
+    lifecycleOrder: `seq:${String(now.getTime() + 1).padStart(16, '0')}`,
+  } as never);
+  await submitPicoCompanionAuthorityRecord({
+    linkClient,
+    resource: 'reader_custody_writer_grant',
+    record: writerGrantRecord as unknown as Record<string, unknown>,
+  });
+
+  /**
+   * Die Raumdatei zeigt erst danach auf das neue Recht. Sie vorher zu
+   * schreiben wäre hier falsch herum: bis das Home die Aufzeichnungen
+   * angenommen hat, ist das alte Recht das gültige.
+   */
+  writeFileSync(
+    picoCompanionReaderCustodySpacePath(input.profilePath),
+    `${JSON.stringify({ ...space, writerGrantRecord, rotationRecords: rotations }, null, 2)}\n`,
+    'utf8',
+  );
+
+  return Object.freeze({
+    rotated: causes > 0,
+    writerGrantRenewed: true,
+    chainCaughtUp: chainWasStale,
+    kekVersion: version,
+    remainingReaders: bundle.remainingReaderGrants.length,
   });
 }
 
