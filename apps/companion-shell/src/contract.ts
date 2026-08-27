@@ -59,6 +59,7 @@ export const picoCompanionIpcChannels = Object.freeze({
   createReaderCustodySpace: 'pico:reader-custody:create',
   writeReaderCustodyNote: 'pico:reader-custody:write',
   letOtherDeviceRead: 'pico:reader-custody:let-other-device-read',
+  readReaderCustodyNotes: 'pico:reader-custody:read',
   decideRule: 'pico:rule:decide',
   forgetRule: 'pico:rule:forget',
   /**

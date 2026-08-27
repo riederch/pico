@@ -1973,6 +1973,84 @@ export class ReaderCustodyStore {
     ).length > 0;
   }
 
+  /**
+   * ADR 0094 mit ADR 0086 - alles, was ein Leser zum Entschlüsseln braucht.
+   *
+   * **Der Raum war beschreibbar, erteilbar und unlesbar** (gefunden
+   * 2026-08-27). Die Leihe im Vault-Daemon verlangt vier Aufzeichnungen -
+   * Domäne, Leserrecht, Schreibrecht und das Item -, und ein lesendes Gerät
+   * hat keine davon: sie liegen hier. Die einzige Route dorthin war
+   * Home-zu-Home, und sie lieferte Projektionen statt Aufzeichnungen.
+   *
+   * **Nur an einen Leser.** Ohne ein gültiges Leserrecht für diese Identität
+   * gibt es kein Bündel - nicht, weil der Geheimtext etwas verriete, sondern
+   * weil die Umschläge daneben für genau einen Schlüssel bestimmt sind und
+   * eine Liste davon eine Karte wäre, wer wo hineindarf.
+   *
+   * Die Aufzeichnungen gehen **ganz** hinaus, mit ihren Unterschriften: der
+   * Daemon prüft sie selbst, und ein Bündel, das hier zurechtgeschnitten
+   * würde, machte diesen Speicher zur zweiten Meinung über etwas, das er
+   * nicht entscheidet.
+   */
+  public readingBundleFor(input: {
+    domainAuthorityId: string;
+    readerIdentityKeyFingerprintHex: string;
+    at?: string;
+  }): {
+    domain: PicoReaderCustodyDomainRecord;
+    readerGrant: PicoReaderCustodyReaderGrantRecord;
+    writerGrants: PicoReaderCustodyWriterGrantRecord[];
+    rotations: PicoReaderCustodyKekRotationRecord[];
+    items: PicoReaderCustodyItemRecord[];
+  } | undefined {
+    const at = input.at ?? new Date().toISOString();
+    const domain = this.domainRecord(input.domainAuthorityId);
+    if (domain === undefined) {
+      return undefined;
+    }
+    const readerGrant = this.readerGrants(at).find((view) =>
+      view.domainAuthorityId === input.domainAuthorityId
+      && view.readerIdentityKeyFingerprintHex === input.readerIdentityKeyFingerprintHex
+      && view.status === 'active');
+    if (readerGrant === undefined) {
+      return undefined;
+    }
+    const readerGrantRecord = this.readerGrantRecord(readerGrant.readerGrantId);
+    if (readerGrantRecord === undefined) {
+      return undefined;
+    }
+    const items = (this.db
+      .prepare(`
+        SELECT item_record_json AS recordJson
+        FROM pico_reader_custody_item
+        WHERE domain_authority_id = ?
+        ORDER BY created_at, package_id
+      `)
+      .all(input.domainAuthorityId) as StoredJsonRow[])
+      .map((row) => parseJson<PicoReaderCustodyItemRecord>(row));
+    const writerGrants = this.writerGrants(at)
+      .filter((view) => view.domainAuthorityId === input.domainAuthorityId)
+      .flatMap((view) => {
+        const record = this.writerGrantRecord(view.writerGrantId);
+        return record === undefined ? [] : [record];
+      });
+    return {
+      domain,
+      readerGrant: readerGrantRecord,
+      writerGrants,
+      rotations: (this.db
+        .prepare(`
+          SELECT rotation_record_json AS recordJson
+          FROM pico_reader_custody_kek_rotation
+          WHERE domain_authority_id = ?
+          ORDER BY kek_version, rotation_id
+        `)
+        .all(input.domainAuthorityId) as StoredJsonRow[])
+        .map((row) => parseJson<PicoReaderCustodyKekRotationRecord>(row)),
+      items,
+    };
+  }
+
   private domainRecord(
     domainAuthorityId: string,
   ): PicoReaderCustodyDomainRecord | undefined {

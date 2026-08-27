@@ -808,6 +808,21 @@ export const picoLinkDirectOperations = [
    * exakte Bindung, höchstens fünf Minuten, kein Zwischenspeicher. Diese
    * Operation trägt Bytes und entscheidet nichts.
    */
+  /**
+   * ADR 0094 mit ADR 0086. Was in einem Reader-Custody-Raum steht - für den,
+   * der ihn lesen darf.
+   *
+   * **Der Raum war beschreibbar, erteilbar und unlesbar** (gefunden
+   * 2026-08-27). Die Leihe im Vault-Daemon verlangt vier Aufzeichnungen -
+   * Domäne, Leserrecht, Schreibrecht und das Item -, und ein lesendes Gerät
+   * hat keine davon. Die einzige Route dorthin war Home-zu-Home und lieferte
+   * Projektionen statt Aufzeichnungen.
+   *
+   * **Nur an einen Leser**, und das ist keine Vorsicht über den Geheimtext:
+   * die Umschläge daneben sind für genau einen Schlüssel bestimmt, und eine
+   * Liste davon wäre eine Karte, wer wo hineindarf.
+   */
+  'home.reader_custody.read',
   'home.reader_key.freshness.submit',
   /**
    * ADR 0086 mit ADR 0088. Wer eine Reader-Custody-Domäne lesen darf.

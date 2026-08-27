@@ -343,6 +343,18 @@ describe('ADR 0085 - das zweite Gerät derselben Person darf lesen', () => {
     });
 
     /**
+     * **Vor dem Leserrecht ist derselbe Lesevorgang ein Nein.** Das ist der
+     * Zustand, in dem der Raum von gestern war: beschreibbar, erteilbar,
+     * unlesbar - und die Zeile hier hält fest, dass das Bündel an einem
+     * Leserrecht hängt und nicht am Zugang zum Home.
+     */
+    const beforeGrant = await send('home.reader_custody.read', {
+      domainAuthorityId: records.domain.domain.domainAuthorityId,
+    });
+    expect(beforeGrant.response.outcome).toBe('invalid_arguments');
+    expect(beforeGrant.result.refusal).toBe('not_a_reader');
+
+    /**
      * **Ohne Nachweis: `freshness_unavailable`.** Das ist die richtige Antwort
      * auf eine leere Ablage - und der Grund, aus dem der Raum von gestern
      * niemanden hereinlassen konnte.
@@ -370,5 +382,55 @@ describe('ADR 0085 - das zweite Gerät derselben Person darf lesen', () => {
     });
     expect(withCheckpoint.result.refusal ?? withCheckpoint.response.outcome).toBe('ok');
     expect(withCheckpoint.result).toEqual({ inserted: true });
+
+    /**
+     * ADR 0094. **Und jetzt gibt es etwas zu holen.** Vor dem Leserrecht war
+     * derselbe Lesevorgang `not_a_reader` - der Grund, aus dem der Raum
+     * beschreibbar, erteilbar und unlesbar war.
+     *
+     * Die Aufzeichnungen gehen **ganz** hinaus, mit ihren Unterschriften: der
+     * Daemon des Lesers prüft sie selbst. Ein Bündel aus Projektionen wäre
+     * eines, das er nicht prüfen könnte.
+     */
+    const bundle = (await send('home.reader_custody.read', {
+      domainAuthorityId: records.domain.domain.domainAuthorityId,
+    })).result as unknown as {
+      domain: { domain: { domainId: string } };
+      readerGrant: { grant: { readerGrantId: string } };
+      writerGrants: unknown[];
+      items: Array<{ item: { memoryItemId: string }; contentCiphertextHex: string }>;
+    };
+    expect(bundle.domain.domain.domainId).toBe(records.domain.domain.domainId);
+    expect(bundle.readerGrant.grant.readerGrantId)
+      .toBe(readerGrant.grant.readerGrantId);
+    expect(bundle.items).toHaveLength(0);
+  }, 60_000);
+
+  it('gibt einem, der kein Leser ist, dasselbe Nein wie für einen Raum, den es nicht gibt', async () => {
+    /**
+     * ADR 0077 C4. Ein Nein, das die beiden unterscheidet, beantwortet die
+     * Frage „gibt es diesen Raum?" für jeden, der raten will - und die
+     * Umschläge daneben sind für genau einen Schlüssel bestimmt, eine Liste
+     * davon wäre eine Karte, wer wo hineindarf.
+     */
+    const { send, databasePath, setup, ownerKeypair } = await claimedHome();
+    const records = makeReaderCustodyRecords({
+      homeId: setup.homeId,
+      hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+      ownerKeypair,
+      writerIdentity: 'owner',
+    });
+    const seeding = await EventStore.open(databasePath, {});
+    expect(seeding.readerCustody(sodium as never).recordDomain(records.domain).ok).toBe(true);
+    seeding.close();
+
+    const notAReader = await send('home.reader_custody.read', {
+      domainAuthorityId: records.domain.domain.domainAuthorityId,
+    });
+    const noSuchSpace = await send('home.reader_custody.read', {
+      domainAuthorityId: 'authority_that_never_was',
+    });
+    expect(notAReader.result).toEqual(noSuchSpace.result);
+    expect(notAReader.result.refusal).toBe('not_a_reader');
   }, 60_000);
 });

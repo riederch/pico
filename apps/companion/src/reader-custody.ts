@@ -200,3 +200,42 @@ export async function submitPicoCompanionReaderGrant(input: {
     throw new Error(typeof refusal === 'string' ? refusal : `reader_grant_${answer.outcome}`);
   }
 }
+
+/**
+ * ADR 0094. Die Aufzeichnungen, die ein Leser zum Entschlüsseln braucht.
+ *
+ * **Hier endet der schalenfreie Kern**, und das ist gemessen und nicht
+ * gewählt: das Entschlüsseln läuft über ADR 0098s Leihe, die einen
+ * *blockierenden* Anschluss verlangt (ADR 0096: ein Lesevorgang läuft ohne
+ * Zwischenschritte), und der steckt in `reader-access.ts` mit
+ * `node:worker_threads` - dem Built-in, das eine mobile JS-Laufzeit am
+ * ehesten nicht hat. `check-companion-boundary` verbietet dieser Datei
+ * deshalb, ihn zu erreichen.
+ *
+ * Die Folge steht hier, statt entdeckt zu werden: **ein Telefon kann so einen
+ * Raum heute holen und nicht lesen.** Das Holen ist eine Anfrage wie jede
+ * andere; das Entschlüsseln wohnt in der Schale.
+ */
+export interface PicoCompanionReaderCustodyBundle {
+  domain: Record<string, unknown>;
+  readerGrant: Record<string, unknown>;
+  writerGrants: Record<string, unknown>[];
+  rotations: Record<string, unknown>[];
+  items: Record<string, unknown>[];
+}
+
+export async function fetchPicoCompanionReaderCustodyBundle(input: {
+  linkClient: PicoLinkDirectClient;
+  domainAuthorityId: string;
+}): Promise<PicoCompanionReaderCustodyBundle> {
+  const answer = await input.linkClient.request('home.reader_custody.read', {
+    domainAuthorityId: input.domainAuthorityId,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(
+      typeof refusal === 'string' ? refusal : `reader_custody_read_${answer.outcome}`,
+    );
+  }
+  return answer.result as unknown as PicoCompanionReaderCustodyBundle;
+}

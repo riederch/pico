@@ -827,6 +827,28 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B27 — Der Raum war beschreibbar, erteilbar und unlesbar (2026-08-27).**
+Nachdem das zweite Gerät hereingelassen werden konnte, war die nächste Frage,
+ob es auch etwas sieht. Es sah nichts: die Leihe aus ADR 0098 verlangt vier
+Aufzeichnungen — Domäne, Leserrecht, Schreibrecht, Item —, und ein lesendes
+Gerät hat keine davon. Sie liegen beim Home, und die einzige Route dorthin war
+Home-zu-Home und lieferte **Projektionen statt Aufzeichnungen**: Ansichten
+ohne Unterschriften, die ein Daemon gar nicht prüfen könnte.
+
+`home.reader_custody.read` liefert das Bündel ganz, mit Unterschriften, und
+**nur an einen Leser** — nicht aus Vorsicht über den Geheimtext, sondern weil
+die Umschläge daneben für genau einen Schlüssel bestimmt sind und eine Liste
+davon eine Karte wäre, wer wo hineindarf. Ein unbekannter Raum und einer, den
+dieser Absender nicht lesen darf, bekommen dasselbe Nein (ADR 0077 C4).
+
+**Und eine Grenze, die der Grenzprüfer gezogen hat, nicht ich.** Das
+Entschlüsseln wollte in den schalenfreien Kern; `check-companion-boundary`
+verbot es: die Leihe braucht `node:worker_threads` — „the built-in least likely
+to exist on a mobile JS runtime" — und `apps/companion` ist der Code, den eine
+Android-Laufzeit trüge. Das Holen blieb im Kern, das Entschlüsseln zog in die
+Schale, und die Folge steht jetzt im Kopf der Datei statt entdeckt zu werden:
+**ein Telefon kann so einen Raum heute holen und nicht lesen.**
+
 **B26 — Der Raum konnte niemanden hereinlassen, und der Grund lag drei
 Schichten tiefer (2026-08-26).** Nachdem der Schreibweg stand, war die
 naheliegende Frage „wie wird ein Leser benannt?". Sie war die falsche.

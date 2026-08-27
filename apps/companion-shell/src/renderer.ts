@@ -93,6 +93,7 @@ declare global {
       createReaderCustodySpace(): Promise<void>;
       writeReaderCustodyNote(text: string): Promise<unknown>;
       letOtherDeviceRead(): Promise<unknown>;
+      readReaderCustodyNotes(): Promise<unknown>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
@@ -693,6 +694,8 @@ const readerCustodyCreate = requireButton('reader-custody-create');
 const readerCustodyText = requireInput('reader-custody-text');
 const readerCustodyWrite = requireButton('reader-custody-write');
 const readerCustodyLetOther = requireButton('reader-custody-let-other');
+const readerCustodyRead = requireButton('reader-custody-read');
+const readerCustodyList = requireElement('reader-custody-list');
 const readerCustodyStatus = requireElement('reader-custody-status');
 
 /**
@@ -710,6 +713,34 @@ readerCustodyCreate.addEventListener('click', () => {
       'The space is there. Who may read it is next door, and nobody may yet.';
   }, (error: unknown) => {
     readerCustodyStatus.textContent = refusalText(error, 'That space was not made.');
+  });
+});
+
+readerCustodyRead.addEventListener('click', () => {
+  /**
+   * ADR 0094. Der Klartext entsteht im Vault, nicht im Home: was über die
+   * Leitung kam, waren Aufzeichnungen mit Unterschriften, und der Daemon hat
+   * sie selbst geprüft. Diese Zeilen zeigen an, was zurückkam.
+   */
+  void window.picoCompanion.readReaderCustodyNotes().then((notes) => {
+    const read = notes as ReadonlyArray<{ memoryItemId: string; text: string }>;
+    readerCustodyList.replaceChildren();
+    for (const note of read) {
+      const item = document.createElement('li');
+      item.className = 'supplier-line';
+      const line = document.createElement('p');
+      line.className = 'detail';
+      line.textContent = note.text;
+      item.append(line);
+      readerCustodyList.append(item);
+    }
+    // Leer heisst leer: „nichts drin" ist eine Aussage, und eine erfundene
+    // Beruhigung wäre eine zweite, die niemand entschieden hat.
+    readerCustodyStatus.textContent = read.length === 0
+      ? 'Nothing has been written there yet.'
+      : `${read.length} of them.`;
+  }, (error: unknown) => {
+    readerCustodyStatus.textContent = refusalText(error, 'That could not be read.');
   });
 });
 

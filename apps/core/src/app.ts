@@ -4707,6 +4707,38 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * kaputte Übergabe mit einem Namen, den ein Absender lesen kann.
          */
         /**
+         * ADR 0094 mit ADR 0086. Das Bündel, das ein Leser zum Entschlüsseln
+         * braucht - und nur für einen Leser.
+         *
+         * Die Aufzeichnungen gehen **ganz** hinaus, mit ihren Unterschriften:
+         * der Daemon des Lesers prüft sie selbst, und ein Bündel, das hier
+         * zurechtgeschnitten würde, machte dieses Home zur zweiten Meinung
+         * über etwas, das es nicht entscheidet.
+         *
+         * `not_a_reader` für eine unbekannte Domäne **und** für eine, in die
+         * dieser Absender nicht darf: ein Nein, das die beiden unterscheidet,
+         * beantwortet die Frage „gibt es diesen Raum?" für jeden, der raten
+         * will (ADR 0077 C4).
+         */
+        case 'home.reader_custody.read': {
+          if (principal === undefined
+            || typeof args.domainAuthorityId !== 'string'
+            || Object.keys(args).length !== 1) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const bundle = readerCustody.readingBundleFor({
+            domainAuthorityId: args.domainAuthorityId,
+            readerIdentityKeyFingerprintHex: principal.picoIdentityFingerprintHex,
+          });
+          if (bundle === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_a_reader' } };
+          }
+          return {
+            outcome: 'ok',
+            result: bundle as unknown as Record<string, unknown>,
+          };
+        }
+        /**
          * ADR 0085 mit ADR 0089. Der Frische-Nachweis, in die Ablage.
          *
          * Dieselbe eine Tür wie die Route daneben: `publishReaderKeyFreshnessCheckpoint`

@@ -49,6 +49,10 @@
     "./link-direct-client": {
       "types": "./dist/link-direct-client.d.ts",
       "import": "./dist/link-direct-client.js"
+    },
+    "./reader-access": {
+      "types": "./dist/reader-access.d.ts",
+      "import": "./dist/reader-access.js"
     }
   },
   "bin": {

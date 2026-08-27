@@ -218,6 +218,8 @@ export interface PicoCompanionShellRuntime {
    */
   createReaderCustodySpace(): Promise<void>;
   writeReaderCustodyNote(text: string): Promise<{ memoryItemId: string }>;
+  /** ADR 0094. Was in dem Raum steht - für dieses Gerät, wenn es lesen darf. */
+  readReaderCustodyNotes(): Promise<readonly { memoryItemId: string; text: string }[]>;
   /** ADR 0085 mit ADR 0088. Das zweite Gerät derselben Person hereinlassen. */
   letOtherDeviceReadReaderCustody(): Promise<{ readerDelegationId: string }>;
   /** ADR 0140 RL4. Was Pico ohne Anwesende tun darf, gesetzt und zurückgenommen. */
@@ -891,6 +893,29 @@ export async function startPicoCompanionShellRuntime(input: {
           sodium: input.sodium,
           text,
           ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+      }),
+      readReaderCustodyNotes: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { readPicoCompanionReaderCustodySpace } =
+          await import('@pico/companion/reader-custody-space');
+        const space = readPicoCompanionReaderCustodySpace(profilePath);
+        if (space === undefined) {
+          throw new Error('no_reader_custody_space');
+        }
+        const { readPicoCompanionReaderCustodyNotes } =
+          await import('./reader-custody-read.js');
+        return await readPicoCompanionReaderCustodyNotes({
+          linkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          socketPath: input.vaultSocketPath ?? defaultPicoVaultDaemonSocketPath(),
+          readerKeyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
+          domainAuthorityId: space.domainAuthorityId,
         });
       }),
       letOtherDeviceReadReaderCustody: async () => await serialized(async () => {

@@ -1183,6 +1183,16 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    picoCompanionIpcChannels.readReaderCustodyNotes,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      return await runtime.readReaderCustodyNotes();
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.letOtherDeviceRead,
     async (event: IpcMainInvokeEvent) => {
       assertRendererSender(event);
