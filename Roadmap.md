@@ -906,6 +906,16 @@ Offen und benannt: eine **andere Person** hereinlassen verlangt, dass deren
 Gerät binnen fünf Minuten wach ist (ADR 0085); und ein Telefon als Leser
 braucht eine andere Form, weil ADR 0096 nicht verschränkt.
 
+**Nachgetragen am 2026-08-27**: der Durchlauf ist ein Test geworden.
+`apps/companion-shell/src/reader-custody-real-process.test.ts` geht denselben
+Weg gegen dieselben echten Prozesse, mit denen E2 bis E5 daneben geprüft
+werden - anlegen, hineinschreiben, zurücklesen -, und hält die drei Sätze fest,
+die der Weg von Hand gelernt hat: dass ein zweites Drücken fortsetzt, dass
+„du hast nur dieses eine Gerät" gesagt wird, und dass die Antwort vom Home kam.
+Ein Weg, der nur von Hand gegangen wird, wird einmal gegangen. Gefälscht durch
+Entfernen genau des Falls, der still ausgeliefert worden war: vier der fünf
+Tests fallen mit `unknown_authority_resource`.
+
 **B30 — Ich habe drei Türen gebaut, die es schon gab (2026-08-27).**
 Beim Aufsetzen des Durchlaufs stand im Nutzungstext des Vault-CLI eine
 Unterkommando-Liste, und darin `ceremony publish-checkpoint`. Nachgesehen: der
