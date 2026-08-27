@@ -2,6 +2,29 @@
 
 ## Status
 
+Status note, 2026-08-27 (später am Tag): **E5 trägt alle vier
+Bedienelemente.** Die Notiz darunter zählte drei und nannte das vierte offen -
+eine Domäne rotieren. Zwischen den beiden Notizen kam ein Fund dazwischen, der
+das vierte von einer Vollständigkeitsfrage in eine Notwendigkeit verwandelte:
+einen Lesezugang zu **beenden** hat nie funktioniert (Befund B34), und seit es
+funktioniert, verschließt jedes Beenden die Domäne mit `rotation_required`. Eine
+Person erreicht diese Sackgasse in vier Knopfdrücken.
+
+Gebaut ist deshalb `home.reader_custody.rotation.read` - eine eigene Tür, weil
+das Lesebündel Leser bedient und ihnen die verbleibenden Leser nicht aufzählen
+darf, während für die Besitzerin genau diese Aufzählung der Inhalt ist -, dazu
+`rotatePicoCompanionReaderCustodyDomain` und ein Knopf im Fenster.
+
+**Drei Stufen derselben Sackgasse lagen dahinter**, jede erst sichtbar, als die
+davor behoben war: das eigene Schreibrecht gehört nach der Rotation zur alten
+Fassung; ein zweites Gerät steht genauso da, wenn das erste rotiert hat; und
+die Raumdatei trug die Rotationskette nicht mit, ohne die der Vault die beiden
+Fassungen nicht verbinden kann. Alle drei kamen aus Durchläufen gegen ein
+laufendes Home, keine aus einem Test. Befund B35 hält sie fest.
+
+Offen bleibt der Fall, für den ADR 0085 nicht reicht: eine andere Person
+hereinzulassen verlangt, dass deren Gerät binnen fünf Minuten wach ist.
+
 Status note, 2026-08-27: **E5s Ast ist zum ersten Mal wirklich gegangen
 worden - und der Weg fand drei Dinge, die vier Gates und tausend Tests nicht
 fanden.** Die Notiz darunter hielt fest, dass gebaut ist, was E5 verlangt. Was

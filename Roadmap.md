@@ -827,6 +827,51 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B35 — Das Schloss wechseln, und die drei Sackgassen dahinter (2026-08-27).**
+B34 machte eine Sackgasse erreichbar, die vorher hinter einem Fehler lag: seit
+das Beenden eines Lesezugangs wirklich geht, verschließt jedes Beenden die
+Domäne. Jede beendete Leserberechtigung erzeugt eine Rotationsschuld (ADR
+0101), und solange sie besteht, weist das Home neue Items mit
+`rotation_required` ab. Das ist richtig - wer hinausgeworfen wurde, hält den
+alten KEK, und ohne Wechsel liefe alles Neue weiter unter genau ihm. Falsch war
+nur, dass kein Produktweg sie begleichen konnte: der Vault konnte rotieren, der
+Daemon hatte `ceremonyRotateDomain`, das Home nahm `reader_custody_kek_rotation`
+an - dazwischen fehlte der Companion. E5s viertes Bedienelement.
+
+**Der Bau fand drei weitere Stufen derselben Sackgasse**, jede erst sichtbar,
+als die davor behoben war. Keine davon war zu erraten; jede kam aus einem
+Durchlauf gegen ein laufendes Home:
+
+1. **Rotieren allein reicht nicht.** Danach gehört das Schreibrecht dieses
+   Geräts zur alten Fassung, und `recordItem` verlangt, dass Item *und* Recht
+   die geltende nennen - `inactive_writer_grant`, eine Stufe später. Das neue
+   Recht gehört deshalb in dieselbe Handlung: „das Schloss wechseln" heißt für
+   eine Person, danach wieder hineinschreiben zu können.
+2. **Ein zweites Gerät steht genauso da**, wenn das erste rotiert hat: kein
+   offener Anlass, aber ein Recht der alten Fassung. Ein Knopf, der dann
+   „nichts zu tun" sagte, wäre für dieses Gerät eine Endlosschleife. Derselbe
+   Knopf holt es jetzt nach.
+3. **Die Raumdatei trug die Kette nicht mit.** Ohne die Rotationsaufzeichnungen
+   dazwischen kann der Vault ein Recht der Fassung zwei nicht gegen eine Domäne
+   der Fassung eins prüfen - `invalid_reader_custody_writer_grant`, für ein
+   Recht, das gerade erst richtig erteilt wurde. `encryptPicoReaderCustodyItem`
+   kannte die Kette seit jeher; nur die Daemon-Familie reichte sie nicht durch.
+   Nachtragen ist Buchhaltung und keine Zeremonie, also fragt es niemanden.
+
+Gebaut wurde dafür: `rotationBundleFor` im Home und die Link-Operation
+`home.reader_custody.rotation.read` - eine eigene Tür statt des Lesebündels,
+weil dessen Leser die verbleibenden Leser nicht aufgezählt bekommen dürfen,
+während für die Besitzerin genau diese Aufzählung der Inhalt ist. Dazu
+`rotatePicoCompanionReaderCustodyDomain`, `rotationRecords` durch die
+Encrypt-Familie, und ein Knopf mit vier Sätzen statt einem: rotiert; nur das
+eigene Recht erneuert; nur die Kette nachgetragen; oder es war nichts zu tun -
+und das letzte ist eine Aussage und keine Ablehnung (ADR 0118 O4).
+
+Der Realprozess-Test geht den Kreis jetzt ganz: zweites Gerät einziehen,
+hereinlassen, hinauswerfen, `rotation_required` sehen, wechseln, wieder
+schreiben, und ein zweites Drücken sagt „nichts zu tun". Damit trägt E5 alle
+vier Bedienelemente.
+
 **B34 — Einen Lesezugang zu beenden hat nie funktioniert (2026-08-27).**
 Der Knopf steht seit dem 2026-08-24 neben der Leserschaft im Fenster: einen
 vergebenen Lesezugang beenden, mit einem der fünf Gründe als Teil der
