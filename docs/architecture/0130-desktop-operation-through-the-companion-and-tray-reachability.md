@@ -2,6 +2,44 @@
 
 ## Status
 
+Status note, 2026-08-27: **E5s Ast ist zum ersten Mal wirklich gegangen
+worden - und der Weg fand drei Dinge, die vier Gates und tausend Tests nicht
+fanden.** Die Notiz darunter hielt fest, dass gebaut ist, was E5 verlangt. Was
+sie nicht behaupten konnte, ist, dass es *trägt*: geprüft war der Ast bis zur
+Ablage, und ein Ast, der bis zur Ablage geprüft wird, kann alles Nötige ablegen
+und trotzdem unlesbar sein.
+
+Gegen ein laufendes Home und einen laufenden Vault-Daemon - Raum anlegen,
+hineinschreiben, das zweite Gerät hereinlassen, zurücklesen - kam heraus:
+
+1. `ceremonyCreateDomain` bekam ein Feld zu viel und antwortete
+   `invalid_request`; ein `as never` am Aufruf hatte die Typprüfung
+   stillgelegt.
+2. Der Domänenname war fest. Eine halb durchgekommene Anlage hinterließ eine
+   Zeile, und `UNIQUE (home_id, privacy_domain)` machte daraus ein
+   `conflicting_record`, aus dem eine Person nie wieder herausgekommen wäre.
+   Der Name trägt jetzt die Autorität in sich, und ein zweites Drücken setzt
+   fort statt abzulehnen.
+3. Die Home-Seite kannte `reader_custody_writer_grant` gar nicht - und das war
+   grün ausgeliefert worden, weil der Test des Clients den **Namen** behauptet
+   und nicht, dass jemand ihn annimmt.
+
+Der Weg ist deshalb kein Skript mehr, sondern
+`apps/companion-shell/src/reader-custody-real-process.test.ts`: dieselben
+echten Prozesse, mit denen E2 bis E4 daneben geprüft werden, und geprüft wird
+nicht, dass die Aufrufe zurückkehren, sondern dass derselbe Satz wieder
+herauskommt. Daneben hält `check-authority-resources.mjs` die geschlossene
+Liste `picoHomeAuthoritySubmitResources` gegen die Fallunterscheidung des
+Homes; ein Client tippt gegen dieselbe Liste.
+
+**Was E5 damit ist.** Von seinen vier Bedienelementen stehen drei im Fenster:
+Domäne anlegen, Leser berechtigen und - innerhalb des Berechtigens - den
+Frische-Nachweis veröffentlichen. Offen bleibt das vierte, eine Domäne zu
+rotieren: das existiert im Home, im Vault und im CLI und hat keinen
+Companion-Weg. Und benannt offen bleibt der Fall, für den ADR 0085 nicht
+reicht - eine **andere Person** hereinzulassen verlangt, dass deren Gerät
+binnen fünf Minuten wach ist.
+
 Status note, 2026-08-26: **E5s andere Hälfte ist nicht mehr blockiert, weil der
 Ast ein Subjekt hat.** Die Notiz darunter hielt fest, dass Domänen anzulegen
 und Leser zu berechtigen Bedienelemente wären, deren gewöhnliche Wirkung
