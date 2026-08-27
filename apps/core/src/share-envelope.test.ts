@@ -14,6 +14,7 @@ import {
   picoHomeFoundingRecordSchema,
   picoIdentitySuite,
   picoShareSuite,
+  picoTestValidityWindow,
   type PicoHomeDomainReadGrantLifecycleRecord,
   type PicoHomeDomainReadGrantRecord,
   type PicoHomeFoundingRecord,
@@ -34,7 +35,20 @@ import {
 import { PicoShareEnvelopeIssuer } from './share-envelope.js';
 import { createPicoTestFirstDeviceEvidence } from './test-first-device-evidence.js';
 
-const AT = '2026-07-27T10:00:00.000Z';
+/**
+ * **Die Uhr dieser Datei geht mit** - und das ist hier keine Nachlässigkeit,
+ * sondern die einzige stimmige Wahl.
+ *
+ * `recordPicoHomeDomainReadGrant` nimmt kein `at` entgegen: ADR 0115 lässt das
+ * Home einen neuen Zuschuss mit seinem eigenen Jetzt stempeln. Ein Test, der
+ * daneben auf einen festen Zeitpunkt in der Vergangenheit misst, prüft dann
+ * zwei Uhren gegeneinander - und fällt um, sobald der Abstand zwischen ihnen
+ * groß genug wird. Genau das zeigte `pnpm clock:check` am 2026-08-27.
+ *
+ * Also geht alles in dieser Datei mit derselben Uhr: dieser Zeitpunkt und die
+ * Fenster aus `picoTestValidityWindow()` darum herum.
+ */
+const AT = new Date().toISOString();
 const HOME_ID = 'home_share_envelope_test';
 const DOMAIN = 'domain_share_envelope';
 const GRANT_ID = 'grant_share_envelope_test_0001';
@@ -229,7 +243,9 @@ describe('controller-signed share-envelope issuance (ADR 0084)', () => {
           buildPicoShareEnvelopeSignatureInput(prepared.pending.envelope),
           controller.privateKey,
         ),
-        new Date('2026-07-27T10:02:00.000Z'),
+        // Zwei Minuten nach `AT`, aus `AT` gerechnet: als festes Datum
+        // daneben geschrieben ging es mit, sobald die Uhr der Datei mitging.
+        new Date(new Date(AT).getTime() + 2 * 60 * 1_000),
       )).resolves.toEqual({ ok: false, reason: 'unknown_or_expired_issuance' });
       expect(fixture.store.picoShareEnvelopes()).toEqual([]);
     } finally {
@@ -257,7 +273,9 @@ describe('controller-signed share-envelope issuance (ADR 0084)', () => {
           buildPicoShareEnvelopeSignatureInput(prepared.pending.envelope),
           controller.privateKey,
         ),
-        new Date('2026-07-27T09:59:00.000Z'),
+        // Eine Minute *vor* `AT` - die zurückgestellte Wanduhr, um die es
+        // hier geht -, ebenfalls aus `AT` gerechnet.
+        new Date(new Date(AT).getTime() - 60 * 1_000),
       )).resolves.toEqual({ ok: false, reason: 'unknown_or_expired_issuance' });
       expect(fixture.store.picoShareEnvelopes()).toEqual([]);
     } finally {
@@ -513,8 +531,8 @@ function createFixture(options: {
     readerIdentityFingerprint,
     '["memory_read"]',
     'credential_share_envelope_test',
-    '2026-01-01T00:00:00.000Z',
-    '2027-01-01T00:00:00.000Z',
+    picoTestValidityWindow().validFrom,
+    picoTestValidityWindow().validUntil,
     AT,
     AT,
   );
@@ -636,8 +654,7 @@ function readerDelegation(): PicoIdentityDelegationSignatureInput {
     subjectSigningKeyFingerprintHex: deviceSigningFingerprint,
     subjectKeyAgreementKeyFingerprintHex: readerFingerprint,
     scopes: ['surface_session', 'decrypt_domain', 'receive_key_envelope'],
-    validFrom: '2026-01-01T00:00:00.000Z',
-    validUntil: '2027-01-01T00:00:00.000Z',
+    ...picoTestValidityWindow(),
     lifecycleOrder: 'seq:0000000000000002',
   };
 }
@@ -651,8 +668,7 @@ function domainGrant(): PicoHomeDomainReadGrantRecord {
     privacyDomain: DOMAIN,
     controllerPicoIdentityFingerprintHex: controllerFingerprint,
     readerPicoIdentityFingerprintHex: readerIdentityFingerprint,
-    validFrom: '2026-01-01T00:00:00.000Z',
-    validUntil: '2027-01-01T00:00:00.000Z',
+    ...picoTestValidityWindow(),
     lifecycleOrder: 'seq:0000000000000003',
   };
   return {
@@ -679,7 +695,7 @@ function revokeGrant(): PicoHomeDomainReadGrantLifecycleRecord {
     readerPicoIdentityFingerprintHex: readerIdentityFingerprint,
     status: 'revoked',
     reasonCategory: 'reader_removed',
-    changedAt: '2026-07-27T10:01:00.000Z',
+    changedAt: new Date(new Date(AT).getTime() + 60 * 1_000).toISOString(),
     lifecycleOrder: 'seq:0000000000000004',
   };
   return {
@@ -690,7 +706,7 @@ function revokeGrant(): PicoHomeDomainReadGrantLifecycleRecord {
       buildPicoHomeDomainReadGrantLifecycleSignatureInput(lifecycle),
       controller.privateKey,
     ),
-    createdAt: '2026-07-27T10:01:00.000Z',
+    createdAt: new Date(new Date(AT).getTime() + 60 * 1_000).toISOString(),
   };
 }
 
@@ -754,7 +770,16 @@ function currentCheckpoint(
     delegationId: query.delegationId,
     observedThroughLifecycleOrder: query.locallyObservedThroughLifecycleOrder,
     checkedAt: query.evaluatedAt,
-    freshUntil: '2026-07-27T10:04:00.000Z',
+    /**
+     * Aus `checkedAt`, nicht daneben geschrieben: eine Frische gilt ab dem
+     * Augenblick, in dem nachgesehen wurde, und ADR 0085 gibt ihr dafür
+     * fünf Minuten. Als festes Datum galt sie stattdessen bis zu einem
+     * Vormittag im Juli 2026 - für jeden Aufrufer, der die Wanduhr benutzt,
+     * also seither gar nicht mehr.
+     */
+    freshUntil: new Date(
+      new Date(query.evaluatedAt).getTime() + 4 * 60 * 1_000,
+    ).toISOString(),
   };
 }
 

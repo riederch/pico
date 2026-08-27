@@ -84,17 +84,33 @@ export async function createPicoCompanionReaderCustodySpace(input: {
   fetch?: typeof fetch;
 }): Promise<PicoCompanionReaderCustodySpace> {
   /**
-   * **Ein zweites Anlegen ersetzt kein erstes.** Die Datei daneben hält genau
-   * einen Raum; ein zweiter überschriebe sie, und was im ersten steht, bliebe
-   * beim Home liegen, für dieses Gerät unerreichbar - eine Person, die zweimal
-   * drückt, verlöre den Zugang zu ihren eigenen Sätzen, ohne dass etwas
-   * fehlschlüge.
+   * **Ein zweites Drücken macht keinen zweiten Raum - es beendet den ersten.**
    *
-   * Benannt statt still: „du hast schon einen" ist etwas, worauf jemand
-   * handeln kann.
+   * Am Durchlauf gelernt (2026-08-27). Zuerst stand hier eine Ablehnung, und
+   * die war für den falschen Fehlschlag gedacht: „du hast schon einen" ist
+   * richtig, wenn der Raum fertig ist, und falsch, wenn die Abgabe auf halbem
+   * Weg abgebrochen ist. Genau das geschah - die Domäne lag beim Home, das
+   * Schreibrecht nicht, und die Person hätte für immer eine Ablehnung
+   * gelesen.
+   *
+   * Die Abgabe ist wiederholbar: dieselben Aufzeichnungen noch einmal zu
+   * schicken beantwortet der Home mit „schon da" und nicht mit einem Fehler.
    */
-  if (readPicoCompanionReaderCustodySpace(input.profilePath) !== undefined) {
-    throw new Error('reader_custody_space_exists');
+  const unfinished = readPicoCompanionReaderCustodySpace(input.profilePath);
+  if (unfinished !== undefined) {
+    await submitPicoCompanionReaderCustodyRecords({
+      linkClient: await createPicoCompanionLinkClient({
+        profile: input.profile,
+        daemonClient: input.daemonClient,
+        sodium: input.sodium,
+        ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+      }),
+      records: {
+        domainRecord: unfinished.domainRecord,
+        writerGrantRecord: unfinished.writerGrantRecord,
+      },
+    });
+    return unfinished;
   }
   const homeId = await homeIdOf(input);
   /**
@@ -127,9 +143,23 @@ export async function createPicoCompanionReaderCustodySpace(input: {
 
   const authorizedAt = new Date().toISOString();
   const domainAuthorityId = `authority_${randomUUID()}`;
+  /**
+   * **Der Raumname trägt seine Kennung** - am Durchlauf gelernt. Ein fester
+   * Name kollidiert mit `UNIQUE (home_id, privacy_domain)`, sobald irgendwann
+   * einmal eine Domäne dieses Namens beim Home liegt, die dieses Gerät nicht
+   * mehr kennt. Dann wäre jeder weitere Versuch `conflicting_record`, für
+   * immer, ohne dass die Person etwas tun könnte.
+   */
+  const domainId = `chosen-readers-${domainAuthorityId.slice(-12)}`;
+  /**
+   * **Ohne `agreementKeyFingerprintHex`** - am Durchlauf gelernt, 2026-08-27.
+   * Die Domänen-Zeremonie kennt es nicht: der KEK entsteht im Daemon und wird
+   * auf den Leserschlüssel *als Datensatz* versiegelt, nicht über eine offene
+   * Sitzung. Ein Feld zu viel ist hier `invalid_request`, und das `as never`
+   * unten hat die Typprüfung an genau dieser Stelle stummgeschaltet.
+   */
   const { domainRecord } = await input.daemonClient.ceremonyCreateDomain({
     signerKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    agreementKeyFingerprintHex: agreement.keyFingerprintHex,
     ownerReaderKeyRecord: {
       suite: picoIdentitySuite,
       keyRole: 'device_key_agreement',
@@ -138,7 +168,7 @@ export async function createPicoCompanionReaderCustodySpace(input: {
     domainAuthorityId,
     homeId,
     hostSigningKeyFingerprintHex: input.profile.host.signingKeyFingerprintHex,
-    domainId: 'chosen-readers',
+    domainId,
     authorizedAt,
     lifecycleOrder: 'seq:0000000000000001',
   } as never);
@@ -160,33 +190,35 @@ export async function createPicoCompanionReaderCustodySpace(input: {
     lifecycleOrder: 'seq:0000000000000002',
   } as never);
 
-  const linkClient = await createPicoCompanionLinkClient({
-    profile: input.profile,
-    daemonClient: input.daemonClient,
-    sodium: input.sodium,
-    ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
-  });
-  await submitPicoCompanionReaderCustodyRecords({
-    linkClient,
-    records: { domainRecord, writerGrantRecord },
-  });
-
   const space: PicoCompanionReaderCustodySpace = {
     domainRecord,
     writerGrantRecord,
-    domainId: 'chosen-readers',
+    domainId,
     domainAuthorityId,
   };
   /**
-   * Erst schreiben, wenn das Home die beiden hat. Ein Gerät, das seinen Raum
-   * kennt und das Home nicht, böte einer Person an, hineinzuschreiben, und
-   * jeder Satz würde abgelehnt.
+   * **Erst aufschreiben, dann abgeben** - umgedreht am 2026-08-27, nachdem der
+   * Durchlauf gezeigt hat, was die andere Reihenfolge kostet. Sie war für den
+   * Fehlschlag „Home kennt den Raum nicht" gedacht; der teurere ist der
+   * andere: eine Abgabe, die auf halbem Weg abbricht, ließ ein Gerät ohne
+   * jede Spur zurück, während beim Home schon etwas lag. Ein Raum, den dieses
+   * Gerät kennt und der Home noch nicht, ist reparierbar - der umgekehrte
+   * Fall war es nicht.
    */
   writeFileSync(
     picoCompanionReaderCustodySpacePath(input.profilePath),
     JSON.stringify(space, null, 2),
     'utf8',
   );
+  await submitPicoCompanionReaderCustodyRecords({
+    linkClient: await createPicoCompanionLinkClient({
+      profile: input.profile,
+      daemonClient: input.daemonClient,
+      sodium: input.sodium,
+      ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+    }),
+    records: { domainRecord, writerGrantRecord },
+  });
   return space;
 }
 

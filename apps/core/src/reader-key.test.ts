@@ -408,6 +408,12 @@ function recordReaderDelegation(store: EventStore) {
     subjectSigningKeyFingerprintHex: signingFingerprint,
     subjectKeyAgreementKeyFingerprintHex: agreementFingerprint,
     scopes: ['surface_session', 'decrypt_domain', 'receive_key_envelope'],
+    /**
+     * Das feste Fenster bleibt hier: dieser Test sagt etwas *über* das Fenster
+     * aus und misst gegen eigene Zeitpunkte, nicht gegen die Wanduhr.
+     * `picoTestValidityWindow()` ist für die vielen anderen, denen es
+     * gleichgültig ist.
+     */
     validFrom: '2026-01-01T00:00:00.000Z',
     validUntil: '2027-01-01T00:00:00.000Z',
     lifecycleOrder: 'seq:0000000000000001',

@@ -401,6 +401,35 @@ export const picoLinkDirectResponseEnvelopeSchema =
  * adding a route. The two setup operations are pre-authority by nature -
  * a claim cannot carry a membership because no Home exists yet.
  */
+/**
+ * ADR 0130 E5. Die Autoritätsaufzeichnungen, die ein Gerät abgeben darf.
+ *
+ * **Eine Liste statt einer Textsuche** (2026-08-27). Diese Wörter stehen im
+ * Feld `resource` einer Anfrage und nicht im Namen eines Vorgangs, also findet
+ * sie kein Vergleich über die Vorgangsliste - genau daran ist es
+ * vorbeigegangen, dass `reader_custody_writer_grant` im Home fehlte, während
+ * ein Client es schickte. `release:verify` blieb dabei grün: der Test des
+ * Clients behauptet den *Namen* und nicht, dass jemand ihn annimmt.
+ *
+ * Eine erste Prüfung dagegen suchte `resource: '...'` im Quelltext und sah die
+ * Stelle nicht, an der die Wörter als Feldwerte in einem Array stehen. Eine
+ * Suche nach einer Form findet die andere Form nicht; deshalb hält es jetzt
+ * der Compiler.
+ */
+export const picoHomeAuthoritySubmitResources = [
+  'membership',
+  'membership_lifecycle',
+  'reader_key_freshness_checkpoint',
+  'reader_custody_domain',
+  'reader_custody_writer_grant',
+  'reader_custody_reader_grant',
+  'reader_custody_reader_grant_lifecycle',
+  'reader_custody_kek_rotation',
+] as const;
+
+export type PicoHomeAuthoritySubmitResource =
+  typeof picoHomeAuthoritySubmitResources[number];
+
 export const picoLinkDirectOperations = [
   'home.setup.read',
   'home.claim.submit',
@@ -5366,6 +5395,7 @@ export * from './time-authority.js';
 // than growing a barrel no consumer can opt out of.
 export * from './storage-pressure.js';
 export * from './appearance.js';
+export * from './test-window.js';
 
 function canonicalScopeSet(scopes: readonly string[]): PicoIdentityDelegationScope[] {
   if (!Array.isArray(scopes) || scopes.length === 0) {

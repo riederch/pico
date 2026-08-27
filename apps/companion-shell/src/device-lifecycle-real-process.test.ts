@@ -1,3 +1,4 @@
+import { picoTestValidityWindow } from '@pico/protocol';
 // The window never sees the core's rows: the main process renders them on
 // their way across (ADR 0113 C2), and a test that skipped that step would be
 // checking a shape nobody is shown.
@@ -34,6 +35,17 @@ import {
   picoCompanionDeviceAuthorityLines,
   picoCompanionDeviceAuthoritySummary,
 } from './contract.js';
+
+/**
+ * Ein Jahr ab jetzt, nicht der Neujahrstag 2027.
+ *
+ * Diese Tests fahren ein echtes Home hoch, das an seiner eigenen Uhr misst.
+ * Ein festes Ende hätte sie am 2027-01-01 gemeinsam umgeworfen - dieselbe
+ * Sorte Fehlschlag, die am 2026-08-27 drei Tests im Kern erwischt hat, nur
+ * vier Monate später und mit neunzehn auf einmal. `pnpm clock:check` stellt
+ * die Uhr ein Jahr vor und sucht danach.
+ */
+const VALID_UNTIL = picoTestValidityWindow().validUntil;
 
 /**
  * ADR 0130 E3 - which devices a Home answers to, and ending one, against real
@@ -181,7 +193,7 @@ async function foundedDevice(onApproval: () => void = () => undefined): Promise<
     passphrase,
     sodium: sodium as unknown as VaultSodium,
     decisions: { decideApproval: async () => true },
-    delegationValidUntil: '2027-01-01T00:00:00.000Z',
+    delegationValidUntil: VALID_UNTIL,
   });
 
   const profile = readPicoCompanionProfile(profilePath);
@@ -263,7 +275,10 @@ describe('ADR 0130 E3 - the device lifecycle from the Client', () => {
 
     const [line] = picoCompanionDeviceAuthorityLines(picoCompanionRenderedDeviceAuthority(view));
     expect(line?.headline).toBe('This device');
-    expect(line?.detail).toContain('2027-01-01');
+    // Der Tag, den die Bevollmächtigung wirklich trägt - aus derselben
+    // Konstante, aus der sie gebaut wurde. Ein abgeschriebenes Datum sagte
+    // dasselbe nur so lange, wie beide zufällig übereinstimmten.
+    expect(line?.detail).toContain(VALID_UNTIL.slice(0, 10));
     expect(line?.endLabel).not.toBeNull();
     // One device, and the sentence says what ending it costs before it is
     // ended rather than afterwards.

@@ -62,6 +62,28 @@ export interface ReaderCustodyRecords {
   writerIdentityFingerprint: string;
 }
 
+/**
+ * Ein Fenster, das an seinem Anker hängt - nicht daneben geschrieben.
+ *
+ * Am 2026-08-27 um 10:00 UTC wurden drei Tests rot, ohne dass jemand etwas
+ * geändert hatte: das `validUntil` des Schreibrechts stand hier als zweites
+ * Datum von Hand, genau einen Monat nach dem Anker, und an dem Tag lief es ab.
+ * Ein Datum, das neben seinem Anker geschrieben wird, driftet von ihm weg -
+ * dieselbe Regel wie überall sonst, nur in einer Vorrichtung.
+ *
+ * Ein Jahr, weil das Fenster hier nicht geprüft wird: Tests, die *über* das
+ * Ablaufen etwas aussagen, setzen ihr `validUntil` selbst.
+ */
+function aMinuteAfter(anchor: string): string {
+  return new Date(new Date(anchor).getTime() + 60_000).toISOString();
+}
+
+function aYearAfter(anchor: string): string {
+  const at = new Date(anchor);
+  at.setUTCFullYear(at.getUTCFullYear() + 1);
+  return at.toISOString();
+}
+
 export function makeReaderCustodyRecords(binding: {
   homeId: string;
   hostSigningKeyFingerprintHex: string;
@@ -86,7 +108,16 @@ export function makeReaderCustodyRecords(binding: {
   const HOME_ID = binding.homeId;
   const HOST_FINGERPRINT = binding.hostSigningKeyFingerprintHex;
   const DOMAIN_ID = binding.domainId ?? 'domain_reader_private';
-  const AUTHORIZED_AT = binding.authorizedAt ?? '2026-07-27T10:00:00.000Z';
+  /**
+   * **Ohne Anker die echte Uhr**, nicht ein festes Datum.
+   *
+   * Ein Test, der über den Produktweg abgibt, misst an der Uhr des Homes; eine
+   * Vorrichtung mit einem festen Anker spannt dann ein Fenster auf, das
+   * irgendwann hinter der Gegenwart liegt. Genau daran ist
+   * `reader-custody-submit.test.ts` am 2026-08-27 gescheitert. Wer ein festes
+   * Ergebnis braucht, gibt den Anker an - und die Speicher-Tests tun das.
+   */
+  const AUTHORIZED_AT = binding.authorizedAt ?? new Date().toISOString();
   const identityKeypair = binding.ownerKeypair ?? sodium.crypto_sign_keypair();
   const readerKeypair = sodium.crypto_box_keypair();
   const writerKeypair = sodium.crypto_sign_keypair();
@@ -169,7 +200,7 @@ export function makeReaderCustodyRecords(binding: {
     writerIdentityKeyFingerprintHex: writerIdentityFingerprint,
     writerDeviceSigningKeyFingerprintHex: writerFingerprint,
     validFrom: AUTHORIZED_AT,
-    validUntil: '2026-08-27T10:00:00.000Z',
+    validUntil: aYearAfter(AUTHORIZED_AT),
     lifecycleOrder: 'seq:0000000000000002',
   };
   const writerGrant: PicoReaderCustodyWriterGrantRecord = {
@@ -202,7 +233,12 @@ export function makeReaderCustodyRecords(binding: {
     contentCiphertextDigestHex: hashHex(contentCiphertext),
     dekWrapNonceHex: '33'.repeat(24),
     wrappedDekDigestHex: hashHex(wrappedDek),
-    createdAt: '2026-07-27T10:01:00.000Z',
+    /**
+     * Eine Minute nach dem Anker, nicht ein Datum daneben: geschrieben wird
+     * innerhalb des Schreibrechts, und ein festes `createdAt` fiel aus dem
+     * Fenster, sobald der Anker mitging.
+     */
+    createdAt: aMinuteAfter(AUTHORIZED_AT),
   };
   const itemRecord: PicoReaderCustodyItemRecord = {
     schema: picoReaderCustodyItemRecordSchema,
@@ -293,7 +329,7 @@ export function makeReaderCustodyReaderGrant(
     accessMode: 'from_version' as const,
     firstKekVersion: 1,
     validFrom: records.domain.domain.authorizedAt,
-    validUntil: input.validUntil ?? '2026-08-27T10:00:00.000Z',
+    validUntil: input.validUntil ?? aYearAfter(records.domain.domain.authorizedAt),
     lifecycleOrder: input.lifecycleOrder ?? 'seq:0000000000000003',
   };
   return {

@@ -1,3 +1,4 @@
+import { picoTestValidityWindow } from '@pico/protocol';
 import { describe, expect, it } from 'vitest';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
@@ -7,6 +8,17 @@ import {
   revokePicoCompanionDeviceAuthority,
 } from './device-lifecycle.js';
 import type { PicoCompanionProfile } from './profile.js';
+
+/**
+ * Ein Jahr ab jetzt, nicht der Neujahrstag 2027.
+ *
+ * Diese Tests fahren ein echtes Home hoch, das an seiner eigenen Uhr misst.
+ * Ein festes Ende hätte sie am 2027-01-01 gemeinsam umgeworfen - dieselbe
+ * Sorte Fehlschlag, die am 2026-08-27 drei Tests im Kern erwischt hat, nur
+ * vier Monate später und mit neunzehn auf einmal. `pnpm clock:check` stellt
+ * die Uhr ein Jahr vor und sucht danach.
+ */
+const VALID_UNTIL = picoTestValidityWindow().validUntil;
 
 /**
  * ADR 0130 E3's two refusals, which the real-process test cannot reach yet.
@@ -66,7 +78,7 @@ function linkClient(asked: string[]): PicoLinkDirectClient {
             deviceSigningKeyFingerprintHex,
             deviceKeyAgreementKeyFingerprintHex,
             lifecycleOrder: 'seq:0000000000000001',
-            validUntil: '2027-01-01T00:00:00.000Z',
+            validUntil: VALID_UNTIL,
             status: 'active',
           }],
           pendingRecovery: null,

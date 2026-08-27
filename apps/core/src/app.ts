@@ -3487,6 +3487,31 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     };
   }
 
+  /**
+   * ADR 0086 mit ADR 0130 E5. Das Schreibrecht als Autoritätsressource.
+   *
+   * **Es fehlte in dieser Liste**, und das war die einzige echte Lücke von
+   * vieren, die am 2026-08-26 wie vier aussahen: Domäne, Leser-Grant,
+   * Leser-Lebenslauf, Rotation und Frische-Nachweis gehen längst durch diese
+   * eine Tür. Ein eigener Vorgang je Aufzeichnung wäre eine zweite Tür in
+   * eine geschlossene Liste gewesen, die ADR 0107 absichtlich klein hält.
+   */
+  function recordReaderCustodyWriterGrant(body: unknown): FoundationOperationResult {
+    const result = readerCustody.recordWriterGrant(
+      body as PicoReaderCustodyWriterGrantRecord,
+    );
+    if (!result.ok) {
+      return {
+        statusCode: readerCustodyFailureStatus(result.reason),
+        body: { error: result.reason },
+      };
+    }
+    return {
+      statusCode: result.inserted ? 201 : 200,
+      body: { writerGrant: result.value as unknown as Record<string, unknown> },
+    };
+  }
+
   function recordReaderCustodyDomain(body: unknown): FoundationOperationResult {
     const result = readerCustody.recordDomain(body as PicoReaderCustodyDomainRecord);
     if (!result.ok) {
@@ -3588,6 +3613,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         return publishReaderKeyFreshnessCheckpoint(args.record);
       case 'reader_custody_domain':
         return recordReaderCustodyDomain(args.record);
+      case 'reader_custody_writer_grant':
+        return recordReaderCustodyWriterGrant(args.record);
       case 'reader_custody_reader_grant':
         return await recordReaderCustodyReaderGrant(args.record);
       case 'reader_custody_reader_grant_lifecycle':

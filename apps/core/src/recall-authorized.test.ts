@@ -7,6 +7,7 @@ import {
   buildPicoHomeDomainReadGrantSignatureInput,
   picoHomeDomainReadGrantRecordSchema,
   picoIdentitySuite,
+  picoTestValidityWindow,
 } from '@pico/protocol';
 import { parsePicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { picoPresenceSchema } from '@pico/protocol/presence';
@@ -183,8 +184,7 @@ describe('ADR 0116 W1 with ADR 0082 - the way a person actually reads their memo
       controllerPicoIdentityFingerprintHex:
         founding.founding.homeHostPicoIdentityFingerprintHex,
       readerPicoIdentityFingerprintHex: founding.founding.homeHostPicoIdentityFingerprintHex,
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000001',
     };
     const signed = {

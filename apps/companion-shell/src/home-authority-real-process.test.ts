@@ -1,3 +1,4 @@
+import { picoTestValidityWindow } from '@pico/protocol';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -24,6 +25,17 @@ import {
   openPicoCompanionVaultProductSession,
   type PicoCompanionVaultProductSession,
 } from '@pico/companion/vault-product-session';
+
+/**
+ * Ein Jahr ab jetzt, nicht der Neujahrstag 2027.
+ *
+ * Diese Tests fahren ein echtes Home hoch, das an seiner eigenen Uhr misst.
+ * Ein festes Ende hätte sie am 2027-01-01 gemeinsam umgeworfen - dieselbe
+ * Sorte Fehlschlag, die am 2026-08-27 drei Tests im Kern erwischt hat, nur
+ * vier Monate später und mit neunzehn auf einmal. `pnpm clock:check` stellt
+ * die Uhr ein Jahr vor und sucht danach.
+ */
+const VALID_UNTIL = picoTestValidityWindow().validUntil;
 
 /**
  * ADR 0130 E4 - what the Home Host Pico decides about the Home itself, from
@@ -162,7 +174,7 @@ async function foundedDevice(): Promise<{
     passphrase,
     sodium: sodium as unknown as VaultSodium,
     decisions: { decideApproval: async () => true },
-    delegationValidUntil: '2027-01-01T00:00:00.000Z',
+    delegationValidUntil: VALID_UNTIL,
   });
   const profile = readPicoCompanionProfile(profilePath);
   const session = await openPicoCompanionVaultProductSession({
@@ -271,7 +283,7 @@ describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => 
       livingDeviceLinkClient: linkClient,
       sodium: sodium as unknown as VaultSodium,
       subjectPicoIdentityFingerprintHex: subject,
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
     });
     expect(membership.credentialId).toMatch(/^membership_[0-9a-f]{32}$/u);
 
@@ -307,7 +319,7 @@ describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => 
     );
     expect(admitted?.role).toBe('home_member');
     expect(admitted?.status).toBe('active');
-    expect(admitted?.validUntil).toBe('2027-01-01T00:00:00.000Z');
+    expect(admitted?.validUntil).toBe(VALID_UNTIL);
   }, 300_000);
 
   it('ends a membership, and the Home says so afterwards', async () => {
@@ -337,7 +349,7 @@ describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => 
       livingDeviceLinkClient: linkClient,
       sodium: sodium as unknown as VaultSodium,
       subjectPicoIdentityFingerprintHex: subject,
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
     });
     const admitted = (await readPicoCompanionHomeMembers({
       profile,
@@ -454,7 +466,7 @@ describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => 
       livingDeviceLinkClient: linkClient,
       sodium: sodium as unknown as VaultSodium,
       subjectPicoIdentityFingerprintHex: profile.identity.keyFingerprintHex,
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
     })).rejects.toThrow('subject_is_this_identity');
 
     await expect(issuePicoCompanionMembership({
@@ -463,7 +475,7 @@ describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => 
       livingDeviceLinkClient: linkClient,
       sodium: sodium as unknown as VaultSodium,
       subjectPicoIdentityFingerprintHex: 'not-a-fingerprint',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
     })).rejects.toThrow('invalid_pico_companion_membership_subject');
   }, 300_000);
 });

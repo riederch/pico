@@ -1,5 +1,17 @@
+import { picoTestValidityWindow } from '@pico/protocol';
 import { describe, expect, it } from 'vitest';
 import { foundPicoCompanionHome } from './founding.js';
+
+/**
+ * Ein Jahr ab jetzt, nicht der Neujahrstag 2027.
+ *
+ * Diese Tests fahren ein echtes Home hoch, das an seiner eigenen Uhr misst.
+ * Ein festes Ende hätte sie am 2027-01-01 gemeinsam umgeworfen - dieselbe
+ * Sorte Fehlschlag, die am 2026-08-27 drei Tests im Kern erwischt hat, nur
+ * vier Monate später und mit neunzehn auf einmal. `pnpm clock:check` stellt
+ * die Uhr ein Jahr vor und sucht danach.
+ */
+const VALID_UNTIL = picoTestValidityWindow().validUntil;
 
 describe('ADR 0130 E2 - the address a Home is founded at', () => {
   it('is refused before anything is created', async () => {
@@ -29,7 +41,7 @@ describe('ADR 0130 E2 - the address a Home is founded at', () => {
         // Present because the type asks for them, and never consulted: the
         // refusal happens before a key is made or anybody is asked anything.
         decisions: {} as never,
-        delegationValidUntil: '2027-01-01T00:00:00.000Z',
+        delegationValidUntil: VALID_UNTIL,
       })).rejects.toThrow('invalid_companion_core_url');
     }
   });

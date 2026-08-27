@@ -1,3 +1,4 @@
+import { picoTestValidityWindow } from '@pico/protocol';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -29,6 +30,17 @@ import {
   openPicoCompanionVaultProductSession,
   type PicoCompanionVaultProductSession,
 } from '@pico/companion/vault-product-session';
+
+/**
+ * Ein Jahr ab jetzt, nicht der Neujahrstag 2027.
+ *
+ * Diese Tests fahren ein echtes Home hoch, das an seiner eigenen Uhr misst.
+ * Ein festes Ende hätte sie am 2027-01-01 gemeinsam umgeworfen - dieselbe
+ * Sorte Fehlschlag, die am 2026-08-27 drei Tests im Kern erwischt hat, nur
+ * vier Monate später und mit neunzehn auf einmal. `pnpm clock:check` stellt
+ * die Uhr ein Jahr vor und sucht danach.
+ */
+const VALID_UNTIL = picoTestValidityWindow().validUntil;
 
 /**
  * ADR 0130 E3 - a second device joins over camera and code, against real
@@ -168,7 +180,7 @@ async function sponsorDevice(): Promise<{
     passphrase,
     sodium: sodium as unknown as VaultSodium,
     decisions: { decideApproval: async () => true },
-    delegationValidUntil: '2027-01-01T00:00:00.000Z',
+    delegationValidUntil: VALID_UNTIL,
   });
   const profile = readPicoCompanionProfile(profilePath);
   const session = await openPicoCompanionVaultProductSession({
@@ -228,7 +240,7 @@ describe('ADR 0130 E3 - a second device over camera and code', () => {
       }),
       sodium: sodium as unknown as VaultSodium,
       offerCode: offer.offerCode,
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
       exchange: async (grantCode) => {
         expect(grantCode.startsWith('pico-device-grant-v1:')).toBe(true);
         accepted = await acceptPicoCompanionEnrolment({
@@ -324,7 +336,7 @@ describe('ADR 0130 E3 - a second device over camera and code', () => {
       }),
       sodium: sodium as unknown as VaultSodium,
       offerCode: offer.offerCode,
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
       exchange: async (grantCode) => {
         accepted = await acceptPicoCompanionEnrolment({
           socketPath: targetSocketPath,
@@ -421,7 +433,7 @@ describe('ADR 0130 E3 - a second device over camera and code', () => {
       livingDeviceLinkClient: await sponsorLink(),
       sodium: sodium as unknown as VaultSodium,
       offerCode: first.offerCode,
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
       exchange: async (grantCode) => {
         accepted = await carry(first, grantCode);
         return accepted.acceptanceCode;
@@ -542,7 +554,7 @@ describe('ADR 0130 E3 - a second device over camera and code', () => {
       }),
       sodium: sodium as unknown as VaultSodium,
       offerCode: offer.offerCode,
-      validUntil: '2027-01-01T00:00:00.000Z',
+      validUntil: VALID_UNTIL,
       // A well-formed code from an earlier attempt, built the way a real one
       // is - so what is under test is the binding and not the parser.
       exchange: async () => buildPicoDeviceEnrolmentAcceptance({

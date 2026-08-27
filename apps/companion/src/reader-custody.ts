@@ -1,5 +1,6 @@
 import {
   picoIdentityReaderKeyFreshnessCheckpointSchema,
+  type PicoHomeAuthoritySubmitResource,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySuite,
 } from '@pico/protocol';
@@ -115,7 +116,12 @@ export async function submitPicoCompanionReaderCustodyRecords(input: {
  */
 export async function submitPicoCompanionAuthorityRecord(input: {
   linkClient: PicoLinkDirectClient;
-  resource: string;
+  /**
+   * Aus der geschlossenen Liste des Protokolls. Eine Zeichenkette hier hätte
+   * `reader_custody_writer_grant` an einen Home schicken lassen, der das Wort
+   * nicht kannte - und das ist am 2026-08-27 genau passiert.
+   */
+  resource: PicoHomeAuthoritySubmitResource;
   record: Record<string, unknown>;
 }): Promise<void> {
   const answer = await input.linkClient.request('home.authority.submit', {

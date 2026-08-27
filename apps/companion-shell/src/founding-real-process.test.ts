@@ -1,3 +1,4 @@
+import { picoTestValidityWindow } from '@pico/protocol';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -15,6 +16,17 @@ import {
   foundPicoCompanionHome,
   parsePicoHomeSetupAnnouncement,
 } from '@pico/companion/founding';
+
+/**
+ * Ein Jahr ab jetzt, nicht der Neujahrstag 2027.
+ *
+ * Diese Tests fahren ein echtes Home hoch, das an seiner eigenen Uhr misst.
+ * Ein festes Ende hätte sie am 2027-01-01 gemeinsam umgeworfen - dieselbe
+ * Sorte Fehlschlag, die am 2026-08-27 drei Tests im Kern erwischt hat, nur
+ * vier Monate später und mit neunzehn auf einmal. `pnpm clock:check` stellt
+ * die Uhr ein Jahr vor und sucht danach.
+ */
+const VALID_UNTIL = picoTestValidityWindow().validUntil;
 
 /**
  * ADR 0130 E2 - a Home founded from the Pico Client, against real processes.
@@ -185,7 +197,7 @@ describe('ADR 0130 E2 - founding from the Client, with no CLI in the walk', () =
       // ADR 0099. A window would raise these; here they are answered directly,
       // because what is under test is the walk rather than who says yes.
       decisions: { decideApproval: async () => true },
-      delegationValidUntil: '2027-01-01T00:00:00.000Z',
+      delegationValidUntil: VALID_UNTIL,
     });
 
     expect(outcome.homeId).toMatch(/^home_[0-9a-f]{32}$/u);
@@ -251,7 +263,7 @@ describe('ADR 0130 E2 - founding from the Client, with no CLI in the walk', () =
       passphrase: 'a-passphrase-the-person-chose',
       sodium: sodium as unknown as VaultSodium,
       decisions: { decideApproval: async () => true },
-      delegationValidUntil: '2027-01-01T00:00:00.000Z',
+      delegationValidUntil: VALID_UNTIL,
     });
     expect(first.homeId).toMatch(/^home_/u);
 
@@ -264,7 +276,7 @@ describe('ADR 0130 E2 - founding from the Client, with no CLI in the walk', () =
       passphrase: 'another-passphrase',
       sodium: sodium as unknown as VaultSodium,
       decisions: { decideApproval: async () => true },
-      delegationValidUntil: '2027-01-01T00:00:00.000Z',
+      delegationValidUntil: VALID_UNTIL,
     })).rejects.toThrow();
 
     expect(existsSync(secondProfile)).toBe(false);
@@ -338,7 +350,7 @@ describe('a founded device starts the way a restored one does', () => {
       passphrase,
       sodium: sodium as unknown as VaultSodium,
       decisions: { decideApproval: async () => true },
-      delegationValidUntil: '2027-01-01T00:00:00.000Z',
+      delegationValidUntil: VALID_UNTIL,
       platformSecrets: secretPort(passphrase),
     });
     expect(outcome.platformUnlockBound).toBe(true);
@@ -391,7 +403,7 @@ describe('a founded device starts the way a restored one does', () => {
       passphrase: 'a-passphrase-the-person-chose',
       sodium: sodium as unknown as VaultSodium,
       decisions: { decideApproval: async () => true },
-      delegationValidUntil: '2027-01-01T00:00:00.000Z',
+      delegationValidUntil: VALID_UNTIL,
     });
 
     expect(outcome.platformUnlockBound).toBe(false);

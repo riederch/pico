@@ -55,6 +55,22 @@ const HOST_FINGERPRINT = '11'.repeat(32);
 const DOMAIN_ID = 'domain_reader_private';
 const AUTHORIZED_AT = '2026-07-27T10:00:00.000Z';
 
+/**
+ * Die Uhr dieser Tests, ausdrücklich statt aus der Wand.
+ *
+ * Am 2026-08-27 um 10:00 UTC wurden zwei Tests in dieser Datei rot, ohne dass
+ * jemand etwas geändert hatte: die Fabrik gibt dem Schreibrecht ein
+ * `validUntil` von genau diesem Zeitpunkt, und `recordItem` nimmt ohne
+ * zweites Argument `new Date()`. Ein Test, dessen Ergebnis vom Kalendertag
+ * abhängt, prüft an dem Tag etwas anderes als am Tag davor - und meldet dann
+ * einen Fehler, den niemand gemacht hat.
+ *
+ * Das `validUntil` weiter nach vorn zu schieben hieße, dieselbe Zündschnur
+ * länger zu machen. Die Ursache ist die Wanduhr; also steht die Uhr jetzt
+ * hier, innerhalb des Fensters, das die Fabrik aufspannt.
+ */
+const RECORDED_AT = '2026-07-27T10:05:00.000Z';
+
 interface Harness {
   db: Database.Database;
   store: ReaderCustodyStore;
@@ -172,11 +188,11 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
     );
     harness.activeMembers.add(records.writerIdentityFingerprint);
 
-    expect(harness.store.recordDomain(records.domain).ok).toBe(true);
-    expect(harness.store.recordWriterGrant(records.writerGrant).ok).toBe(true);
-    const first = harness.store.recordItem(records.item);
+    expect(harness.store.recordDomain(records.domain, RECORDED_AT).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, RECORDED_AT).ok).toBe(true);
+    const first = harness.store.recordItem(records.item, RECORDED_AT);
     expect(first).toMatchObject({ ok: true, inserted: true });
-    expect(harness.store.recordItem(records.item)).toMatchObject({
+    expect(harness.store.recordItem(records.item, RECORDED_AT)).toMatchObject({
       ok: true,
       inserted: false,
     });
@@ -476,9 +492,9 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
     const owner = records.domain.domain.ownerIdentityKeyFingerprintHex;
     harness.activeMembers.add(owner);
     harness.activeMembers.add(records.writerIdentityFingerprint);
-    expect(harness.store.recordDomain(records.domain).ok).toBe(true);
-    expect(harness.store.recordWriterGrant(records.writerGrant).ok).toBe(true);
-    expect(harness.store.recordItem(records.item).ok).toBe(true);
+    expect(harness.store.recordDomain(records.domain, RECORDED_AT).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, RECORDED_AT).ok).toBe(true);
+    expect(harness.store.recordItem(records.item, RECORDED_AT).ok).toBe(true);
 
     const corrupted = structuredClone(records.item);
     corrupted.contentCiphertextHex = 'ff'.repeat(64);
@@ -489,13 +505,13 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
         WHERE package_id = ?
       `)
       .run(JSON.stringify(corrupted), records.item.item.packageId);
-    expect(harness.store.reconcile()).toMatchObject({ droppedItems: 1 });
+    expect(harness.store.reconcile(RECORDED_AT)).toMatchObject({ droppedItems: 1 });
 
     // Losing writer membership drops restored writer authority and dependent
     // opaque items while preserving the owner's domain authority.
-    expect(harness.store.recordItem(records.item).ok).toBe(true);
+    expect(harness.store.recordItem(records.item, RECORDED_AT).ok).toBe(true);
     harness.activeMembers.delete(records.writerIdentityFingerprint);
-    expect(harness.store.reconcile()).toMatchObject({
+    expect(harness.store.reconcile(RECORDED_AT)).toMatchObject({
       droppedDomains: 0,
       droppedWriterGrants: 1,
       droppedItems: 1,
@@ -505,10 +521,10 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
     // Recreate the dependency chain so the owner-loss cascade is exercised
     // independently.
     harness.activeMembers.add(records.writerIdentityFingerprint);
-    expect(harness.store.recordWriterGrant(records.writerGrant).ok).toBe(true);
-    expect(harness.store.recordItem(records.item).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, RECORDED_AT).ok).toBe(true);
+    expect(harness.store.recordItem(records.item, RECORDED_AT).ok).toBe(true);
     harness.activeMembers.delete(owner);
-    expect(harness.store.reconcile()).toMatchObject({
+    expect(harness.store.reconcile(RECORDED_AT)).toMatchObject({
       droppedDomains: 1,
       droppedWriterGrants: 1,
     });

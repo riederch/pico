@@ -23,6 +23,7 @@ import {
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRotationSignatureInput,
+  picoTestValidityWindow,
 } from '@pico/protocol';
 import {
   EventStore,
@@ -1057,7 +1058,14 @@ function delegation(input: {
     subjectKeyAgreementKeyFingerprintHex: input.agreementFingerprintHex,
     scopes: ['surface_session'],
     validFrom: foundedAt,
-    validUntil: '2027-07-19T10:00:00.000Z',
+    /**
+     * Um die Uhr herum, nicht ein Jahr nach `foundedAt`:
+     * `recordPicoHomeDomainReadGrant` stempelt mit dem Jetzt des Homes (ADR
+     * 0115) und nimmt kein `at` entgegen. Ein Fenster, das ein Jahr nach der
+     * Gründung endet, fällt danach von selbst zu - und der Test läse sich, als
+     * sei die Wurzelrotation schuld.
+     */
+    validUntil: picoTestValidityWindow().validUntil,
     lifecycleOrder: input.lifecycleOrder,
   };
 }
@@ -1079,7 +1087,14 @@ function createMembershipCredential(
     role: 'home_member',
     scopes: ['host.use', 'packet.receive'],
     validFrom: foundedAt,
-    validUntil: '2027-07-19T10:00:00.000Z',
+    /**
+     * Um die Uhr herum, nicht ein Jahr nach `foundedAt`:
+     * `recordPicoHomeDomainReadGrant` stempelt mit dem Jetzt des Homes (ADR
+     * 0115) und nimmt kein `at` entgegen. Ein Fenster, das ein Jahr nach der
+     * Gründung endet, fällt danach von selbst zu - und der Test läse sich, als
+     * sei die Wurzelrotation schuld.
+     */
+    validUntil: picoTestValidityWindow().validUntil,
     lifecycleOrder: 'seq:0000000000000001',
   };
   const input = buildPicoHomeMembershipSignatureInput(membership);
@@ -1106,7 +1121,14 @@ function issueReadGrant(
     controllerPicoIdentityFingerprintHex: fixture.founder.fingerprintHex,
     readerPicoIdentityFingerprintHex: fixture.founder.fingerprintHex,
     validFrom: foundedAt,
-    validUntil: '2027-07-19T10:00:00.000Z',
+    /**
+     * Um die Uhr herum, nicht ein Jahr nach `foundedAt`:
+     * `recordPicoHomeDomainReadGrant` stempelt mit dem Jetzt des Homes (ADR
+     * 0115) und nimmt kein `at` entgegen. Ein Fenster, das ein Jahr nach der
+     * Gründung endet, fällt danach von selbst zu - und der Test läse sich, als
+     * sei die Wurzelrotation schuld.
+     */
+    validUntil: picoTestValidityWindow().validUntil,
     lifecycleOrder: 'seq:0000000000000001',
     ...overrides,
   };

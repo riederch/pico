@@ -363,8 +363,22 @@ export async function createPicoIdentitySessionDevice(
     subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(deviceSigningKeyRecord),
     subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(deviceAgreementKeyRecord),
     scopes: input.scopes ?? ['surface_session'],
-    validFrom: '2026-01-01T00:00:00.000Z',
-    validUntil: '2027-01-01T00:00:00.000Z',
+    /**
+     * **Um die Uhr herum, nicht auf einen Kalendertag.**
+     *
+     * Diese Bevollmächtigung trug bis zum 2026-08-27 ein festes Fenster von
+     * 2026-01-01 bis 2027-01-01. Die Tests, die sie benutzen, messen aber an
+     * der Uhr des Homes - also wäre am Neujahrstag 2027 der halbe Kern rot
+     * geworden, mit `pico_identity_session_refused:401` und ohne dass jemand
+     * etwas geändert hätte. Genau diese Sorte Fehlschlag hat an diesem
+     * Vormittag drei andere Tests umgeworfen; `pnpm clock:check` stellt die
+     * Uhr deshalb ein Jahr vor und sucht danach.
+     *
+     * Ein Jahr in jede Richtung: Tests, die *über* Fenster etwas aussagen,
+     * geben ihres selbst an.
+     */
+    validFrom: new Date(Date.now() - 365 * 24 * 60 * 60 * 1_000).toISOString(),
+    validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1_000).toISOString(),
     lifecycleOrder: input.lifecycleOrder ?? 'seq:0000000000000001',
   };
   const challenge = (await app.inject({

@@ -14,6 +14,7 @@ import {
   type PicoHomeDomainReadGrantRecord,
   type PicoHomeFoundingRecord,
   type PicoIdentityKeyRecordSignatureInput,
+  picoTestValidityWindow,
 } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -205,23 +206,32 @@ describe('Home domain read grants (ADR 0082)', () => {
       inserted: true,
       grant: { status: 'active' },
     });
+    /**
+     * Zwei Zeitpunkte aus dem Fenster gerechnet, nicht daneben geschrieben:
+     * einer darin und einer dahinter. Als feste Daten sagten sie „drinnen"
+     * und „draußen" nur so lange, wie das Fenster selbst festlag.
+     */
+    const insideWindow = new Date().toISOString();
+    const afterWindow = new Date(
+      new Date(picoTestValidityWindow().validUntil).getTime() + 1_000,
+    ).toISOString();
     expect(store.mayReadDomain(
       controllerFingerprint,
       DOMAIN,
       HOME_ID,
-      '2026-07-27T10:00:00.000Z',
+      insideWindow,
     )).toBe(true);
     expect(store.mayReadDomain(
       controllerFingerprint,
       'domain-other',
       HOME_ID,
-      '2026-07-27T10:00:00.000Z',
+      insideWindow,
     )).toBe(false);
     expect(store.mayReadDomain(
       controllerFingerprint,
       DOMAIN,
       HOME_ID,
-      '2027-01-01T00:00:00.000Z',
+      afterWindow,
     )).toBe(false);
 
     expect(store.recordPicoHomeDomainReadGrantLifecycle({
@@ -232,7 +242,7 @@ describe('Home domain read grants (ADR 0082)', () => {
       controllerFingerprint,
       DOMAIN,
       HOME_ID,
-      '2026-07-27T10:00:00.000Z',
+      insideWindow,
     )).toBe(false);
   });
 
@@ -293,8 +303,10 @@ describe('Home domain read grants (ADR 0082)', () => {
       droppedGrants: 0,
       droppedLifecycleRecords: 1,
     });
+    // Aus dem Fenster gefragt statt an einem festen Tag: „aktiv" ist eine
+    // Aussage über einen Zeitpunkt, und der muss im Fenster liegen.
     expect(store.picoHomeDomainReadGrants(
-      '2026-07-27T10:00:00.000Z',
+      new Date().toISOString(),
     )).toMatchObject([{ status: 'active' }]);
 
     db.prepare('UPDATE pico_home_domain_read_grant SET grant_json = ?')
@@ -336,8 +348,14 @@ function issueGrant(
     privacyDomain: DOMAIN,
     controllerPicoIdentityFingerprintHex: controllerFingerprint,
     readerPicoIdentityFingerprintHex: controllerFingerprint,
-    validFrom: '2026-01-01T00:00:00.000Z',
-    validUntil: '2027-01-01T00:00:00.000Z',
+    /**
+     * Um die Uhr herum: diese Datei gibt nirgends ein `at` an, also misst der
+     * Speicher überall an der Wanduhr. Ein festes Fenster hätte hier bis zum
+     * Neujahrstag 2027 gehalten und wäre danach von selbst zugefallen.
+     * Wer *über* das Fenster etwas sagt, gibt es unter `overrides` an - und
+     * zwei Tests in dieser Datei tun das.
+     */
+    ...picoTestValidityWindow(),
     lifecycleOrder: 'seq:0000000000000001',
     ...overrides,
   };

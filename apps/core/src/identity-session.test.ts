@@ -228,6 +228,11 @@ function signedProof(challenge: IdentitySessionChallenge): IdentitySessionProof 
     subjectSigningKeyFingerprintHex: deviceFingerprint,
     subjectKeyAgreementKeyFingerprintHex: deviceAgreementFingerprint,
     scopes: ['surface_session'],
+    /**
+     * Fest, weil diese Datei ihre Uhr angibt: jede Prüfung geht mit einem
+     * ausdrücklichen `at` hinein. Ein Fenster um die Wanduhr herum läge dann
+     * neben der Zeit, gegen die geprüft wird.
+     */
     validFrom: '2026-01-01T00:00:00.000Z',
     validUntil: '2027-01-01T00:00:00.000Z',
     lifecycleOrder: 'seq:0000000000000001',

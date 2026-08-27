@@ -10,6 +10,7 @@ import {
   buildPicoHomeDomainReadGrantSignatureInput,
   picoHomeDomainReadGrantRecordSchema,
   picoIdentitySuite,
+  picoTestValidityWindow,
 } from '@pico/protocol';
 import { startPicoFakeModelHost } from './test-model-provider-host.js';
 import {
@@ -122,8 +123,7 @@ async function homeThatCanAnswer(noteOrigin: string | undefined) {
     privacyDomain: 'privat',
     controllerPicoIdentityFingerprintHex: founding.founding.homeHostPicoIdentityFingerprintHex,
     readerPicoIdentityFingerprintHex: founding.founding.homeHostPicoIdentityFingerprintHex,
-    validFrom: '2026-01-01T00:00:00.000Z',
-    validUntil: '2027-01-01T00:00:00.000Z',
+    ...picoTestValidityWindow(),
     lifecycleOrder: 'seq:0000000000000001',
   };
   await send('home.domain.read-grant.submit', {

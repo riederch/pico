@@ -18,6 +18,7 @@ import {
   type PicoHomeContinuitySignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoLinkDirectRequestSignatureInput,
+  picoTestValidityWindow,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon';
@@ -31,6 +32,17 @@ import {
   writePicoCompanionProfile,
   type PicoCompanionProfile,
 } from './profile.js';
+
+/**
+ * Ein Jahr ab jetzt, nicht der Neujahrstag 2027.
+ *
+ * Diese Tests fahren ein echtes Home hoch, das an seiner eigenen Uhr misst.
+ * Ein festes Ende hätte sie am 2027-01-01 gemeinsam umgeworfen - dieselbe
+ * Sorte Fehlschlag, die am 2026-08-27 drei Tests im Kern erwischt hat, nur
+ * vier Monate später und mit neunzehn auf einmal. `pnpm clock:check` stellt
+ * die Uhr ein Jahr vor und sucht danach.
+ */
+const VALID_UNTIL = picoTestValidityWindow().validUntil;
 
 let vaultSodium: VaultSodium;
 const temporaryDirectories: string[] = [];
@@ -252,7 +264,7 @@ function fakeHome(input: {
         deviceSigningKeyFingerprintHex: input.device.signingFingerprintHex,
         deviceKeyAgreementKeyFingerprintHex: input.device.agreementFingerprintHex,
         lifecycleOrder: 'seq:0000000000000001',
-        validUntil: '2027-01-01T00:00:00.000Z',
+        validUntil: VALID_UNTIL,
         status: 'active',
       }],
       pendingRecovery: null,

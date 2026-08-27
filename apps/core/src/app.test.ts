@@ -76,6 +76,7 @@ import {
   type PicoHomeContinuitySignatureInput,
   type PicoLinkDirectOperation,
   type PicoLinkDirectResponseSignatureInput,
+  picoTestValidityWindow,
 } from '@pico/protocol';
 import { buildPicoLibraryDerivation } from '@pico/protocol/library-pin';
 import { buildApp } from './app.js';
@@ -2247,8 +2248,7 @@ describe('Pico Home Core app', () => {
       subjectKeyAgreementKeyFingerprintHex:
         keyRecordFingerprintHex(deviceAgreementKeyRecord),
       scopes: ['surface_session'],
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000002',
     };
     const challenge = (await app.inject({
@@ -2522,8 +2522,7 @@ describe('Pico Home Core app', () => {
       hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
       role: 'home_member',
       scopes: ['host.use', 'packet.receive'],
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000001',
     };
     expect((await app.inject({
@@ -2568,8 +2567,7 @@ describe('Pico Home Core app', () => {
         subjectKeyAgreementKeyFingerprintHex:
           keyRecordFingerprintHex(agreementKeyRecord),
         scopes: ['surface_session'],
-        validFrom: '2026-01-01T00:00:00.000Z',
-        validUntil: '2027-01-01T00:00:00.000Z',
+        ...picoTestValidityWindow(),
         lifecycleOrder: `seq:000000000000000${index + 2}`,
       };
       const signedDelegation = {
@@ -2682,8 +2680,7 @@ describe('Pico Home Core app', () => {
       subjectKeyAgreementKeyFingerprintHex:
         keyRecordFingerprintHex(devices[0].agreementKeyRecord),
       scopes: ['surface_session'],
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000009',
     };
     const rotation: PicoIdentityRotationSignatureInput = {
@@ -3091,8 +3088,7 @@ describe('Pico Home Core app', () => {
       privacyDomain: 'domain-journal',
       controllerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
       readerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000001',
     };
     const grantResponse = await app.inject({
@@ -3136,8 +3132,7 @@ describe('Pico Home Core app', () => {
       subjectSigningKeyFingerprintHex: deviceSigningFingerprint,
       subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(deviceAgreementKeyRecord),
       scopes: ['surface_session'],
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000002',
     };
     const signedDelegation = {
@@ -3349,8 +3344,7 @@ describe('Pico Home Core app', () => {
       subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(targetSigningKeyRecord),
       subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(targetAgreementKeyRecord),
       scopes: ['surface_session'],
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000003',
     };
     const transitionCreatedAt = Date.now();
@@ -3682,8 +3676,7 @@ describe('Pico Home Core app', () => {
       hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
       role: 'home_member',
       scopes: ['host.use'],
-      validFrom: '2026-01-01T00:00:00.000Z',
-      validUntil: '2027-01-01T00:00:00.000Z',
+      ...picoTestValidityWindow(),
       lifecycleOrder: 'seq:0000000000000001',
     };
     const memberAccepted = await app.inject({
