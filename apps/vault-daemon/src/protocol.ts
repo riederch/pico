@@ -250,7 +250,8 @@ export interface PicoVaultDaemonReaderAccessDecryptItemRequest {
   requestId: string;
   leaseId: string;
   domainRecord: Record<string, unknown>;
-  readerGrantRecord: Record<string, unknown>;
+  /** Wahlfrei: der Besitzer einer Domäne hat keines und braucht keines. */
+  readerGrantRecord?: Record<string, unknown>;
   writerGrantRecord: Record<string, unknown>;
   rotationRecords: Record<string, unknown>[];
   itemRecord: Record<string, unknown>;
@@ -937,22 +938,33 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.readerAccessDecryptItem: {
-      assertExactKeys(parsed, [
-        'family',
-        'requestId',
-        'leaseId',
-        'domainRecord',
-        'readerGrantRecord',
-        'writerGrantRecord',
-        'rotationRecords',
-        'itemRecord',
-      ]);
+      /**
+       * `readerGrantRecord` ist wahlfrei: der **Besitzer** einer Domäne hat
+       * keines und braucht keines - er entschlüsselt über seinen eigenen
+       * Umschlag im Domänen-Datensatz. Es zu verlangen zwang jeden Aufrufer,
+       * für diesen Fall eines zu erfinden.
+       */
+      assertExactKeysWithOptional(
+        parsed,
+        [
+          'family',
+          'requestId',
+          'leaseId',
+          'domainRecord',
+          'writerGrantRecord',
+          'rotationRecords',
+          'itemRecord',
+        ],
+        ['readerGrantRecord'],
+      );
       return {
         family: picoVaultDaemonRequestFamilies.readerAccessDecryptItem,
         requestId,
         leaseId: requireLeaseId(parsed),
         domainRecord: requireRecord(parsed, 'domainRecord'),
-        readerGrantRecord: requireRecord(parsed, 'readerGrantRecord'),
+        ...(parsed.readerGrantRecord === undefined
+          ? {}
+          : { readerGrantRecord: requireRecord(parsed, 'readerGrantRecord') }),
         writerGrantRecord: requireRecord(parsed, 'writerGrantRecord'),
         rotationRecords: requireRecordArray(parsed, 'rotationRecords'),
         itemRecord: requireRecord(parsed, 'itemRecord'),

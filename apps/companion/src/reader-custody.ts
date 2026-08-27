@@ -218,7 +218,8 @@ export async function submitPicoCompanionReaderGrant(input: {
  */
 export interface PicoCompanionReaderCustodyBundle {
   domain: Record<string, unknown>;
-  readerGrant: Record<string, unknown>;
+  /** Fehlt beim Besitzer: er liest über seinen eigenen Umschlag. */
+  readerGrant?: Record<string, unknown>;
   writerGrants: Record<string, unknown>[];
   rotations: Record<string, unknown>[];
   items: Record<string, unknown>[];

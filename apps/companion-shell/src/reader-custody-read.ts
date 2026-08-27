@@ -76,7 +76,15 @@ export async function readPicoCompanionReaderCustodyNotes(input: {
           memoryItemId: item.item?.memoryItemId ?? '',
           text: session.decryptItem({
             domainRecord: bundle.domain,
-            readerGrantRecord: bundle.readerGrant,
+            /**
+             * Fehlt beim Besitzer, und dann wird es auch nicht mitgeschickt:
+             * er entschlüsselt über seinen eigenen Umschlag, und ein
+             * erfundenes Leserrecht wäre eine Lüge, die auf einen Prüfer
+             * wartet.
+             */
+            ...(bundle.readerGrant === undefined
+              ? {}
+              : { readerGrantRecord: bundle.readerGrant }),
             writerGrantRecord,
             rotationRecords: bundle.rotations,
             itemRecord,

@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -343,16 +344,19 @@ describe('ADR 0085 - das zweite Gerät derselben Person darf lesen', () => {
     });
 
     /**
-     * **Vor dem Leserrecht ist derselbe Lesevorgang ein Nein.** Das ist der
-     * Zustand, in dem der Raum von gestern war: beschreibbar, erteilbar,
-     * unlesbar - und die Zeile hier hält fest, dass das Bündel an einem
-     * Leserrecht hängt und nicht am Zugang zum Home.
+     * **Der Besitzer bekommt sein Bündel, auch ohne Leserrecht** - und die
+     * erste Fassung dieses Tests behauptete das Gegenteil, weil der Code es
+     * tat: sie verweigerte genau der Person den Raum, die ihn gemacht und
+     * beschrieben hat. Ein Besitzer entschlüsselt über seinen eigenen
+     * Umschlag im Domänen-Datensatz und hat nie ein Leserrecht.
      */
-    const beforeGrant = await send('home.reader_custody.read', {
+    const asOwner = (await send('home.reader_custody.read', {
       domainAuthorityId: records.domain.domain.domainAuthorityId,
-    });
-    expect(beforeGrant.response.outcome).toBe('invalid_arguments');
-    expect(beforeGrant.result.refusal).toBe('not_a_reader');
+    })).result as unknown as { readerGrant?: unknown; domain: unknown };
+    expect(asOwner.domain).toBeDefined();
+    // Und es liegt keins bei, statt eines erfundenen: ein Datensatz, den
+    // heute niemand prüft, ist eine Lüge, die auf einen Prüfer wartet.
+    expect(asOwner.readerGrant).toBeUndefined();
 
     /**
      * **Ohne Nachweis: `freshness_unavailable`.** Das ist die richtige Antwort
@@ -406,31 +410,55 @@ describe('ADR 0085 - das zweite Gerät derselben Person darf lesen', () => {
     expect(bundle.items).toHaveLength(0);
   }, 60_000);
 
-  it('gibt einem, der kein Leser ist, dasselbe Nein wie für einen Raum, den es nicht gibt', async () => {
+  it('gibt einem, der weder Besitzer noch Leser ist, dasselbe Nein wie für einen Raum, den es nicht gibt', async () => {
     /**
      * ADR 0077 C4. Ein Nein, das die beiden unterscheidet, beantwortet die
      * Frage „gibt es diesen Raum?" für jeden, der raten will - und die
      * Umschläge daneben sind für genau einen Schlüssel bestimmt, eine Liste
      * davon wäre eine Karte, wer wo hineindarf.
+     *
+     * Die fremde Domäne wird **direkt in die Tabelle gelegt**, weil der
+     * Produktweg sie nicht erzeugen kann: `recordDomain` verlangt einen
+     * Besitzer, der aktives Mitglied dieses Homes ist, und ein zweites
+     * Mitglied gibt es hier nicht. Geprüft wird die *Antwort*, nicht wie die
+     * Domäne dorthin kam.
      */
     const { send, databasePath, setup, ownerKeypair } = await claimedHome();
-    const records = makeReaderCustodyRecords({
+    const foreign = makeReaderCustodyRecords({
       homeId: setup.homeId,
       hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
-      ownerKeypair,
-      writerIdentity: 'owner',
+      domainId: 'somebody-elses',
     });
-    const seeding = await EventStore.open(databasePath, {});
-    expect(seeding.readerCustody(sodium as never).recordDomain(records.domain).ok).toBe(true);
+    const seeding = new Database(databasePath);
+    seeding.prepare(`
+      INSERT INTO pico_reader_custody_domain (
+        domain_authority_id, home_id, host_signing_key_fingerprint_hex, privacy_domain,
+        owner_identity_key_fingerprint_hex, owner_reader_key_fingerprint_hex,
+        kek_version, authorized_at, lifecycle_order, domain_record_json, received_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      foreign.domain.domain.domainAuthorityId,
+      foreign.domain.domain.homeId,
+      foreign.domain.domain.hostSigningKeyFingerprintHex,
+      foreign.domain.domain.domainId,
+      foreign.domain.domain.ownerIdentityKeyFingerprintHex,
+      foreign.domain.domain.ownerReaderKeyFingerprintHex,
+      foreign.domain.domain.kekVersion,
+      foreign.domain.domain.authorizedAt,
+      foreign.domain.domain.lifecycleOrder,
+      JSON.stringify(foreign.domain),
+      foreign.domain.receivedAt,
+    );
     seeding.close();
+    void ownerKeypair;
 
-    const notAReader = await send('home.reader_custody.read', {
-      domainAuthorityId: records.domain.domain.domainAuthorityId,
+    const notMine = await send('home.reader_custody.read', {
+      domainAuthorityId: foreign.domain.domain.domainAuthorityId,
     });
     const noSuchSpace = await send('home.reader_custody.read', {
       domainAuthorityId: 'authority_that_never_was',
     });
-    expect(notAReader.result).toEqual(noSuchSpace.result);
-    expect(notAReader.result.refusal).toBe('not_a_reader');
+    expect(notMine.result).toEqual(noSuchSpace.result);
+    expect(notMine.result.refusal).toBe('not_a_reader');
   }, 60_000);
 });

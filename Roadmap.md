@@ -827,6 +827,31 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B29 — Der Besitzer durfte seinen eigenen Raum nicht lesen (2026-08-27).**
+Beim Aufbauen eines echten Durchlaufs gefunden, noch bevor er lief: das
+Labor-Home kennt eine Identität mit zwei Geräten, und beim Durchdenken, was
+der Sponsor dort sähe, fiel es auf. `readingBundleFor` verlangte ein
+**Leserrecht** — und wer eine Domäne anlegt, hat nie eines. Er entschlüsselt
+über seinen eigenen Umschlag im Domänen-Datensatz; `decryptPicoReaderCustodyItem`
+wählt genau danach aus, ob es die Besitzer- oder die Leserfassung nimmt.
+
+Die Folge war, dass die Person, die den Raum gemacht und beschrieben hat, auf
+„Show me what is in there" gelesen hätte: *„This device may not read that
+space. Someone has to let it in first."* Über ihren eigenen Raum.
+
+Und meine Tests hielten den Fehler fest, statt ihn zu finden — sie behaupteten
+`not_a_reader` für den Besitzer, weil der Code es tat. Sie sagen jetzt, was
+gilt, und die C4-Prüfung braucht dafür eine fremde Domäne, die der Produktweg
+nicht erzeugen kann: `recordDomain` verlangt einen Besitzer, der Mitglied ist,
+und ein zweites Mitglied gibt es im Testaufbau nicht. Sie wird deshalb direkt
+in die Tabelle gelegt, mit dem Satz daneben, warum.
+
+**Und ein erfundener Datensatz weniger.** Das Leserrecht war überall Pflicht -
+im Bündel, im Daemon-Aufruf, im Beweistyp des Vaults -, obwohl die
+Entschlüsselung es beim Besitzer nie anfasst. Jeder Aufrufer hätte für diesen
+Fall eines erfinden müssen, und ein Datensatz, den heute niemand prüft, ist
+eine Lüge, die auf einen Prüfer wartet. Es ist jetzt durchgängig wahlfrei.
+
 **B28 — Vier Fehler in Code, den nur Tests je berührt haben (2026-08-27).**
 Die Reader-Custody-Senkrechte stand und war nie *durchlaufen* worden — nur
 geprüft. Meine Tests decken die Home-Seite und die Reihenfolge ab; was sie

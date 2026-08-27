@@ -351,7 +351,16 @@ export interface OpenPicoReaderCustodySyncBatchInput {
 
 export interface PicoVaultReaderCustodySyncItemEvidence {
   domainRecord: PicoReaderCustodyDomainRecord;
-  readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
+  /**
+   * **Wahlfrei, weil der Besitzer keines hat** (2026-08-27). Wer eine Domäne
+   * angelegt hat, entschlüsselt über seinen eigenen Umschlag im
+   * Domänen-Datensatz; ein Leserrecht wird dabei nie angefasst. Der Typ
+   * verlangte trotzdem eines, also musste jeder Aufrufer für den
+   * Besitzerfall eines erfinden - und ein erfundener Datensatz an einer
+   * Stelle, die ihn heute nicht prüft, ist eine Lüge, die auf einen Prüfer
+   * wartet.
+   */
+  readerGrantRecord?: PicoReaderCustodyReaderGrantRecord;
   writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
   rotationRecords: PicoReaderCustodyKekRotationRecord[];
   itemRecord: PicoReaderCustodyItemRecord;

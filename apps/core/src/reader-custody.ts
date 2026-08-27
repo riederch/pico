@@ -1998,7 +1998,14 @@ export class ReaderCustodyStore {
     at?: string;
   }): {
     domain: PicoReaderCustodyDomainRecord;
-    readerGrant: PicoReaderCustodyReaderGrantRecord;
+    /**
+     * **Fehlt beim Besitzer, und das ist kein Mangel** (2026-08-27). Wer eine
+     * Domäne angelegt hat, entschlüsselt über seinen eigenen Umschlag im
+     * Domänen-Datensatz; ein Leserrecht wird dabei nie angefasst. Die erste
+     * Fassung dieser Methode verlangte trotzdem eines - und verweigerte damit
+     * genau der Person das Bündel, die den Raum gemacht und beschrieben hat.
+     */
+    readerGrant?: PicoReaderCustodyReaderGrantRecord;
     writerGrants: PicoReaderCustodyWriterGrantRecord[];
     rotations: PicoReaderCustodyKekRotationRecord[];
     items: PicoReaderCustodyItemRecord[];
@@ -2008,15 +2015,23 @@ export class ReaderCustodyStore {
     if (domain === undefined) {
       return undefined;
     }
+    /**
+     * Zwei Wege hinein, und der zweite ist der, den die erste Fassung vergaß:
+     * ein **Leserrecht** für diese Identität, oder **die Domäne gehört ihr**.
+     * Der Besitzer liest über seinen eigenen Umschlag und hat nie ein
+     * Leserrecht - ihn abzuweisen hiess, der Person das Bündel zu verweigern,
+     * die den Raum gemacht und beschrieben hat.
+     */
+    const owns = domain.domain.ownerIdentityKeyFingerprintHex
+      === input.readerIdentityKeyFingerprintHex;
     const readerGrant = this.readerGrants(at).find((view) =>
       view.domainAuthorityId === input.domainAuthorityId
       && view.readerIdentityKeyFingerprintHex === input.readerIdentityKeyFingerprintHex
       && view.status === 'active');
-    if (readerGrant === undefined) {
-      return undefined;
-    }
-    const readerGrantRecord = this.readerGrantRecord(readerGrant.readerGrantId);
-    if (readerGrantRecord === undefined) {
+    const readerGrantRecord = readerGrant === undefined
+      ? undefined
+      : this.readerGrantRecord(readerGrant.readerGrantId);
+    if (!owns && readerGrantRecord === undefined) {
       return undefined;
     }
     const items = (this.db
@@ -2036,7 +2051,7 @@ export class ReaderCustodyStore {
       });
     return {
       domain,
-      readerGrant: readerGrantRecord,
+      ...(readerGrantRecord === undefined ? {} : { readerGrant: readerGrantRecord }),
       writerGrants,
       rotations: (this.db
         .prepare(`
