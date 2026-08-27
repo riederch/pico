@@ -33,6 +33,35 @@ describe('ADR 0113 C2 - a refusal reaches the person as a sentence', () => {
     expect(theirs).toContain('invalid_depot_pin');
   });
 
+  it('spricht jede Ablehnung des Reader-Custody-Wegs aus', () => {
+    /**
+     * ADR 0086 mit ADR 0094. Diese Worte sind neu, und sie treffen eine
+     * Person an einer Stelle, an der sie nicht raten können soll: hat sie
+     * etwas falsch gemacht, oder darf Pico etwas nicht?
+     *
+     * Der Test zählt sie einzeln auf, weil eine Schleife über die Tabelle
+     * selbst nur prüfte, dass die Tabelle die Tabelle ist.
+     */
+    const spoken = [
+      'reader_custody_space_exists',
+      'no_reader_custody_space',
+      'no_other_active_device',
+      'not_a_reader',
+      'freshness_unavailable',
+      'reader_key_not_unlocked',
+      'device_signing_key_not_unlocked',
+      'device_key_agreement_key_not_unlocked',
+    ];
+    for (const word of spoken) {
+      const line = picoCompanionRefusalLine(word, 'That did not work.');
+      expect(line, word).not.toContain(word);
+      expect(line, word).not.toContain('_');
+      // Und jede sagt, was jetzt gilt oder was zu tun ist - eine Ablehnung,
+      // die nur „nein" sagt, lässt eine Person am selben Knopf stehen.
+      expect(line.length, word).toBeGreaterThan(30);
+    }
+  });
+
   it('keeps the caller\'s sentence when the word means nothing here', () => {
     // Refusals travel from the Home too, with a vocabulary this file does not
     // own. The call site already knows what was being attempted, so its own

@@ -83,6 +83,19 @@ export async function createPicoCompanionReaderCustodySpace(input: {
   sodium: VaultSodium;
   fetch?: typeof fetch;
 }): Promise<PicoCompanionReaderCustodySpace> {
+  /**
+   * **Ein zweites Anlegen ersetzt kein erstes.** Die Datei daneben hält genau
+   * einen Raum; ein zweiter überschriebe sie, und was im ersten steht, bliebe
+   * beim Home liegen, für dieses Gerät unerreichbar - eine Person, die zweimal
+   * drückt, verlöre den Zugang zu ihren eigenen Sätzen, ohne dass etwas
+   * fehlschlüge.
+   *
+   * Benannt statt still: „du hast schon einen" ist etwas, worauf jemand
+   * handeln kann.
+   */
+  if (readPicoCompanionReaderCustodySpace(input.profilePath) !== undefined) {
+    throw new Error('reader_custody_space_exists');
+  }
   const homeId = await homeIdOf(input);
   /**
    * Der Leseschlüssel des Besitzers ist der Schlüsselvereinbarungsschlüssel
@@ -97,6 +110,19 @@ export async function createPicoCompanionReaderCustodySpace(input: {
   );
   if (agreement === undefined) {
     throw new Error('device_key_agreement_key_not_unlocked');
+  }
+  /**
+   * **Benannt statt leer.** Hier stand `?? ''`, und ein leerer öffentlicher
+   * Schlüssel wäre in ein Schreibrecht gewandert, das niemand mehr benutzen
+   * kann - eine Zeremonie mit einer Zustimmung, die eine unbrauchbare
+   * Urkunde erzeugt. Ein nicht entsperrter Schlüssel ist kein leerer.
+   */
+  const signing = status.sessions.find(
+    (session) => session.keyFingerprintHex
+      === input.profile.device.signingKeyFingerprintHex,
+  );
+  if (signing === undefined) {
+    throw new Error('device_signing_key_not_unlocked');
   }
 
   const authorizedAt = new Date().toISOString();
@@ -124,10 +150,7 @@ export async function createPicoCompanionReaderCustodySpace(input: {
     writerDeviceSigningKeyRecord: {
       suite: picoIdentitySuite,
       keyRole: 'device_signing',
-      publicKeyHex: status.sessions.find(
-        (session) => session.keyFingerprintHex
-          === input.profile.device.signingKeyFingerprintHex,
-      )?.publicKeyHex ?? '',
+      publicKeyHex: signing.publicKeyHex,
     },
     writerGrantId: `writer_${randomUUID()}`,
     // Dieselbe Person schreibt in ihren eigenen Raum.
@@ -285,10 +308,24 @@ export async function letPicoCompanionOtherDeviceRead(input: {
      * die vorsichtige Wahl, und die einzige, die eine Person nicht überrascht.
      */
     accessMode: 'from_version',
-    firstKekVersion: 1,
+    /**
+     * Aus der Domäne gelesen, nicht als `1` angenommen. Heute rotiert nichts,
+     * also stimmte die Annahme - und ADR 0101 hat die Rotation als Zeremonie
+     * gebaut, also stimmt sie beim ersten Mal nicht mehr. Ein Leserrecht mit
+     * einer falschen Fassung öffnet eine Fassung, die es nicht mehr gibt.
+     */
+    firstKekVersion: (space.domainRecord as {
+      domain?: { kekVersion?: number };
+    }).domain?.kekVersion ?? 1,
     validFrom: now.toISOString(),
     validUntil: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000).toISOString(),
-    lifecycleOrder: 'seq:0000000000000003',
+    /**
+     * Aus der Uhr, nicht als feste `3`. Ein zweites Hereinlassen - nach einem
+     * Widerruf, oder für ein drittes Gerät - trüge sonst dieselbe Ordnung wie
+     * das erste, und eine Ordnung, die zweimal vorkommt, ordnet nichts.
+     * Sechzehn Stellen sind die Form, die der Daemon verlangt.
+     */
+    lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
   } as never);
 
   await submitPicoCompanionReaderGrant({ linkClient, record: readerGrantRecord });

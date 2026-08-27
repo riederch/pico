@@ -827,6 +827,33 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B28 — Vier Fehler in Code, den nur Tests je berührt haben (2026-08-27).**
+Die Reader-Custody-Senkrechte stand und war nie *durchlaufen* worden — nur
+geprüft. Meine Tests decken die Home-Seite und die Reihenfolge ab; was sie
+nicht erreichen, sind die Werte, die der Companion in eine Zeremonie schreibt.
+Beim Durchsehen der eigenen drei Commits:
+
+- **`?? ''`**: ein nicht entsperrter Signaturschlüssel wäre als *leerer*
+  öffentlicher Schlüssel in ein Schreibrecht gewandert — eine Zeremonie mit
+  einer Zustimmung, die eine unbrauchbare Urkunde erzeugt. Jetzt eine benannte
+  Ablehnung.
+- **`firstKekVersion: 1`**: aus der Domäne gelesen statt angenommen. Heute
+  rotiert nichts, also stimmte die Annahme — und ADR 0101 hat die Rotation als
+  Zeremonie gebaut, also stimmt sie beim ersten Mal nicht mehr.
+- **`lifecycleOrder: 'seq:…0003'`**: fest verdrahtet. Ein zweites
+  Hereinlassen trüge dieselbe Ordnung wie das erste, und eine Ordnung, die
+  zweimal vorkommt, ordnet nichts. Jetzt aus der Uhr.
+- **Zweimal „Raum anlegen"** überschrieb die Datei daneben stillschweigend, und
+  was im ersten Raum stand, bliebe beim Home liegen — für dieses Gerät
+  unerreichbar. Eine Person, die zweimal drückt, verlöre den Zugang zu ihren
+  eigenen Sätzen, ohne dass etwas fehlschlüge.
+
+Dazu acht Ablehnungen, die als Maschinenwort auf dem Bildschirm gestanden
+hätten: `not_a_reader` sagt einer Person nicht, ob sie etwas falsch gemacht hat
+oder ob Pico etwas nicht darf. Sie stehen jetzt in der Tabelle gesprochener
+Ablehnungen, und ein Test zählt sie einzeln auf — eine Schleife über die
+Tabelle selbst prüfte nur, dass die Tabelle die Tabelle ist.
+
 **B27 — Der Raum war beschreibbar, erteilbar und unlesbar (2026-08-27).**
 Nachdem das zweite Gerät hereingelassen werden konnte, war die nächste Frage,
 ob es auch etwas sieht. Es sah nichts: die Leihe aus ADR 0098 verlangt vier

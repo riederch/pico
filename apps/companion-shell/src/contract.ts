@@ -562,6 +562,30 @@ export function picoCompanionRefusalLine(message: string, fallback: string): str
       'The two PINs were not the same. Nothing was printed - choose the PIN again.',
     untrusted_companion_ipc_sender:
       'Pico refused a request that did not come from this window, and did nothing.',
+    /**
+     * ADR 0086 mit ADR 0094. Die Ablehnungen des Reader-Custody-Wegs, in
+     * Worten - sonst läse eine Person `not_a_reader` und wüsste nicht, ob sie
+     * etwas falsch gemacht hat oder ob Pico etwas nicht darf.
+     */
+    reader_custody_space_exists:
+      'You already have such a space. Making a second one would leave what is in '
+      + 'the first unreachable from this device.',
+    no_reader_custody_space:
+      'There is no such space yet. Make one first, then you can write in it.',
+    no_other_active_device:
+      'This is your only device right now. There is nobody to let in.',
+    not_a_reader:
+      'This device may not read that space. Someone has to let it in first.',
+    freshness_unavailable:
+      'Your Home has no current proof that this device\'s key still stands. It needs '
+      + 'one from the identity that owns the device, and it only lasts minutes.',
+    reader_key_not_unlocked:
+      'The key that opens that space is locked. Unlock your Vault and try again.',
+    device_signing_key_not_unlocked:
+      'This device\'s signing key is locked, so nothing could be signed. Unlock your '
+      + 'Vault and try again.',
+    device_key_agreement_key_not_unlocked:
+      'The key this device reads with is locked. Unlock your Vault and try again.',
   };
   if (spoken[message] !== undefined) {
     return spoken[message];
