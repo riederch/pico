@@ -787,26 +787,16 @@ export const picoLinkDirectOperations = [
    * dazukommt, ist der Weg dorthin von einem Gerät, das die Person in der Hand
    * hält - und nicht von einem zweiten Home.
    *
-   * **Drei Vorgänge, weil eine Verwahrung drei Aufzeichnungen braucht**: die
-   * Domäne sagt, wem der Raum gehört, das Schreibrecht, wessen Unterschrift
-   * darin angenommen wird, und das Item ist der Inhalt. Sie einzeln zu
-   * schicken ist nicht Umständlichkeit, sondern die Reihenfolge: ein Item
-   * ohne sein Recht wird abgelehnt, und das Recht ohne seine Domäne auch.
-   */
-  /**
-   * ADR 0085 mit ADR 0089. Der Frische-Nachweis, vom Gerät seines Besitzers.
+   * **Ein Vorgang, nicht vier** - berichtigt am 2026-08-27. Die erste Fassung
+   * gab jeder Aufzeichnung einen eigenen: Domäne, Schreibrecht, Leser-Grant,
+   * Frische-Nachweis. Drei davon hatten längst eine Tür - `home.authority.submit`
+   * trägt sie als *Ressourcen*, und meine Messung hat das verfehlt, weil sie
+   * die Namensliste der Vorgänge durchsucht hat und nicht eine Ressourcenkarte.
+   * Das Schreibrecht fehlte dort wirklich und ist jetzt eine Ressource mehr.
    *
-   * **Die Schublade war da und hatte keine Tür für ein Gerät.** ADR 0089 füllt
-   * die Transport-Nahtstelle mit einer Ablage im Speicher, und ihr Kopf sagt,
-   * warum sie so aussieht: der Vault-Daemon hat nach ADR 0097 keine Netzfläche,
-   * das Home kann also nicht *ziehen* - der Besitzer schiebt. Ihr einziger
-   * Eingang war bis zum 2026-08-26 eine `home-authority-relay`-Route, also ein
-   * zweites Home oder eine Betreiber-Sitzung. Das Gerät der Person, deren
-   * Identitätswurzel als einzige unterschreiben darf, kam nicht hinein.
-   *
-   * Der Home prüft unverändert: nur die exakte Wurzel des benannten Lesers,
-   * exakte Bindung, höchstens fünf Minuten, kein Zwischenspeicher. Diese
-   * Operation trägt Bytes und entscheidet nichts.
+   * Ein **Item** ist keine Autorität, sondern Inhalt, und bleibt deshalb ein
+   * eigener Vorgang. Die Reihenfolge gilt unverändert: ein Item ohne sein
+   * Recht wird abgelehnt, und das Recht ohne seine Domäne auch.
    */
   /**
    * ADR 0094 mit ADR 0086. Was in einem Reader-Custody-Raum steht - für den,
@@ -818,25 +808,11 @@ export const picoLinkDirectOperations = [
    * hat keine davon. Die einzige Route dorthin war Home-zu-Home und lieferte
    * Projektionen statt Aufzeichnungen.
    *
-   * **Nur an einen Leser**, und das ist keine Vorsicht über den Geheimtext:
-   * die Umschläge daneben sind für genau einen Schlüssel bestimmt, und eine
-   * Liste davon wäre eine Karte, wer wo hineindarf.
+   * **Nur an einen Leser oder den Besitzer**, und das ist keine Vorsicht über
+   * den Geheimtext: die Umschläge daneben sind für genau einen Schlüssel
+   * bestimmt, und eine Liste davon wäre eine Karte, wer wo hineindarf.
    */
   'home.reader_custody.read',
-  'home.reader_key.freshness.submit',
-  /**
-   * ADR 0086 mit ADR 0088. Wer eine Reader-Custody-Domäne lesen darf.
-   *
-   * Der erste Fall, für den das reicht, ist **das zweite Gerät derselben
-   * Person**: dieselbe Identität, also unterschreibt ihre eigene Wurzel den
-   * Frische-Nachweis, und niemand sonst muss dafür wach sein. Eine andere
-   * Person hereinzulassen verlangt, dass *ihr* Gerät in genau diesem Moment
-   * antwortet - dafür gibt es noch keinen Weg, und das ist eine benannte
-   * Lücke und kein Versehen.
-   */
-  'home.reader_custody.reader_grant.submit',
-  'home.reader_custody.domain.submit',
-  'home.reader_custody.writer_grant.submit',
   'home.reader_custody.item.submit',
   'home.observations.submit',
   'home.modules.consent.read',

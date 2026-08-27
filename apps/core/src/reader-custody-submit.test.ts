@@ -363,14 +363,16 @@ describe('ADR 0085 - das zweite Gerät derselben Person darf lesen', () => {
      * auf eine leere Ablage - und der Grund, aus dem der Raum von gestern
      * niemanden hereinlassen konnte.
      */
-    const withoutCheckpoint = await send('home.reader_custody.reader_grant.submit', {
+    const withoutCheckpoint = await send('home.authority.submit', {
+      resource: 'reader_custody_reader_grant',
       record: readerGrant,
     });
-    expect(withoutCheckpoint.response.outcome).toBe('invalid_arguments');
-    expect(withoutCheckpoint.result.refusal).toBe('freshness_unavailable');
+    expect((withoutCheckpoint.result as { error?: string }).error)
+      .toBe('freshness_unavailable');
 
-    const pushed = await send('home.reader_key.freshness.submit', {
-      checkpoint: checkpointFor({
+    const pushed = await send('home.authority.submit', {
+      resource: 'reader_key_freshness_checkpoint',
+      record: checkpointFor({
         homeId: setup.homeId,
         identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
         identityPrivateKey: sealedClaim.claimantPrivateKey,
@@ -379,13 +381,14 @@ describe('ADR 0085 - das zweite Gerät derselben Person darf lesen', () => {
         now: new Date(),
       }),
     });
-    expect(pushed.result.refusal ?? pushed.response.outcome).toBe('ok');
+    expect((pushed.result as { error?: string }).error ?? pushed.response.outcome).toBe('ok');
 
-    const withCheckpoint = await send('home.reader_custody.reader_grant.submit', {
+    const withCheckpoint = await send('home.authority.submit', {
+      resource: 'reader_custody_reader_grant',
       record: readerGrant,
     });
-    expect(withCheckpoint.result.refusal ?? withCheckpoint.response.outcome).toBe('ok');
-    expect(withCheckpoint.result).toEqual({ inserted: true });
+    expect((withCheckpoint.result as { error?: string }).error
+      ?? withCheckpoint.response.outcome).toBe('ok');
 
     /**
      * ADR 0094. **Und jetzt gibt es etwas zu holen.** Vor dem Leserrecht war

@@ -89,15 +89,45 @@ export async function submitPicoCompanionReaderCustodyRecords(input: {
   linkClient: PicoLinkDirectClient;
   records: PicoCompanionReaderCustodyRecords;
 }): Promise<void> {
-  for (const [operation, record] of [
-    ['home.reader_custody.domain.submit', input.records.domainRecord],
-    ['home.reader_custody.writer_grant.submit', input.records.writerGrantRecord],
+  /**
+   * **Durch die Tür, die es gibt** - berichtigt am 2026-08-27. Die erste
+   * Fassung gab jeder Aufzeichnung einen eigenen Vorgang; drei davon hatten
+   * längst einen, denn `home.authority.submit` trägt sie als *Ressourcen*.
+   * Meine Messung hat das verfehlt, weil sie die Namensliste der Vorgänge
+   * durchsucht hat und nicht eine Ressourcenkarte.
+   *
+   * Die Reihenfolge ist die Sache selbst: ein Schreibrecht ohne seine Domäne
+   * wird abgelehnt.
+   */
+  for (const [resource, record] of [
+    ['reader_custody_domain', input.records.domainRecord],
+    ['reader_custody_writer_grant', input.records.writerGrantRecord],
   ] as const) {
-    const answer = await input.linkClient.request(operation, { record });
-    if (answer.outcome !== 'ok') {
-      const refusal = (answer.result as { refusal?: unknown }).refusal;
-      throw new Error(typeof refusal === 'string' ? refusal : `${operation}_${answer.outcome}`);
-    }
+    await submitPicoCompanionAuthorityRecord({ linkClient: input.linkClient, resource, record });
+  }
+}
+
+/**
+ * ADR 0130 E5. Eine Autoritätsaufzeichnung beim eigenen Home abgeben.
+ *
+ * Eine Stelle für alle: die Ressourcen sind eine geschlossene Liste im Home,
+ * und ein Aufrufer, der sie hier einzeln nachbaute, hätte eine zweite.
+ */
+export async function submitPicoCompanionAuthorityRecord(input: {
+  linkClient: PicoLinkDirectClient;
+  resource: string;
+  record: Record<string, unknown>;
+}): Promise<void> {
+  const answer = await input.linkClient.request('home.authority.submit', {
+    resource: input.resource,
+    record: input.record,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { error?: unknown; refusal?: unknown });
+    const named = typeof refusal.error === 'string'
+      ? refusal.error
+      : typeof refusal.refusal === 'string' ? refusal.refusal : undefined;
+    throw new Error(named ?? `${input.resource}_${answer.outcome}`);
   }
 }
 
@@ -163,8 +193,10 @@ export async function publishPicoCompanionReaderKeyFreshness(input: {
     // Aufrufer merkt, dass er den falschen Fingerabdruck geschickt hat.
     throw new Error('pico_identity_key_required');
   }
-  const answer = await input.linkClient.request('home.reader_key.freshness.submit', {
-    checkpoint: {
+  await submitPicoCompanionAuthorityRecord({
+    linkClient: input.linkClient,
+    resource: 'reader_key_freshness_checkpoint',
+    record: {
       schema: picoIdentityReaderKeyFreshnessCheckpointSchema,
       checkpoint,
       issuerIdentityKeyRecord: {
@@ -175,10 +207,6 @@ export async function publishPicoCompanionReaderKeyFreshness(input: {
       issuerSignatureHex: signed.signatureHex,
     },
   });
-  if (answer.outcome !== 'ok') {
-    const refusal = (answer.result as { refusal?: unknown }).refusal;
-    throw new Error(typeof refusal === 'string' ? refusal : `freshness_${answer.outcome}`);
-  }
 }
 
 /** ADR 0086 mit ADR 0088. Wer die Domäne lesen darf, beim Home abgegeben. */
@@ -186,19 +214,17 @@ export async function submitPicoCompanionReaderGrant(input: {
   linkClient: PicoLinkDirectClient;
   record: Record<string, unknown>;
 }): Promise<void> {
-  const answer = await input.linkClient.request('home.reader_custody.reader_grant.submit', {
+  /**
+   * Der Grund reist weiter, und hier trägt er besonders viel:
+   * `freshness_unavailable` heisst „der Nachweis fehlt oder ist abgelaufen"
+   * und ist etwas völlig anderes als `reader_is_not_active_member`. Die Fläche
+   * darüber kann auf das erste etwas tun und auf das zweite nicht.
+   */
+  await submitPicoCompanionAuthorityRecord({
+    linkClient: input.linkClient,
+    resource: 'reader_custody_reader_grant',
     record: input.record,
   });
-  if (answer.outcome !== 'ok') {
-    const refusal = (answer.result as { refusal?: unknown }).refusal;
-    /**
-     * Der Grund reist weiter, und hier trägt er besonders viel: `freshness_
-     * unavailable` heisst „der Nachweis fehlt oder ist abgelaufen" und ist
-     * etwas völlig anderes als `reader_is_not_active_member`. Die Fläche
-     * darüber kann auf das erste etwas tun und auf das zweite nicht.
-     */
-    throw new Error(typeof refusal === 'string' ? refusal : `reader_grant_${answer.outcome}`);
-  }
 }
 
 /**

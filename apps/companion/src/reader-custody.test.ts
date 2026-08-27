@@ -82,22 +82,30 @@ describe('ADR 0086 - eine Erinnerung unter Reader-Custody, geschrieben', () => {
     await expect(writing(given)).rejects.toThrow('invalid_pico_reader_custody_submit_result');
   });
 
-  it('gibt Domäne und Schreibrecht in dieser Reihenfolge ab', async () => {
-    // Ein Schreibrecht ohne seine Domäne wird abgelehnt; die Reihenfolge ist
-    // deshalb keine Stilfrage.
+  it('gibt Domäne und Schreibrecht in dieser Reihenfolge durch die eine Tür ab', async () => {
+    /**
+     * Ein Schreibrecht ohne seine Domäne wird abgelehnt; die Reihenfolge ist
+     * deshalb keine Stilfrage.
+     *
+     * **Und beide gehen durch `home.authority.submit`** - berichtigt am
+     * 2026-08-27. Die erste Fassung gab jeder Aufzeichnung einen eigenen
+     * Vorgang; drei davon hatten längst eine Tür, denn dieser Vorgang trägt
+     * sie als Ressourcen. Der Test nennt die Ressourcen, weil genau das die
+     * Stelle ist, an der eine zweite Liste entstünde.
+     */
     const given = clients();
     await submitPicoCompanionReaderCustodyRecords({
       linkClient: {
-        request: async (operation: string) => {
-          given.steps.push(operation);
+        request: async (operation: string, args: Record<string, unknown>) => {
+          given.steps.push(`${operation}:${String(args.resource)}`);
           return { outcome: 'ok', result: {} };
         },
       } as never,
       records: { domainRecord: {}, writerGrantRecord: {} },
     });
     expect(given.steps).toEqual([
-      'home.reader_custody.domain.submit',
-      'home.reader_custody.writer_grant.submit',
+      'home.authority.submit:reader_custody_domain',
+      'home.authority.submit:reader_custody_writer_grant',
     ]);
   });
 });

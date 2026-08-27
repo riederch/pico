@@ -827,6 +827,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B30 — Ich habe drei Türen gebaut, die es schon gab (2026-08-27).**
+Beim Aufsetzen des Durchlaufs stand im Nutzungstext des Vault-CLI eine
+Unterkommando-Liste, und darin `ceremony publish-checkpoint`. Nachgesehen: der
+Tool-Weg baut einen Frische-Nachweis genau so, wie ich ihn tags zuvor im
+Companion gebaut hatte — Sitzung suchen, Felder bauen, über die `sign`-Familie
+mit demselben Etikett unterschreiben.
+
+**Meine Aussage vom Vortag war falsch.** Ich hatte gesagt, nichts im Baum
+signiere je einen Nachweis; beide Verwendungen des Byte-Bauers seien prüfende
+Seiten. Der CLI nennt weder den Vault-Helfer noch den Byte-Bauer — er geht
+durch den Daemon —, und meine Suche hat ihn deshalb verfehlt.
+
+Schlimmer: `home.authority.submit` trägt seit langem Ressourcen, darunter
+`reader_key_freshness_checkpoint`, `reader_custody_domain` und
+`reader_custody_reader_grant`. Gemessen (nicht vermutet): die Tür geht vom
+beanspruchenden Gerät aus auf, ohne Betreiber-Sitzung — `isCurrentHomeHostPico`
+prüft die Identität, nicht das Gerät. **Drei meiner vier neuen Vorgänge waren
+Doppelungen einer vorhandenen Tür**, in einer Liste, die ADR 0107 absichtlich
+klein hält.
+
+Sie sind entfernt. Das Schreibrecht fehlte dort wirklich und ist jetzt eine
+Ressource mehr; ein Item ist Inhalt und keine Autorität und behält seinen
+eigenen Vorgang. Die Link-Operationen sind damit von 57 auf 53 gefallen — vier
+weniger als vor meiner Arbeit von gestern, und der Weg funktioniert unverändert.
+
+**Warum die Messung versagt hat, und was das kostet.** Ich habe die
+*Namensliste* der Vorgänge nach `reader_grant` und `fresh` durchsucht. Eine
+generische Tür mit einer Ressourcenkarte trägt diese Wörter nicht in ihrem
+Namen. Wer nach einem Namen sucht, findet keine Fähigkeit — er findet einen
+Namen.
+
 **B29 — Der Besitzer durfte seinen eigenen Raum nicht lesen (2026-08-27).**
 Beim Aufbauen eines echten Durchlaufs gefunden, noch bevor er lief: das
 Labor-Home kennt eine Identität mit zwei Geräten, und beim Durchdenken, was
