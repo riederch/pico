@@ -827,6 +827,85 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B32 — Hundertvierunddreißig Tests hingen am Kalender (2026-08-27).**
+An diesem Vormittag um 10:00 UTC wurden drei Tests im Kern rot, ohne dass
+jemand etwas geändert hatte. Der Grund war ein Datum: eine Vorrichtung gab dem
+Schreibrecht ein `validUntil`, das als zweites Datum neben seinem Anker stand —
+genau einen Monat später —, und `recordItem` nimmt ohne zweites Argument
+`new Date()`. Der Fehlschlag las sich wie ein Fehler im Kern und war einer im
+Kalender.
+
+Eine Textsuche taugt für diese Sorte nicht: rund hundertfünfzig Fenster-Enden
+stehen als Datum in Tests, und die Hälfte liegt mit Absicht in der
+Vergangenheit — so prüft man Ablaufen. „Darf nicht vergangen sein" wäre
+überwiegend Fehlalarm. Die ehrliche Frage ist eine andere: **ein gut gebauter
+Test liest die Wanduhr gar nicht**, er gibt seine Zeit an. Für ihn ist ein
+Vorstellen der Uhr folgenlos.
+
+Also die Uhr vorgestellt. `scripts/shift-clock.mjs` verschiebt `Date` um ein
+Jahr, `pnpm clock:check` läuft die ganze Testmenge darunter. Der erste Lauf:
+**134 von 1095 Tests im Kern fielen um, in 19 Dateien.** Eine einzige
+Vorrichtung stand hinter 115 davon — `test-claimed-home.ts` gab jeder
+Bevollmächtigung ein Fenster von 2026-01-01 bis 2027-01-01, und am Neujahrstag
+wäre der halbe Kern gemeinsam mit `pico_identity_session_refused:401`
+umgefallen. Dasselbe Fenster stand in sechzehn Dateien abgeschrieben; eine
+Wahrheit, die sechzehnmal geschrieben wird, driftet sechzehnmal, und diese
+driftet sogar von allein, weil die Gegenwart weiterläuft und das Datum nicht.
+
+Repariert wurde nach zwei Regeln, nicht nach einer:
+- Wer seine Zeit **angibt**, behält sein festes Fenster (`share-envelope`,
+  `identity-session`, `domain-read-grant`s Ablauf-Aussagen). Ein Fenster um die
+  Wanduhr herum läge dort neben der Zeit, gegen die geprüft wird.
+- Wer an der **Wanduhr** misst, bekommt `picoTestValidityWindow()` — ein Jahr in
+  jede Richtung, an einer Stelle. Das betrifft alles, was durch
+  `recordPicoHomeDomainReadGrant` geht: der Weg nimmt bewusst kein `at`
+  entgegen, weil ADR 0115 das Home mit seinem eigenen Jetzt stempeln lässt.
+
+Nebenbei fielen zwei Dinge auf. `share-envelope.test.ts` maß zwei Uhren
+gegeneinander — jede Aufzeichnung mit `at: AT`, eine ohne —, und das ging nur
+gut, solange der Abstand klein war. Und die `freshUntil` einer Frische stand
+als festes Datum neben `checkedAt`, statt aus ihm zu folgen; als Datum galt sie
+bis zu einem Vormittag im Juli 2026, für jeden Aufrufer mit Wanduhr also seither
+gar nicht mehr.
+
+Stand danach: **2884 Tests, beide Uhren grün.** `pnpm clock:check` hängt an
+`release:verify`. Gefälscht am 2026-08-27, indem das feste Fenster in
+`test-claimed-home.ts` zurückgestellt wurde: `pnpm test` blieb grün, und ein
+Jahr voraus fielen 119 Tests.
+
+**B31 — Ein Durchlauf fand, was vier Gates und tausend Tests nicht fanden
+(2026-08-27).**
+Der Reader-Custody-Ast wurde zum ersten Mal wirklich gegangen — gegen ein
+laufendes Home und einen laufenden Vault-Daemon, nicht gegen Vorrichtungen:
+Raum anlegen, hineinschreiben, das zweite Gerät hereinlassen, zurücklesen. Vier
+Zustimmungen wurden dabei von einem echten Daemon gerendert und beantwortet.
+
+Der Weg fand drei Dinge, die kein Test hatte:
+- `ceremonyCreateDomain` bekam ein Feld zu viel und antwortete
+  `invalid_request`. Ein `as never` am Aufruf hatte die Typprüfung stillgelegt.
+- Der Domänenname war fest. Eine halb durchgekommene Anlage hinterließ eine
+  Zeile, und `UNIQUE (home_id, privacy_domain)` machte daraus ein `conflicting_record`,
+  aus dem eine Person nie wieder herauskam. Jetzt trägt der Name die Autorität
+  in sich, und ein zweiter Druck **setzt fort**, statt abzulehnen.
+- Die Home-Seite kannte `reader_custody_writer_grant` nicht. Der Grund ist
+  unangenehm: ein Bearbeitungsschritt von mir war an seiner zweiten Hälfte
+  gescheitert und hatte die erste nie geschrieben — der Zweig ging so ins
+  Repository, und `release:verify` blieb grün, weil der Test des Clients den
+  **Namen** behauptet und nicht, dass jemand ihn annimmt.
+
+Daraus wurde `scripts/check-authority-resources.mjs`. Die erste Fassung suchte
+`resource: '...'` im Quelltext der Clients — und sah die Stelle nicht, an der
+die Wörter als Feldwerte in einem Array stehen; die Pflanzung biss nicht. Wer
+nach einer Form sucht, findet die andere Form nicht. Jetzt hält es der Compiler:
+`picoHomeAuthoritySubmitResources` ist eine geschlossene Liste im Protokoll, der
+Client tippt dagegen, und das Gate hält die Liste gegen die Fallunterscheidung
+des Homes. Gefälscht am 2026-08-27 durch Entfernen des Falls: die Prüfung nennt
+das Wort und sagt, wann eine Person es merken würde.
+
+Offen und benannt: eine **andere Person** hereinlassen verlangt, dass deren
+Gerät binnen fünf Minuten wach ist (ADR 0085); und ein Telefon als Leser
+braucht eine andere Form, weil ADR 0096 nicht verschränkt.
+
 **B30 — Ich habe drei Türen gebaut, die es schon gab (2026-08-27).**
 Beim Aufsetzen des Durchlaufs stand im Nutzungstext des Vault-CLI eine
 Unterkommando-Liste, und darin `ceremony publish-checkpoint`. Nachgesehen: der
