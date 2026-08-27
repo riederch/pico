@@ -258,7 +258,24 @@ export async function revokePicoHomeDomainReaderGrant(input: {
     schema: picoReaderCustodyReaderGrantLifecycleRecordSchema,
     lifecycle,
     ownerIdentityKeyRecord: {
-      suite: picoMemoryContentSuite,
+      /**
+       * **Die Identitätssuite, nicht die des Inhalts** (gefunden am
+       * 2026-08-27, gegen ein laufendes Home).
+       *
+       * Hier stand `picoMemoryContentSuite`, und das Home verlangt von einer
+       * Lebenszyklus-Aussage, dass ihr Schlüsselnachweis Zeichen für Zeichen
+       * derselbe ist wie der in der Domäne - die trägt `pico.suite.id.v1`.
+       * Also wurde jedes Beenden eines Lesezugangs mit `invalid_record`
+       * abgewiesen, seit das Fenster es am 2026-08-24 anbietet. Die drei
+       * Geschwister-Zeremonien in dieser Datei hatten es richtig; diese eine
+       * nicht, und kein Test bemerkte es, weil alle gegen einen erfundenen
+       * Link-Client prüfen, welche *Operation* geschickt wird - nicht, ob
+       * jemand sie annimmt.
+       *
+       * Ein Schlüssel in einer Identitätsrolle gehört in die Identitätssuite;
+       * `check-key-record-suites.mjs` hält das jetzt fest.
+       */
+      suite: picoIdentitySuite,
       keyRole: 'pico_identity',
       publicKeyHex: signer.publicKeyHex,
     },

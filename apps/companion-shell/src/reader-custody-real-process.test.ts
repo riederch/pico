@@ -11,6 +11,15 @@ import {
   foundPicoCompanionHome,
   parsePicoHomeSetupAnnouncement,
 } from '@pico/companion/founding';
+import {
+  acceptPicoCompanionEnrolment,
+  enrolPicoCompanionDevice,
+  offerPicoCompanionEnrolment,
+} from '@pico/companion/enrolment';
+import {
+  readPicoCompanionDomainReadership,
+  revokePicoCompanionDomainReader,
+} from '@pico/companion/home-authority';
 import { readPicoCompanionProfile } from '@pico/companion/profile';
 import { createPicoCompanionLinkClient } from '@pico/companion/recovery-controller';
 import {
@@ -72,6 +81,7 @@ afterEach(async () => {
 const CLI = join(import.meta.dirname, '..', '..', 'vault-daemon', 'dist', 'cli.js');
 const CORE = join(import.meta.dirname, '..', '..', 'core', 'dist', 'index.js');
 const passphrase = 'a-passphrase-the-person-chose';
+const targetPassphrase = 'the-other-machine-has-its-own';
 
 /** Siehe `home-authority-real-process.test.ts` - ein Jahr ab jetzt, nicht ein Kalendertag. */
 const VALID_UNTIL = picoTestValidityWindow().validUntil;
@@ -205,6 +215,53 @@ async function foundedDevice(): Promise<{
   return { profilePath, socketPath, session, home: home.child };
 }
 
+/**
+ * Ein zweites Gerät derselben Person, wirklich eingezogen.
+ *
+ * Der Weg ist der aus `enrolment-real-process.test.ts`, hier auf das
+ * Notwendige gekürzt: ein Angebot vom neuen Gerät, ein Zuschuss vom alten, eine
+ * Annahme zurück. Ohne ein zweites Gerät gibt es keinen Leser, ohne Leser kein
+ * Beenden - und genau das Beenden war seit dem 2026-08-24 kaputt, ohne dass es
+ * jemand sah.
+ */
+async function enrolSecondDevice(sponsorProfilePath: string,
+  sponsorSession: PicoCompanionVaultProductSession): Promise<void> {
+  const sponsorProfile = readPicoCompanionProfile(sponsorProfilePath);
+  const targetSocketPath = await startEmptyDaemon();
+  const targetProfilePath = join(tempDirectory('pico-e5-target-'), 'profile.json');
+  const offer = await offerPicoCompanionEnrolment({
+    socketPath: targetSocketPath,
+    passphrase: targetPassphrase,
+  });
+  let confirming: Promise<unknown> | null = null;
+  await enrolPicoCompanionDevice({
+    profile: sponsorProfile,
+    daemonClient: sponsorSession.consumerClient,
+    livingDeviceLinkClient: await createPicoCompanionLinkClient({
+      profile: sponsorProfile,
+      daemonClient: sponsorSession.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    }),
+    sodium: sodium as unknown as VaultSodium,
+    offerCode: offer.offerCode,
+    validUntil: VALID_UNTIL,
+    exchange: async (grantCode) => {
+      const accepted = await acceptPicoCompanionEnrolment({
+        socketPath: targetSocketPath,
+        passphrase: targetPassphrase,
+        grantCode,
+        profilePath: targetProfilePath,
+        sodium: sodium as unknown as VaultSodium,
+        decisions: { decideApproval: async () => true },
+        device: offer.device,
+      });
+      confirming = accepted.confirm();
+      return accepted.acceptanceCode;
+    },
+  });
+  await confirming;
+}
+
 describe('ADR 0130 E5 - ein Raum, in den nur Gewählte sehen', () => {
   it('legt ihn an, schreibt hinein und liest zurück, was drin steht', async () => {
     /**
@@ -264,6 +321,125 @@ describe('ADR 0130 E5 - ein Raum, in den nur Gewählte sehen', () => {
       memoryItemId: written.memoryItemId,
       text: 'Der erste Satz, den dieser Ast je getragen hat.',
     }]);
+  }, 300_000);
+
+  it('lässt das zweite Gerät herein und nimmt den Zugang wieder zurück', async () => {
+    /**
+     * **Der Test, der am 2026-08-27 einen Fehler fand, der seit dem
+     * 2026-08-24 im Fenster stand.** Einen Lesezugang zu beenden ist ein Knopf
+     * neben der Leserschaft, und das Home hat die Aussage jedes Mal mit
+     * `invalid_record` abgewiesen: die Zeremonie hängte den Schlüsselnachweis
+     * der Besitzerin mit der Inhaltssuite an, während die Domäne die
+     * Identitätssuite trägt.
+     *
+     * Kein Test bemerkte es, weil alle gegen einen erfundenen Link-Client
+     * prüfen, *welche Operation* geschickt wird. Der Unterschied zwischen
+     * „geschickt" und „angenommen" ist genau dieser Block: nach dem Beenden
+     * wird die Leserschaft noch einmal beim Home gelesen, und sie muss den
+     * Zugang als beendet zeigen.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    await enrolSecondDevice(profilePath, session);
+    const profile = readPicoCompanionProfile(profilePath);
+    const input = {
+      daemonClient: session.consumerClient,
+      profile,
+      profilePath,
+      sodium: sodium as unknown as VaultSodium,
+    };
+    await createPicoCompanionReaderCustodySpace(input);
+    const letIn = await letPicoCompanionOtherDeviceRead(input);
+    expect(letIn.readerDelegationId).toMatch(/^delegation_/u);
+
+    const linkClient = await createPicoCompanionLinkClient({
+      profile,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+    const before = await readPicoCompanionDomainReadership({
+      livingDeviceLinkClient: linkClient,
+    });
+    const domain = before.find((entry) => entry.readers.length > 0);
+    expect(domain?.readers[0]?.status).toBe('active');
+
+    await revokePicoCompanionDomainReader({
+      profile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: linkClient,
+      sodium: sodium as unknown as VaultSodium,
+      domain: domain!,
+      reader: domain!.readers[0]!,
+      reasonCategory: 'device_retired',
+    });
+
+    /**
+     * Vom Home gelesen, nicht vom Rückgabewert geglaubt. Der alte Fehler ließ
+     * die Zeremonie unterschreiben und das Home ablehnen; ein Test, der der
+     * Antwort der eigenen Funktion glaubt, hätte auch das grün gefunden.
+     */
+    const after = await readPicoCompanionDomainReadership({
+      livingDeviceLinkClient: linkClient,
+    });
+    const sameDomain = after.find((entry) => entry.domainId === domain!.domainId);
+    expect(sameDomain?.readers[0]?.status).toBe('revoked');
+  }, 300_000);
+
+  it('verschließt die Domäne, bis rotiert wird - und das kann heute niemand', async () => {
+    /**
+     * **Eine benannte Sackgasse, gemessen am 2026-08-27.** Jede beendete
+     * Leserberechtigung erzeugt eine Rotationsschuld (ADR 0101), und solange
+     * sie besteht, weist das Home neue Items mit `rotation_required` ab. Das
+     * ist richtig: wer hinausgeworfen wurde, hält den alten KEK, und ohne
+     * Rotation liefe alles Neue weiter unter genau diesem Schlüssel.
+     *
+     * Falsch ist nur, dass es im Produkt keinen Weg gibt, sie zu begleichen.
+     * Der Vault kann rotieren, der Daemon hat die Zeremonie, das Home nimmt
+     * die Aufzeichnung an - der Companion hat keine Funktion dafür, und das
+     * Fenster keinen Knopf. E5s viertes Bedienelement fehlt, und dieser Test
+     * hält den Preis dafür fest, statt ihn zu behaupten.
+     *
+     * **Wenn das Rotieren gebaut ist, wird dieser Test zu seiner anderen
+     * Hälfte** - er endet dann nicht bei der Abweisung, sondern bei dem
+     * Satz, der danach doch hineingeschrieben werden kann.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    await enrolSecondDevice(profilePath, session);
+    const profile = readPicoCompanionProfile(profilePath);
+    const input = {
+      daemonClient: session.consumerClient,
+      profile,
+      profilePath,
+      sodium: sodium as unknown as VaultSodium,
+    };
+    await createPicoCompanionReaderCustodySpace(input);
+    await writePicoCompanionReaderCustodyNote({ ...input, text: 'Vor dem Hinauswerfen.' });
+    await letPicoCompanionOtherDeviceRead(input);
+
+    const linkClient = await createPicoCompanionLinkClient({
+      profile,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+    const domains = await readPicoCompanionDomainReadership({
+      livingDeviceLinkClient: linkClient,
+    });
+    const domain = domains.find((entry) => entry.readers.length > 0)!;
+    await revokePicoCompanionDomainReader({
+      profile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: linkClient,
+      sodium: sodium as unknown as VaultSodium,
+      domain,
+      reader: domain.readers[0]!,
+      reasonCategory: 'reader_removed',
+    });
+
+    await expect(writePicoCompanionReaderCustodyNote({
+      ...input,
+      text: 'Nach dem Hinauswerfen.',
+    })).rejects.toThrow('rotation_required');
   }, 300_000);
 
   it('setzt eine angefangene Anlage fort, statt sie zu verweigern', async () => {

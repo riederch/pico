@@ -827,6 +827,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B34 — Einen Lesezugang zu beenden hat nie funktioniert (2026-08-27).**
+Der Knopf steht seit dem 2026-08-24 neben der Leserschaft im Fenster: einen
+vergebenen Lesezugang beenden, mit einem der fünf Gründe als Teil der
+Handlung. Gegen ein laufendes Home antwortete das Home jedes Mal
+`invalid_record`.
+
+Der Grund ist ein Wort. Die Zeremonie hängt an die Lebenszyklus-Aussage den
+Schlüsselnachweis der Besitzerin, und das Home vergleicht ihn Zeichen für
+Zeichen mit dem in der Domäne. Die Domäne trägt `pico.suite.id.v1`; die
+Zeremonie schrieb `picoMemoryContentSuite`. Die drei Geschwister-Zeremonien in
+derselben Datei hatten es richtig.
+
+**Warum es niemand sah.** Die Tests dafür prüfen gegen einen erfundenen
+Link-Client, *welche Operation* geschickt wird - `home.authority.submit` mit
+der Ressource `reader_custody_reader_grant_lifecycle` -, und das stimmte. Der
+Unterschied zwischen „geschickt" und „angenommen" ist genau die Lücke, durch
+die auch B31s fehlendes Wort ging. Und `invalid_record` liest sich wie die
+Antwort auf eine gefälschte Aussage, also sieht niemand nach.
+
+Zwei Dinge halten es jetzt. `check-key-record-suites.mjs` prüft mechanisch,
+was hier schiefging: ein Schlüssel in einer Identitätsrolle gehört in die
+Identitätssuite, weil `verifyPicoIdentityKeyRecordFingerprint` genau das
+verlangt - 79 solche Stellen im Haus, 78 waren richtig. Und
+`reader-custody-real-process.test.ts` zieht jetzt ein zweites Gerät wirklich
+ein, lässt es lesen, beendet den Zugang und **liest die Leserschaft danach
+noch einmal beim Home**, statt der eigenen Rückgabe zu glauben. Gefälscht am
+2026-08-27 durch Zurückdrehen des einen Wortes: der Test fällt mit
+`foundation_rejected:400:invalid_record`, das Gate nennt Datei, Zeile, Rolle
+und Suite.
+
+**Was der Fund freilegt.** Solange das Beenden scheiterte, war die Sackgasse
+dahinter unerreichbar. Jetzt ist sie es nicht mehr: jede beendete
+Leserberechtigung erzeugt eine Rotationsschuld (ADR 0101), und solange sie
+besteht, weist das Home neue Items mit `rotation_required` ab. Das ist richtig
+- wer hinausgeworfen wurde, hält den alten KEK. Falsch ist, dass kein
+Produktweg sie begleichen kann: der Vault kann rotieren, der Daemon hat die
+Zeremonie `ceremonyRotateDomain`, das Home nimmt `reader_custody_kek_rotation`
+an - der Companion hat keine Funktion dafür. Ein Test hält den Preis fest,
+statt ihn zu behaupten.
+
 **B33 — Drei Tests bauten die Zeitregel nach, statt sie anzuwenden (2026-08-27).**
 Nachdem der Kalender-Befund die Uhr als Frage sichtbar gemacht hatte, lag die
 zweite auf der Hand: **wo** jemand steht. `when-display.ts` entscheidet seit
