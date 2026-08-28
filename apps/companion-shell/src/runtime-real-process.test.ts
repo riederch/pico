@@ -1,6 +1,6 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -864,6 +864,197 @@ describe('Electron-hosted companion runtime against real processes', () => {
       expect(new Set(both.map((waiting) => waiting.prompt)).size).toBe(1);
       expect(Object.keys(both[0]!).sort())
         .toEqual(['expiresAt', 'prompt', 'requestedEventId', 'risk']);
+    } finally {
+      await runtime.stop();
+    }
+  }, 300_000);
+
+  /**
+   * ADR 0143 DP1/DP3 mit ADR 0136 und ADR 0137 IN5. Ein Depot wirklich holen,
+   * und den Zulieferer anhängen, den es dabei erklärt.
+   *
+   * Die letzten drei Bedienelemente der Zuliefererfamilie aus Befund B36 -
+   * `home.supplier.attach`, `home.supplier.reach.decide`,
+   * `home.supplier.detach`. Sie sind nicht einzeln erreichbar: was angehängt
+   * werden kann, steht in `pico-depot.json` eines Depots, das wirklich geholt
+   * wurde, und *erklärt* wird es dort und nicht hier. Deshalb geht dieser Weg
+   * die ganze Kette, mit einem echten `git`.
+   *
+   * **Das Repository ist echt und die Adresse ist eine.** `file://` steht auf
+   * der Liste und ein blosser Pfad nicht: ein Depot wird über die Stelle
+   * benannt, von der sein Code kommt, und `../depots/x` ist eine Position
+   * relativ zu dem, der fragt. Geholt wird der Commit und nie ein Zweig - ADR
+   * 0143 DP1s fehlendes `branch`-Feld als fehlendes Argument.
+   *
+   * **Und was ankam, wird gegen das gehalten, was angenommen wurde**: das Home
+   * liest `HEAD` zurück. Dass hier derselbe Commit steht, den der Test
+   * geschrieben hat, ist deshalb keine Tautologie - dazwischen liegen ein
+   * `git fetch`, ein losgelöster Checkout und ein Vergleich.
+   */
+  it('holt ein echtes Depot und hängt den Zulieferer an, den es erklärt', async () => {
+    const depot = tempDirectory('pico-depot-remote-');
+    const git = (args: readonly string[]): string => execFileSync('git', [...args], {
+      cwd: depot,
+      encoding: 'utf8',
+      env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' },
+    });
+    git(['init', '-q', '-b', 'main', '.']);
+    git(['config', 'user.email', 'depot@example.invalid']);
+    git(['config', 'user.name', 'Depot']);
+    git(['config', 'commit.gpgsign', 'false']);
+    writeFileSync(join(depot, 'pico-depot.json'), JSON.stringify({
+      schema: 'pico.depot.manifest.v1',
+      suppliers: [{
+        identifier: 'git-library',
+        kind: 'library',
+        slots: ['memory_item'],
+        coverage: ['knowledge_base'],
+        entryPoint: 'suppliers/git-library/index.js',
+        protocolVersion: 1,
+      }],
+    }, null, 2));
+    mkdirSync(join(depot, 'suppliers', 'git-library'), { recursive: true });
+    writeFileSync(join(depot, 'suppliers', 'git-library', 'index.js'), 'export {};\n');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'the depot as its author published it']);
+    const commit = git(['rev-parse', 'HEAD']).trim();
+    const remote = `file://${depot}`;
+
+    const core = await startCore();
+    const living = await startDaemon('pico-companion-supplier-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: {
+        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+      },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const runtime = await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: living.socketPath,
+      sodium,
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => {},
+        notify: () => {},
+      }),
+    });
+    const session = 'pico-shell-supplier-session';
+
+    try {
+      await runtime.attachDepot({ remote, commit });
+      await runtime.recordModuleConsent('depot');
+      await runtime.decideDepotReach({ remote, mayFetch: true, mayFetchUnasked: false });
+
+      // Nichts ist erklärt, solange nichts geholt wurde: angehängt und geholt
+      // sind zwei Zustände und nicht einer mit einer Lücke.
+      expect(await runtime.readSuppliers()).toEqual({ suppliers: [], declared: [] });
+
+      const asked = await runtime.askDepotFetch(session);
+      const [question] = asked.waiting as ReadonlyArray<{ requestedEventId: string }>;
+      expect(await runtime.resolvePendingAction({
+        requestedEventId: question!.requestedEventId,
+        presenceSessionId: session,
+        approved: true,
+      })).toMatchObject({ outcome: 'approved', ran: true, succeeded: true });
+
+      const fetched = await runtime.readSuppliers();
+      expect(fetched.suppliers).toEqual([]);
+      expect(fetched.declared).toEqual([
+        {
+          identifier: 'git-library',
+          kind: 'library',
+          remote,
+          // ADR 0137 IN5. Das eine Feld, das das Depot nicht liefern darf.
+          needs: ['privacyDomain'],
+        },
+      ]);
+
+      /**
+       * ADR 0137 IN5. Die Person sagt, wohin das Material gehört - und nur
+       * das. Alles andere schreibt das Home aus der Erklärung des Depots ab,
+       * nicht aus dem, was hier geschickt wurde.
+       */
+      expect(await runtime.attachSupplier({
+        identifier: 'git-library',
+        privacyDomain: 'household',
+      })).toEqual({ identifier: 'git-library', privacyDomain: 'household' });
+
+      const attached = await runtime.readSuppliers();
+      expect(attached.declared).toEqual([]);
+      expect(attached.suppliers).toEqual([
+        expect.objectContaining({
+          identifier: 'git-library',
+          kind: 'library',
+          // Frisch angehängt greift auch ein Zulieferer nach nichts hinaus.
+          mayReachOutside: false,
+          mayReachUnasked: false,
+        }),
+      ]);
+
+      await runtime.decideSupplierReach({
+        identifier: 'git-library',
+        mayReachOutside: true,
+        mayReachUnasked: true,
+      });
+      expect(((await runtime.readSuppliers()).suppliers as ReadonlyArray<Record<string, unknown>>)[0])
+        .toMatchObject({ mayReachOutside: true, mayReachUnasked: true });
+
+      await runtime.detachSupplier('git-library');
+      const detached = await runtime.readSuppliers();
+      expect(detached.suppliers).toEqual([]);
+      // Und die Erklärung steht wieder da: abgehängt ist nicht weggeworfen,
+      // das Depot liegt weiter auf der Platte und erklärt weiter, was es hat.
+      expect((detached.declared as ReadonlyArray<Record<string, unknown>>)
+        .map((entry) => entry.identifier)).toEqual(['git-library']);
+
+      /**
+       * **Und das Angebot, das kein Home je sieht** (Befund B38).
+       *
+       * Der Autor des Depots legt einen neueren Commit hin. ADR 0143 DP1 sagt,
+       * das sei ein Angebot: nichts wird deswegen geholt, und eine Person
+       * entscheidet. Der Weg dorthin endet aber immer hier - `offered_commit`
+       * hat in diesem Baum keinen Erzeuger. `recordPicoDepotFetchOutcome` ist
+       * die einzige Tür in die Spalte, und ihr einziger Aufrufer im Produkt
+       * gibt das Feld nie mit, also ist `offeredCommit` an einem echten Home
+       * immer abwesend und `home.depot.offer.accept` antwortet immer
+       * `no_offer_standing`.
+       *
+       * Das steht hier als Messung und nicht als Reparatur: *woher* ein Home
+       * erfährt, dass es etwas Neueres gibt, ist offen. Die ADR verbietet dem
+       * planmässigen Lauf, danach zu suchen - er ist eine Instandsetzung und
+       * keine Abfrage nach Commits -, und sie sagt nicht, wer stattdessen
+       * fragen darf. ADR 0143 hat die datierte Notiz dazu.
+       */
+      git(['commit', '-q', '--allow-empty', '-m', 'was der Autor danach veröffentlicht hat']);
+      const newer = git(['rev-parse', 'HEAD']).trim();
+      expect(newer).not.toBe(commit);
+      await expect(runtime.acceptDepotOffer(remote, newer)).rejects.toThrow('no_offer_standing');
     } finally {
       await runtime.stop();
     }
