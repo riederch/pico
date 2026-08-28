@@ -827,6 +827,58 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B36 — Achtzehn von vierundfünfzig Türen waren je aufgegangen, und hinter
+einer stand niemand (2026-08-28).** Gemessen statt geschätzt: das laufende Home
+wurde für die Dauer eines Testlaufs gebeten, jede angenommene Link-Operation
+mitzuschreiben, und der Lauf war die ganze Companion-Shell-Testmenge — die
+einzige Stelle im Baum, an der echte Prozesse einander antworten. Von den
+vierundfünfzig Operationen der geschlossenen Liste hatte ein *echter Client* an
+einem *echten Home* achtzehn durchgebracht.
+
+**Was die anderen sechsunddreißig hatten, ist ein Test, der den Namen
+behauptet.** `check-link-reachability` sagt, dass jede Operation einen Aufrufer
+außerhalb des Homes hat; die Fallunterscheidung des Homes ist über `never`
+erschöpfend; ein Client-Test prüft, *welche Operation* geschickt wird. Keine der
+drei Aussagen ist die vierte: dass jemand sie annimmt. Genau diese Lücke hat
+B31 und B34 durchgelassen, und sie war nie vermessen.
+
+**Sechzehn davon lagen hinter Bedienelementen, die das Fenster längst zeigt**,
+alle in `@pico/companion/suppliers`. Der Weg dorthin ist jetzt gegangen — die
+vier Listen des Fensters an einem frischen Home, einem Modul zustimmen, und
+danach eine Regel über einen Effekt entscheiden, den erst die Zustimmung
+entscheidbar macht. Dazu die andere Hälfte von ADR 0126 P6 (eine Fähigkeit
+entziehen, ein Gerät abschalten, es vergessen) und die beiden Vorgänge, die
+eine Erinnerung braucht. Einunddreißig von vierundfünfzig, nachgemessen mit
+derselben Mitschrift.
+
+**Und einer der neu gegangenen Wege ging nicht.** „Let this device read one
+part of your memory" (ADR 0082) hat nie funktioniert. ADR 0106 hat die
+Unterschrift am 2026-07-29 umgedreht — der Aufrufer schickt einen
+Familiennamen und die Felder, der Daemon baut die Bytes und schreibt den Satz
+der Person aus denselben Feldern —, und `grantPicoCompanionDomainRead` wurde
+achtzehn Tage später in der alten Gestalt geschrieben: als Familienname stand
+dort der Satz für die Person, dazu zwei der zehn Felder. Der Daemon antwortete
+`unknown_signature_input_label`, bevor überhaupt jemand gefragt wurde. Die
+Familie war außerdem in keiner der drei Tabellen eingetragen, die sie braucht
+— unterschreibbar, baubar, darstellbar —, also war der Fehler nicht ein
+falsches Wort, sondern eine nie angeschlossene Familie.
+
+**Die Klasse ist jetzt geschlossen**, und das ist der Teil, der bleibt:
+`check-signature-labels.mjs` hält jede Signierstelle des Produkts gegen die
+Konstanten des Protokolls und diese gegen die Tabellen des Daemons. Ein
+Literal an dieser Stelle ist entweder ein Tippfehler oder ein Satz, und beides
+endet in derselben Ablehnung; eine Familie ohne Bauer hat keine Bytes; eine
+bewilligungspflichtige ohne Renderer ist einer, dem niemand zustimmen konnte.
+Fünfundzwanzig Stellen, keine unauflösbar. Was der Prüfer nicht kann, steht in
+ihm: die Schlüsselrolle steht an der Aufrufstelle nicht, also bleiben drei
+rollenabhängige Familien beim Bauer stehen.
+
+**Dreiundzwanzig Türen bleiben offen**, und die Gründe sind verschieden: zwei
+sind eine ausgesprochene Vertagung (ADR 0114 T4), die übrigen brauchen ein
+Depot mit einem echten Remote, einen gemessenen Modellanbieter oder ein
+Relay-Postfach. Keine davon ist geschätzt worden; die Liste steht in
+`progress.md`.
+
 **B35 — Das Schloss wechseln, und die drei Sackgassen dahinter (2026-08-27).**
 B34 machte eine Sackgasse erreichbar, die vorher hinter einem Fehler lag: seit
 das Beenden eines Lesezugangs wirklich geht, verschließt jedes Beenden die

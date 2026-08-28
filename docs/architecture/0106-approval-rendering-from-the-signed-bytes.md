@@ -2,6 +2,25 @@
 
 ## Status
 
+Status note, 2026-08-28: **„jeder Aufrufer ist migriert" stimmte, als es
+geschrieben wurde, und hörte drei Wochen später auf zu stimmen.** Der Satz
+darunter zählt die Aufrufer von damals auf. Am 2026-08-16 kam einer dazu, der
+die alte Gestalt weitergab: `grantPicoCompanionDomainRead` gab als Label den
+Satz für die Person und zwei der zehn Felder. Der Daemon antwortete jedem Druck
+mit `unknown_signature_input_label`, bevor überhaupt jemand gefragt wurde - der
+Knopf im Fenster, der eine Person ihre eigene Erinnerung lesen lässt (ADR 0082),
+hat damit nie funktioniert.
+
+Die Familie war zudem in keiner der drei Tabellen eingetragen, die eine
+Unterschrift braucht: unterschreibbar für die Identitätswurzel, baubar aus
+Feldern, darstellbar als Satz. Alle drei sind jetzt da, und die Aussage steht
+nicht mehr in einem Statustext, sondern in `check-signature-labels.mjs`: eine
+Signierstelle nennt eine Konstante des Protokolls und keinen String, und die
+genannte Familie hat einen Bauer und - solange sie nicht auf der geschlossenen
+Freistellungsliste steht - einen Renderer. Gefunden wurde es nicht von einem
+Test, sondern von einem Durchlauf gegen ein laufendes Home; Befund B36 hält
+fest, wie viele Türen bis dahin nie aufgegangen waren.
+
 Accepted and implemented. ADR 0105 B4 named this a precondition for the
 avatar product form; the `sign` family now takes a label and fields, the
 daemon rebuilds the canonical bytes and renders the statement from them,

@@ -2,6 +2,20 @@
 
 ## Status
 
+Status note, 2026-08-28: **Der Weg, auf dem eine Person sich selbst den
+Lesezugang erteilt, ist zum ersten Mal wirklich gegangen worden - und ging
+nicht.** Seit dem 2026-08-16 steht dafür ein Bedienelement im Fenster, damit
+niemand mehr eine Foundation-Sitzung braucht, um seine eigene Erinnerung lesen
+zu dürfen. Gegen ein laufendes Home endete jeder Druck vor der Frage an die
+Person: die Signaturfamilie `pico.home.domain-read-grant.v1` war weder als von
+der Identitätswurzel unterschreibbar eingetragen noch im Daemon baubar oder
+darstellbar, und der Aufrufer nannte statt ihrer den Satz, den die Person lesen
+sollte. Alle vier Stellen sind repariert; der Weg steht als Durchlauf gegen
+echte Prozesse in `runtime-real-process.test.ts`, und die Klasse hält
+`check-signature-labels.mjs`. ADR 0106s Statusnotiz erklärt, wie die Gestalt
+veralten konnte; Befund B36 hält fest, wie viele Link-Vorgänge bis dahin nie
+von einem Home angenommen worden waren.
+
 Accepted and implemented for the first ADR 0078 Gate R3 runtime slice. This ADR
 defines the proof, persistence and authority boundaries that let a claimed Pico
 Home serve host-custody domain content to verified Pico identities. It does not
