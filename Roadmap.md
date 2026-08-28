@@ -827,6 +827,35 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B38 — „Ein neuerer Commit ist ein Angebot", und niemand sieht je eines
+(2026-08-28).** Beim Gehen der Zuliefererkette gemessen. ADR 0143 DP1 sagt, ein
+neuerer Commit im Depot sei ein Angebot: nichts wird deswegen geholt, und eine
+Person entscheidet. Gebaut ist dafür alles — die Spalte `offered_commit`, der
+Zustand `offered`, `picoDepotOffer`, `acceptPicoDepotOffer`, das Feld im
+Depot-Lesevorgang, die Link-Operation `home.depot.offer.accept` und das
+Bedienelement im Fenster. **Nur schreibt niemand die Spalte.**
+`recordPicoDepotFetchOutcome` ist ihre einzige Tür, und ihr einziger Aufrufer
+im Produkt gibt das Feld nie mit. An einem echten Home ist `offeredCommit`
+deshalb immer abwesend, und die Annahme antwortet immer `no_offer_standing`.
+
+**Die ADR hat denselben Satz schon einmal über sich selbst geschrieben.** In
+ihrer Notiz vom 2026-08-12 steht, `offered` sei „already declared, already read
+by `picoDepotState`, and **produced by nothing**". Behoben wurde damals die
+fehlende Hälfte des Datensatzes; die Spalte kam, die Tür kam — und der
+Erzeuger kam eine Ebene tiefer wieder nicht. Dieselbe Krankheit, einen Schritt
+weiter unten, und dieselbe Sorte Gate ging darüber hinweg:
+`check-store-writers` sieht einen Aufrufer, `check-link-reachability` sieht
+einen Client, und beide sind da — nur reicht keiner das Feld durch.
+
+**Nicht repariert, und der Grund ist eine offene Entscheidung.** *Woher* ein
+Home erfährt, dass es etwas Neueres gibt, steht nirgends. Zwei Sätze grenzen
+es ein: der planmässige Lauf darf es nicht sein — die ADR nennt ihn
+ausdrücklich eine Instandsetzung und keine Abfrage nach Commits —, und DP1s
+fehlendes `branch`-Feld verbietet einem Ref zu folgen für das, was *läuft*,
+nicht für das, was angeboten wird. Wer stattdessen fragen darf und was „neuer"
+heisst, gehört in ein ADR. ADR 0143 hat die datierte Notiz; die Messung steht
+in `runtime-real-process.test.ts`.
+
 **B37 — Zwei Depots stellen zwei Fragen, die nichts unterscheidet
 (2026-08-28).** Beim Gehen von `home.depot.fetch.ask` gemessen und nicht
 vermutet: eine wartende Frage trägt vier Felder — Ereignis-Id, Satz,
@@ -871,8 +900,9 @@ entscheidbar macht. Dazu die andere Hälfte von ADR 0126 P6 (eine Fähigkeit
 entziehen, ein Gerät abschalten, es vergessen), die beiden Vorgänge, die eine
 Erinnerung braucht, die Messungen der Sonde mit der Aufzeichnungszustimmung
 davor, ein Depot anhängen, sein Hinausgreifen entscheiden und es abhängen, und
-zuletzt um einen Abruf bitten, gefragt werden und nein sagen.
-**Siebenunddreißig von vierundfünfzig**, nachgemessen mit derselben
+um einen Abruf bitten, gefragt werden und nein sagen, und zuletzt ein echtes
+Depot mit einem echten `git` holen und den Zulieferer anhängen, den es dabei
+erklärt. **Vierzig von vierundfünfzig**, nachgemessen mit derselben
 Mitschrift.
 
 **Und einer der neu gegangenen Wege ging nicht.** „Let this device read one
@@ -897,14 +927,13 @@ Fünfundzwanzig Stellen, keine unauflösbar. Was der Prüfer nicht kann, steht i
 ihm: die Schlüsselrolle steht an der Aufrufstelle nicht, also bleiben drei
 rollenabhängige Familien beim Bauer stehen.
 
-**Siebzehn Türen bleiben offen**, und die Gründe sind verschieden: zwei sind
-eine ausgesprochene Vertagung (ADR 0114 T4), drei brauchen einen Zulieferer,
-den ein wirklich geholtes Depot erklärt, eine ein angenommenes Angebot, eine
-ein Relay-Postfach, und die übrigen zehn hängen an einem gemessenen
-Modellanbieter — die Messung probt einen echten Modell-Host über
-achthundertfünfundsechzig Zeilen, und ein Doppelgänger dafür lehrte einen Test
-eine Erfindung statt einer Messung. Keine davon ist geschätzt worden; die
-Liste steht in `progress.md`.
+**Vierzehn Türen bleiben offen**, und die Gründe sind verschieden: zwei sind
+eine ausgesprochene Vertagung (ADR 0114 T4), eine braucht ein Relay-Postfach,
+eine ein Angebot, das kein Home je sieht (Befund B38), und die übrigen zehn
+hängen an einem gemessenen Modellanbieter — die Messung probt einen echten
+Modell-Host über achthundertfünfundsechzig Zeilen, und ein Doppelgänger dafür
+lehrte einen Test eine Erfindung statt einer Messung. Keine davon ist
+geschätzt worden; die Liste steht in `progress.md`.
 
 **B35 — Das Schloss wechseln, und die drei Sackgassen dahinter (2026-08-27).**
 B34 machte eine Sackgasse erreichbar, die vorher hinter einem Fehler lag: seit

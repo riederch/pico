@@ -2,6 +2,37 @@
 
 ## Status
 
+Status note, 2026-08-28: **„Ein neuerer Commit ist ein Angebot" ist wieder
+eine Aussage über einen Typ und nicht über ein Pico.** Die Notiz vom
+2026-08-12 hielt genau das schon einmal fest - `offered` sei „already declared,
+already read by `picoDepotState`, and **produced by nothing**" - und behob die
+fehlende Hälfte des Datensatzes. Die Spalte `offered_commit` kam, und
+`recordPicoDepotFetchOutcome` wurde „the only door into them". Der Erzeuger
+kam nicht: der einzige Aufrufer dieser Tür im Produkt gibt das Feld nie mit.
+An einem laufenden Home ist `offeredCommit` deshalb immer abwesend, und
+`home.depot.offer.accept` antwortet immer `no_offer_standing`. Befund B38 hält
+die Messung, die es gegen echte Prozesse gezeigt hat.
+
+**Was offen ist, ist eine Entscheidung und keine Zeile.** Woher ein Home
+erfährt, dass es etwas Neueres gibt, sagt diese ADR nicht, und zwei ihrer
+Sätze grenzen es ein:
+
+- Der planmässige Lauf darf es nicht sein. Er ist hier ausdrücklich eine
+  Instandsetzung und „not a poll for commits", und er kostet über einem
+  unveränderten Depot ein `rev-parse` - eine Netzfrage je Lauf machte aus der
+  Instandsetzung genau die Abfrage, die dieser Satz ausschliesst.
+- DP1s fehlendes `branch`-Feld verbietet, einem Ref zu folgen für das, was
+  *läuft*. Für das, was angeboten wird, sagt die ADR selbst „a newer commit on
+  the same branch is an offer" - dort ist ein Ref also nicht verboten, sondern
+  ungeklärt.
+
+Das offene Paar ist damit: **wer fragen darf** (naheliegend die Person, die
+*jetzt holen* drückt - eine Frage, die sie gerade gestellt hat) und **was
+„neuer" heisst** (naheliegend das, was das Remote veröffentlicht). Beides
+gehört entschieden, bevor es gebaut wird; ein Patch, der eine Netzfrage in den
+Abrufeffekt legt, entschiede beides nebenbei und auch für den planmässigen
+Lauf.
+
 Status note, 2026-08-17: **DP3's declared suppliers reached nobody, and
 `picoDepotSupplierNeedsFromPerson` had no caller at all.**
 
