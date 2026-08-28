@@ -827,6 +827,52 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B39 — Das eigene Modell auf der eigenen Maschine darf die eigenen Notizen
+nicht sehen (2026-08-28).** Gemessen beim Gehen der Modellfamilie, und die
+zweite Messung widerlegte die erste Erklärung. Drei Regeln greifen ineinander:
+
+1. Was ein Rückruf tragen muss, liest das Home aus der **Herkunft** des
+   eingeschlossenen Materials — `live_turn` reicht nur, wenn das Niedrigste
+   `person_present` oder `own_pico` ist (ADR 0116 W1 mit ADR 0048).
+2. Die weitere Erlaubnis gibt es nur zusammen mit einem **Zugang**: „not a lax
+   entry - not an entry" (ADR 0151 PV4).
+3. Ein Zugang über einfaches HTTP wird rundheraus abgewiesen, weil ein Bearer
+   dort für jeden lesbar ist, der den Port ohnehin erreicht (PV5).
+
+**Und kein Schreibweg erzeugt heute `person_present`.** Die Ortsseite sagt es
+selbst: eine nachgewiesene Pico-Identität ist `home_member` und nicht die
+Person im Raum, „because the higher class would require proving the writer is
+the subject person of what they are writing". Das ist eine bewusste
+Zurückhaltung — ihre Folge eine Ebene weiter unten war nicht nachgezogen.
+
+Gemessen wurde beides gegen ein laufendes Home: eine Notiz über die Ortsseite
+(`unattributed`) wird abgewiesen, und eine unter einer identitätsgebundenen
+Sitzung geschriebene (`home_member`) genauso. Die Herkunft ist also nicht das
+fehlende Stück; die zweite Notiz steht im Test, damit niemand diesen Weg noch
+einmal geht.
+
+**Was das für eine Person heisst.** Sie stellt ein Modell auf ihre eigene
+Maschine — der Fall, für den die Klasse `declared_own_host` überhaupt heisst,
+wie sie heisst —, lässt es messen, entscheidet sich dafür, und bekommt auf jede
+Frage an ihre **selbst geschriebenen** Notizen
+`entry_may_not_carry_these_words`. Erweitern kann sie nicht, weil ihr Host auf
+`127.0.0.1` kein TLS spricht und kein Geheimnis hat, das er beweisen müsste.
+
+Über `own_pico` kann derselbe Anbieter dagegen sehr wohl gefragt werden, und
+das ist die schiefe Stelle: eine verdichtete Beobachtung des Spatial-Recall-
+Moduls, der Auszug eines verfolgten Korpus und eine behaltene Modellantwort
+tragen `own_pico` und liegen über der Schwelle. Ein Anbieter, der die eigenen
+Zeilen seiner Person nicht sehen darf, darf also den Inhalt eines
+git-Repositorys sehen — nicht weil das eine vertraulicher wäre, sondern weil
+für das andere niemand beweisen kann, wer es geschrieben hat.
+
+**Nicht repariert, weil jede der drei Regeln ihren Grund hat und die Frage
+zwischen ihnen liegt.** Zwei Antworten sind denkbar und beide gehören
+entschieden statt gepatcht: ob Loopback ein geschützter Transport ist, und ob
+ein erklärter eigener Host die weitere Erlaubnis ohne Zugang verdient — er
+beweist nichts, aber es gibt auch niemanden, dem gegenüber er es beweisen
+müsste. ADR 0151 hat die datierte Notiz.
+
 **B38 — „Ein neuerer Commit ist ein Angebot", und niemand sieht je eines
 (2026-08-28).** Beim Gehen der Zuliefererkette gemessen. ADR 0143 DP1 sagt, ein
 neuerer Commit im Depot sei ein Angebot: nichts wird deswegen geholt, und eine
@@ -934,17 +980,10 @@ Relay-Wegs, die `check-capability-reach` seit dem 2026-08-24 namentlich
 begründet stehen lässt, eine ist ein Angebot, das kein Home je sieht (Befund
 B38), und fünf sind die Rückruffamilie.
 
-**Die fünf sind der interessante Rest**, weil sie an zwei Regeln hängen und an
-keiner Lücke. `home.recall.ask` erreicht das Home und wird benannt abgewiesen:
-`entry_may_not_carry_these_words`. Was ein Anbieter tragen darf, steht in
-seiner Entscheidung; was getragen werden müsste, liest das Home aus der
-*Herkunft* dessen, was eingeschlossen wäre (ADR 0151 PV1). Eine Notiz, die über
-die Ortsseite hereinkam, gehört keiner nachgewiesenen Person und verlangt mehr
-als den lebenden Zug. Den Anbieter zu erweitern scheitert an der zweiten Regel:
-PV5 lehnt einen Zugang über einfaches HTTP rundheraus ab, und der
-Host-Doppelgänger dieses Hauses spricht HTTP. Es braucht also entweder Material
-mit nachgewiesenem Urheber oder einen Doppelgänger mit TLS - beides ist
-benennbar, keines ist heute da.
+**Die fünf sind der interessante Rest**, und der Grund ist Befund B39: sie
+hängen an drei Regeln, die zusammen eine Sackgasse bilden. Ein Doppelgänger mit
+TLS würde sie öffnen; Material mit nachgewiesenem Urheber nicht - das wurde
+gemessen und fiel anders aus als erwartet.
 
 **Ein Satz über diesen Punkt war zuerst falsch und wird hier
 zurückgenommen**, weil er einen Aufwand behauptete, den das Haus schon

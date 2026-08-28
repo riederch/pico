@@ -2,6 +2,38 @@
 
 ## Status
 
+Status note, 2026-08-28: **Die Notiz darunter hat die Hälfte des Falls
+geschlossen; die andere Hälfte ist gemessen und offen** (Befund B39).
+
+Dort ging es um die *Folgefrage* über eine behaltene Antwort - eine Ableitung
+aus den eigenen Notizen der Person bleibt auf dem lebenden Zug. Die erste Frage
+über die Notizen selbst tut das nicht: was ein Rückruf tragen muss, entscheidet
+die niedrigste Herkunft des eingeschlossenen Materials, und über der Schwelle
+liegen nur `person_present` und `own_pico`. Ein Schreibweg, der
+`person_present` erzeugt, existiert nicht - die Ortsseite sagt selbst, eine
+nachgewiesene Pico-Identität sei `home_member`, „because the higher class would
+require proving the writer is the subject person of what they are writing".
+
+Damit greifen PV4 und PV5 auf einen Fall durch, für den sie nicht geschrieben
+wurden: die weitere Erlaubnis gibt es nur mit einem Zugang, und einen Zugang
+gibt es nicht über einfaches HTTP. Ein Modell auf der eigenen Maschine - der
+Fall, für den `declared_own_host` heisst, wie es heisst - kann gemessen und
+entschieden werden und antwortet danach auf keine Frage an die eigenen Notizen.
+Über eine verdichtete Beobachtung, einen Korpusauszug oder eine behaltene
+Antwort antwortet es sehr wohl, weil die `own_pico` tragen.
+
+Beides gegen ein laufendes Home gemessen und im Realprozess-Test festgehalten:
+eine Notiz über die Ortsseite und eine unter identitätsgebundener Sitzung
+geschriebene werden gleich abgewiesen. Die Herkunft ist also nicht das fehlende
+Stück.
+
+Zwei Antworten sind denkbar und gehören entschieden statt gepatcht: ob Loopback
+ein geschützter Transport im Sinne von PV5 ist, und ob ein erklärter eigener
+Host die weitere Erlaubnis ohne Zugang verdient - er beweist nichts, aber es
+gibt auch niemanden, dem gegenüber er es beweisen müsste. Eine dritte, teurere
+Antwort läge bei ADR 0116 W2: eine Schreibklasse, die die anwesende Person
+wirklich nachweist.
+
 Status note, 2026-08-16: **PV1's allowance stops at `own_pico`, not above
 it.** A derivation from the person's own notes stays on the live turn.
 
