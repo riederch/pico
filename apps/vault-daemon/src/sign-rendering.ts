@@ -6,6 +6,7 @@ import {
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
+  buildPicoHomeDomainReadGrantSignatureInput,
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeFoundingSignatureInput,
   buildPicoHomeMembershipLifecycleSignatureInput,
@@ -39,6 +40,7 @@ import {
   type PicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceRecoveryClaimSignatureInput,
   type PicoHomeDeviceRecoveryPrepareSignatureInput,
+  type PicoHomeDomainReadGrantSignatureInput,
   type PicoHomeFoundingSignatureInput,
   type PicoHomeMembershipLifecycleSignatureInput,
   type PicoHomeMembershipSignatureInput,
@@ -124,6 +126,8 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
     buildPicoHomeContinuitySignatureInput(f as never),
   [picoHomeSignatureInputLabels.membershipLifecycle]: (f) =>
     buildPicoHomeMembershipLifecycleSignatureInput(f as never),
+  [picoHomeSignatureInputLabels.domainReadGrant]: (f) =>
+    buildPicoHomeDomainReadGrantSignatureInput(f as never),
   [picoShareCanonicalLabels.envelope]: (f) =>
     buildPicoShareEnvelopeSignatureInput(f as never),
   [picoReaderCustodyCanonicalLabels.domain]: (f) =>
@@ -239,6 +243,24 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   [picoHomeSignatureInputLabels.membershipLifecycle]: (f) => {
     const v = f as PicoHomeMembershipLifecycleSignatureInput;
     return `Set the membership of ${picoDisplayFingerprint(v.subjectPicoIdentityFingerprintHex)} in Home ${v.homeId} to ${v.status} (${v.reasonCategory}).`;
+  },
+  /**
+   * ADR 0082 with ADR 0100. What the person is agreeing to, in the words of
+   * the thing rather than in the words of the wire.
+   *
+   * The sentence used to live in the caller, next to the two fields it named -
+   * which was the shape of the pre-ADR-0106 signer and is exactly what R5
+   * forbids: a sentence composed beside the bytes can say something the bytes
+   * do not. Here it is rendered from the same fields the signature is built
+   * from, so the reader and the writer cannot come apart.
+   *
+   * Both fingerprints are said even when they are the same person, because
+   * they are two different roles - who decides and who may read - and a
+   * sentence that collapsed them would read the same when they differ.
+   */
+  [picoHomeSignatureInputLabels.domainReadGrant]: (f) => {
+    const v = f as PicoHomeDomainReadGrantSignatureInput;
+    return `Let ${picoDisplayFingerprint(v.readerPicoIdentityFingerprintHex)} read the ${v.privacyDomain} part of Home ${v.homeId}, decided by ${picoDisplayFingerprint(v.controllerPicoIdentityFingerprintHex)}, until ${picoDisplayDate(v.validUntil)}.`;
   },
   [picoShareCanonicalLabels.envelope]: (f) => {
     const v = f as PicoShareEnvelopeSignatureInput;

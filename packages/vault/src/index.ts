@@ -486,6 +486,24 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     // (`home-setup.ts`), never in a person's Vault.
     picoHomeSignatureInputLabels.membership,
     picoHomeSignatureInputLabels.membershipLifecycle,
+    /**
+     * ADR 0082 with ADR 0087. A person letting one of their own devices read
+     * one part of their memory.
+     *
+     * The identity root and nothing else, for the reason membership above has:
+     * the Home verifies this signature against its founding record, so it is
+     * exactly the statement a thief of the host disk cannot make. A device
+     * signing key must not carry it - a device that could grant itself a read
+     * would be deciding on the authority it is asking for.
+     *
+     * **Missing until 2026-08-28**, which made the window's own control
+     * unusable: `grantPicoCompanionDomainRead` shipped on 2026-08-16 against
+     * the pre-ADR-0106 signer that took bytes and a sentence, and the daemon
+     * had taken a family label and fields since 2026-07-29. Every press ended
+     * in `unknown_signature_input_label` - and no test noticed, because they
+     * all sign through a stand-in. Befund B36.
+     */
+    picoHomeSignatureInputLabels.domainReadGrant,
     // ADR 0115 (ADR 0080 H7): the acceptance half of host-key continuity.
     // The two host signatures on the same bytes are custody's act and live in
     // the Foundation; the acceptance is the person's - it is exactly the

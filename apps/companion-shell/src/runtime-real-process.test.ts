@@ -264,10 +264,257 @@ describe('Electron-hosted companion runtime against real processes', () => {
     expect(presented.at(-1)?.kind).toBe('idle');
     await runtime.stop();
   }, 180_000);
+
+  /**
+   * ADR 0139 AC4 mit ADR 0140 RL4 - und der Grund, warum dieser Weg fehlte.
+   *
+   * Am 2026-08-28 wurde gemessen, welche der vierundfünfzig Link-Operationen
+   * je von einem echten Client an einem echten Home **angenommen** wurden -
+   * nicht, welche ein Test bei Namen nennt. Es waren achtzehn. Sechzehn der
+   * übrigen liegen hinter Bedienelementen, die dieses Fenster längst zeigt,
+   * und alle sechzehn stehen in einer Datei: `@pico/companion/suppliers`. Dass
+   * ein Test gegen einen erfundenen Client die *Operation* behauptet, hat
+   * zweimal nicht gereicht (Befunde B31 und B34).
+   *
+   * Gegangen wird die Kette, die eine Person geht, und ihre Reihenfolge ist
+   * Teil der Aussage: eine Regel über einen Effekt, dem niemand zugestimmt
+   * hat, weist das Home mit `effect_not_consented` ab. Erst die Zustimmung
+   * macht die Regel entscheidbar - hier steht also nicht nur, dass jeder
+   * einzelne Aufruf durchkommt, sondern dass sie in dieser Folge aufeinander
+   * aufbauen.
+   *
+   * Und die drei Listen davor sind an einem frisch gegründeten Home leer.
+   * `leer heißt leer` ist hier eine Aussage über die Antwort und nicht über
+   * ihr Ausbleiben: ein `invalid_arguments` käme als geworfener Fehler an,
+   * nicht als leere Liste.
+   */
+  it('liest die Listen des Fensters, stimmt einem Modul zu und entscheidet eine Regel', async () => {
+    const core = await startCore();
+    const living = await startDaemon('pico-companion-suppliers-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: {
+        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+      },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const runtime = await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: living.socketPath,
+      sodium,
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => {},
+        notify: () => {},
+      }),
+    });
+
+    try {
+      expect(await runtime.readSuppliers()).toEqual({ suppliers: [], declared: [] });
+      expect(await runtime.readDepots()).toMatchObject({ depots: [] });
+      /**
+       * Die Sitzung reist mit, weil eine wartende Frage zu einer Sitzung
+       * gehört (ADR 0141 RN4). Dass hier nichts wartet, ist die Antwort und
+       * nicht ihr Fehlen.
+       */
+      expect(await runtime.readPendingActions('pico-shell-walk-session')).toEqual([]);
+      /**
+       * Und die beiden Listen, die zeigen, was ein Modellanbieter für diese
+       * Person getan hat. An einem Home, das nie eines gefragt hat, sind sie
+       * leer - und leer ist eine Antwort: eine abgewiesene Anfrage käme hier
+       * als geworfener Fehler an und nicht als kurze Liste.
+       */
+      expect(await runtime.readRecalls()).toEqual([]);
+      expect(await runtime.readAnsweredReads()).toEqual([]);
+
+      const awaiting = (await runtime.readModuleConsent()) as ReadonlyArray<{
+        identifier: string;
+        declares: ReadonlyArray<{ name: string }>;
+      }>;
+      /**
+       * Aktivierung ist voreingestellt an, Zustimmung nicht - deshalb wartet
+       * an einem frischen Home jedes ausgelieferte Modul auf sein erstes Wort.
+       */
+      const calendar = awaiting.find((entry) => entry.identifier === 'calendar');
+      expect(calendar).toBeDefined();
+      expect(calendar?.declares.map((effect) => effect.name)).toEqual(['calendar.raise-entry']);
+
+      await runtime.recordModuleConsent('calendar');
+      expect(((await runtime.readModuleConsent()) as ReadonlyArray<{ identifier: string }>)
+        .map((entry) => entry.identifier)).not.toContain('calendar');
+
+      // Und jetzt trägt der Effekt eine Regel, die er vor der Zustimmung nicht
+      // tragen konnte.
+      await runtime.decideRule({
+        effectName: 'calendar.raise-entry',
+        privacyDomain: 'household',
+        decision: 'require_approval',
+      });
+      await runtime.forgetRule({
+        effectName: 'calendar.raise-entry',
+        privacyDomain: 'household',
+      });
+    } finally {
+      await runtime.stop();
+    }
+  }, 300_000);
+
+  /**
+   * ADR 0118 O1 mit ADR 0082 - und der Unterschied zwischen „geschickt" und
+   * „angenommen", diesmal als Aufbau statt als Satz.
+   *
+   * Beide Operationen hier waren am 2026-08-28 unbegangen:
+   * `home.time_bound_entry.acknowledge` und `home.domain.read-grant.submit`.
+   * Die zweite ist ein Bedienelement im Fenster („Let this device read one
+   * part of your memory"), die erste geschieht von selbst, sobald einer Person
+   * etwas gesagt wurde.
+   *
+   * **Der zweite Durchgang ist der Beweis.** Dass die Quittung *geschickt*
+   * wurde, sagt schon der erste; dass das Home sie *angenommen* hat, sagt erst,
+   * dass derselbe Eintrag beim nächsten Nachsehen nicht wieder fällig ist.
+   * Genau diese Lücke - ein Test, der den Namen der Operation behauptet - hat
+   * die Befunde B31 und B34 durchgelassen.
+   *
+   * Der Eintrag wird durch die Ortsseite des Homes geschrieben, weil Erinnerung
+   * dort entsteht: Module schreiben sie, kein Link-Vorgang tut es. Das ist
+   * zugleich die Voraussetzung der zweiten Operation - ein Lesezugang gilt für
+   * eine Domäne, die es gibt, und ohne sie antwortet das Home
+   * `domain_is_not_host_custody`.
+   */
+  it('quittiert einen fälligen Eintrag und erteilt sich den Lesezugang darauf', async () => {
+    const core = await startCore();
+    /**
+     * Vor der Gründung geschrieben, über den vertrauten Ortsweg ohne
+     * Berechtigung - die Tür, durch die ein Modul schreibt. Ein Link-Vorgang
+     * legt keine Erinnerung an, und deshalb gibt es an einem Home, das nie ein
+     * Modul gefüttert hat, auch keine Domäne, für die ein Lesezugang gälte.
+     */
+    const recorded = await fetch(`${core.apiBaseUrl}/api/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: 'pico-shell-walk',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'household',
+          contentType: 'text/plain',
+          content: 'Die Heizung wird gewartet.',
+          dueAt: new Date(Date.now() - 60_000).toISOString(),
+        },
+      }),
+    });
+    expect(recorded.status, await recorded.clone().text()).toBe(201);
+
+    const living = await startDaemon('pico-companion-due-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: {
+        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+      },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const notified: PicoCompanionPresentation[] = [];
+    const runtime = await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: living.socketPath,
+      sodium,
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => {},
+        notify: (state) => { notified.push(state); },
+      }),
+    });
+
+    try {
+      expect(notified.map((state) => state.kind)).toContain('time_bound_entry_due');
+      expect(runtime.status()).toMatchObject({ checks: 1, readFailures: 0, notifyFailures: 0 });
+
+      /**
+       * Und jetzt die eigentliche Frage: hat das Home die Quittung genommen?
+       * Ein zweites Nachsehen, und nichts ist mehr fällig. Ein Home, das die
+       * Quittung abgewiesen hätte, böte denselben Eintrag wieder an - und der
+       * erste Durchgang sähe genauso aus wie dieser.
+       */
+      await runtime.checkNow();
+      expect(runtime.status()).toMatchObject({
+        checks: 2,
+        readFailures: 0,
+        notifyFailures: 0,
+        // Eine abgewiesene Quittung wird hier gezählt, nicht geworfen - die
+        // Null ist also die eine Hälfte der Aussage.
+        dueEntryAcknowledgeFailures: 0,
+      });
+      expect(notified.filter((state) => state.kind === 'time_bound_entry_due')).toHaveLength(1);
+
+      /**
+       * ADR 0082 mit ADR 0100. Der Lesezugang, den dieses Gerät sich selbst
+       * erteilt - unterschrieben vom Identitätsschlüssel, den nur der Vault
+       * hält, und vom Home Zeichen für Zeichen gegen seinen Gründungseintrag
+       * geprüft.
+       */
+      const granted = await runtime.grantDomainRead({ privacyDomain: 'household' });
+      expect(granted.privacyDomain).toBe('household');
+      expect(granted.status).toBe('active');
+    } finally {
+      await runtime.stop();
+    }
+  }, 300_000);
 });
 
 interface RunningCore {
   linkBaseUrl: string;
+  /** Die Ortsseite des Homes: dieselbe Tür, durch die die Foundation schreibt. */
+  apiBaseUrl: string;
   moveInCode: string;
   host: {
     signingPublicKeyHex: string;
@@ -361,6 +608,7 @@ async function startCore(): Promise<RunningCore> {
   }
   return {
     linkBaseUrl: `http://127.0.0.1:${linkPort}`,
+    apiBaseUrl: `http://127.0.0.1:${port}`,
     moveInCode: String(setup.picoHomeMoveInCode),
     host: {
       signingPublicKeyHex: String(setup.hostSigningPublicKeyHex),

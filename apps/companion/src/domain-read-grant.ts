@@ -1,6 +1,7 @@
 import {
   buildPicoHomeDomainReadGrantSignatureInput,
   picoHomeDomainReadGrantRecordSchema,
+  picoHomeSignatureInputLabels,
   picoIdentitySuite,
 } from '@pico/protocol';
 import type { PicoVaultDetachedSigner } from '@pico/vault';
@@ -101,17 +102,23 @@ export async function grantPicoCompanionDomainRead(
     lifecycleOrder: picoCompanionGrantLifecycleOrder(input.nowMs),
   };
 
+  /**
+   * ADR 0106. The family label and the whole grant, never bytes and a sentence.
+   *
+   * The daemon rebuilds these bytes from these fields and renders the person's
+   * statement from the same ones, so nothing this process says can diverge
+   * from what the key signs - and the bytes below are only the loop that
+   * closes it from this side.
+   *
+   * **This call named a sentence where a family belongs until 2026-08-28**,
+   * and passed two of the ten fields. It was written on 2026-08-16, eighteen
+   * days after the daemon stopped taking bytes, so the control it serves had
+   * never worked: every press ended in `unknown_signature_input_label` before
+   * a person was ever asked. Befund B36.
+   */
   const signatureHex = Buffer.from(input.signer.sign(
     buildPicoHomeDomainReadGrantSignatureInput(grant),
-    {
-      // ADR 0100. What the person is agreeing to, in the words of the thing
-      // rather than in the words of the wire.
-      label: 'Let this device read one part of your memory',
-      fields: {
-        privacyDomain: grant.privacyDomain,
-        validUntil: grant.validUntil,
-      },
-    },
+    { label: picoHomeSignatureInputLabels.domainReadGrant, fields: grant },
   )).toString('hex');
 
   const submitted = await input.livingDeviceLinkClient.request(
