@@ -3,6 +3,7 @@ import { createServer } from 'node:net';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   createPicoVaultKeyfile,
   writePicoVaultKeyfile,
@@ -1059,6 +1060,184 @@ describe('Electron-hosted companion runtime against real processes', () => {
       await runtime.stop();
     }
   }, 300_000);
+
+  /**
+   * ADR 0142 PE1/PE2 mit ADR 0152 und ADR 0116 W1/W5. Eine Maschine messen,
+   * sich für sie entscheiden, sie fragen, die Antwort behalten und alles
+   * wieder zurücknehmen.
+   *
+   * Zehn der vierzehn Türen, die Befund B36 offen liess, hängen an einem
+   * gemessenen Modellanbieter. Der Host dafür musste nicht erfunden werden -
+   * `apps/core/src/test-model-provider-host.ts` ist einer, den dieses Haus
+   * gebaut hat, und sein Kommentar begründet ihn: ein *echter* Server statt
+   * eines gefälschten `fetch`, weil die Messung eine Reihenfolge ist und eine
+   * nach URL antwortende Funktion sie nicht falsch machen kann.
+   *
+   * **Er läuft hier als eigener Prozess**, gestartet aus demselben `dist`, aus
+   * dem auch das Home gestartet wird - keine zweite Kopie und kein Import quer
+   * durch die Paketgrenze.
+   *
+   * Was diesen Weg von `whole-chain.test.ts` unterscheidet, ist das, was B31,
+   * B34 und B36 durchgelassen hat: dort baut der Test die Link-Anfragen
+   * selbst, hier schickt sie der Companion-Client an ein Home, das nebenan
+   * wirklich läuft.
+   */
+  it('misst eine Maschine, fragt sie und nimmt beides wieder zurück', async () => {
+    const modelHost = await startFakeModelHost();
+    const core = await startCore();
+    /**
+     * Eine Erinnerung, über die sich fragen lässt - durch die Ortsseite, weil
+     * Module sie schreiben und kein Link-Vorgang es tut.
+     */
+    const recorded = await fetch(`${core.apiBaseUrl}/api/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: 'pico-shell-walk',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'household',
+          contentType: 'text/plain',
+          content: 'Der Zählerstand am Monatsanfang war 41870.',
+        },
+      }),
+    });
+    expect(recorded.status, await recorded.clone().text()).toBe(201);
+
+    const living = await startDaemon('pico-companion-model-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: {
+        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+      },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const runtime = await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: living.socketPath,
+      sodium,
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => {},
+        notify: () => {},
+      }),
+    });
+
+    try {
+      const asked = await runtime.askModelProviderMeasurement({
+        reach: modelHost.reach,
+        model: 'a-model:measured',
+      });
+      // Laufend, nicht fertig: die Messung ist eine Folge von Anfragen an eine
+      // fremde Maschine, und ein Aufrufer, der hier eine Zahl bekäme, bekäme
+      // eine erfundene.
+      expect(asked).toEqual({ entryId: 'a-model:measured', state: 'running' });
+
+      /**
+       * Zwei `state` mit demselben Namen und verschiedenen Vokabularen: der
+       * der *Messung* (läuft, fertig, abgelehnt) und der des *Eintrags*, den
+       * das Fenster zeigt (noch nicht benutzt, antwortet, antwortet nicht).
+       * Gewartet wird auf den ersten.
+       */
+      const measured = await eventually(async () => {
+        const entries = (await runtime.readModelProviderMeasurements()) as ReadonlyArray<{
+          entryId: string;
+          state: string;
+          refusal?: string;
+        }>;
+        const entry = entries.find((candidate) => candidate.entryId === 'a-model:measured');
+        return entry !== undefined && entry.state !== 'running' ? entry : undefined;
+      });
+      expect(measured, JSON.stringify(measured)).toMatchObject({ state: 'settled' });
+
+      /**
+       * ADR 0142 PE2 mit ADR 0152 SE6. Ein gemessener Eintrag ist ein Befund
+       * und keine Erlaubnis: nichts benutzt ihn, bis eine Person sich
+       * entscheidet, und die Entscheidung fällt auf ihrem eigenen Gerät.
+       */
+      await runtime.decideModelProvider({
+        entryId: 'a-model:measured',
+        providerClass: 'declared_own_host',
+        carries: 'live_turn',
+      });
+
+      // ADR 0082. Und lesen darf dieses Gerät die Domäne erst, wenn es sich
+      // den Zugang erteilt hat - „darf dieses Home benutzen" ist nicht „darf
+      // diesen Raum lesen" (ADR 0077).
+      await runtime.grantDomainRead({ privacyDomain: 'household' });
+
+      /**
+       * **Und die erste Antwort ist ein Nein mit Namen** (ADR 0151 PV1). Was
+       * der Anbieter tragen darf, steht in seiner Entscheidung, und was
+       * getragen werden müsste, liest das Home aus der Herkunft dessen, was
+       * eingeschlossen wäre. Diese Notiz kam über die Ortsseite herein und
+       * gehört damit keiner nachgewiesenen Person, also verlangt sie mehr als
+       * den lebenden Zug - und die Ablehnung nennt genau das, statt eine leere
+       * Antwort zu liefern.
+       */
+      await expect(runtime.askRecall({
+        privacyDomain: 'household',
+        question: 'Was stand am Monatsanfang auf dem Zähler?',
+      })).rejects.toThrow('entry_may_not_carry_these_words');
+
+      /**
+       * ADR 0151 PV1 mit PV4/PV5. Das Geheimnis hinreichen und danach
+       * erweitern, als eine Handlung - und das Home nimmt hier die eine Hälfte
+       * an und weist die andere ab.
+       *
+       * Angenommen wird `home.model.provider.credential.submit`: das
+       * Geheimnis wird versiegelt und der Name zurückgegeben. Abgewiesen wird
+       * die Entscheidung, die ihn nennt, weil dieser Host über einfaches HTTP
+       * erreichbar ist. PV5 lehnt das rundheraus ab statt es zu verengen - ein
+       * Bearer über ungeschütztem Transport ist für jeden lesbar, der den Port
+       * ohnehin erreicht, unterscheidet den Anbieter also von niemandem und
+       * sieht nur so aus, als täte er es.
+       *
+       * Der Doppelgänger dieses Hauses spricht HTTP; ein erweiterter Anbieter
+       * bräuchte einen mit TLS. Das ist der Grund, aus dem die Rückruffamilie
+       * hier offen bleibt und nicht ein Versäumnis dieses Wegs.
+       */
+      await expect(runtime.widenModelProvider({
+        entryId: 'a-model:measured',
+        providerClass: 'declared_own_host',
+        secret: 'a secret this Home seals and never hands back',
+      })).rejects.toThrow('pico_model_provider_credential_on_unprotected_transport');
+
+      // Und alles wieder zurück: erst die Entscheidung, dann der Befund.
+      await runtime.revokeModelProvider('a-model:measured');
+      await runtime.forgetModelProvider('a-model:measured');
+      expect((await runtime.readModelProviders()).map((entry) => entry.entryId))
+        .not.toContain('a-model:measured');
+    } finally {
+      await runtime.stop();
+      await modelHost.close();
+    }
+  }, 300_000);
 });
 
 interface RunningCore {
@@ -1277,6 +1456,66 @@ async function operatorSession(core: RunningCore): Promise<string> {
     throw new Error('operator_bootstrap_returned_no_session');
   }
   return session;
+}
+
+/**
+ * ADR 0142 PE2. Ein Modell-Host, klein genug für einen Test und echt genug,
+ * gemessen zu werden - als eigener Prozess.
+ *
+ * Er stammt aus `apps/core`, wo er neben dem Messer wohnt, weil zwei Tests ihn
+ * brauchen und eine zweite Kopie eines gefälschten Hosts eine zweite Sache
+ * wäre, die ehrlich gehalten werden muss. Hier wird er deshalb aus demselben
+ * `dist` gestartet, aus dem auch das Home gestartet wird, statt über die
+ * Paketgrenze importiert zu werden.
+ */
+async function startFakeModelHost(): Promise<{ reach: string; close(): Promise<void> }> {
+  const source = join(import.meta.dirname, '..', '..', 'core', 'dist', 'test-model-provider-host.js');
+  const child = spawn(process.execPath, [
+    '--input-type=module',
+    '-e',
+    `import { startPicoFakeModelHost } from ${JSON.stringify(pathToFileURL(source).href)};\n`
+    + 'const host = await startPicoFakeModelHost();\n'
+    + 'process.stdout.write(JSON.stringify({ reach: host.reach }) + "\\n");\n',
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+  let output = '';
+  for (const stream of [child.stdout, child.stderr]) {
+    stream!.setEncoding('utf8');
+    stream!.on('data', (chunk: string) => { output += chunk; });
+  }
+  try {
+    await waitFor(() => output.includes('"reach"'), 'model_host_ready');
+  } catch {
+    throw new Error(`model_host_failed:${output}`);
+  }
+  const { reach } = JSON.parse(output.split('\n').find((line) => line.includes('"reach"'))!) as {
+    reach: string;
+  };
+  return {
+    reach,
+    close: async () => {
+      child.kill('SIGTERM');
+    },
+  };
+}
+
+/**
+ * Wartet, bis etwas *da* ist, und gibt es zurück.
+ *
+ * Neben `waitFor` und nicht statt seiner: das eine wartet auf eine Bedingung,
+ * die der Aufrufer selbst prüft, das andere auf einen Wert, den er danach
+ * braucht. Eine Messung ist eine Folge von Anfragen an eine fremde Maschine,
+ * also wird sie abgewartet und nicht angenommen.
+ */
+async function eventually<T>(read: () => Promise<T | undefined>): Promise<T> {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const value = await read();
+    if (value !== undefined) {
+      return value;
+    }
+    await new Promise((resolve) => { setTimeout(resolve, 1_000); });
+  }
+  throw new Error('never_settled');
 }
 
 async function runFounding(
