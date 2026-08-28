@@ -900,10 +900,11 @@ entscheidbar macht. Dazu die andere Hälfte von ADR 0126 P6 (eine Fähigkeit
 entziehen, ein Gerät abschalten, es vergessen), die beiden Vorgänge, die eine
 Erinnerung braucht, die Messungen der Sonde mit der Aufzeichnungszustimmung
 davor, ein Depot anhängen, sein Hinausgreifen entscheiden und es abhängen, und
-um einen Abruf bitten, gefragt werden und nein sagen, und zuletzt ein echtes
-Depot mit einem echten `git` holen und den Zulieferer anhängen, den es dabei
-erklärt. **Vierzig von vierundfünfzig**, nachgemessen mit derselben
-Mitschrift.
+um einen Abruf bitten, gefragt werden und nein sagen, ein echtes Depot mit
+einem echten `git` holen und den Zulieferer anhängen, den es dabei erklärt,
+und zuletzt eine Maschine messen, sich für sie entscheiden, ihr ein Geheimnis
+hinreichen und beides zurücknehmen. **Fünfundvierzig von vierundfünfzig**,
+nachgemessen mit derselben Mitschrift.
 
 **Und einer der neu gegangenen Wege ging nicht.** „Let this device read one
 part of your memory" (ADR 0082) hat nie funktioniert. ADR 0106 hat die
@@ -927,13 +928,36 @@ Fünfundzwanzig Stellen, keine unauflösbar. Was der Prüfer nicht kann, steht i
 ihm: die Schlüsselrolle steht an der Aufrufstelle nicht, also bleiben drei
 rollenabhängige Familien beim Bauer stehen.
 
-**Vierzehn Türen bleiben offen**, und die Gründe sind verschieden: zwei sind
-eine ausgesprochene Vertagung (ADR 0114 T4), eine braucht ein Relay-Postfach,
-eine ein Angebot, das kein Home je sieht (Befund B38), und die übrigen zehn
-hängen an einem gemessenen Modellanbieter — die Messung probt einen echten
-Modell-Host über achthundertfünfundsechzig Zeilen, und ein Doppelgänger dafür
-lehrte einen Test eine Erfindung statt einer Messung. Keine davon ist
-geschätzt worden; die Liste steht in `progress.md`.
+**Neun Türen bleiben offen**, und jede hat einen geschriebenen Grund: zwei
+sind eine ausgesprochene Vertagung (ADR 0114 T4), eine ist die Geräteseite des
+Relay-Wegs, die `check-capability-reach` seit dem 2026-08-24 namentlich
+begründet stehen lässt, eine ist ein Angebot, das kein Home je sieht (Befund
+B38), und fünf sind die Rückruffamilie.
+
+**Die fünf sind der interessante Rest**, weil sie an zwei Regeln hängen und an
+keiner Lücke. `home.recall.ask` erreicht das Home und wird benannt abgewiesen:
+`entry_may_not_carry_these_words`. Was ein Anbieter tragen darf, steht in
+seiner Entscheidung; was getragen werden müsste, liest das Home aus der
+*Herkunft* dessen, was eingeschlossen wäre (ADR 0151 PV1). Eine Notiz, die über
+die Ortsseite hereinkam, gehört keiner nachgewiesenen Person und verlangt mehr
+als den lebenden Zug. Den Anbieter zu erweitern scheitert an der zweiten Regel:
+PV5 lehnt einen Zugang über einfaches HTTP rundheraus ab, und der
+Host-Doppelgänger dieses Hauses spricht HTTP. Es braucht also entweder Material
+mit nachgewiesenem Urheber oder einen Doppelgänger mit TLS - beides ist
+benennbar, keines ist heute da.
+
+**Ein Satz über diesen Punkt war zuerst falsch und wird hier
+zurückgenommen**, weil er einen Aufwand behauptete, den das Haus schon
+bezahlt hat: es gibt einen Modell-Host-Doppelgänger, `test-model-provider-host.ts`,
+und sein eigener Kommentar begründet ihn genau richtig — „a real server rather
+than a stub `fetch`", weil die Messung eine *Reihenfolge* ist und eine nach URL
+antwortende Funktion sie nicht falsch machen kann. Er läuft jetzt als eigener
+Prozess, aus demselben `dist` gestartet wie das Home und ohne zweite Kopie, und
+fünf der zehn sind damit gegangen: messen, entscheiden, das Geheimnis
+hinreichen, die Entscheidung zurücknehmen, den Befund vergessen. Der Aufwand,
+den der zurückgenommene Satz behauptete, war eine knappe Stunde.
+
+Keine davon ist geschätzt worden; die Liste steht in `progress.md`.
 
 **B35 — Das Schloss wechseln, und die drei Sackgassen dahinter (2026-08-27).**
 B34 machte eine Sackgasse erreichbar, die vorher hinter einem Fehler lag: seit
