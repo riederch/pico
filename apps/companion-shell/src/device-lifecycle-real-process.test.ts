@@ -23,7 +23,11 @@ import {
 } from '@pico/companion/founding';
 import {
   announcePicoCompanionPresence,
+  forgetPicoCompanionDevice,
+  picoCompanionPresenceId,
   readPicoCompanionDevices,
+  switchPicoCompanionDevice,
+  type PicoCompanionDeviceView,
 } from '@pico/companion/presence';
 import { readPicoCompanionProfile } from '@pico/companion/profile';
 import { createPicoCompanionLinkClient } from '@pico/companion/recovery-controller';
@@ -295,6 +299,98 @@ describe('ADR 0130 E3 - the device lifecycle from the Client', () => {
     expect(line?.endWarning).toContain('only device');
     expect(picoCompanionDeviceAuthoritySummary(picoCompanionRenderedDeviceAuthority(view)))
       .toBe('Your Home answers to one device.');
+  }, 180_000);
+
+  /**
+   * ADR 0126 P6. Das Wort einer Person über eines ihrer Geräte, gegen ein
+   * laufendes Home statt gegen einen erfundenen Client.
+   *
+   * **Warum dieser Weg fehlte.** Am 2026-08-28 wurde gemessen, welche der
+   * vierundfünfzig Link-Operationen je von einem echten Client an einem echten
+   * Home *angenommen* wurden - nicht, welche ein Test bei Namen nennt.
+   * `home.presence.switch` und `home.presence.forget` waren keine davon,
+   * obwohl beide seit ihrer Entstehung Knöpfe im Fenster sind
+   * (`pico:device:switch` und `pico:device:forget`). Das ist die Lage aus
+   * Befund B34: ein Knopf, dessen Test die *Operation* behauptet, und niemand,
+   * der sie je angenommen hat.
+   *
+   * Der Weg geht deshalb beide Aussagen, und die eine ist nicht die andere:
+   * eine einzelne Fähigkeit zu entziehen lässt das Gerät stehen, das ganze
+   * Gerät abzuschalten lässt seine Fähigkeiten stehen, und Vergessen nimmt die
+   * Zeile. Nur das Home weiß, ob die drei auseinandergehalten werden.
+   */
+  it('nimmt einem Gerät eine Fähigkeit, schaltet es ab und vergisst es', async () => {
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    const profile = readPicoCompanionProfile(profilePath);
+    const linkClient = await createPicoCompanionLinkClient({
+      profile,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+
+    // Mit Kamera und Drucker, damit es etwas zu entziehen gibt, das nicht zu
+    // den drei ohnehin immer angebotenen gehört.
+    expect(await announcePicoCompanionPresence({
+      livingDeviceLinkClient: linkClient,
+      profile,
+      probe: { canScanWithCamera: () => true, canPrint: () => true },
+    })).toEqual({ ok: true });
+
+    const presenceId = picoCompanionPresenceId(profile);
+    const asTheHomeKnowsIt = async (): Promise<PicoCompanionDeviceView> => {
+      const devices = await readPicoCompanionDevices({ livingDeviceLinkClient: linkClient });
+      const found = devices.find((device) => device.presenceId === presenceId);
+      if (found === undefined) {
+        throw new Error(`presence_missing:${presenceId}`);
+      }
+      return found;
+    };
+
+    const announced = await asTheHomeKnowsIt();
+    expect(announced.affordances).toContain('camera');
+    expect(announced.withheld).toEqual([]);
+    expect(announced.enabled).toBe(true);
+
+    await switchPicoCompanionDevice({
+      livingDeviceLinkClient: linkClient,
+      presenceId,
+      affordance: 'camera',
+      enabled: false,
+    });
+    const withoutCamera = await asTheHomeKnowsIt();
+    expect(withoutCamera.withheld).toEqual(['camera']);
+    /**
+     * Die Fähigkeit bleibt in der Aufzählung stehen, und das ist kein Detail:
+     * entzogen ist nicht dasselbe wie nicht vorhanden. Ein Home, das die
+     * Kamera aus der Liste nähme, könnte die Rücknahme nicht anbieten.
+     */
+    expect(withoutCamera.affordances).toContain('camera');
+    expect(withoutCamera.enabled).toBe(true);
+
+    await switchPicoCompanionDevice({
+      livingDeviceLinkClient: linkClient,
+      presenceId,
+      enabled: false,
+    });
+    const switchedOff = await asTheHomeKnowsIt();
+    expect(switchedOff.enabled).toBe(false);
+    // Und die eine Aussage hat die andere nicht mitgenommen.
+    expect(switchedOff.withheld).toEqual(['camera']);
+
+    await forgetPicoCompanionDevice({ livingDeviceLinkClient: linkClient, presenceId });
+    expect((await readPicoCompanionDevices({ livingDeviceLinkClient: linkClient }))
+      .map((device) => device.presenceId)).not.toContain(presenceId);
+
+    /**
+     * Ein zweites Vergessen ist eine Ablehnung mit Namen und keine Stille -
+     * ADR 0118 O4: „ist schon weg" und „ich habe nicht nachgesehen" dürfen
+     * für den Aufrufer nicht gleich aussehen.
+     */
+    await expect(forgetPicoCompanionDevice({
+      livingDeviceLinkClient: linkClient,
+      presenceId,
+    })).rejects.toThrow('not_found');
   }, 180_000);
 
   it('renews this device, and the old authority stops working', async () => {
