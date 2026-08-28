@@ -827,6 +827,27 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B37 — Zwei Depots stellen zwei Fragen, die nichts unterscheidet
+(2026-08-28).** Beim Gehen von `home.depot.fetch.ask` gemessen und nicht
+vermutet: eine wartende Frage trägt vier Felder — Ereignis-Id, Satz,
+Risikoklasse und Ablauf. Der Satz kommt aus dem Manifest des Moduls (ADR 0139
+AC4: was jemand zugesagt bekommt, schreibt die Seite auf, die es tut, und nicht
+die, die davon profitiert), also nennt er den Effekt und nie das Depot. Wer
+zwei Depots angehängt hat und *jetzt holen* drückt, bekommt zweimal dieselbe
+Zeile und beantwortet sie, ohne zu wissen, welches Depot gemeint ist — bei dem
+einen Effekt im Baum, der Code installiert.
+
+Die Ereignis-Id unterscheidet die beiden, aber sie ist keine Auskunft: sie
+steht in keiner anderen Fläche, die eine Person sieht.
+
+**Nicht repariert, und der Grund ist der Grund.** Einen Betreff neben den
+zugesagten Satz zu setzen hiesse, einen Satz daneben zu komponieren — genau
+die Gestalt, die ADR 0139 AC4 für Effektzusagen und ADR 0106 R5 für
+Unterschriften verbieten. Ob eine Frage sagen darf, *woran* sie hängt, ohne
+dass die Antwort damit von einer anderen Seite als dem Manifest formuliert
+wird, ist eine Entscheidung und keine Implementierung. Sie steht als Messung
+in `runtime-real-process.test.ts` und wartet auf ein ADR.
+
 **B36 — Achtzehn von vierundfünfzig Türen waren je aufgegangen, und hinter
 einer stand niemand (2026-08-28).** Gemessen statt geschätzt: das laufende Home
 wurde für die Dauer eines Testlaufs gebeten, jede angenommene Link-Operation
@@ -847,9 +868,12 @@ alle in `@pico/companion/suppliers`. Der Weg dorthin ist jetzt gegangen — die
 vier Listen des Fensters an einem frischen Home, einem Modul zustimmen, und
 danach eine Regel über einen Effekt entscheiden, den erst die Zustimmung
 entscheidbar macht. Dazu die andere Hälfte von ADR 0126 P6 (eine Fähigkeit
-entziehen, ein Gerät abschalten, es vergessen) und die beiden Vorgänge, die
-eine Erinnerung braucht. Einunddreißig von vierundfünfzig, nachgemessen mit
-derselben Mitschrift.
+entziehen, ein Gerät abschalten, es vergessen), die beiden Vorgänge, die eine
+Erinnerung braucht, die Messungen der Sonde mit der Aufzeichnungszustimmung
+davor, ein Depot anhängen, sein Hinausgreifen entscheiden und es abhängen, und
+zuletzt um einen Abruf bitten, gefragt werden und nein sagen.
+**Siebenunddreißig von vierundfünfzig**, nachgemessen mit derselben
+Mitschrift.
 
 **Und einer der neu gegangenen Wege ging nicht.** „Let this device read one
 part of your memory" (ADR 0082) hat nie funktioniert. ADR 0106 hat die
@@ -873,11 +897,14 @@ Fünfundzwanzig Stellen, keine unauflösbar. Was der Prüfer nicht kann, steht i
 ihm: die Schlüsselrolle steht an der Aufrufstelle nicht, also bleiben drei
 rollenabhängige Familien beim Bauer stehen.
 
-**Dreiundzwanzig Türen bleiben offen**, und die Gründe sind verschieden: zwei
-sind eine ausgesprochene Vertagung (ADR 0114 T4), die übrigen brauchen ein
-Depot mit einem echten Remote, einen gemessenen Modellanbieter oder ein
-Relay-Postfach. Keine davon ist geschätzt worden; die Liste steht in
-`progress.md`.
+**Siebzehn Türen bleiben offen**, und die Gründe sind verschieden: zwei sind
+eine ausgesprochene Vertagung (ADR 0114 T4), drei brauchen einen Zulieferer,
+den ein wirklich geholtes Depot erklärt, eine ein angenommenes Angebot, eine
+ein Relay-Postfach, und die übrigen zehn hängen an einem gemessenen
+Modellanbieter — die Messung probt einen echten Modell-Host über
+achthundertfünfundsechzig Zeilen, und ein Doppelgänger dafür lehrte einen Test
+eine Erfindung statt einer Messung. Keine davon ist geschätzt worden; die
+Liste steht in `progress.md`.
 
 **B35 — Das Schloss wechseln, und die drei Sackgassen dahinter (2026-08-27).**
 B34 machte eine Sackgasse erreichbar, die vorher hinter einem Fehler lag: seit

@@ -9,6 +9,23 @@ Third of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is, ADR 0140 says who decides, this says who acts, what a person
 is asked, and what is left behind.
 
+Status note, 2026-08-28: **Zwei Depots stellen zwei Fragen, die nichts
+unterscheidet - gemessen, nicht vermutet.** Der Weg von `home.depot.fetch.ask`
+über `home.action.approval.read` bis `home.action.approval.resolve` ist zum
+ersten Mal gegen echte Prozesse gegangen worden (Befund B36). Dabei kam heraus,
+was RN4s wartende Frage trägt: Ereignis-Id, Satz, Risikoklasse, Ablauf. Der
+Satz stammt aus dem Manifest des Moduls, wie ADR 0139 AC4 es verlangt, und
+nennt deshalb den Effekt und nie sein Ziel. Wer zwei Depots angehängt hat,
+bekommt zweimal dieselbe Zeile - bei dem einen Effekt im Baum, der Code
+installiert.
+
+Hier nicht entschieden, weil es eine Entscheidung ist: einen Betreff neben den
+zugesagten Satz zu setzen hiesse, einen Satz daneben zu komponieren, und genau
+diese Gestalt verbieten AC4 für Zusagen und ADR 0106 R5 für Unterschriften. Ob
+eine Frage sagen darf, *woran* sie hängt, ohne dass eine andere Seite als das
+Manifest sie formuliert, gehört in ein ADR und nicht in einen Patch. Befund B37
+hält die Messung.
+
 Status note, 2026-08-17: **RN4's question can now be asked and answered
 by a person, and the session it hangs on is the window's own.**
 
