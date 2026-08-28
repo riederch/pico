@@ -18,6 +18,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { writePicoCompanionProfile } from '@pico/companion';
 import type { PicoCompanionPresentation } from './contract.js';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
+import { submitPicoCompanionObservations } from '@pico/companion/observations';
 import { startPicoCompanionShellRuntime } from './runtime.js';
 
 const CLI = join(import.meta.dirname, '..', '..', 'vault-daemon', 'dist', 'cli.js');
@@ -509,12 +510,378 @@ describe('Electron-hosted companion runtime against real processes', () => {
       await runtime.stop();
     }
   }, 300_000);
+
+  /**
+   * ADR 0129 SR5/SR6. Was ein Gerät gemessen hat, auf dem Weg in den Puffer -
+   * und die Antwort davor, die es nicht ist.
+   *
+   * `home.observations.submit` war am 2026-08-28 unbegangen (Befund B36). Sie
+   * gehört keinem Knopf, sondern der Sonde auf dem Telefon, und genau deshalb
+   * lohnt der Weg hier: gegen ein erfundenes Home lässt sich nicht prüfen, was
+   * ein echtes zur *Aufzeichnungszustimmung* sagt, und die ist die eine
+   * Voreinstellung, die auf „nein" steht. Ein Home, dessen Kalender aus wäre,
+   * sähe kaputt aus; eines, das die Wege seiner Person mitschriebe, weil
+   * jemand etwas installiert hat, wäre nicht kaputt, sondern falsch.
+   *
+   * Deshalb geht der Weg beide Antworten. Die erste ist eine Ablehnung **mit
+   * Namen**: eine Sonde, die „nichts angekommen" läse, misst weiter und
+   * schickt weiter, und niemand sagte ihr je, warum es nirgends ankommt.
+   */
+  it('schreibt Messungen erst auf, wenn jemand der Aufzeichnung zugestimmt hat', async () => {
+    const core = await startCore();
+    const living = await startDaemon('pico-companion-observations-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const daemonClient = await connectPicoVaultDaemonClient({ socketPath: living.socketPath });
+    await daemonClient.hello();
+    const linkClient = await createPicoLinkDirectClient({
+      sodium,
+      daemonClient,
+      coreUrl: core.linkBaseUrl,
+      host: core.host,
+      sender: {
+        identityKeyFingerprintHex: identity.keyFingerprintHex,
+        identityPublicKeyHex: identity.publicKeyHex,
+        deviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+
+    const measured = [
+      {
+        kind: 'location_fix' as const,
+        payload: JSON.stringify({
+          at: new Date(Date.now() - 120_000).toISOString(),
+          latitudeDeg: 48.2082,
+          longitudeDeg: 16.3738,
+          accuracyM: 12,
+        }),
+      },
+      {
+        kind: 'mobility_sample' as const,
+        payload: JSON.stringify({
+          at: new Date(Date.now() - 60_000).toISOString(),
+          mobility: 'walking',
+          confidence: 'high',
+        }),
+      },
+    ];
+
+    try {
+      await expect(submitPicoCompanionObservations({
+        linkClient,
+        observations: measured,
+      })).rejects.toThrow('capture_not_consented');
+
+      // Die Zustimmung ist eine Handlung der Person an ihrem Home und kommt
+      // nicht von dem Gerät, das aufzeichnen möchte.
+      const consented = await fetch(`${core.apiBaseUrl}/api/home/modules/capture`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${await operatorSession(core)}`,
+        },
+        body: JSON.stringify({ identifier: 'spatial-recall', capturing: true }),
+      });
+      expect(consented.status, await consented.clone().text()).toBe(200);
+
+      /**
+       * Wie viele *angekommen* sind, nicht wie viele geschickt wurden: ein
+       * Deckel nach ADR 0119 Q5 kann weniger annehmen als angeboten wurde, und
+       * wer „alles gut" liest, misst weiter ins Leere.
+       */
+      expect(await submitPicoCompanionObservations({
+        linkClient,
+        observations: measured,
+      })).toEqual({ appended: 2 });
+    } finally {
+      await daemonClient.close();
+    }
+  }, 300_000);
+
+  /**
+   * ADR 0143 DP1 mit ADR 0138 CO3/CO4. Ein Depot anhängen, entscheiden, ob es
+   * hinausgreifen darf, und es wieder abhängen.
+   *
+   * Drei der sechzehn Bedienelemente aus Befund B36, die nie ein Home gesehen
+   * hatten. Anhängen holt nichts - es schreibt auf, woher Code kommen dürfte,
+   * und **nichts wird geholt, bis jemand es sagt**. Deshalb steht das
+   * Zurückgelesene neben dem Zurückgegebenen: dass ein frisch angehängtes
+   * Depot nicht greifen darf, ist eine Aussage des Homes und keine des
+   * Aufrufers.
+   *
+   * Die beiden Ablehnungen gehören mit auf den Weg, weil sie Entscheidungen
+   * sind und keine Formfehler: ein Aufrufer, der `branch` nennt, macht keinen
+   * Tippfehler, sondern verlangt genau das, was ADR 0143 DP1 verhindert - ein
+   * fremdes Repository, das zwischen zwei Releases Code in ein laufendes Pico
+   * schiebt. Und ein zweites Abhängen ist eine Ablehnung mit Namen statt einer
+   * stillen Bestätigung.
+   */
+  it('hängt ein Depot an, entscheidet sein Hinausgreifen und hängt es wieder ab', async () => {
+    const core = await startCore();
+    const living = await startDaemon('pico-companion-depot-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: {
+        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+      },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const runtime = await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: living.socketPath,
+      sodium,
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => {},
+        notify: () => {},
+      }),
+    });
+
+    // Eine Adresse und ein Commit, und `file://` ist eine Adresse: sie nennt
+    // denselben Ort von überall, ein blosser Pfad nur von hier aus.
+    const remote = 'file:///srv/depots/bridges';
+    const commit = '0'.repeat(39) + '1';
+    const depotsNow = async (): Promise<ReadonlyArray<Record<string, unknown>>> =>
+      ((await runtime.readDepots()) as { depots: ReadonlyArray<Record<string, unknown>> }).depots;
+
+    try {
+      expect(await runtime.attachDepot({ remote, commit })).toEqual({ remote, commit });
+      expect(await depotsNow()).toEqual([
+        expect.objectContaining({ remote, commit, mayFetch: false, mayFetchUnasked: false }),
+      ]);
+
+      await runtime.decideDepotReach({ remote, mayFetch: true, mayFetchUnasked: true });
+      expect((await depotsNow())[0]).toMatchObject({ mayFetch: true, mayFetchUnasked: true });
+
+      /**
+       * Das Hinausgreifen abzuschalten nimmt die ungefragte Erlaubnis mit.
+       * Wer „darf nicht hinausgreifen" sagt, hat ersichtlich nicht „aber tu es
+       * weiter von selbst" gemeint - und das Home wiese das Paar ohnehin als
+       * `unasked_needs_fetching` ab, statt es stillschweigend zu ordnen.
+       */
+      await runtime.decideDepotReach({ remote, mayFetch: false, mayFetchUnasked: true });
+      expect((await depotsNow())[0]).toMatchObject({ mayFetch: false, mayFetchUnasked: false });
+
+      await expect(runtime.attachDepot({ remote, commit, branch: 'main' }))
+        .rejects.toThrow('pico_depot_cannot_follow_a_ref');
+
+      await runtime.detachDepot(remote);
+      expect(await depotsNow()).toEqual([]);
+      await expect(runtime.detachDepot(remote)).rejects.toThrow('not_attached');
+    } finally {
+      await runtime.stop();
+    }
+  }, 300_000);
+
+  /**
+   * ADR 0143 DP8 mit ADR 0141 RN4 und ADR 0139 AC4. Eine Person bittet um
+   * einen Abruf, und wird zurückgefragt.
+   *
+   * Die letzten beiden Bedienelemente der Zuliefererfamilie aus Befund B36:
+   * `home.depot.fetch.ask` und `home.action.approval.resolve`. Sie gehören
+   * zusammen, weil die eine die andere erzeugt - `depot.fetch` ist der einzige
+   * Effekt im Baum, der Code installiert, also fällt er unter ADR 0140s
+   * RL3-Boden nie von selbst auf „erlaubt", und ohne aufgezeichnete Regel wird
+   * gefragt.
+   *
+   * **Und die Antwort davor ist die interessantere.** Ohne Zustimmung zum
+   * Modul sagt das Home `effects_not_consented` statt „nichts zu tun" - eine
+   * Unterscheidung, die dieselbe Sorte Durchlauf schon einmal erzwungen hat:
+   * `depot` wird aktiv ausgeliefert, Effektzustimmung wird nur beim Übergang
+   * von aus auf an geschrieben, und ein Modul, das nie aus war, macht diesen
+   * Übergang nie. Jeder Depot-Abruf war unerreichbar, und jeder Test schrieb
+   * sich die Zustimmungszeile selbst.
+   *
+   * Beantwortet wird mit **nein**, und deshalb wird hier kein Repository
+   * gebraucht: was geprüft wird, ist die Frage und ihr Weg zurück, nicht was
+   * git danach täte.
+   */
+  it('bittet um einen Abruf, wird gefragt und antwortet nein', async () => {
+    const core = await startCore();
+    const living = await startDaemon('pico-companion-fetch-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: {
+        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+      },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const runtime = await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: living.socketPath,
+      sodium,
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => {},
+        notify: () => {},
+      }),
+    });
+
+    const remote = 'file:///srv/depots/bridges';
+    const session = 'pico-shell-fetch-session';
+
+    try {
+      await runtime.attachDepot({ remote, commit: 'a'.repeat(40) });
+      await runtime.decideDepotReach({ remote, mayFetch: true, mayFetchUnasked: false });
+
+      // Vor der Zustimmung: keine Frage, aber ein Grund.
+      expect(await runtime.askDepotFetch(session)).toMatchObject({
+        requested: 0,
+        blocked: 'effects_not_consented',
+      });
+      expect(await runtime.readPendingActions(session)).toEqual([]);
+
+      await runtime.recordModuleConsent('depot');
+
+      const asked = await runtime.askDepotFetch(session);
+      expect(asked.blocked).toBeUndefined();
+      expect(asked.waiting).toHaveLength(1);
+      const [question] = asked.waiting as ReadonlyArray<{
+        requestedEventId: string;
+        prompt: string;
+        risk: string;
+      }>;
+      expect(question?.risk).toBe('external_write');
+      /**
+       * Der Satz kommt aus dem Manifest des Moduls und nicht von hier - ADR
+       * 0139 AC4: was jemand zugesagt bekommt, schreibt die Seite auf, die es
+       * tut, und nicht die, die davon profitiert. Er nennt deshalb den Effekt
+       * und nicht das Depot.
+       */
+      expect(question?.prompt).toContain('Fetches a depot at the commit you accepted');
+      // Dieselbe Frage über die eigene Tür gelesen, nicht aus der Antwort von
+      // eben abgeschrieben.
+      expect((await runtime.readPendingActions(session) as ReadonlyArray<{
+        requestedEventId: string;
+      }>).map((waiting) => waiting.requestedEventId)).toEqual([question?.requestedEventId]);
+
+      /**
+       * Nein ist eine Antwort, und sie unterscheidet sich von „niemand war
+       * da": ADR 0141 RN4 kennt dafür `unanswered`, und deshalb reist
+       * `approved` hier ausdrücklich mit.
+       */
+      expect(await runtime.resolvePendingAction({
+        requestedEventId: question!.requestedEventId,
+        presenceSessionId: session,
+        approved: false,
+      })).toMatchObject({ outcome: 'refused', ran: false });
+      expect(await runtime.readPendingActions(session)).toEqual([]);
+
+      /**
+       * **Gemessen, nicht behauptet: zwei Depots stellen zwei Fragen, die
+       * nichts unterscheidet.** Der Eintrag trägt vier Felder - Ereignis-Id,
+       * Satz, Risikoklasse und Ablauf -, und der Satz ist der des Effekts. Wer
+       * zwei Depots angehängt hat, bekommt zweimal dieselbe Zeile und
+       * beantwortet sie, ohne zu wissen, welches Depot gemeint ist - bei dem
+       * einen Effekt im Baum, der Code installiert.
+       *
+       * Das steht hier als Messung und nicht als Reparatur: *was* eine Person
+       * gefragt wird, entscheidet ADR 0139 AC4 (der Satz kommt aus dem
+       * Manifest, nicht vom Aufrufer), und einen Betreff daneben zu setzen ist
+       * eine Entscheidung und keine Implementierung. Befund B37 hält sie fest.
+       */
+      await runtime.attachDepot({
+        remote: 'file:///srv/depots/others',
+        commit: 'b'.repeat(40),
+      });
+      await runtime.decideDepotReach({
+        remote: 'file:///srv/depots/others',
+        mayFetch: true,
+        mayFetchUnasked: false,
+      });
+      const both = (await runtime.askDepotFetch(session)).waiting as ReadonlyArray<{
+        requestedEventId: string;
+        prompt: string;
+        risk: string;
+        expiresAt: string;
+      }>;
+      expect(both).toHaveLength(2);
+      expect(new Set(both.map((waiting) => waiting.prompt)).size).toBe(1);
+      expect(Object.keys(both[0]!).sort())
+        .toEqual(['expiresAt', 'prompt', 'requestedEventId', 'risk']);
+    } finally {
+      await runtime.stop();
+    }
+  }, 300_000);
 });
 
 interface RunningCore {
   linkBaseUrl: string;
   /** Die Ortsseite des Homes: dieselbe Tür, durch die die Foundation schreibt. */
   apiBaseUrl: string;
+  /**
+   * ADR 0076. Der einmalige Code, mit dem der erste Operator entsteht.
+   *
+   * Das Home schreibt ihn beim Start auf seinen eigenen lokalen Kanal, weil es
+   * sonst niemanden gibt, dem er gegeben werden könnte. Er gilt für diesen
+   * Prozess und einmal.
+   */
+  operatorBootstrapCode: string;
   moveInCode: string;
   host: {
     signingPublicKeyHex: string;
@@ -590,7 +957,8 @@ async function startCore(): Promise<RunningCore> {
     await waitFor(
       () => output.includes('Server listening at')
         && output.includes('Pico Link restricted intake listening')
-        && output.includes('picoHomeMoveInCode'),
+        && output.includes('picoHomeMoveInCode')
+        && output.includes('operatorBootstrapCode'),
       'core_ready',
     );
   } catch {
@@ -606,9 +974,20 @@ async function startCore(): Promise<RunningCore> {
   if (setup === undefined) {
     throw new Error(`core_setup_not_logged:${output}`);
   }
+  const bootstrap = output.split('\n').map((line) => {
+    try {
+      return JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }).find((line) => line?.operatorBootstrapCode !== undefined);
+  if (bootstrap === undefined) {
+    throw new Error(`core_bootstrap_code_not_logged:${output}`);
+  }
   return {
     linkBaseUrl: `http://127.0.0.1:${linkPort}`,
     apiBaseUrl: `http://127.0.0.1:${port}`,
+    operatorBootstrapCode: String(bootstrap.operatorBootstrapCode),
     moveInCode: String(setup.picoHomeMoveInCode),
     host: {
       signingPublicKeyHex: String(setup.hostSigningPublicKeyHex),
@@ -680,6 +1059,33 @@ async function startApprover(
     () => daemon.stderr().split('"event":"approval_watch_started"').length - 1 > before,
     `approval_${role}`,
   );
+}
+
+/**
+ * ADR 0076. Eine Operator-Sitzung an einem laufenden Home.
+ *
+ * Was der Host verwaltet, ist nicht, was ein Bewohner entscheidet (ADR 0087) -
+ * die Aufzeichnungszustimmung eines Moduls liegt heute auf der
+ * Foundation-Seite, also holt der Weg sich die Sitzung, die diese Seite
+ * verlangt, statt sie zu umgehen.
+ */
+async function operatorSession(core: RunningCore): Promise<string> {
+  const bootstrapped = await fetch(`${core.apiBaseUrl}/api/auth/bootstrap`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      bootstrapCode: core.operatorBootstrapCode,
+      passphrase: 'a long enough operator passphrase',
+    }),
+  });
+  if (bootstrapped.status !== 201) {
+    throw new Error(`operator_bootstrap_failed:${bootstrapped.status}:${await bootstrapped.text()}`);
+  }
+  const { session } = await bootstrapped.json() as { session?: unknown };
+  if (typeof session !== 'string' || session === '') {
+    throw new Error('operator_bootstrap_returned_no_session');
+  }
+  return session;
 }
 
 async function runFounding(
