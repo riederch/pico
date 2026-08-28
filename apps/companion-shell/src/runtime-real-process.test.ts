@@ -1116,9 +1116,40 @@ describe('Electron-hosted companion runtime against real processes', () => {
     expect(founded.code, founded.stderr).toBe(0);
     const founding = JSON.parse(founded.stdout) as {
       foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
+        firstDeviceDelegation: Record<string, unknown> & {
+          record: { delegationId: string };
+        };
       };
     };
+
+    /**
+     * Und dieselbe Notiz noch einmal, diesmal von einer nachgewiesenen Person.
+     * Zwei Räume, weil die Herkunft am Material hängt und nicht an der Frage:
+     * ein Raum, in dem etwas Fremdes liegt, verlangt mehr, auch wenn daneben
+     * Eigenes liegt.
+     */
+    const session = await openIdentitySession({
+      daemon: living,
+      core,
+      delegation: founding.foundingRecord.firstDeviceDelegation,
+    });
+    const mine = await fetch(`${core.apiBaseUrl}/api/events`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session}`,
+      },
+      body: JSON.stringify({
+        deviceId: 'pico-shell-walk',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'ownnotes',
+          contentType: 'text/plain',
+          content: 'Der Zählerstand am Monatsanfang war 41870.',
+        },
+      }),
+    });
+    expect(mine.status, await mine.clone().text()).toBe(201);
 
     const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
     writePicoCompanionProfile(profilePath, {
@@ -1227,6 +1258,29 @@ describe('Electron-hosted companion runtime against real processes', () => {
         providerClass: 'declared_own_host',
         secret: 'a secret this Home seals and never hands back',
       })).rejects.toThrow('pico_model_provider_credential_on_unprotected_transport');
+
+      /**
+       * **Und dasselbe Nein über die eigenen Notizen dieser Person** - das ist
+       * die Messung, die die Frage schliesst, und sie fiel anders aus als
+       * erwartet (Befund B39).
+       *
+       * Die Notiz oben kam über die Ortsseite herein und trägt deshalb
+       * `unattributed`; diese hier wurde unter einer identitätsgebundenen
+       * Sitzung geschrieben und trägt `home_member`. Sie wird trotzdem
+       * abgewiesen, und damit ist die Herkunft nicht das fehlende Stück: ein
+       * Rückruf holt Material aus einem Speicher, das ist per Definition
+       * *retrieved memory*, und die weitere Erlaubnis dafür verlangt einen
+       * Zugang (ADR 0151 PV4), der über einfaches HTTP abgewiesen wird (PV5).
+       *
+       * Die Klasse `person_present` läge über der Schwelle - nur schreibt sie
+       * heute kein Weg: die Ortsseite sagt selbst, eine nachgewiesene Identität
+       * sei `home_member` und nicht die Person im Raum.
+       */
+      await runtime.grantDomainRead({ privacyDomain: 'ownnotes' });
+      await expect(runtime.askRecall({
+        privacyDomain: 'ownnotes',
+        question: 'Was stand am Monatsanfang auf dem Zähler?',
+      })).rejects.toThrow('entry_may_not_carry_these_words');
 
       // Und alles wieder zurück: erst die Entscheidung, dann der Befund.
       await runtime.revokeModelProvider('a-model:measured');
@@ -1516,6 +1570,54 @@ async function eventually<T>(read: () => Promise<T | undefined>): Promise<T> {
     await new Promise((resolve) => { setTimeout(resolve, 1_000); });
   }
   throw new Error('never_settled');
+}
+
+/**
+ * ADR 0082. Eine identitätsgebundene Foundation-Sitzung, über die Zeremonie,
+ * die es dafür gibt.
+ *
+ * Gebraucht, um eine Notiz zu schreiben, die *einer nachgewiesenen Person*
+ * gehört: die Ortsseite ohne Berechtigung schreibt `unattributed`, und ADR
+ * 0151 PV1 liest genau diese Herkunft, wenn es entscheidet, wieviel ein
+ * Anbieter tragen können muss. Der Besitznachweis kommt vom Geräteschlüssel
+ * und steht auf ADR 0099s Freistellungsliste, kostet also keine Zustimmung -
+ * richtig, denn eine Sitzung ist ein Nachweis und keine neue Vollmacht.
+ */
+async function openIdentitySession(input: {
+  daemon: RunningDaemon;
+  core: RunningCore;
+  delegation: Record<string, unknown>;
+}): Promise<string> {
+  const delegationPath = join(tempDirectory('pico-delegation-'), 'delegation.json');
+  writeFileSync(delegationPath, JSON.stringify(input.delegation));
+  const child = spawn(process.execPath, [
+    CLI,
+    'ceremony', 'open-identity-session',
+    '--vault-home', input.daemon.vaultHomePath,
+    '--fingerprint', identity.keyFingerprintHex,
+    '--signing-fingerprint', signing.keyFingerprintHex,
+    '--agreement-fingerprint', agreement.keyFingerprintHex,
+    '--core-url', input.core.apiBaseUrl,
+    '--delegation', delegationPath,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+  let stdout = '';
+  let stderr = '';
+  child.stdout!.setEncoding('utf8');
+  child.stderr!.setEncoding('utf8');
+  child.stdout!.on('data', (chunk: string) => { stdout += chunk; });
+  child.stderr!.on('data', (chunk: string) => { stderr += chunk; });
+  const code = await new Promise<number | null>((resolvePromise) => {
+    child.once('exit', resolvePromise);
+  });
+  if (code !== 0) {
+    throw new Error(`open_identity_session_failed:${code}:${stderr}`);
+  }
+  const { session } = JSON.parse(stdout) as { session?: unknown };
+  if (typeof session !== 'string' || session === '') {
+    throw new Error(`open_identity_session_returned_nothing:${stdout}`);
+  }
+  return session;
 }
 
 async function runFounding(
