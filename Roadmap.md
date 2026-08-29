@@ -893,6 +893,17 @@ weiter unten, und dieselbe Sorte Gate ging darüber hinweg:
 `check-store-writers` sieht einen Aufrufer, `check-link-reachability` sieht
 einen Client, und beide sind da — nur reicht keiner das Feld durch.
 
+**Die Klasse wurde vermessen und bekommt trotzdem kein Tor** (2026-08-29).
+Über den Compiler gezählt: 22 Store-Methoden nehmen optionale Felder, und zwölf
+davon reicht kein Aufrufer im Produkt je durch. Elf der zwölf sind dieselbe
+Sache — ein `*At`, das der Store selbst stempelt, wenn niemand etwas anderes
+sagt —, und das ist kein Fehler, sondern die Vorgabe. Übrig bleibt genau
+`offeredCommit`. Ein Prüfer daraus wäre eine Liste mit zwölf Einträgen, elf
+davon mit demselben Satz begründet, und die Roadmap warnt vor genau dieser
+Gestalt. Der Unterschied, auf den es ankäme - ein Feld, das eine *Tatsache*
+trägt, gegen eines, das eine Vorgabe übersteuert - ist ein Urteil und keine
+Syntax.
+
 **Nicht repariert, und der Grund ist eine offene Entscheidung.** *Woher* ein
 Home erfährt, dass es etwas Neueres gibt, steht nirgends. Zwei Sätze grenzen
 es ein: der planmässige Lauf darf es nicht sein — die ADR nennt ihn
@@ -997,6 +1008,14 @@ hinreichen, die Entscheidung zurücknehmen, den Befund vergessen. Der Aufwand,
 den der zurückgenommene Satz behauptete, war eine knappe Stunde.
 
 Keine davon ist geschätzt worden; die Liste steht in `progress.md`.
+
+**Und die Zahl ist seit dem 2026-08-29 nachrechenbar.** `pnpm link:walk`
+(`scripts/measure-link-walk.mjs`) setzt die Mitschrift in das gebaute Home
+ein, fährt die Companion-Shell-Testmenge, nimmt sie wieder heraus und nennt,
+was angenommen wurde, was nur abgelehnt wurde und was gar nicht vorkam. Kein
+Tor: es dauert anderthalb Minuten, es urteilt nicht, und `release:verify`
+ruft es nicht. Eine genannte Zahl, die niemand nachrechnen kann, driftet -
+und diese hier steht an drei Stellen.
 
 **B35 — Das Schloss wechseln, und die drei Sackgassen dahinter (2026-08-27).**
 B34 machte eine Sackgasse erreichbar, die vorher hinter einem Fehler lag: seit
