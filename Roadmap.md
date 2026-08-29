@@ -859,6 +859,16 @@ aufzuhalten:
   genau der Zustand einer Person, die die Verschlüsselung eben erst
   eingeschaltet hat.
 
+**Die andere Hälfte der Fläche ist keine Frage-und-Antwort**, und sie stand
+noch schlechter da: `websocket.test.ts` prüft den URL-Bau, und
+`connectRealtime` hatte gar keinen Test — es hatte noch nie eine Verbindung
+hergestellt. Auch das ist jetzt gegangen: ein Ticket ziehen, sich damit
+verbinden, am Home ein Ereignis auslösen und warten, bis es ankommt. Damit ist
+auch die *Form* geprüft, die der Leser erwartet — eine Nachricht, die er nicht
+versteht, wirft er weg, und ohne diesen Durchlauf sähe das genauso aus wie ein
+Home, das schweigt. Gepflanzt: lässt der Client das Ticket aus der Adresse,
+kommt die Verbindung nie zustande.
+
 Wo das Risiko wirklich sass, sagt der Vergleich damit deutlicher als jede
 Vermutung: nicht in der Fläche, die über gewöhnliches HTTP mit einem Home
 spricht, sondern dort, wo ein Client Aufzeichnungen *unterschreibt* und ein
