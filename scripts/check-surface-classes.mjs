@@ -397,6 +397,40 @@ const arguedRoutes = [
     why: 'ADR 0118 O1. `home.time_bound_entry.acknowledge` is the door in use',
   },
   {
+    route: '/api/auth/session',
+    prefix: '/api/auth/session',
+    method: 'GET',
+    why: 'ADR 0076. Die Betreiberfläche hält ihre Sitzung im Speicher, solange ihr Reiter '
+      + 'offen ist, und fragt niemanden, ob sie noch gilt - ein Aufruf, der scheitert, sagt '
+      + 'es ihr an der Stelle, an der es zählt. Gefunden am 2026-08-29, als der Aufrufertest '
+      + 'anfing, das Verb zu lesen (Befund B44)',
+  },
+  {
+    route: '/api/auth/session',
+    prefix: '/api/auth/session',
+    method: 'DELETE',
+    why: 'ADR 0076. Abgemeldet wird alles auf einmal - die Fläche ruft '
+      + '`DELETE /api/auth/sessions` -, weil eine Person, die aufhört, nicht meint '
+      + '„dieser Reiter" sondern „dieses Home". Die Einzelsitzungs-Hälfte hat keinen '
+      + 'Aufrufer (Befund B44)',
+  },
+  {
+    route: '/api/model/providers/:entryId/decision',
+    prefix: '/api/model/providers/',
+    method: 'POST',
+    why: 'ADR 0152 SE6. Die Tür in Gebrauch ist `home.model.provider.decision.submit`, die '
+      + 'das Fenster vom Gerät der Person aus ruft; das hier ist dieselbe Entscheidung über '
+      + 'eine Foundation-Sitzung, und keine öffnet dafür eine. `/narrowing` liegt unter '
+      + 'demselben Präfix und wird gerufen, deshalb steht das Verb daneben',
+  },
+  {
+    route: '/api/model/providers/:entryId/decision',
+    prefix: '/api/model/providers/',
+    method: 'DELETE',
+    why: 'ADR 0152 SE6, die Rücknahme derselben Entscheidung: '
+      + '`home.model.provider.decision.revoke` ist die Tür in Gebrauch',
+  },
+  {
     prefix: '/api/system/version',
     why: 'ADR 0075. A diagnostic a person never asks for and no client polls; it exists so '
       + 'somebody with a terminal can tell what is running. The only route here with '
@@ -426,6 +460,81 @@ const routeCallerText = routeCallerFiles
   .map((path_) => readFileSync(path_, 'utf8'))
   .join('\n');
 
+/**
+ * Ob eine Route einen Aufrufer hat - und bei Adressen, die mehrere Verben
+ * bedienen, ob es *ihr* Aufrufer ist.
+ *
+ * **Warum das überhaupt eine Frage ist.** Gesucht wird die Adresse; welches
+ * Verb ein Aufrufer darauf schickt, steht ein paar Zeichen daneben. Solange
+ * eine Adresse von genau einem Verb bedient wird, ist das gleichgültig. Am
+ * 2026-08-29 wurden fünfzehn Adressen gezählt, die mehr als eines tragen -
+ * dreiunddreissig Routen zusammen -, und dort bürgte ein einziger Aufrufer für
+ * alle: wer `POST /api/auth/session` rief, liess `GET` und `DELETE` darauf als
+ * erreicht gelten. Sieben Routen standen so bedient und ungerufen da, und der
+ * Prüfer, dessen ganze Aufgabe das ist, sagte nichts.
+ *
+ * **Wie es enger wird, ohne falsch zu werden.** Nur für diese Adressen wird
+ * genauer hingesehen, und nur in einem Fenster von zweihundert Zeichen um die
+ * Nennung herum - so weit, wie ein `method:` in diesem Baum von seiner Adresse
+ * entfernt steht. Findet sich dort das Verb, gilt die Route als gerufen; findet
+ * sich *gar kein* Verb, gilt sie ebenfalls als gerufen, weil ein Aufrufer, der
+ * seine Methode woanders herholt, kein Beweis für das Gegenteil ist. Nur ein
+ * Fenster, das ausschliesslich *andere* Verben nennt, zählt als Nein.
+ *
+ * Das Ergebnis wurde gegen eine Handzählung derselben sieben gehalten, bevor
+ * es hier stehen blieb. Befund B43 und B44 halten beides fest.
+ */
+const methodsPerPath = new Map();
+for (const route of registered) {
+  methodsPerPath.set(route.route, (methodsPerPath.get(route.route) ?? 0) + 1);
+}
+const httpVerbs = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+function reached(route, named) {
+  named.lastIndex = 0;
+  const mentions = [...routeCallerText.matchAll(named)];
+  if (mentions.length === 0) {
+    return false;
+  }
+  if ((methodsPerPath.get(route.route) ?? 1) < 2) {
+    return true;
+  }
+  return mentions.some((mention) => {
+    const window = routeCallerText.slice(
+      Math.max(0, mention.index - 200),
+      mention.index + 200,
+    );
+    const seen = httpVerbs.filter((verb) => window.includes(`'${verb}'`));
+    return seen.length === 0 || seen.includes(route.method);
+  });
+}
+
+/**
+ * Und was hinter einem Parameter noch kommt, muss auch jemand nennen.
+ *
+ * Der Stamm endet am ersten `:`, also steht `/api/model/providers` für
+ * `/api/model/providers/:entryId/decision` genauso wie für
+ * `/api/model/providers/mine` - eine Sammeladresse bürgt für alles, was hinter
+ * ihr liegt. Wo eine Route hinter dem Parameter weitergeht, wird dieses letzte
+ * Stück deshalb eigens verlangt.
+ *
+ * **Was auch das nicht fängt**, gesagt statt geglaubt: eine Route, die *nur*
+ * aus Sammeladresse und Parameter besteht - `GET /api/memory/retention-policies/:id`
+ * neben der Liste, `GET /api/memory/domains/:d/items/:id` neben ihrer -, hat
+ * kein eigenes Stück, an dem sie sich festhalten liesse. Zwei solche Routen
+ * gibt es (Stand 2026-08-29), beide gelesen und beide ohne Aufrufer; sie
+ * stehen in Befund B44 statt in einem Muster, das sie nicht sieht.
+ */
+function tailNamed(route) {
+  const parts = route.route.split('/');
+  const parameterAt = parts.findIndex((part) => part.startsWith(':'));
+  if (parameterAt < 0 || parameterAt === parts.length - 1) {
+    return true;
+  }
+  return parts.slice(parameterAt + 1)
+    .filter((part) => !part.startsWith(':'))
+    .every((part) => new RegExp(`/${part}(?![A-Za-z0-9_-])`, 'u').test(routeCallerText));
+}
+
 let routesChecked = 0;
 let routesArgued = 0;
 for (const route of registered) {
@@ -438,29 +547,29 @@ for (const route of registered) {
    * by being a prefix of it, which is exactly the confusion this direction
    * exists to catch.
    */
-  /**
-   * **Und die Methode steht hier nicht drin, was gesagt gehört.**
-   *
-   * Gesucht wird die Adresse; welches Verb ein Aufrufer darauf schickt, steht
-   * in seinem Quelltext ein paar Zeichen daneben und lässt sich nicht
-   * verlässlich daran binden. Fünfzehn Adressen dieses Homes werden von mehr
-   * als einem Verb bedient (dreiunddreissig Routen zusammen), und für sie
-   * bürgt ein einziger Aufrufer für alle: wer `POST /api/auth/session` ruft,
-   * lässt auch `GET` und `DELETE` darauf als erreicht gelten.
-   *
-   * Nicht enger gemacht, weil enger hier falscher wäre: ein Fenster um die
-   * Adresse herum nach `method:` abzusuchen, meldete Routen als unerreicht,
-   * die es nicht sind, und ein falsches Rot in einem Tor kostet mehr als ein
-   * benanntes Loch. Gemessen am 2026-08-29 und in Befund B43 festgehalten.
-   */
   const named = new RegExp(
     `${stem.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![A-Za-z0-9_-])`,
-    'u',
+    'gu',
   );
-  if (named.test(routeCallerText)) {
+  if (reached(route, named) && tailNamed(route)) {
     continue;
   }
-  if (arguedRoutes.some((entry) => route.route.startsWith(entry.prefix))) {
+  /**
+   * Ein Argument darf ein Verb nennen, und wo es eines nennt, gilt es nur
+   * dafür. `/api/auth/session` ist ein Präfix von `/api/auth/sessions`, und ein
+   * Argument über das erste dürfte das zweite nicht mit stillstellen - genau
+   * die Verwechslung, die dieser Prüfer an anderer Stelle schon einmal
+   * eingefangen hat.
+   *
+   * Und wo ein Argument eine einzelne Route meint, nennt es sie ganz. Ein
+   * Präfix mit Verb sah zuerst genau genug aus und stellte prompt
+   * `POST /api/model/providers/:entryId/narrowing` mit stumm - eine Route, die
+   * gerufen wird. Aufgefallen ist es beim Pflanzen, nicht beim Schreiben.
+   */
+  if (arguedRoutes.some((entry) => (entry.route === undefined
+    ? route.route.startsWith(entry.prefix)
+    : entry.route === route.route)
+    && (entry.method === undefined || entry.method === route.method))) {
     routesArgued += 1;
     continue;
   }
