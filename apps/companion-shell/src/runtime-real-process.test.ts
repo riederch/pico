@@ -20,6 +20,7 @@ import { writePicoCompanionProfile } from '@pico/companion';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionPresentation } from './contract.js';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
+import { exchangePicoCompanionLinkMailbox } from '@pico/companion/link-mailbox';
 import { submitPicoCompanionObservations } from '@pico/companion/observations';
 import { startPicoCompanionShellRuntime } from './runtime.js';
 
@@ -1437,10 +1438,167 @@ describe('Electron-hosted companion runtime against real processes', () => {
       await relay.stop();
     }
   }, 300_000);
+
+  /**
+   * ADR 0148 EX1/EX2/EX5 mit ADR 0149 RS2. Zwei Enden tauschen Adressen, über
+   * ein Relay, das wirklich läuft.
+   *
+   * `home.link.mailbox.exchange` war eine der neun Türen aus Befund B36, und
+   * ihr Grund war ein anderer als bei den übrigen: die Geräteseite des
+   * Relay-Wegs hat keinen Produktaufrufer, und `check-capability-reach` lässt
+   * sie seit dem 2026-08-24 namentlich begründet stehen — „nothing starts it
+   * because nothing starts the sweep below it". Das ändert dieser Weg nicht.
+   * Was er ändert, ist die andere Hälfte: dass der Weg *trägt*, wenn ihn
+   * jemand startet. Bis heute lief er nur gegen erfundene Gegenstellen.
+   *
+   * **Drei echte Prozesse**, und der Tausch berührt alle drei: das Gerät gibt
+   * sich eine Eingangsadresse beim Betreiber, das Home legt sich beim Relay
+   * ein Postfach an und gibt seine zurück, und *registriert wird vor dem
+   * Aushändigen* — ein Gerät mit einer Adresse, die es beim Betreiber nicht
+   * gibt, schriebe ins Leere, und beide Seiten hielten den Tausch für
+   * gelungen.
+   *
+   * Der direkte Weg bleibt davon unberührt, und das ist der Grund, warum
+   * dieser Tausch ausgerechnet über ihn reist: er funktioniert genau dann,
+   * wenn das Relay nicht gebraucht wird.
+   */
+  it('tauscht Postfachadressen mit seinem Home, über ein laufendes Relay', async () => {
+    const relay = await startRelay();
+
+    // Die Betreiberhälfte steht im Weg nebenan; hier zählt, dass es ein Konto
+    // gibt, unter dem ein Home Postfächer anlegen darf.
+    const claimed = await fetch(`${relay.operatorBaseUrl}/operator/claim`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ claimCode: relay.claimCode }),
+    });
+    expect(claimed.status, await claimed.clone().text()).toBe(200);
+    const operatorCredential = ((await claimed.json()) as { credential: string }).credential;
+    const created = await fetch(`${relay.operatorBaseUrl}/operator/accounts/create`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-pico-relay-operator': operatorCredential,
+      },
+      /**
+       * Dieselben Zahlen, die das Fenster einsetzt (4 und 64). Die Obergrenze
+       * muss über der Postfachgrösse liegen, mit der ein Home sich anmeldet -
+       * ein Konto mit einer kleineren nimmt kein Postfach an, und das Home
+       * schreibt den Grund auf seinen eigenen Kanal, während das Gerät nur
+       * `unavailable` sieht.
+       */
+      body: JSON.stringify({ mailboxQuota: 4, maxCapacity: 64 }),
+    });
+    expect(created.status, await created.clone().text()).toBe(200);
+    const accountCredential = ((await created.json()) as { credential: string }).credential;
+
+    /**
+     * ADR 0149 RS2: der Zugang *ist* die Kennung. Das Home bekommt beides über
+     * seine Umgebung, was es als vom Betreiber geerbt aufschreibt - eine
+     * Entscheidung, die eine Person später überschreiben kann, ohne dass diese
+     * hier je als ihre ausgegeben wird.
+     */
+    const core = await startCore({
+      PICO_LINK_RELAY_BASE_URL: relay.mailboxBaseUrl,
+      PICO_LINK_RELAY_OPERATOR: 'relay.example.test',
+      PICO_LINK_RELAY_ACCOUNT_ID: accountCredential,
+    });
+    const living = await startDaemon('pico-companion-mailbox-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const daemonClient = await connectPicoVaultDaemonClient({ socketPath: living.socketPath });
+    await daemonClient.hello();
+    const linkClient = await createPicoLinkDirectClient({
+      sodium,
+      daemonClient,
+      coreUrl: core.linkBaseUrl,
+      host: core.host,
+      sender: {
+        identityKeyFingerprintHex: identity.keyFingerprintHex,
+        identityPublicKeyHex: identity.publicKeyHex,
+        deviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const profile = {
+      schema: 'pico.companion.profile.v1' as const,
+      coreUrl: core.linkBaseUrl,
+      home: { homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    };
+
+    try {
+      const exchanged = await exchangePicoCompanionLinkMailbox({
+        linkClient,
+        profile,
+        operator: 'relay.example.test',
+      }).catch((refused: unknown) => {
+        // Der Grund liegt im Home, nicht in der Antwort: es sagt auf seinem
+        // eigenen Kanal, warum es die Registrierung nicht bekommen hat.
+        throw new Error(`${String(refused)} | home said: ${core.logs().slice(-2_000)}`);
+      });
+
+      // ADR 0148 EX2. Das Home sagt, welchem Gerät es ausgestellt hat, und
+      // dieses Gerät weiss, womit es unterschrieben hat.
+      expect(exchanged.deviceSigningKeyFingerprintHex).toBe(signing.keyFingerprintHex);
+      expect(exchanged.inbound).toContain('relay.example.test');
+      expect(exchanged.outbound).toContain('relay.example.test');
+      // Nichts legitimes gibt die eigene Adresse zurück; wer sie ablegte,
+      // schriebe in sein eigenes Postfach.
+      expect(exchanged.outbound).not.toBe(exchanged.inbound);
+
+      /**
+       * ADR 0148 EX5. Ein zweiter Tausch ist die Rotation und kein Leerlauf -
+       * beide Seiten geben eine frische Adresse aus, und das ist zugleich das
+       * Mittel gegen ein geflutetes Postfach.
+       */
+      const again = await exchangePicoCompanionLinkMailbox({
+        linkClient,
+        profile,
+        operator: 'relay.example.test',
+      });
+      expect(again.inbound).not.toBe(exchanged.inbound);
+      expect(again.outbound).not.toBe(exchanged.outbound);
+    } finally {
+      await daemonClient.close();
+      await relay.stop();
+    }
+  }, 300_000);
 });
 
 interface RunningCore {
   linkBaseUrl: string;
+  /**
+   * Was das Home auf seinen eigenen Kanal geschrieben hat.
+   *
+   * Ein Fehlschlag, dessen Erklärung im Prozess daneben liegt und nirgends
+   * ankommt, kostet einen ganzen Durchgang, nur um ihn noch einmal zu
+   * erzeugen - Befund B21, eine Ebene höher.
+   */
+  logs(): string;
   /** Die Ortsseite des Homes: dieselbe Tür, durch die die Foundation schreibt. */
   apiBaseUrl: string;
   /**
@@ -1494,7 +1652,11 @@ async function waitFor(condition: () => boolean, label: string): Promise<void> {
   throw new Error(`wait_timeout:${label}`);
 }
 
-async function startCore(): Promise<RunningCore> {
+/**
+ * `overrides` statt einer zweiten Startfunktion: was ein Home zusätzlich
+ * bekommt - etwa ein Relay - ist eine Umgebung und keine andere Sorte Home.
+ */
+async function startCore(overrides: Record<string, string> = {}): Promise<RunningCore> {
   const port = await freePort();
   let linkPort = await freePort();
   while (linkPort === port) {
@@ -1513,6 +1675,7 @@ async function startCore(): Promise<RunningCore> {
       PICO_FOUNDATION_ACCESS_MODE: 'loopback-dev',
       PICO_LINK_INTAKE_HOST: '127.0.0.1',
       PICO_LINK_INTAKE_PORT: String(linkPort),
+      ...overrides,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -1556,6 +1719,7 @@ async function startCore(): Promise<RunningCore> {
   return {
     linkBaseUrl: `http://127.0.0.1:${linkPort}`,
     apiBaseUrl: `http://127.0.0.1:${port}`,
+    logs: () => output,
     operatorBootstrapCode: String(bootstrap.operatorBootstrapCode),
     moveInCode: String(setup.picoHomeMoveInCode),
     host: {
@@ -1774,6 +1938,7 @@ async function openIdentitySession(input: {
  */
 async function startRelay(): Promise<{
   operatorBaseUrl: string;
+  mailboxBaseUrl: string;
   claimCode: string;
   stop(): Promise<void>;
 }> {
@@ -1822,6 +1987,9 @@ async function startRelay(): Promise<{
   }
   return {
     operatorBaseUrl: `http://127.0.0.1:${operatorPort}`,
+    // Wo Postfächer angelegt und geleert werden - eine andere Tür als die des
+    // Betreibers, weil das zwei Rollen sind und nicht zwei Pfade.
+    mailboxBaseUrl: `http://127.0.0.1:${mailboxPort}`,
     claimCode: String(unclaimed.claimCode),
     stop: async () => {
       child.kill('SIGTERM');
