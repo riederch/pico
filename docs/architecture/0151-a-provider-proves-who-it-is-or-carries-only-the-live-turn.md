@@ -27,12 +27,20 @@ eine Notiz über die Ortsseite und eine unter identitätsgebundener Sitzung
 geschriebene werden gleich abgewiesen. Die Herkunft ist also nicht das fehlende
 Stück.
 
-Zwei Antworten sind denkbar und gehören entschieden statt gepatcht: ob Loopback
-ein geschützter Transport im Sinne von PV5 ist, und ob ein erklärter eigener
-Host die weitere Erlaubnis ohne Zugang verdient - er beweist nichts, aber es
-gibt auch niemanden, dem gegenüber er es beweisen müsste. Eine dritte, teurere
-Antwort läge bei ADR 0116 W2: eine Schreibklasse, die die anwesende Person
-wirklich nachweist.
+**Und die Absicht steht bereits geschrieben, nur an einer anderen Stelle.**
+`apps/core/src/recall.ts` sagt in seinem eigenen Kopf, eine Frage über die
+eigenen Notizen der Person brauche nur den lebenden Zug - und genau das kann es
+nicht liefern, weil W2 diesen Notizen `home_member` gibt. Die beiden Absätze
+wurden gegen verschiedene Annahmen geschrieben. Das ist kein Regelkonflikt,
+sondern ein Satz, den sein eigenes Modul nicht hält; offen ist damit das Wie
+und nicht das Ob.
+
+Drei Antworten sind denkbar und gehören entschieden statt gepatcht: ob Loopback
+ein geschützter Transport im Sinne von PV5 ist; ob ein erklärter eigener Host
+die weitere Erlaubnis ohne Zugang verdient - er beweist nichts, aber es gibt
+auch niemanden, dem gegenüber er es beweisen müsste; oder ob ADR 0116 W2 eine
+Schreibklasse bekommt, die die anwesende Person wirklich nachweist. Nur die
+dritte trifft die Ursache.
 
 Status note, 2026-08-16: **PV1's allowance stops at `own_pico`, not above
 it.** A derivation from the person's own notes stays on the live turn.

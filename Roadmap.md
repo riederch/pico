@@ -842,8 +842,22 @@ zweite Messung widerlegte die erste Erklärung. Drei Regeln greifen ineinander:
 **Und kein Schreibweg erzeugt heute `person_present`.** Die Ortsseite sagt es
 selbst: eine nachgewiesene Pico-Identität ist `home_member` und nicht die
 Person im Raum, „because the higher class would require proving the writer is
-the subject person of what they are writing". Das ist eine bewusste
-Zurückhaltung — ihre Folge eine Ebene weiter unten war nicht nachgezogen.
+the subject person of what they are writing" (ADR 0116 W2). Das ist eine
+bewusste Zurückhaltung.
+
+**Die Stelle, die darüber entscheidet, sagt aber das Gegenteil.**
+`apps/core/src/recall.ts` schreibt in seinem eigenen Kopf: „a question over the
+person's own notes - or over an answer Pico derived from them - needs only the
+live turn, while one that pulls in a housemate's note or a supplier's document
+needs a provider that proved who it is". Der zweite Halbsatz stimmt, der erste
+nicht: eine selbst geschriebene Notiz *ist* eine fremde Notiz für diese Regel,
+weil niemand beweisen kann, dass die Schreibende die ist, über die geschrieben
+wird. W2 und dieser Absatz wurden gegen verschiedene Annahmen geschrieben, und
+zwischen ihnen sitzt die Sackgasse.
+
+Das verschiebt den Charakter des Befunds: es ist keine Regel mit einer
+unbedachten Folge, sondern eine Aussage, die ihr eigenes Modul nicht halten
+kann. Die Absicht steht also fest, und offen ist das Wie.
 
 Gemessen wurde beides gegen ein laufendes Home: eine Notiz über die Ortsseite
 (`unattributed`) wird abgewiesen, und eine unter einer identitätsgebundenen
@@ -866,12 +880,14 @@ Zeilen seiner Person nicht sehen darf, darf also den Inhalt eines
 git-Repositorys sehen — nicht weil das eine vertraulicher wäre, sondern weil
 für das andere niemand beweisen kann, wer es geschrieben hat.
 
-**Nicht repariert, weil jede der drei Regeln ihren Grund hat und die Frage
-zwischen ihnen liegt.** Zwei Antworten sind denkbar und beide gehören
-entschieden statt gepatcht: ob Loopback ein geschützter Transport ist, und ob
-ein erklärter eigener Host die weitere Erlaubnis ohne Zugang verdient — er
+**Nicht repariert, weil die Frage zwischen den Regeln liegt und jede ihren
+Grund hat.** Drei Antworten sind denkbar, und die dritte trifft die Ursache
+statt des Symptoms: ob Loopback ein geschützter Transport im Sinne von PV5 ist;
+ob ein erklärter eigener Host die weitere Erlaubnis ohne Zugang verdient — er
 beweist nichts, aber es gibt auch niemanden, dem gegenüber er es beweisen
-müsste. ADR 0151 hat die datierte Notiz.
+müsste; oder ob ADR 0116 W2 eine Schreibklasse bekommt, die die anwesende
+Person wirklich nachweist, womit `recall.ts` seinen eigenen Satz wieder halten
+könnte. ADR 0151 hat die datierte Notiz.
 
 **B38 — „Ein neuerer Commit ist ein Angebot", und niemand sieht je eines
 (2026-08-28).** Beim Gehen der Zuliefererkette gemessen. ADR 0143 DP1 sagt, ein
@@ -1424,8 +1440,15 @@ geraten — beide Richtungen haben einen Test.
 
 Der sprechende Companion: die erste Requesting-Seite, ADR 0116 W4/W5, ADR 0117
 X3–X5, die Modell-Delegation aus ADR 0048/0049 — und die Avatar-Assets über
-ADR 0124, die ADR 0112 S4 entsperren. Nichts davon ist heute prüfbar, weil kein
-Modell-Provider existiert.
+ADR 0124, die ADR 0112 S4 entsperren.
+
+**Der Satz „nichts davon ist heute prüfbar, weil kein Modell-Provider
+existiert" stimmt seit dem 2026-08-28 nicht mehr.** Ein Anbieter lässt sich vom
+Fenster aus messen, entscheiden und wieder vergessen, und der Weg steht als
+Durchlauf gegen echte Prozesse; der Host dafür ist der Doppelgänger, den dieses
+Haus für seine eigenen Messungen gebaut hat. Was fehlt, ist keine Fläche,
+sondern eine Entscheidung (Befund B39) und ein echter Host in der Umgebung
+dessen, der es benutzen will.
 
 Ebenfalls außerhalb: iOS, macOS (blockiert mangels Testgerät, ADR 0130 E8),
 Windows (ADR 0130 E7) und ADR 0027 IM1–IM3, die ein Image brauchen, das es nicht
