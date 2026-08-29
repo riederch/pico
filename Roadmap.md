@@ -1062,9 +1062,10 @@ Erinnerung braucht, die Messungen der Sonde mit der Aufzeichnungszustimmung
 davor, ein Depot anhängen, sein Hinausgreifen entscheiden und es abhängen, und
 um einen Abruf bitten, gefragt werden und nein sagen, ein echtes Depot mit
 einem echten `git` holen und den Zulieferer anhängen, den es dabei erklärt,
-und zuletzt eine Maschine messen, sich für sie entscheiden, ihr ein Geheimnis
-hinreichen und beides zurücknehmen. **Fünfundvierzig von vierundfünfzig**,
-nachgemessen mit derselben Mitschrift.
+eine Maschine messen, sich für sie entscheiden, ihr ein Geheimnis hinreichen
+und beides zurücknehmen, und zuletzt Postfachadressen tauschen — mit drei
+laufenden Prozessen, weil dazu ein echtes Relay gehört. **Sechsundvierzig von
+vierundfünfzig**, nachgemessen mit `pnpm link:walk`.
 
 **Und einer der neu gegangenen Wege ging nicht.** „Let this device read one
 part of your memory" (ADR 0082) hat nie funktioniert. ADR 0106 hat die
@@ -1088,11 +1089,19 @@ Fünfundzwanzig Stellen, keine unauflösbar. Was der Prüfer nicht kann, steht i
 ihm: die Schlüsselrolle steht an der Aufrufstelle nicht, also bleiben drei
 rollenabhängige Familien beim Bauer stehen.
 
-**Neun Türen bleiben offen**, und jede hat einen geschriebenen Grund: zwei
-sind eine ausgesprochene Vertagung (ADR 0114 T4), eine ist die Geräteseite des
-Relay-Wegs, die `check-capability-reach` seit dem 2026-08-24 namentlich
-begründet stehen lässt, eine ist ein Angebot, das kein Home je sieht (Befund
-B38), und fünf sind die Rückruffamilie.
+**Acht Türen bleiben offen**, und jede hat einen geschriebenen Grund: zwei
+sind eine ausgesprochene Vertagung (ADR 0114 T4), eine ist ein Angebot, das
+kein Home je sieht (Befund B38), und fünf sind die Rückruffamilie.
+
+**Die neunte war der Postfachtausch, und sie ist am 2026-08-29 gegangen
+worden.** Ihr Grund war ein anderer als bei den übrigen: die Geräteseite des
+Relay-Wegs hat keinen Produktaufrufer, und `check-capability-reach` lässt sie
+namentlich begründet stehen — „nothing starts it because nothing starts the
+sweep below it". Das ändert der Weg nicht; er beantwortet die andere Hälfte,
+dass der Tausch *trägt*, wenn ihn jemand startet. Drei echte Prozesse sind
+daran beteiligt, und registriert wird vor dem Aushändigen: ein Gerät mit einer
+Adresse, die es beim Betreiber nicht gibt, schriebe ins Leere, und beide Seiten
+hielten den Tausch für gelungen.
 
 **Die fünf sind der interessante Rest**, und der Grund ist Befund B39: sie
 hängen an drei Regeln, die zusammen eine Sackgasse bilden. Ein Doppelgänger mit
