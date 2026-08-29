@@ -827,6 +827,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B40 — Einunddreißig von zweiundsechzig Fensterknöpfen sind nie ausgeführt
+worden, und das ist eine Zahl zu einer Grenze, die schon dasteht
+(2026-08-29).** `check-companion-boundary` sagt von sich selbst, was es nicht
+kann: „between a runtime method and its channel, and between a bridge function
+and a control, nothing checks". Gemessen: die Laufzeit des Fensters hat 62
+Methoden, und 31 davon ruft kein Realprozess-Weg je auf.
+
+**Das ist für die meisten nicht dasselbe wie unbegangen.** Die Wege *unter*
+ihnen laufen — Leserschaft beenden, ein zweites Pico aufnehmen, Host-Schlüssel
+wechseln, einen Raum anlegen: alle in einem Realprozess-Test, nur über die
+Client-Funktionen und nicht über das Objekt, das der Hauptprozess wirklich
+ruft. Zwei Familien sind die Ausnahme und auf keiner Schicht begangen: die
+Rückrufe (`keepRecall`, `forgetRecall`, `forgetMemory`, `keepAnsweredRead`),
+weil Befund B39 sie versperrt, und die fünf Relay-Betreiber-Methoden, die
+keinen Realprozess-Weg auf irgendeiner Ebene haben — dort gilt dieselbe
+Begründung, mit der `check-capability-reach` die Geräteseite des Relay-Wegs
+stehen lässt.
+
+Was zwischen Methode und Client-Funktion liegt, ist Klebstoff — aber nicht
+immer dünner:
+`endDomainRead` hat 35 Zeilen und sucht sich Domäne und Leser aus der Liste,
+die es selbst vom Home liest, weil das Fenster den Host-Schlüssel nicht
+behaupten können soll. `acceptOwnRenewal` hat 28, `admitHomeMember` 26.
+
+**Trotzdem nicht durchgegangen**, und der Grund ist die Kosten-Nutzen-Rechnung,
+nicht die Zeit: die beiden Fehler dieser Sitzung (B34, B36) sassen eine Schicht
+tiefer, im Companion und im Vault, und die Wege dorthin sind jetzt gegangen.
+Einunddreissig weitere Durchläufe mit echten Prozessen kosten Minuten pro Lauf
+für eine Schicht, die überwiegend weiterreicht. Die Zahl steht hier, damit die
+nächste Person sie nicht noch einmal ermitteln muss, und die drei grössten sind
+benannt, falls jemand die Rechnung anders macht.
+
 **B39 — Das eigene Modell auf der eigenen Maschine darf die eigenen Notizen
 nicht sehen (2026-08-28).** Gemessen beim Gehen der Modellfamilie, und die
 zweite Messung widerlegte die erste Erklärung. Drei Regeln greifen ineinander:
