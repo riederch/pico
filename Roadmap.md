@@ -827,6 +827,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B42 — „Ein Mensch, der gefragt hat, verdient die Antwort jetzt" — und wartet
+bis zu einer Minute (2026-08-29).** Beim Suchen nach einem Weg zur
+Rückruffamilie gefunden, im Code und nicht geraten. Der Rückruf-Vorgang lehnt
+*sofort* ab, wenn etwas nicht geht, und ADR 0116 W1 sagt warum: „The refusal
+happens here, before anything is queued, rather than as a job that fails at
+dispatch: a person who asked a question deserves the answer now." Kommt die
+Frage aber durch, wird sie in die Modellwarteschlange gelegt, und die einzige
+Stelle, die sie herausholt, ist ein Zeitgeber mit **sechzig Sekunden**
+(`modelJobSweepIntervalMs ?? 60_000`). Es gibt keinen zweiten Auslöser: kein
+Aufruf beim Einreihen, kein Wecken.
+
+**Widerspruch ist es keiner, Spannung schon.** Die Fläche ist ausdrücklich
+asynchron - `askRecall` gibt eine Vorgangsnummer zurück, und was fertig ist,
+liest man daneben. Nur ist der Satz, der die sofortige Ablehnung begründet,
+derselbe, der die Wartezeit fragwürdig macht: wer dasitzt und wartet, wartet im
+schlechtesten Fall eine Minute, bevor die Frage überhaupt losgeschickt wird,
+und im Leerlauf kostet ein Fegen nichts.
+
+**Nicht repariert, weil auch das eine Entscheidung ist.** Beim Einreihen zu
+fegen ist eine Zeile; was sie kostet, ist die Grenze, für die der Zeitgeber da
+ist - ein Schwall Fragen fegte dann pro Frage. Entweder eine Entprellung, ein
+kurzer erster Takt oder ein ausdrückliches „das dauert" in der Fläche.
+
+**Und es hängt an B39s letzten fünf Türen.** Über ein *behaltenes* Ergebnis
+eines Korpuslesens (`own_pico`) wäre die Rückruffamilie begehbar, ohne dass
+irgendetwas an ADR 0151 geändert würde - der Weg dorthin ist gebaut und
+bekannt: Depot anhängen, Regel auf `allow`, holen, lesen lassen, behalten,
+fragen. Er wartet nur zweimal auf denselben Zeitgeber, und zwei Minuten
+Leerlauf in einer Testmenge, die zweimal je Freigabe läuft, sind ein Preis,
+den diese Frage erst wert ist, wenn sie entschieden ist.
+
 **B41 — Die Foundation-Fläche ist zum ersten Mal gegen ein Home gefahren
 worden, und sie hielt (2026-08-29).** `apps/web/src/api.ts` trägt die
 Bedienoberfläche des Betreibers in zwanzig Funktionen, und `api.test.ts` prüft
@@ -1106,7 +1137,8 @@ hielten den Tausch für gelungen.
 **Die fünf sind der interessante Rest**, und der Grund ist Befund B39: sie
 hängen an drei Regeln, die zusammen eine Sackgasse bilden. Ein Doppelgänger mit
 TLS würde sie öffnen; Material mit nachgewiesenem Urheber nicht - das wurde
-gemessen und fiel anders aus als erwartet.
+gemessen und fiel anders aus als erwartet. Ein dritter Weg steht offen und
+wartet auf B42: über ein behaltenes Korpusergebnis, das `own_pico` trägt.
 
 **Ein Satz über diesen Punkt war zuerst falsch und wird hier
 zurückgenommen**, weil er einen Aufwand behauptete, den das Haus schon

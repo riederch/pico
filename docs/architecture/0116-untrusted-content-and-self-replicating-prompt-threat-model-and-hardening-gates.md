@@ -2,6 +2,25 @@
 
 ## Status
 
+Status note, 2026-08-29: **W1s Satz „a person who asked a question deserves the
+answer now" trägt die sofortige Ablehnung und nicht die Antwort** (Befund B42).
+
+Der Rückruf-Vorgang weist vier Dinge ab, bevor irgendetwas eingereiht wird -
+eine Domäne, die jemand nicht lesen darf, ein Anbieter, über den niemand
+entschieden hat, eine Frage, die dieses Home nicht trägt, und Material, das
+eine weitere Erlaubnis bräuchte -, und der zitierte Satz ist die Begründung
+dafür. Kommt die Frage durch, liegt sie in der Modellwarteschlange, und die
+einzige Stelle, die sie herausholt, ist ein Zeitgeber mit sechzig Sekunden.
+Einen zweiten Auslöser gibt es nicht.
+
+Kein Widerspruch: die Fläche ist ausdrücklich asynchron, `askRecall` gibt eine
+Vorgangsnummer zurück. Aber der Satz, der die Sofort-Ablehnung begründet, macht
+die Wartezeit zu einer Frage - und im Leerlauf kostet ein Fegen nichts. Beim
+Einreihen zu fegen ist eine Zeile; was sie kostet, ist genau die Grenze, für
+die der Zeitgeber da ist. Entprellung, kurzer erster Takt oder ein
+ausdrückliches „das dauert" in der Fläche sind drei Antworten, und keine davon
+gehört in einen Patch.
+
 Accepted as a security constraint, partially implemented. Opened by the
 user on 2026-08-01 as the security initiative against prompt-injection
 worms of the Morris II class. W1 and W2 are implemented: content that can
