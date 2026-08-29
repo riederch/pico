@@ -183,8 +183,13 @@ const arguedCoreNames = [
   ],
   [
     'condensePicoObservations',
-    'ADR 0129. The sibling of `appendPicoObservations`, which is itself an argued deferral: '
-      + 'no runtime with a sensor fills the buffer, so there is nothing to condense',
+    'ADR 0129, **und der Grund ist seit dem 2026-08-26 ein anderer** - der Satz hier sagte '
+      + 'bis zum 2026-08-29, kein Gerät mit Sensor fülle den Puffer, und das stimmte schon '
+      + 'seit drei Tagen nicht: `home.observations.submit` füllt ihn von einem Telefon aus, '
+      + 'am Gerät bewiesen und seit dem 2026-08-28 auch gegen ein laufendes Home gegangen. '
+      + 'Was fehlt, ist dasselbe wie bei `picoDeriveParkingCandidate` daneben: die zweite '
+      + 'Hälfte der Eingabe, die Bewegungsarten, und ohne den Übergang von fahrend zu gehend '
+      + 'verdichtet ein Lauf Messungen zu nichts, woran ein Ort zu erkennen wäre',
   ],
   [
     'openPicoTpm2AnchorCounter',
@@ -220,8 +225,14 @@ const arguedCoreNames = [
   ],
   [
     'createPicoVaultDaemonReaderAccessUnlockPort',
-    'ADR 0117. Reader access needs somebody holding a reader grant, and nothing in the '
-      + 'product issues one - the same absence that leaves ADR 0130 E5 half open',
+    'ADR 0117 mit ADR 0085. **Der Satz hier war überholt** und sagte bis zum 2026-08-29, '
+      + 'nichts im Produkt erteile eine Leserberechtigung, was ADR 0130 E5 halb offen lasse '
+      + '- beides hat am 2026-08-26 aufgehört zu stimmen, und seit dem 2026-08-27 trägt E5 '
+      + 'alle vier Bedienelemente. Ohne Aufrufer ist die Stelle trotzdem, aus dem engeren '
+      + 'Grund: die Besitzerin liest ihren eigenen Raum über den Umschlag, der ihr gehört, '
+      + 'und diesen Port braucht ein Gerät, das die Berechtigung *einer anderen Person* '
+      + 'hält. Genau dieser Fall bleibt offen, weil ADR 0085 verlangt, dass deren Gerät '
+      + 'binnen fünf Minuten wach ist',
   ],
   [
     'picoRecoveryCardQrPayload',
