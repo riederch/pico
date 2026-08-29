@@ -832,18 +832,26 @@ worden, und das ist eine Zahl zu einer Grenze, die schon dasteht
 (2026-08-29).** `check-companion-boundary` sagt von sich selbst, was es nicht
 kann: „between a runtime method and its channel, and between a bridge function
 and a control, nothing checks". Gemessen: die Laufzeit des Fensters hat 62
-Methoden, und 31 davon ruft kein Realprozess-Weg je auf.
+Methoden, und 31 davon rief kein Realprozess-Weg je auf. Nach der
+Relay-Familie unten sind es 26.
 
 **Das ist für die meisten nicht dasselbe wie unbegangen.** Die Wege *unter*
 ihnen laufen — Leserschaft beenden, ein zweites Pico aufnehmen, Host-Schlüssel
 wechseln, einen Raum anlegen: alle in einem Realprozess-Test, nur über die
 Client-Funktionen und nicht über das Objekt, das der Hauptprozess wirklich
-ruft. Zwei Familien sind die Ausnahme und auf keiner Schicht begangen: die
+ruft. Zwei Familien waren die Ausnahme und auf keiner Schicht begangen: die
 Rückrufe (`keepRecall`, `forgetRecall`, `forgetMemory`, `keepAnsweredRead`),
-weil Befund B39 sie versperrt, und die fünf Relay-Betreiber-Methoden, die
-keinen Realprozess-Weg auf irgendeiner Ebene haben — dort gilt dieselbe
-Begründung, mit der `check-capability-reach` die Geräteseite des Relay-Wegs
-stehen lässt.
+weil Befund B39 sie versperrt, und die fünf Relay-Betreiber-Methoden.
+
+**Die fünf sind noch am selben Tag gegangen worden**, weil sie das einzige
+Stück waren, das auf *keiner* Ebene lief, und weil sie einen Prozess kosten und
+nicht fünf: ein Relay beanspruchen, ein Konto ausstellen, es beenden, das Relay
+vergessen. Nichts daran berührt das Home — ein Relay zu betreiben ist ein
+anderer Hut als ein Pico zu haben, der Zugang liegt verschlüsselt neben dem
+Profil statt im Vault, und Vergessen ist eine Sache dieses Geräts, von der das
+Relay nichts erfährt. Der Schlüsselbund ist dabei ein Doppelgänger, und das
+steht im Test: geprüft ist der Ablauf, nicht dass ein echter Keyring den Zugang
+schützt.
 
 Was zwischen Methode und Client-Funktion liegt, ist Klebstoff — aber nicht
 immer dünner:
