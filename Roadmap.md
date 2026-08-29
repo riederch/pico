@@ -750,6 +750,53 @@ Companion postet versiegelte Umschläge an `${coreUrl}/api/home/link`, und diese
 Route trägt die Zugriffsklasse `link-intake` — weder Session noch Token, weil die
 Authentifizierung im Umschlag sitzt.
 
+### Offene Entscheidungen (Stand 2026-08-29)
+
+Vier Fragen, die aus den Durchläufen dieser Woche kommen und **nicht in einem
+Patch beantwortet werden können**, weil jede eine Regel verschiebt statt eine
+Zeile. Sie stehen hier zusammen, weil sie einzeln in ihren Befunden liegen und
+niemand sie dort nebeneinander sieht; die Befunde tragen die Messung, dieser
+Abschnitt nur die Frage und ihre Antwortmöglichkeiten.
+
+- **Darf eine wartende Frage sagen, woran sie hängt?** (Befund B37, ADR 0141.)
+  Zwei angehängte Depots erzeugen zwei Fragen mit demselben Satz und ohne ein
+  Feld, das sie unterscheidet — bei dem einen Effekt im Baum, der Code
+  installiert. Der Satz kommt aus dem Manifest, weil ihn die Seite schreiben
+  soll, die handelt, und nicht die, die profitiert (ADR 0139 AC4). *Antworten:*
+  einen Betreff neben den zugesagten Satz stellen, der nicht von der handelnden
+  Seite formuliert ist; oder es so lassen und sagen, dass zwei Depots eine
+  seltene Lage sind.
+
+- **Wer darf ein Depot nach etwas Neuerem fragen, und was heisst „neuer"?**
+  (Befund B38, ADR 0143.) Die Spalte, der Zustand, der Vergleich, die Annahme,
+  die Link-Operation und der Knopf sind gebaut; nur schreibt niemand die Spalte,
+  also antwortet die Annahme immer `no_offer_standing`. Der planmässige Lauf
+  darf nicht danach suchen — die ADR nennt ihn eine Instandsetzung —, und
+  DP1s fehlendes `branch`-Feld verbietet einem Ref zu folgen für das, was
+  *läuft*, nicht für das, was angeboten wird. *Antworten:* die Person, die
+  *jetzt holen* drückt, fragt auch nach dem Angebot; oder ein eigener,
+  selteneren Takt; oder es bleibt bis auf Weiteres unerreichbar und der Knopf
+  verschwindet.
+
+- **Darf das eigene Modell die eigenen Notizen sehen?** (Befund B39, ADR 0151
+  mit ADR 0116 W2.) Drei Regeln greifen ineinander, und `recall.ts` sagt in
+  seinem eigenen Kopf das Gegenteil dessen, was dabei herauskommt. *Antworten:*
+  Loopback als geschützten Transport anerkennen; einem erklärten eigenen Host
+  die weitere Erlaubnis ohne Zugang geben; oder — die einzige, die die Ursache
+  trifft — ADR 0116 W2 eine Schreibklasse geben, die die anwesende Person
+  wirklich nachweist.
+
+- **Wie schnell wird eine Frage losgeschickt?** (Befund B42, ADR 0116 W1.) Die
+  Ablehnung ist sofort, weil „a person who asked a question deserves the answer
+  now"; die Antwort wartet auf einen Zeitgeber mit sechzig Sekunden.
+  *Antworten:* beim Einreihen fegen, mit einer Entprellung gegen den Schwall;
+  ein kurzer erster Takt; oder die Fläche sagt ausdrücklich, dass es dauert.
+
+**Was an ihnen hängt.** B39 und B42 zusammen halten die letzten fünf der
+vierundfünfzig Link-Türen zu (Befund B36) und damit die Hälfte von ADR 0116s
+Rückrufweg; B38 hält eine sechste zu. B37 hält nichts auf und ist die
+billigste von den vieren.
+
 ### Phase 6 — die erste echte Nützlichkeit
 
 Hängt vollständig an Phase 3.
