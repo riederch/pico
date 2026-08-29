@@ -874,6 +874,42 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B44 — Vier bediente Routen, die niemand ruft, und der Prüfer nannte sie
+erreicht (2026-08-29).** Die Folge aus B43, von Hand nachgezählt und dann
+maschinell bestätigt. `check-surface-classes` sucht die *Adresse* eines
+Aufrufers und schneidet sie am ersten Parameter ab. Zwei Löcher folgen daraus:
+eine Adresse, die mehrere Verben bedient, wird von einem einzigen Aufrufer
+verbürgt; und eine Sammeladresse bürgt für alles, was hinter ihrem Parameter
+liegt.
+
+Beides ist jetzt enger, und nur so weit, wie es sicher geht: bei Adressen mit
+mehreren Verben wird in einem Fenster von zweihundert Zeichen um die Nennung
+nach dem Verb gesehen - findet sich gar keines, gilt die Route weiter als
+gerufen, denn ein Aufrufer, der seine Methode woanders herholt, beweist nichts
+—, und wo eine Route hinter dem Parameter weitergeht, muss dieses letzte Stück
+eigens genannt sein.
+
+**Vier Routen standen daraufhin bedient und ungerufen da**, dieselben vier, die
+die Handzählung gefunden hatte: `GET` und `DELETE /api/auth/session` - die
+Fläche hält ihre Sitzung im Speicher und meldet alles auf einmal ab, statt
+diesen einen Reiter - und `POST` und `DELETE /api/model/providers/:entryId/decision`,
+die Foundation-Zwillinge zweier Link-Vorgänge, die das Fenster vom Gerät der
+Person aus ruft. Alle vier sind jetzt begründet statt unbemerkt; die Zeile des
+Prüfers sagt 40 mit Aufrufer und 21 begründet, wo sie vorher 44 und 17 sagte.
+
+**Zwei bleiben unsichtbar, und das steht im Prüfer.** Eine Route, die nur aus
+Sammeladresse und Parameter besteht - `GET /api/memory/retention-policies/:id`
+neben ihrer Liste, `GET /api/memory/domains/:d/items/:id` neben ihrer -, hat
+kein eigenes Stück, an dem ein Muster sie festhalten könnte. Beide sind gelesen
+und beide haben keinen Aufrufer; sie stehen hier, weil ein Muster, das sie
+fände, auch Richtiges als falsch meldete.
+
+**Und das Pflanzen fand den Fehler, den das Schreiben nicht fand.** Das erste
+Argument für die Anbieter-Entscheidung war ein Präfix mit Verb - genau genug
+aussehend - und stellte prompt `POST …/narrowing` mit stumm, eine Route, die
+gerufen wird. Ein Argument, das eine einzelne Route meint, nennt sie jetzt
+ganz.
+
 **B43 — Siebenundzwanzig von einundsechzig Routen haben je einen echten Prozess
 geantwortet, und ein Aufrufer bürgt für drei Verben (2026-08-29).** Dieselbe
 Mitschrift wie bei den Link-Vorgängen, eine Fläche darüber: das gebaute Home
