@@ -4,6 +4,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { RealtimeMessage } from './types.js';
+import { realtimeMessageType } from './protocol-values.js';
+import { connectRealtime } from './websocket.js';
 import {
   changeOperatorPassphrase,
   createRetentionPolicy,
@@ -301,5 +304,66 @@ describe('the Foundation surface against a running Home', () => {
     expect(revoked.revokedSessions).toBeGreaterThan(0);
     await expect(listRetentionPolicies(home.baseUrl, { operatorSession: second }))
       .rejects.toThrow();
+  }, 180_000);
+
+  /**
+   * ADR 0039 mit ADR 0030. Der Ereignisstrom, die eine Hälfte dieser Fläche,
+   * die keine Frage-und-Antwort ist.
+   *
+   * `websocket.test.ts` prüft heute nur den URL-Bau; `connectRealtime` selbst
+   * hatte keinen Test und hat noch nie eine Verbindung hergestellt. Das ist
+   * dieselbe Lage wie bei den zwanzig Funktionen daneben, nur schärfer: hier
+   * wird nicht einmal behauptet, *was* geschickt wird.
+   *
+   * Ein Browser kann bei einem WebSocket-Handschlag keine Kopfzeile setzen,
+   * also legt er ein kurzlebiges Einwegticket in die Adresse. Der Weg zieht
+   * eines, verbindet sich damit, löst am Home ein Ereignis aus und wartet, bis
+   * es ankommt - womit auch die Form geprüft ist, die der Leser hier erwartet:
+   * eine Nachricht, die er nicht versteht, wirft er weg, und ohne diesen
+   * Durchlauf sähe das genauso aus wie ein Home, das schweigt.
+   */
+  it('zieht ein Ticket, hört zu und bekommt ein Ereignis', async () => {
+    const home = await startHome();
+    await bootstrapOperator(home);
+    const access = { operatorSession: await loginOperator(home.baseUrl, OPERATOR_PASSPHRASE) };
+    const ticket = await mintRealtimeTicket(home.baseUrl, access);
+
+    const messages: RealtimeMessage[] = [];
+    let opened = false;
+    let closed = false;
+    const errors: string[] = [];
+    const client = connectRealtime({
+      baseUrl: home.baseUrl,
+      ticket,
+      onOpen: () => { opened = true; },
+      onClose: () => { closed = true; },
+      onError: (message) => { errors.push(message); },
+      onMessage: (message) => { messages.push(message); },
+    });
+
+    try {
+      await waitFor(() => opened, 'realtime_open');
+      expect(errors).toEqual([]);
+
+      // Etwas, das dieses Home als Ereignis anhängt und weitersagt.
+      await setModuleCapture(home.baseUrl, access, {
+        identifier: 'spatial-recall',
+        capturing: true,
+      });
+
+      await waitFor(
+        () => messages.some((message) => message.type === realtimeMessageType.eventCreated),
+        `realtime_event:${JSON.stringify(messages)}`,
+      );
+      const created = messages.find(
+        (message) => message.type === realtimeMessageType.eventCreated,
+      );
+      expect(created).toBeDefined();
+    } finally {
+      client.close();
+    }
+
+    // Und das Zumachen ist auch eine Aussage: die Fläche erfährt es.
+    await waitFor(() => closed, 'realtime_close');
   }, 180_000);
 });
