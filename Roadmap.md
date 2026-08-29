@@ -874,6 +874,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B43 — Siebenundzwanzig von einundsechzig Routen haben je einen echten Prozess
+geantwortet, und ein Aufrufer bürgt für drei Verben (2026-08-29).** Dieselbe
+Mitschrift wie bei den Link-Vorgängen, eine Fläche darüber: das gebaute Home
+schreibt für die Dauer eines Laufs mit, welche Route mit welchem Status
+antwortet, und gefahren werden die Web- und die Companion-Shell-Testmenge.
+
+Von 61 bedienten Routen haben **27** einem getrennten Prozess mit einem Erfolg
+geantwortet. Von den 34 übrigen sind **21** in `check-surface-classes`
+namentlich als aufruferlos begründet — meist, weil die Tür in Gebrauch der
+Link-Zwilling ist. Bleiben **dreizehn, die einen Aufrufer haben und noch nie
+angenommen wurden**, darunter das Abmelden, der Sitzungsblick, das Lesen einer
+einzelnen Erinnerung, die Mitgliedschaftsrouten und die beiden
+Anbieter-Entscheidungen der Betreiberfläche.
+
+**Und beim Nachzählen fiel eine Schwäche des Prüfers auf, die er nicht
+aussprach.** Er sucht die *Adresse* eines Aufrufers, nicht sein Verb. Fünfzehn
+Adressen dieses Homes werden von mehr als einem Verb bedient —
+dreiunddreissig Routen zusammen —, und für sie bürgt ein einziger Aufrufer für
+alle: wer `POST /api/auth/session` ruft, lässt `GET` und `DELETE` darauf als
+erreicht gelten. Enger gemacht wird es nicht, und das ist eine Entscheidung mit
+Grund: ein Fenster um die Adresse herum nach `method:` abzusuchen meldete
+Routen als unerreicht, die es nicht sind, und ein falsches Rot in einem Tor
+kostet mehr als ein benanntes Loch. Die Grenze steht jetzt im Prüfer, mit der
+Zahl daneben.
+
+**Ein abgelaufenes Argument dabei gefunden und ersetzt.** Die
+Reader-Custody-Routen waren damit begründet, „nothing in the product writes
+reader-custody content" — was am 2026-08-26 aufhörte zu stimmen, als das
+Fenster genau das bekam. Die Folgerung hielt, die Begründung nicht; sie heisst
+jetzt, was wahr ist: es ist der Foundation-Transport für Aufzeichnungen, die
+das Produkt über Link trägt.
+
 **B42 — „Ein Mensch, der gefragt hat, verdient die Antwort jetzt" — und wartet
 bis zu einer Minute (2026-08-29).** Beim Suchen nach einem Weg zur
 Rückruffamilie gefunden, im Code und nicht geraten. Der Rückruf-Vorgang lehnt
