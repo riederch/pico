@@ -368,10 +368,12 @@ const arguedRoutes = [
   },
   {
     prefix: '/api/home/reader-custody/',
-    why: 'ADR 0086/0117. The writer half: nothing in the product writes reader-custody '
-      + 'content, so a writer grant would authorise a writer that does not exist. The reader '
-      + 'half of the same family *is* reached, over the authority resources the Link '
-      + 'reachability check counts',
+    why: 'ADR 0086/0117 with ADR 0130 E5. The Foundation transport of records the product '
+      + 'carries over Link instead: the window creates a reader-custody space, writes into '
+      + 'it, lets a second device in and rotates the lock, and every one of those goes '
+      + 'through an authority resource rather than through these routes. The argument here '
+      + 'said until 2026-08-29 that nothing in the product writes reader-custody content, '
+      + 'which stopped being true on 2026-08-26',
   },
   {
     prefix: '/api/auth/bootstrap',
@@ -435,6 +437,21 @@ for (const route of registered) {
    * `/api/auth/sessions` four lines away - one route standing in for another
    * by being a prefix of it, which is exactly the confusion this direction
    * exists to catch.
+   */
+  /**
+   * **Und die Methode steht hier nicht drin, was gesagt gehört.**
+   *
+   * Gesucht wird die Adresse; welches Verb ein Aufrufer darauf schickt, steht
+   * in seinem Quelltext ein paar Zeichen daneben und lässt sich nicht
+   * verlässlich daran binden. Fünfzehn Adressen dieses Homes werden von mehr
+   * als einem Verb bedient (dreiunddreissig Routen zusammen), und für sie
+   * bürgt ein einziger Aufrufer für alle: wer `POST /api/auth/session` ruft,
+   * lässt auch `GET` und `DELETE` darauf als erreicht gelten.
+   *
+   * Nicht enger gemacht, weil enger hier falscher wäre: ein Fenster um die
+   * Adresse herum nach `method:` abzusuchen, meldete Routen als unerreicht,
+   * die es nicht sind, und ein falsches Rot in einem Tor kostet mehr als ein
+   * benanntes Loch. Gemessen am 2026-08-29 und in Befund B43 festgehalten.
    */
   const named = new RegExp(
     `${stem.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![A-Za-z0-9_-])`,
