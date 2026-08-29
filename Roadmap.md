@@ -827,6 +827,43 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B41 — Die Foundation-Fläche ist zum ersten Mal gegen ein Home gefahren
+worden, und sie hielt (2026-08-29).** `apps/web/src/api.ts` trägt die
+Bedienoberfläche des Betreibers in zwanzig Funktionen, und `api.test.ts` prüft
+sie zweiundzwanzigmal gegen ein ausgetauschtes `fetch` — es hält fest, *was*
+geschickt wird, und das ist die Aussage, die auf der Companion-Seite dreimal
+nicht gereicht hat (B31, B34, B36). Keine der zwanzig war je gegen einen
+echten Prozess gefahren.
+
+Neunzehn sind es jetzt, in der Ordnung, in der eine Person sie benutzt:
+anmelden, nachsehen, Verschlüsselung entscheiden, ein Modul abschalten und die
+Aufzeichnung einschalten, eine Aufbewahrungsregel anlegen, ändern und löschen,
+einen Termin anlegen und im Raum wiederfinden, die Modellanbieter lesen, das
+Relay-Konto entscheiden, ein Ticket ziehen, schreddern, das Kennwort wechseln
+und alle Sitzungen beenden — auch die, die den Widerruf geschickt hat. Die
+zwanzigste (`narrowModelProvider`) braucht einen gemessenen Anbieter und wartet
+mit der Rückruffamilie auf B39.
+
+**Kein Fehler. Das ist das Ergebnis**, und es ist eines: dieselbe Methode hat
+auf der Companion-Seite vier gefunden. Was hier passierte, war dreimal ein
+*Nein mit Grund*, und jedes davon hat den Weg besser gemacht statt ihn
+aufzuhalten:
+
+- Die Verschlüsselungsentscheidung ändert `enabled` nicht, sondern `decided` —
+  der Schlüsselspeicher steht, bevor die Datenbank offen ist, also gilt sie
+  beim nächsten Start. Der Weg hält jetzt genau das fest.
+- Ein Home ohne Relay-Konto hat kein `decided: false`, sondern gar kein Feld.
+  Abwesenheit ist Abwesenheit (ADR 0118 O4).
+- Schreddern lehnt ab, solange der Inhalt im Klartext liegt: Schlüssel zu
+  zerstören schützt nichts, wo nichts damit verschlossen ist — und das ist
+  genau der Zustand einer Person, die die Verschlüsselung eben erst
+  eingeschaltet hat.
+
+Wo das Risiko wirklich sass, sagt der Vergleich damit deutlicher als jede
+Vermutung: nicht in der Fläche, die über gewöhnliches HTTP mit einem Home
+spricht, sondern dort, wo ein Client Aufzeichnungen *unterschreibt* und ein
+Home sie Zeichen für Zeichen vergleicht.
+
 **B40 — Einunddreißig von zweiundsechzig Fensterknöpfen sind nie ausgeführt
 worden, und das ist eine Zahl zu einer Grenze, die schon dasteht
 (2026-08-29).** `check-companion-boundary` sagt von sich selbst, was es nicht
