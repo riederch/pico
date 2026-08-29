@@ -16,7 +16,7 @@ import {
 } from '@pico/vault-daemon';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { writePicoCompanionProfile } from '@pico/companion';
+import { writePicoCompanionProfile, type PicoCompanionProfile } from '@pico/companion';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionPresentation } from './contract.js';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
@@ -295,48 +295,12 @@ describe('Electron-hosted companion runtime against real processes', () => {
    */
   it('liest die Listen des Fensters, stimmt einem Modul zu und entscheidet eine Regel', async () => {
     const core = await startCore();
-    const living = await startDaemon('pico-companion-suppliers-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-suppliers-' });
 
-    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
-    writePicoCompanionProfile(profilePath, {
-      schema: 'pico.companion.profile.v1',
-      coreUrl: core.linkBaseUrl,
-      home: {
-        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
-      },
-      host: core.host,
-      identity: {
-        keyFingerprintHex: identity.keyFingerprintHex,
-        publicKeyHex: identity.publicKeyHex,
-      },
-      device: {
-        signingKeyFingerprintHex: signing.keyFingerprintHex,
-        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
-      },
-    });
-    const runtime = await startPicoCompanionShellRuntime({
-      profilePath,
-      vaultSocketPath: living.socketPath,
-      sodium,
-      notifications: createPicoCompanionPresentationAdapter({
-        present: () => {},
-        notify: () => {},
-      }),
+    const { runtime } = await runtimeFor({
+      core,
+      living,
+      delegationId,
     });
 
     try {
@@ -435,21 +399,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
     });
     expect(recorded.status, await recorded.clone().text()).toBe(201);
 
-    const living = await startDaemon('pico-companion-due-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-due-' });
 
     const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
     writePicoCompanionProfile(profilePath, {
@@ -466,7 +416,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
       device: {
         signingKeyFingerprintHex: signing.keyFingerprintHex,
         keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+        delegationId,
       },
     });
     const notified: PicoCompanionPresentation[] = [];
@@ -533,21 +483,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
    */
   it('schreibt Messungen erst auf, wenn jemand der Aufzeichnung zugestimmt hat', async () => {
     const core = await startCore();
-    const living = await startDaemon('pico-companion-observations-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-observations-' });
 
     const daemonClient = await connectPicoVaultDaemonClient({ socketPath: living.socketPath });
     await daemonClient.hello();
@@ -561,7 +497,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
         identityPublicKeyHex: identity.publicKeyHex,
         deviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
         deviceKeyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+        delegationId,
       },
     });
 
@@ -637,48 +573,12 @@ describe('Electron-hosted companion runtime against real processes', () => {
    */
   it('hängt ein Depot an, entscheidet sein Hinausgreifen und hängt es wieder ab', async () => {
     const core = await startCore();
-    const living = await startDaemon('pico-companion-depot-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-depot-' });
 
-    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
-    writePicoCompanionProfile(profilePath, {
-      schema: 'pico.companion.profile.v1',
-      coreUrl: core.linkBaseUrl,
-      home: {
-        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
-      },
-      host: core.host,
-      identity: {
-        keyFingerprintHex: identity.keyFingerprintHex,
-        publicKeyHex: identity.publicKeyHex,
-      },
-      device: {
-        signingKeyFingerprintHex: signing.keyFingerprintHex,
-        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
-      },
-    });
-    const runtime = await startPicoCompanionShellRuntime({
-      profilePath,
-      vaultSocketPath: living.socketPath,
-      sodium,
-      notifications: createPicoCompanionPresentationAdapter({
-        present: () => {},
-        notify: () => {},
-      }),
+    const { runtime } = await runtimeFor({
+      core,
+      living,
+      delegationId,
     });
 
     // Eine Adresse und ein Commit, und `file://` ist eine Adresse: sie nennt
@@ -742,48 +642,12 @@ describe('Electron-hosted companion runtime against real processes', () => {
    */
   it('bittet um einen Abruf, wird gefragt und antwortet nein', async () => {
     const core = await startCore();
-    const living = await startDaemon('pico-companion-fetch-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-fetch-' });
 
-    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
-    writePicoCompanionProfile(profilePath, {
-      schema: 'pico.companion.profile.v1',
-      coreUrl: core.linkBaseUrl,
-      home: {
-        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
-      },
-      host: core.host,
-      identity: {
-        keyFingerprintHex: identity.keyFingerprintHex,
-        publicKeyHex: identity.publicKeyHex,
-      },
-      device: {
-        signingKeyFingerprintHex: signing.keyFingerprintHex,
-        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
-      },
-    });
-    const runtime = await startPicoCompanionShellRuntime({
-      profilePath,
-      vaultSocketPath: living.socketPath,
-      sodium,
-      notifications: createPicoCompanionPresentationAdapter({
-        present: () => {},
-        notify: () => {},
-      }),
+    const { runtime } = await runtimeFor({
+      core,
+      living,
+      delegationId,
     });
 
     const remote = 'file:///srv/depots/bridges';
@@ -925,48 +789,12 @@ describe('Electron-hosted companion runtime against real processes', () => {
     const remote = `file://${depot}`;
 
     const core = await startCore();
-    const living = await startDaemon('pico-companion-supplier-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-supplier-' });
 
-    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
-    writePicoCompanionProfile(profilePath, {
-      schema: 'pico.companion.profile.v1',
-      coreUrl: core.linkBaseUrl,
-      home: {
-        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
-      },
-      host: core.host,
-      identity: {
-        keyFingerprintHex: identity.keyFingerprintHex,
-        publicKeyHex: identity.publicKeyHex,
-      },
-      device: {
-        signingKeyFingerprintHex: signing.keyFingerprintHex,
-        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
-      },
-    });
-    const runtime = await startPicoCompanionShellRuntime({
-      profilePath,
-      vaultSocketPath: living.socketPath,
-      sodium,
-      notifications: createPicoCompanionPresentationAdapter({
-        present: () => {},
-        notify: () => {},
-      }),
+    const { runtime } = await runtimeFor({
+      core,
+      living,
+      delegationId,
     });
     const session = 'pico-shell-supplier-session';
 
@@ -1107,23 +935,10 @@ describe('Electron-hosted companion runtime against real processes', () => {
     });
     expect(recorded.status, await recorded.clone().text()).toBe(201);
 
-    const living = await startDaemon('pico-companion-model-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: Record<string, unknown> & {
-          record: { delegationId: string };
-        };
-      };
-    };
+    const { living, delegationId, signedDelegation } = await foundedDevice({
+      core,
+      prefix: 'pico-companion-model-',
+    });
 
     /**
      * Und dieselbe Notiz noch einmal, diesmal von einer nachgewiesenen Person.
@@ -1134,7 +949,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
     const session = await openIdentitySession({
       daemon: living,
       core,
-      delegation: founding.foundingRecord.firstDeviceDelegation,
+      delegation: signedDelegation,
     });
     const mine = await fetch(`${core.apiBaseUrl}/api/events`, {
       method: 'POST',
@@ -1154,32 +969,10 @@ describe('Electron-hosted companion runtime against real processes', () => {
     });
     expect(mine.status, await mine.clone().text()).toBe(201);
 
-    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
-    writePicoCompanionProfile(profilePath, {
-      schema: 'pico.companion.profile.v1',
-      coreUrl: core.linkBaseUrl,
-      home: {
-        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
-      },
-      host: core.host,
-      identity: {
-        keyFingerprintHex: identity.keyFingerprintHex,
-        publicKeyHex: identity.publicKeyHex,
-      },
-      device: {
-        signingKeyFingerprintHex: signing.keyFingerprintHex,
-        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
-      },
-    });
-    const runtime = await startPicoCompanionShellRuntime({
-      profilePath,
-      vaultSocketPath: living.socketPath,
-      sodium,
-      notifications: createPicoCompanionPresentationAdapter({
-        present: () => {},
-        notify: () => {},
-      }),
+    const { runtime } = await runtimeFor({
+      core,
+      living,
+      delegationId,
     });
 
     try {
@@ -1322,49 +1115,13 @@ describe('Electron-hosted companion runtime against real processes', () => {
   it('beansprucht ein Relay, stellt ein Konto aus und nimmt beides zurück', async () => {
     const relay = await startRelay();
     const core = await startCore();
-    const living = await startDaemon('pico-companion-relay-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-relay-' });
 
-    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
-    writePicoCompanionProfile(profilePath, {
-      schema: 'pico.companion.profile.v1',
-      coreUrl: core.linkBaseUrl,
-      home: {
-        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
-      },
-      host: core.host,
-      identity: {
-        keyFingerprintHex: identity.keyFingerprintHex,
-        publicKeyHex: identity.publicKeyHex,
-      },
-      device: {
-        signingKeyFingerprintHex: signing.keyFingerprintHex,
-        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
-      },
-    });
-    const runtime = await startPicoCompanionShellRuntime({
-      profilePath,
-      vaultSocketPath: living.socketPath,
-      sodium,
+    const { runtime } = await runtimeFor({
+      core,
+      living,
+      delegationId,
       platformSecrets: standInKeystore(),
-      notifications: createPicoCompanionPresentationAdapter({
-        present: () => {},
-        notify: () => {},
-      }),
     });
 
     try {
@@ -1503,21 +1260,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
       PICO_LINK_RELAY_OPERATOR: 'relay.example.test',
       PICO_LINK_RELAY_ACCOUNT_ID: accountCredential,
     });
-    const living = await startDaemon('pico-companion-mailbox-', [
-      ['pico_identity', identity],
-      ['device_signing', signing],
-      ['device_key_agreement', agreement],
-    ]);
-    await startApprover(living, 'pico_identity', identity, identityPassphrase);
-    await startApprover(living, 'device_signing', signing, signingPassphrase);
-    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
-    const founded = await runFounding(living, core);
-    expect(founded.code, founded.stderr).toBe(0);
-    const founding = JSON.parse(founded.stdout) as {
-      foundingRecord: {
-        firstDeviceDelegation: { record: { delegationId: string } };
-      };
-    };
+    const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-mailbox-' });
 
     const daemonClient = await connectPicoVaultDaemonClient({ socketPath: living.socketPath });
     await daemonClient.hello();
@@ -1531,24 +1274,10 @@ describe('Electron-hosted companion runtime against real processes', () => {
         identityPublicKeyHex: identity.publicKeyHex,
         deviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
         deviceKeyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+        delegationId,
       },
     });
-    const profile = {
-      schema: 'pico.companion.profile.v1' as const,
-      coreUrl: core.linkBaseUrl,
-      home: { homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex },
-      host: core.host,
-      identity: {
-        keyFingerprintHex: identity.keyFingerprintHex,
-        publicKeyHex: identity.publicKeyHex,
-      },
-      device: {
-        signingKeyFingerprintHex: signing.keyFingerprintHex,
-        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
-        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
-      },
-    };
+    const profile = profileFor(core, delegationId);
 
     try {
       const exchanged = await exchangePicoCompanionLinkMailbox({
@@ -2015,6 +1744,91 @@ function standInKeystore(): PicoCompanionPlatformSecretPort {
     encryptString: (plainText) => Buffer.from(`stand-in:${plainText}`, 'utf8'),
     decryptString: (encrypted) => Buffer.from(encrypted).toString('utf8').replace(/^stand-in:/u, ''),
   };
+}
+
+/**
+ * Ein gegründetes Gerät: ein Daemon mit den drei Schlüsseln, drei Zusagen und
+ * die Gründungszeremonie über Link.
+ *
+ * Herausgehoben, weil derselbe Block hier zehnmal stand. Eine Wahrheit, die
+ * zehnmal geschrieben ist, driftet - und das Erste, was driftet, ist die Frage,
+ * ob zwei Wege dasselbe Gerät meinen.
+ */
+async function foundedDevice(input: {
+  core: RunningCore;
+  prefix: string;
+}): Promise<{ living: RunningDaemon; delegationId: string; signedDelegation: Record<string, unknown> }> {
+  const living = await startDaemon(input.prefix, [
+    ['pico_identity', identity],
+    ['device_signing', signing],
+    ['device_key_agreement', agreement],
+  ]);
+  await startApprover(living, 'pico_identity', identity, identityPassphrase);
+  await startApprover(living, 'device_signing', signing, signingPassphrase);
+  await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+  const founded = await runFounding(living, input.core);
+  expect(founded.code, founded.stderr).toBe(0);
+  const founding = JSON.parse(founded.stdout) as {
+    foundingRecord: {
+      firstDeviceDelegation: Record<string, unknown> & { record: { delegationId: string } };
+    };
+  };
+  return {
+    living,
+    delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+    signedDelegation: founding.foundingRecord.firstDeviceDelegation,
+  };
+}
+
+/** Das Profil, das dieses Gerät über sein Home führt. */
+function profileFor(core: RunningCore, delegationId: string): PicoCompanionProfile {
+  return {
+    schema: 'pico.companion.profile.v1',
+    coreUrl: core.linkBaseUrl,
+    home: { homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex },
+    host: core.host,
+    identity: {
+      keyFingerprintHex: identity.keyFingerprintHex,
+      publicKeyHex: identity.publicKeyHex,
+    },
+    device: {
+      signingKeyFingerprintHex: signing.keyFingerprintHex,
+      keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+      delegationId,
+    },
+  };
+}
+
+/**
+ * Die Laufzeit des Fensters über einem gegründeten Gerät.
+ *
+ * Getrennt vom Gründen, weil zwischen beiden etwas passieren darf - eine
+ * Notiz, die einer nachgewiesenen Person gehört, braucht eine Sitzung, und die
+ * gibt es erst nach der Gründung.
+ */
+async function runtimeFor(input: {
+  core: RunningCore;
+  living: RunningDaemon;
+  delegationId: string;
+  platformSecrets?: PicoCompanionPlatformSecretPort;
+  notify?: (state: PicoCompanionPresentation) => void;
+}): Promise<{
+  runtime: Awaited<ReturnType<typeof startPicoCompanionShellRuntime>>;
+  profilePath: string;
+}> {
+  const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+  writePicoCompanionProfile(profilePath, profileFor(input.core, input.delegationId));
+  const runtime = await startPicoCompanionShellRuntime({
+    profilePath,
+    vaultSocketPath: input.living.socketPath,
+    sodium,
+    ...(input.platformSecrets === undefined ? {} : { platformSecrets: input.platformSecrets }),
+    notifications: createPicoCompanionPresentationAdapter({
+      present: () => {},
+      notify: (state) => { input.notify?.(state); },
+    }),
+  });
+  return { runtime, profilePath };
 }
 
 async function runFounding(
