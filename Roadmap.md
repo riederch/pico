@@ -874,6 +874,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B45 — Ein Argument ist ein Satz von damals, und drei waren abgelaufen
+(2026-08-29).** Die Tore dieses Hauses lassen eine Lücke stehen, wenn jemand
+sie *begründet* — rund vierzig solcher Sätze stehen verteilt in
+`check-surface-classes`, `check-capability-reach`, `check-store-writers` und
+`check-link-reachability`. Jeder war wahr, als er geschrieben wurde. Gelesen
+wird keiner wieder, und ein Tor kann Prosa nicht prüfen.
+
+Beim Nachlesen aller vierzig waren drei überholt, und alle drei am selben
+Datum: dem 2026-08-26, als das Fenster den Schreibweg für Reader-Custody bekam
+und die Sonde den Beobachtungspuffer zu füllen anfing.
+
+- Die Reader-Custody-Routen waren damit begründet, „nothing in the product
+  writes reader-custody content".
+- `condensePicoObservations` damit, kein Gerät mit Sensor fülle den Puffer.
+- `createPicoVaultDaemonReaderAccessUnlockPort` damit, nichts im Produkt
+  erteile eine Leserberechtigung, was ADR 0130 E5 halb offen lasse.
+
+**Alle drei Folgerungen hielten; keine der drei Begründungen tat es.** Das ist
+der unangenehme Teil: eine Lücke, die aus dem falschen Grund offen steht, sieht
+genauso aus wie eine, die aus dem richtigen offen steht — bis jemand den Grund
+nachliest. Bemerkenswert daneben: ein *viertes* Argument über genau dieselbe
+Tatsache, in `check-store-writers` über `deletePicoObservations`, war am
+2026-08-26 mitgezogen worden. Dieselbe Wahrheit stand an zwei Stellen, eine
+wurde nachgeführt und eine nicht.
+
+**Kein Tor dafür.** Ein Datum je Argument zu verlangen und nach ein paar
+Monaten zu warnen, erzeugte Lärm über Sätze, die noch stimmen. Was tatsächlich
+geholfen hat, war billiger und steht schon in der Arbeitsweise: ein Durchlauf
+durch eine Gegend macht ihre veralteten Sätze sichtbar. Alle drei fielen bei
+Arbeiten auf, die zufällig daneben lagen — deshalb steht hier die Beobachtung
+und keine Maschine.
+
 **B44 — Vier bediente Routen, die niemand ruft, und der Prüfer nannte sie
 erreicht (2026-08-29).** Die Folge aus B43, von Hand nachgezählt und dann
 maschinell bestätigt. `check-surface-classes` sucht die *Adresse* eines
