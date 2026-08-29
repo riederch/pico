@@ -17,6 +17,7 @@ import {
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { writePicoCompanionProfile } from '@pico/companion';
+import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionPresentation } from './contract.js';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
 import { submitPicoCompanionObservations } from '@pico/companion/observations';
@@ -24,6 +25,7 @@ import { startPicoCompanionShellRuntime } from './runtime.js';
 
 const CLI = join(import.meta.dirname, '..', '..', 'vault-daemon', 'dist', 'cli.js');
 const CORE = join(import.meta.dirname, '..', '..', 'core', 'dist', 'index.js');
+const RELAY = join(import.meta.dirname, '..', '..', 'relay', 'dist', 'main.js');
 const identityPassphrase = 'companion shell identity passphrase';
 const signingPassphrase = 'companion shell signing passphrase';
 const agreementPassphrase = 'companion shell agreement passphrase';
@@ -1292,6 +1294,149 @@ describe('Electron-hosted companion runtime against real processes', () => {
       await modelHost.close();
     }
   }, 300_000);
+
+  /**
+   * ADR 0154 RO1/RO3/RO5. Ein Relay beanspruchen, ein Konto ausstellen, es
+   * beenden und das Relay wieder vergessen — vom Fenster aus, gegen ein
+   * laufendes Relay.
+   *
+   * **Warum gerade diese fünf.** Befund B40 hat gezählt, welche der
+   * zweiundsechzig Fenstermethoden nie ein Realprozess-Weg aufruft: 31, und für
+   * die meisten läuft der Weg *darunter* trotzdem. Die Relay-Betreiber-Familie
+   * ist die Ausnahme — sie war auf keiner Schicht gegangen. `apps/relay` hat
+   * einen eigenen Realprozess-Test, aber der treibt das Relay über HTTP von
+   * Hand; was hier zum ersten Mal fährt, ist der Weg, den eine Person nimmt.
+   *
+   * **Ein Relay zu betreiben ist ein anderer Hut als ein Pico zu haben**, und
+   * das ist an diesem Weg zu sehen: nichts davon berührt das Home. Der Zugang
+   * liegt verschlüsselt neben dem Profil, nicht im Vault — er gehört diesem
+   * Gerät und keiner Identität —, und `forgetRelay` nimmt die Zeile hier weg,
+   * ohne dem Relay etwas zu sagen.
+   *
+   * Der Schlüsselbund ist ein Doppelgänger, und das ist die Grenze dieses Wegs:
+   * geprüft wird der Ablauf und nicht, dass ein echter Keyring den Zugang
+   * schützt. Was der echte tut, misst `companion:release-check` an anderer
+   * Stelle.
+   */
+  it('beansprucht ein Relay, stellt ein Konto aus und nimmt beides zurück', async () => {
+    const relay = await startRelay();
+    const core = await startCore();
+    const living = await startDaemon('pico-companion-relay-', [
+      ['pico_identity', identity],
+      ['device_signing', signing],
+      ['device_key_agreement', agreement],
+    ]);
+    await startApprover(living, 'pico_identity', identity, identityPassphrase);
+    await startApprover(living, 'device_signing', signing, signingPassphrase);
+    await startApprover(living, 'device_key_agreement', agreement, agreementPassphrase);
+    const founded = await runFounding(living, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const founding = JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    };
+
+    const profilePath = join(tempDirectory('pico-companion-profile-'), 'profile.json');
+    writePicoCompanionProfile(profilePath, {
+      schema: 'pico.companion.profile.v1',
+      coreUrl: core.linkBaseUrl,
+      home: {
+        homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+      },
+      host: core.host,
+      identity: {
+        keyFingerprintHex: identity.keyFingerprintHex,
+        publicKeyHex: identity.publicKeyHex,
+      },
+      device: {
+        signingKeyFingerprintHex: signing.keyFingerprintHex,
+        keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId: founding.foundingRecord.firstDeviceDelegation.record.delegationId,
+      },
+    });
+    const runtime = await startPicoCompanionShellRuntime({
+      profilePath,
+      vaultSocketPath: living.socketPath,
+      sodium,
+      platformSecrets: standInKeystore(),
+      notifications: createPicoCompanionPresentationAdapter({
+        present: () => {},
+        notify: () => {},
+      }),
+    });
+
+    try {
+      expect(await runtime.readRelays()).toEqual([]);
+
+      expect(await runtime.claimRelay({
+        baseUrl: relay.operatorBaseUrl,
+        claimCode: relay.claimCode,
+      })).toEqual({ operator: 'relay.example.test' });
+
+      /**
+       * Ein zweites Beanspruchen desselben Relays wird hier abgelehnt und nicht
+       * erst dort: zwei Zeilen für eine Maschine wären zwei Zugänge für einen
+       * Betreiber, und der Code ist ohnehin verbraucht.
+       */
+      await expect(runtime.claimRelay({
+        baseUrl: relay.operatorBaseUrl,
+        claimCode: relay.claimCode,
+      })).rejects.toThrow('relay_already_claimed_here');
+
+      const claimed = await runtime.readRelays();
+      expect(claimed).toHaveLength(1);
+      expect(claimed[0]).toMatchObject({
+        baseUrl: relay.operatorBaseUrl,
+        operator: 'relay.example.test',
+        accounts: [],
+      });
+
+      /**
+       * ADR 0154 RO3. Der Zugang kommt einmal zurück und wird nirgends
+       * behalten - die Liste danach kennt das Konto und nicht sein Geheimnis.
+       */
+      const account = await runtime.createRelayAccount({
+        baseUrl: relay.operatorBaseUrl,
+        mailboxQuota: 4,
+        maxCapacity: 16,
+      });
+      expect(account.credential).not.toBe('');
+      expect(account.accountRef).not.toBe('');
+
+      const withAccount = await runtime.readRelays();
+      expect(withAccount[0]?.accounts).toEqual([
+        expect.objectContaining({
+          accountRef: account.accountRef,
+          status: 'active',
+          mailboxQuota: 4,
+          maxCapacity: 16,
+          openMailboxes: 0,
+        }),
+      ]);
+      expect(JSON.stringify(withAccount)).not.toContain(account.credential);
+
+      /**
+       * ADR 0154 RO5. Was endete, sagt das Relay, weil es sonst niemand
+       * beobachten kann: wieviele Postfächer geschlossen und wieviele Pakete
+       * fallengelassen wurden.
+       */
+      expect(await runtime.revokeRelayAccount({
+        baseUrl: relay.operatorBaseUrl,
+        accountRef: account.accountRef,
+      })).toEqual({ mailboxesEnded: 0, packetsDropped: 0 });
+      expect((await runtime.readRelays())[0]?.accounts)
+        .toEqual([expect.objectContaining({ status: 'revoked' })]);
+
+      // Vergessen ist eine Sache dieses Geräts. Das Relay läuft weiter und
+      // erfährt nichts davon.
+      await runtime.forgetRelay(relay.operatorBaseUrl);
+      expect(await runtime.readRelays()).toEqual([]);
+    } finally {
+      await runtime.stop();
+      await relay.stop();
+    }
+  }, 300_000);
 });
 
 interface RunningCore {
@@ -1618,6 +1763,90 @@ async function openIdentitySession(input: {
     throw new Error(`open_identity_session_returned_nothing:${stdout}`);
   }
   return session;
+}
+
+/**
+ * ADR 0154. Ein laufendes Relay, aus demselben `dist` gestartet wie das Home.
+ *
+ * Der Beanspruchungscode steht in der ersten Zeile, die es schreibt: ein Relay
+ * ohne Betreiber sagt, wie es einen bekommt, und sagt es auf seinen eigenen
+ * lokalen Kanal, weil es sonst niemanden gibt, dem es das sagen könnte.
+ */
+async function startRelay(): Promise<{
+  operatorBaseUrl: string;
+  claimCode: string;
+  stop(): Promise<void>;
+}> {
+  const mailboxPort = await freePort();
+  let healthPort = await freePort();
+  while (healthPort === mailboxPort) {
+    healthPort = await freePort();
+  }
+  let operatorPort = await freePort();
+  while (operatorPort === mailboxPort || operatorPort === healthPort) {
+    operatorPort = await freePort();
+  }
+  const data = tempDirectory('pico-relay-');
+  const child = spawn(process.execPath, [RELAY], {
+    env: {
+      ...process.env,
+      PICO_RELAY_OPERATOR: 'relay.example.test',
+      PICO_RELAY_HOST: '127.0.0.1',
+      PICO_RELAY_PORT: String(mailboxPort),
+      PICO_RELAY_HEALTH_PORT: String(healthPort),
+      PICO_RELAY_OPERATOR_PORT: String(operatorPort),
+      PICO_RELAY_DATABASE_PATH: join(data, 'relay.sqlite'),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  childProcesses.push(child);
+  let output = '';
+  for (const stream of [child.stdout, child.stderr]) {
+    stream!.setEncoding('utf8');
+    stream!.on('data', (chunk: string) => { output += chunk; });
+  }
+  try {
+    await waitFor(() => output.includes('relay_unclaimed'), 'relay_ready');
+  } catch {
+    throw new Error(`relay_ready_failed:${output}`);
+  }
+  const unclaimed = output.split('\n').map((line) => {
+    try {
+      return JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }).find((line) => line?.event === 'relay_unclaimed');
+  if (unclaimed === undefined) {
+    throw new Error(`relay_claim_code_not_logged:${output}`);
+  }
+  return {
+    operatorBaseUrl: `http://127.0.0.1:${operatorPort}`,
+    claimCode: String(unclaimed.claimCode),
+    stop: async () => {
+      child.kill('SIGTERM');
+    },
+  };
+}
+
+/**
+ * ADR 0113. Der Schlüsselbund, den dieses Gerät im Betrieb hat - hier ein
+ * Doppelgänger.
+ *
+ * Er ist ein Port, damit die Laufzeit nicht weiss, wo ein Geheimnis liegt, und
+ * ein Doppelgänger ist genau das, wofür ein Port da ist. Was er *nicht* prüft,
+ * steht im Test daneben: dass ein echter Keyring den Zugang schützt, misst
+ * `companion:release-check` und nicht dieser Weg.
+ */
+function standInKeystore(): PicoCompanionPlatformSecretPort {
+  return {
+    platform: 'linux',
+    selectedBackend: () => 'gnome_libsecret',
+    isEncryptionAvailable: () => true,
+    // Umkehrbar und nicht geheim: dieser Weg fragt, ob der Ablauf trägt.
+    encryptString: (plainText) => Buffer.from(`stand-in:${plainText}`, 'utf8'),
+    decryptString: (encrypted) => Buffer.from(encrypted).toString('utf8').replace(/^stand-in:/u, ''),
+  };
 }
 
 async function runFounding(
