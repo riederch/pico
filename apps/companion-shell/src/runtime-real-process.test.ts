@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -767,33 +767,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
    * gehört, ist auch das eine, an dem es auffällt.
    */
   it('holt ein echtes Depot und hängt den Zulieferer an, den es erklärt', async () => {
-    const depot = tempDirectory('pico-depot-remote-');
-    const git = (args: readonly string[]): string => execFileSync('git', [...args], {
-      cwd: depot,
-      encoding: 'utf8',
-      env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' },
-    });
-    git(['init', '-q', '-b', 'main', '.']);
-    git(['config', 'user.email', 'depot@example.invalid']);
-    git(['config', 'user.name', 'Depot']);
-    git(['config', 'commit.gpgsign', 'false']);
-    writeFileSync(join(depot, 'pico-depot.json'), JSON.stringify({
-      schema: 'pico.depot.manifest.v1',
-      suppliers: [{
-        identifier: 'git-library',
-        kind: 'library',
-        slots: ['memory_item'],
-        coverage: ['knowledge_base'],
-        entryPoint: 'suppliers/git-library/index.js',
-        protocolVersion: 1,
-      }],
-    }, null, 2));
-    mkdirSync(join(depot, 'suppliers', 'git-library'), { recursive: true });
-    writeFileSync(join(depot, 'suppliers', 'git-library', 'index.js'), 'export {};\n');
-    git(['add', '.']);
-    git(['commit', '-q', '-m', 'the depot as its author published it']);
-    const commit = git(['rev-parse', 'HEAD']).trim();
-    const remote = `file://${depot}`;
+    const { remote, commit, git } = createDepotRemote();
 
     const core = await startCore();
     const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-supplier-' });
@@ -1329,6 +1303,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
       await relay.stop();
     }
   }, 300_000);
+
 });
 
 interface RunningCore {
@@ -1842,6 +1817,56 @@ async function runtimeFor(input: {
     }),
   });
   return { runtime, profilePath };
+}
+
+/**
+ * Ein Depot, wie sein Autor es veröffentlicht hätte - ein echtes Repository mit
+ * einem Manifest, dem ausgelieferten Zulieferer und einer Zeile Korpus.
+ *
+ * `file://` ist eine Adresse und ein blosser Pfad nicht: ein Depot wird über die
+ * Stelle benannt, von der sein Code kommt, und `../depots/x` ist eine Position
+ * relativ zu dem, der fragt (ADR 0143 DP1).
+ *
+ * Der Zulieferer wird aus `bridges/` hereinkopiert statt nachgebaut. Ein
+ * zweiter, der nur so aussieht, wäre eine zweite Auffassung davon, was ein
+ * Zulieferer ist - und der Weg, der ihn wirklich laufen lässt, liefe gegen die
+ * Nachbildung.
+ */
+function createDepotRemote(): {
+  remote: string;
+  commit: string;
+  git: (args: readonly string[]) => string;
+} {
+  const depot = tempDirectory('pico-depot-remote-');
+  const git = (args: readonly string[]): string => execFileSync('git', [...args], {
+    cwd: depot,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' },
+  });
+  git(['init', '-q', '-b', 'main', '.']);
+  git(['config', 'user.email', 'depot@example.invalid']);
+  git(['config', 'user.name', 'Depot']);
+  git(['config', 'commit.gpgsign', 'false']);
+  writeFileSync(join(depot, 'pico-depot.json'), JSON.stringify({
+    schema: 'pico.depot.manifest.v1',
+    suppliers: [{
+      identifier: 'git-library',
+      kind: 'library',
+      slots: ['memory_item'],
+      coverage: ['knowledge_base'],
+      entryPoint: 'suppliers/git-library/index.js',
+      protocolVersion: 1,
+    }],
+  }, null, 2));
+  mkdirSync(join(depot, 'suppliers', 'git-library'), { recursive: true });
+  cpSync(
+    join(import.meta.dirname, '..', '..', '..', 'bridges', 'suppliers', 'git-library', 'index.js'),
+    join(depot, 'suppliers', 'git-library', 'index.js'),
+  );
+  writeFileSync(join(depot, 'note.md'), 'Der Zählerstand am Monatsanfang war 41870.\n');
+  git(['add', '-A']);
+  git(['commit', '-q', '-m', 'the depot as its author published it']);
+  return { remote: `file://${depot}`, commit: git(['rev-parse', 'HEAD']).trim(), git };
 }
 
 async function runFounding(
