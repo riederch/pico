@@ -52,6 +52,7 @@ const errors = [];
 const workspace = mkdtempSync(join(tmpdir(), 'pico-vacuity-'));
 let checksRun = 0;
 let skippedByDesign = 0;
+let exitedNonZero = 0;
 let directoriesMirrored = 0;
 
 try {
@@ -68,6 +69,7 @@ try {
       encoding: 'utf8',
     });
     if (run.status !== 0) {
+      exitedNonZero += 1;
       continue;
     }
     const firstLine = (run.stdout ?? '').split('\n')[0] ?? '';
@@ -108,10 +110,22 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
+/**
+ * Die Zeile sagt jetzt drei Zahlen statt zwei, und die dritte ist die
+ * ehrliche.
+ *
+ * Sie hiess „N refused to call nothing clean", und das war mehr, als dieser
+ * Prüfer weiss: ein Prozess, der ungleich null endet, kann abgelehnt haben
+ * oder abgestürzt sein, und der Kommentar oben sagt genau das. Wer die Zeile
+ * las, las trotzdem eine Aussage über gutes Verhalten. Am 2026-08-31 kam eine
+ * Meldung herein, ein Prüfer melde Erfolg über einem leeren Baum - er tat es
+ * nicht, er stürzte ab, und diese Zeile hätte den Unterschied sagen können.
+ */
 console.log(
   `Vacuous-gate check passed (${checksRun} checks run against ${directoriesMirrored} `
   + `mirrored directories holding no files; ${skippedByDesign} skipped by design, `
-  + `${checksRun - skippedByDesign} refused to call nothing clean).`,
+  + `${exitedNonZero} ended non-zero - refused or crashed, which this audit cannot tell `
+  + 'apart - and none reported success over nothing).',
 );
 
 /** The shape of the tree without any of its contents. */

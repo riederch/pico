@@ -16,7 +16,28 @@ if (refType !== 'tag') {
   process.exit(0);
 }
 
-const packageJson = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+/**
+ * Gelesen statt geglaubt, und ein Fehlschlag hier heisst, was er ist.
+ *
+ * Ohne diese Zeilen warf der Aufruf über einem Baum ohne `package.json` einen
+ * ungefangenen `ENOENT` - richtig herum (der Prozess endet ungleich null), aber
+ * als Bericht unbrauchbar: `check-vacuous-gates` kann einen Absturz nicht von
+ * einer Ablehnung unterscheiden, und wer die Ausgabe liest, sieht einen
+ * Stapelabzug statt eines Satzes. Am 2026-08-31 gemeldet als „meldet Erfolg
+ * über einem leeren Baum"; das tut es nicht - aber was es tat, war nicht
+ * lesbar genug, um das auseinanderzuhalten.
+ */
+let packageJson;
+try {
+  packageJson = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+} catch (unreadable) {
+  console.error(
+    'Release tag check failed: there is no readable package.json beside this script, so '
+    + 'there is no version to hold a tag against. A reader that finds no subject is broken, '
+    + `not clean (${unreadable instanceof Error ? unreadable.message : 'unreadable'}).`,
+  );
+  process.exit(1);
+}
 const version = packageJson.version;
 
 if (typeof version !== 'string' || !version.trim()) {
