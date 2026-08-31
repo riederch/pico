@@ -570,6 +570,9 @@ describe('Electron-hosted companion runtime against real processes', () => {
    * fremdes Repository, das zwischen zwei Releases Code in ein laufendes Pico
    * schiebt. Und ein zweites Abhängen ist eine Ablehnung mit Namen statt einer
    * stillen Bestätigung.
+   *
+   * Gepflanzt: schickt der Client die ungefragte Erlaubnis nie mit, liest der
+   * Weg sie als nicht erteilt vom Home zurück.
    */
   it('hängt ein Depot an, entscheidet sein Hinausgreifen und hängt es wieder ab', async () => {
     const core = await startCore();
@@ -758,6 +761,10 @@ describe('Electron-hosted companion runtime against real processes', () => {
    * liest `HEAD` zurück. Dass hier derselbe Commit steht, den der Test
    * geschrieben hat, ist deshalb keine Tautologie - dazwischen liegen ein
    * `git fetch`, ein losgelöster Checkout und ein Vergleich.
+   *
+   * Gepflanzt: setzt der Client eine andere Domäne ein als die, die die Person
+   * genannt hat, liest der Weg die andere zurück - das eine Feld, das ihr
+   * gehört, ist auch das eine, an dem es auffällt.
    */
   it('holt ein echtes Depot und hängt den Zulieferer an, den es erklärt', async () => {
     const depot = tempDirectory('pico-depot-remote-');
@@ -912,6 +919,9 @@ describe('Electron-hosted companion runtime against real processes', () => {
    * B34 und B36 durchgelassen hat: dort baut der Test die Link-Anfragen
    * selbst, hier schickt sie der Companion-Client an ein Home, das nebenan
    * wirklich läuft.
+   *
+   * Gepflanzt: nennt der Client ein Modell, das dieser Host nicht bedient,
+   * kommt der Eintrag unter dem falschen Namen zurück.
    */
   it('misst eine Maschine, fragt sie und nimmt beides wieder zurück', async () => {
     const modelHost = await startFakeModelHost();
@@ -1218,6 +1228,9 @@ describe('Electron-hosted companion runtime against real processes', () => {
    * Der direkte Weg bleibt davon unberührt, und das ist der Grund, warum
    * dieser Tausch ausgerechnet über ihn reist: er funktioniert genau dann,
    * wenn das Relay nicht gebraucht wird.
+   *
+   * Gepflanzt: gibt sich das Gerät beim zweiten Mal dieselbe Eingangsadresse,
+   * ist der Tausch keine Rotation mehr und der Weg sagt es.
    */
   it('tauscht Postfachadressen mit seinem Home, über ein laufendes Relay', async () => {
     const relay = await startRelay();
