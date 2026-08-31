@@ -874,6 +874,21 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B47 — Vier Wege ohne Pflanzung, nachgeholt (2026-08-31).** Beim Durchsehen
+der eigenen Woche gezählt: von den elf Realprozess-Wegen, die zwischen dem
+2026-08-27 und dem 2026-08-29 dazukamen, tragen sieben eine Pflanzung und vier
+nicht — Depot anhängen, das echte Depot mit seinem Zulieferer, die Maschine
+messen und der Postfachtausch. Ein Weg, der nie aus dem richtigen Grund
+umgefallen ist, ist eine Behauptung und kein Beleg; dass er heute grün ist,
+sagt nichts darüber, ob er es bliebe.
+
+Alle vier sind nachgeholt, jede an der Stelle, an der der Weg wirklich hängt:
+die ungefragte Erlaubnis, die nie mitreist; die Domäne der Person, durch eine
+andere ersetzt; ein Modell, das der Host nicht bedient; und ein Gerät, das sich
+zweimal dieselbe Eingangsadresse gibt, womit der zweite Tausch keine Rotation
+mehr ist. Alle vier bissen, jede mit ihrem eigenen Satz, und die Sätze stehen
+jetzt in den Wegen statt in einem Sitzungsprotokoll.
+
 **B46 — „Abgelehnt" und „abgestürzt" standen in derselben Zahl (2026-08-31).**
 Gemeldet wurde, `vacuity:check` weise nach, dass `check-release-tag.mjs` über
 einem leeren Baum Erfolg melde. Nachgestellt: das tut es nicht. Ohne
