@@ -33,6 +33,7 @@
     "license:check": "node scripts/check-license.mjs",
     "link:check": "node scripts/check-link-seal.mjs",
     "link:walk": "node scripts/measure-link-walk.mjs",
+    "route:walk": "node scripts/measure-route-walk.mjs",
     "module:check": "node scripts/check-modules.mjs",
     "offline:check": "node scripts/check-offline-floor.mjs",
     "presence:check": "node scripts/check-presence-affordances.mjs",
