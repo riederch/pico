@@ -980,14 +980,21 @@ aussehend - und stellte prompt `POST …/narrowing` mit stumm, eine Route, die
 gerufen wird. Ein Argument, das eine einzelne Route meint, nennt sie jetzt
 ganz.
 
-**B43 — Siebenundzwanzig von einundsechzig Routen haben je einen echten Prozess
+**B43 — Sechsundzwanzig von einundsechzig Routen haben je einen echten Prozess
 geantwortet, und ein Aufrufer bürgt für drei Verben (2026-08-29).** Dieselbe
 Mitschrift wie bei den Link-Vorgängen, eine Fläche darüber: das gebaute Home
 schreibt für die Dauer eines Laufs mit, welche Route mit welchem Status
-antwortet, und gefahren werden die Web- und die Companion-Shell-Testmenge.
+antwortet, und gefahren werden die Web- und die Companion-Shell-Testmenge. Seit
+dem 2026-08-31 ist das ein Werkzeug statt eines Einzelfalls: `pnpm route:walk`,
+der Zwilling von `pnpm link:walk`, dreimal von Hand gebaut und zweimal
+weggeworfen, bevor es dafür eine Datei gab.
 
-Von 61 bedienten Routen haben **27** einem getrennten Prozess mit einem Erfolg
-geantwortet. Von den 34 übrigen sind **21** in `check-surface-classes`
+Von 61 bedienten Routen haben **26** einem getrennten Prozess mit einem Erfolg
+geantwortet — die Zahl stand hier zuerst als 27, weil die Handzählung eine
+Antwort mitzählte, die gar nicht aus `app.ts` kommt
+(`GET /api/home/link/continuity` wird woanders registriert). Das Werkzeug zählt
+den Schnitt und nennt solche Antworten daneben. Von den 34 übrigen sind **21**
+in `check-surface-classes`
 namentlich als aufruferlos begründet — meist, weil die Tür in Gebrauch der
 Link-Zwilling ist. Bleiben **dreizehn, die einen Aufrufer haben und noch nie
 angenommen wurden**, darunter das Abmelden, der Sitzungsblick, das Lesen einer
