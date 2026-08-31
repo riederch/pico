@@ -893,10 +893,24 @@ Zwei Zeilen sind es jetzt statt einer: der Prüfer zählt getrennt und sagt
 was fehlt, statt einen Stapelabzug zu drucken. Beide Wege - falscher Tag und
 richtiger Tag - sind daneben nachgefahren.
 
-**Und die eigentliche Lücke bleibt benannt statt geschlossen:** ein Prüfer, der
-sich in dieser Umgebung immer überspringt, wird von diesem Audit nur in seinem
-Sprungbein geprüft. Was er im Tag-Bau tut, prüft die Pflanzung neben ihm — und
-die gibt es dafür bisher nicht.
+**Und die eigentliche Lücke ist noch am selben Tag geschlossen worden.** Ein
+Prüfer, der sich hier immer überspringt, wurde von diesem Audit nur in seinem
+Sprungbein geprüft; was er im Tag-Bau über einem leeren Baum tut, sah nie
+jemand. Wer sich überspringt, sagt jetzt daneben, *womit* er loslaufen würde,
+und der Lauf mit dieser Umgebung muss dasselbe leisten wie jeder andere: über
+einem Baum ohne Dateien nicht Erfolg melden. Wer keinen solchen Eintrag hat,
+fällt auf — eine Liste von einem ist billiger als ein blinder Fleck, und der
+nächste überspringende Prüfer muss sich erklären.
+
+Nicht hineingehört eine Umgebung, die einen Prüfer ins Netz schickt:
+`check-release-monotonic.mjs` fragt im Tag-Bau eine Registry, und ein Audit,
+das das täte, prüfte die Registry. Es steht auch nicht drin, weil es sich hier
+gar nicht überspringt — es scheitert am Netz und endet ungleich null, was diese
+Prüfung ohnehin verlangt.
+
+Drei Pflanzungen halten das fest: ein überspringender Prüfer ohne Eintrag, ein
+Eintrag für einen Prüfer, den es nicht gibt, und ein Prüfer, der unter der
+erzwungenen Umgebung doch Erfolg meldet. Alle drei bissen.
 
 **B45 — Ein Argument ist ein Satz von damals, und drei waren abgelaufen
 (2026-08-29).** Die Tore dieses Hauses lassen eine Lücke stehen, wenn jemand
