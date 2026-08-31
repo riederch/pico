@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 // a second time here. The four paths above predate that rule and each state
 // their default twice; this one does not add a fifth.
 import { defaultPicoDepotFetchIntervalMs } from '@pico/protocol/depot';
+import { defaultPicoModelJobSweepIntervalMs } from '@pico/protocol/model-job';
 import {
   defaultPicoLinkRelayOperator,
   defaultPicoLinkRelaySweepIntervalMs,
@@ -230,6 +231,18 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
       env.PICO_DEPOT_FETCH_INTERVAL_MS,
       'PICO_DEPOT_FETCH_INTERVAL_MS',
       defaultPicoDepotFetchIntervalMs,
+    ),
+    /**
+     * ADR 0049 mit ADR 0104s Betriebsklasse. Der dritte Takt dieses Homes, und
+     * bis zum 2026-08-31 der einzige, den nur ein Test stellen konnte: das Feld
+     * gab es, den Umgebungswert nicht. Eine Person hat darauf keine Antwort,
+     * eine Betreiberin auf einem kleinen Rechner schon - dieselbe Begründung
+     * wie bei den beiden darüber.
+     */
+    modelJobSweepIntervalMs: readPositiveInteger(
+      env.PICO_MODEL_JOB_SWEEP_INTERVAL_MS,
+      'PICO_MODEL_JOB_SWEEP_INTERVAL_MS',
+      defaultPicoModelJobSweepIntervalMs,
     ),
     ...(env.PICO_MEMORY_ENCRYPTION === undefined || env.PICO_MEMORY_ENCRYPTION.trim() === ''
       ? {}

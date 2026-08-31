@@ -21,6 +21,7 @@ describe('Core config', () => {
       linkRelayOperator: 'unconfigured.relay.invalid',
       linkRelaySweepIntervalMs: 2 * 60 * 1_000,
       depotFetchIntervalMs: 6 * 60 * 60 * 1_000,
+      modelJobSweepIntervalMs: 60 * 1_000,
       // ADR 0104 S3. No variable, no field: absent is not false, because an
       // instance whose add-on option is already gone must not have this
       // parser answer for it.
@@ -47,6 +48,7 @@ describe('Core config', () => {
       PICO_SUPPLIER_SCRATCH_ROOT: join(tmpdir(), 'pico-scratch'),
       PICO_LINK_RELAY_OPERATOR: 'relay.example.invalid',
       PICO_DEPOT_FETCH_INTERVAL_MS: '900000',
+      PICO_MODEL_JOB_SWEEP_INTERVAL_MS: '5000',
       PICO_MEMORY_ENCRYPTION: 'true',
       PICO_DEVICE_ID: 'test-core',
       PICO_WEB_ROOT: join(tmpdir(), 'pico-web'),
@@ -72,6 +74,7 @@ describe('Core config', () => {
       linkRelayOperator: 'relay.example.invalid',
       linkRelaySweepIntervalMs: 2 * 60 * 1_000,
       depotFetchIntervalMs: 900_000,
+      modelJobSweepIntervalMs: 5_000,
       memoryEncryption: true,
       deviceId: 'test-core',
       webRootPath: join(tmpdir(), 'pico-web'),

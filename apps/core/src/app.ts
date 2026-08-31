@@ -171,6 +171,7 @@ import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
 import { PicoSupplierHost } from './supplier-host.js';
 import { PicoModelDispatchError, PicoModelRuntime } from './model-runtime.js';
+import { defaultPicoModelJobSweepIntervalMs } from '@pico/protocol/model-job';
 import {
   picoModelJobRefusalIsFinal,
   type PicoModelJobQueueRow,
@@ -2559,7 +2560,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const modelJobScheduler = startPicoPeriodicTaskScheduler({
     tasks: [{
       identifier: 'model-job-sweep',
-      intervalMs: config.modelJobSweepIntervalMs ?? 60_000,
+      intervalMs: config.modelJobSweepIntervalMs ?? defaultPicoModelJobSweepIntervalMs,
     }],
     request: async () => {
       try {

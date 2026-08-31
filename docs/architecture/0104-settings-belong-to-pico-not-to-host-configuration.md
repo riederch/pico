@@ -2,6 +2,18 @@
 
 ## Status
 
+Status note, 2026-08-31: **Der dritte Takt dieses Homes steht jetzt neben den
+beiden anderen.** Die Betriebszeile führte `PICO_DEPOT_FETCH_INTERVAL_MS` und
+`PICO_LINK_RELAY_SWEEP_INTERVAL_MS`; der Takt der Modellwarteschlange fehlte,
+und zwar nicht aus einem Grund, sondern als Auslassung: das Feld
+`modelJobSweepIntervalMs` gab es, den Umgebungswert nicht, und die Voreinstellung
+stand als `60_000` im Aufrufer statt als Name neben dem Vorgang. Damit war er
+der einzige der drei, den nur ein Test im selben Prozess stellen konnte.
+
+Die Begründung ist unverändert die der Zeile, in der er jetzt steht: eine Person
+hat auf einen Takt keine Antwort, eine Betreiberin auf einem kleinen Rechner
+schon. Neu entschieden wird hier nichts - eine Auslassung wird geschlossen.
+
 Status note, 2026-08-24: **the relay's twelve were classified by nobody.**
 `settings:check` reads `apps/core/src/config.ts` and holds its twenty-two
 entries against S5 below. Pico Relay reads twelve of its own, and the check
@@ -246,7 +258,7 @@ when it was added.
   | `PICO_HOST`, `PICO_PORT`, `PICO_LINK_INTAKE_HOST`, `PICO_LINK_INTAKE_PORT` | Which sockets this process binds. |
   | `PICO_DEVICE_ID` | Which process this is, among several on one host. |
   | `PICO_FOUNDATION_ACCESS_MODE`, `PICO_WS_ALLOWED_ORIGINS` | ADR 0041/0038: how far this instance's API reaches on this network. |
-  | `PICO_DEPOT_FETCH_INTERVAL_MS`, `PICO_LINK_RELAY_SWEEP_INTERVAL_MS` | Operational cadence. A person has no answer to these; an operator tuning a small host does. |
+  | `PICO_DEPOT_FETCH_INTERVAL_MS`, `PICO_LINK_RELAY_SWEEP_INTERVAL_MS`, `PICO_MODEL_JOB_SWEEP_INTERVAL_MS` | Operational cadence. A person has no answer to these; an operator tuning a small host does. |
   | `PICO_LINK_RELAY_BASE_URL` | Where the operator this Home holds an account with answers today. See the split below: the account is Pico's, the URL is the host's. |
 
   **Transitional, and named as such:**

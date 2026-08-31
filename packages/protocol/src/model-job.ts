@@ -144,6 +144,18 @@ export function picoModelJobAllowanceFor(
     : 'live_turn_and_retrieved_memory';
 }
 
+/**
+ * ADR 0049. Wie oft ein Home seine Modellwarteschlange leert.
+ *
+ * Ein Name statt einer Zahl im Aufrufer, und zwar aus dem Grund, den die beiden
+ * Geschwister schon haben: `defaultPicoLinkRelaySweepIntervalMs` und
+ * `defaultPicoDepotFetchIntervalMs` stehen hier, weil ein Takt eine Eigenschaft
+ * des Vorgangs ist und keine des Prozesses, der ihn startet. Diese eine stand
+ * als `60_000` im Aufrufer und war damit die einzige der drei, die eine
+ * Installation nicht stellen konnte.
+ */
+export const defaultPicoModelJobSweepIntervalMs = 60 * 1_000;
+
 export interface PicoModelJob {
   schema: typeof picoModelJobSchema;
   jobId: string;
