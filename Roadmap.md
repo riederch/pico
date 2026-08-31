@@ -874,6 +874,30 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B46 — „Abgelehnt" und „abgestürzt" standen in derselben Zahl (2026-08-31).**
+Gemeldet wurde, `vacuity:check` weise nach, dass `check-release-tag.mjs` über
+einem leeren Baum Erfolg melde. Nachgestellt: das tut es nicht. Ohne
+Ref-Kontext überspringt es sich und sagt es; mit einem Tag-Kontext über einem
+Baum ohne `package.json` warf es einen ungefangenen `ENOENT` und endete
+ungleich null. Beide Wege sind richtig herum, und keiner ist ein Erfolg.
+
+**Was die Meldung trotzdem trifft, ist die Zeile daneben.** Der Prüfer schrieb
+„37 refused to call nothing clean" — und das weiss er nicht. Sein eigener
+Kommentar sagt seit jeher, dass er einen Absturz nicht von einer Ablehnung
+unterscheiden kann; seine Erfolgszeile behauptete das Gegenteil. Wer sie las,
+las eine Aussage über gutes Verhalten, wo eine über Rückgabewerte stand.
+
+Zwei Zeilen sind es jetzt statt einer: der Prüfer zählt getrennt und sagt
+„ended non-zero - refused or crashed, which this audit cannot tell apart", und
+`check-release-tag` fängt das fehlende `package.json` ab und sagt in einem Satz,
+was fehlt, statt einen Stapelabzug zu drucken. Beide Wege - falscher Tag und
+richtiger Tag - sind daneben nachgefahren.
+
+**Und die eigentliche Lücke bleibt benannt statt geschlossen:** ein Prüfer, der
+sich in dieser Umgebung immer überspringt, wird von diesem Audit nur in seinem
+Sprungbein geprüft. Was er im Tag-Bau tut, prüft die Pflanzung neben ihm — und
+die gibt es dafür bisher nicht.
+
 **B45 — Ein Argument ist ein Satz von damals, und drei waren abgelaufen
 (2026-08-29).** Die Tore dieses Hauses lassen eine Lücke stehen, wenn jemand
 sie *begründet* — rund vierzig solcher Sätze stehen verteilt in
