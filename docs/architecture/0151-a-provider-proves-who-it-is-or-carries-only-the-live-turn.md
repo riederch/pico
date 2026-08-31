@@ -35,6 +35,17 @@ wurden gegen verschiedene Annahmen geschrieben. Das ist kein Regelkonflikt,
 sondern ein Satz, den sein eigenes Modul nicht hält; offen ist damit das Wie
 und nicht das Ob.
 
+**Und die Sackgasse ist breiter, als diese Notiz zuerst sagte** (2026-08-31).
+Sie hielt fest, ein `live_turn`-Anbieter dürfe wenigstens über `own_pico`
+gefragt werden - eine verdichtete Beobachtung, einen Korpusauszug, eine
+behaltene Antwort. Für den Korpus stimmt das nicht: eine Bibliothekslesung
+hängt eine Referenz an und schreibt `live_turn_and_retrieved_memory`
+ausdrücklich hin, denn ein Bezug *ist* geholte Erinnerung. Damit gibt es keinen
+Eingang mehr: `own_pico` entsteht nur beim Behalten einer Modellantwort, eine
+Modellantwort nur aus einem gelaufenen Vorgang, und jeder Vorgang, der etwas
+aus einem Speicher holt, verlangt die weitere Erlaubnis. Ein Modell auf
+`127.0.0.1` ohne TLS trägt genau den lebenden Zug und sonst nichts.
+
 Drei Antworten sind denkbar und gehören entschieden statt gepatcht: ob Loopback
 ein geschützter Transport im Sinne von PV5 ist; ob ein erklärter eigener Host
 die weitere Erlaubnis ohne Zugang verdient - er beweist nichts, aber es gibt

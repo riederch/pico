@@ -1057,13 +1057,16 @@ fegen ist eine Zeile; was sie kostet, ist die Grenze, für die der Zeitgeber da
 ist - ein Schwall Fragen fegte dann pro Frage. Entweder eine Entprellung, ein
 kurzer erster Takt oder ein ausdrückliches „das dauert" in der Fläche.
 
-**Und es hängt an B39s letzten fünf Türen.** Über ein *behaltenes* Ergebnis
-eines Korpuslesens (`own_pico`) wäre die Rückruffamilie begehbar, ohne dass
-irgendetwas an ADR 0151 geändert würde - der Weg dorthin ist gebaut und
-bekannt: Depot anhängen, Regel auf `allow`, holen, lesen lassen, behalten,
-fragen. Er wartet nur zweimal auf denselben Zeitgeber, und zwei Minuten
-Leerlauf in einer Testmenge, die zweimal je Freigabe läuft, sind ein Preis,
-den diese Frage erst wert ist, wenn sie entschieden ist.
+**Und der Takt ist seit dem 2026-08-31 stellbar**, was ihn von einer Vermutung
+zu einer Zahl macht: `PICO_MODEL_JOB_SWEEP_INTERVAL_MS` steht jetzt neben den
+beiden anderen Takten dieses Homes (ADR 0104s Betriebszeile). Er fehlte nicht
+aus einem Grund, sondern als Auslassung — das Feld gab es, den Umgebungswert
+nicht, und die Voreinstellung stand als `60_000` im Aufrufer.
+
+**Der Weg, für den er gebraucht wurde, ging trotzdem nicht.** Über ein
+behaltenes Korpusergebnis schien die Rückruffamilie erreichbar, ohne an ADR
+0151 zu rühren; das war falsch, und warum, steht in B39. Übrig bleibt der
+Umgebungswert, der für sich richtig ist, und eine Vermutung weniger.
 
 **B41 — Die Foundation-Fläche ist zum ersten Mal gegen ein Home gefahren
 worden, und sie hielt (2026-08-29).** `apps/web/src/api.ts` trägt die
@@ -1197,13 +1200,29 @@ Frage an ihre **selbst geschriebenen** Notizen
 `entry_may_not_carry_these_words`. Erweitern kann sie nicht, weil ihr Host auf
 `127.0.0.1` kein TLS spricht und kein Geheimnis hat, das er beweisen müsste.
 
-Über `own_pico` kann derselbe Anbieter dagegen sehr wohl gefragt werden, und
-das ist die schiefe Stelle: eine verdichtete Beobachtung des Spatial-Recall-
-Moduls, der Auszug eines verfolgten Korpus und eine behaltene Modellantwort
-tragen `own_pico` und liegen über der Schwelle. Ein Anbieter, der die eigenen
-Zeilen seiner Person nicht sehen darf, darf also den Inhalt eines
-git-Repositorys sehen — nicht weil das eine vertraulicher wäre, sondern weil
-für das andere niemand beweisen kann, wer es geschrieben hat.
+**Ein Satz an dieser Stelle war falsch und wird hier zurückgenommen** (geprüft
+am 2026-08-31). Er sagte, über `own_pico` — eine verdichtete Beobachtung, der
+Auszug eines verfolgten Korpus, eine behaltene Antwort — dürfe derselbe
+Anbieter sehr wohl gefragt werden. Für den Korpus stimmt das nicht:
+`library-read.ts` hängt an jede Lesung eine *Referenz* und schreibt
+`carries: 'live_turn_and_retrieved_memory'` ausdrücklich hin. Ein Bezug ist
+geholte Erinnerung, gleich welcher Herkunftsklasse der Auszug ist — und damit
+gilt für ihn dieselbe Kette: weitere Erlaubnis, Zugang, TLS.
+
+**Damit hat der Kreis keinen Eingang.** `own_pico` schreibt heute nur, wer eine
+Modellantwort behält; eine Modellantwort gibt es nur, wenn ein Vorgang lief;
+und jeder Vorgang, der etwas aus einem Speicher holt, verlangt die weitere
+Erlaubnis. Ein Modell auf `127.0.0.1` ohne TLS kann also über *nichts*
+Gespeichertes gefragt werden — weder über die Notizen seiner Person noch über
+den Korpus, den Pico selbst geholt hat. Es trägt genau den lebenden Zug, und
+das ist für ein Haus, dessen Zweck Erinnerung ist, keine Fähigkeit.
+
+Gemessen wurde das beim Versuch, genau diesen Weg zu bauen: Depot anhängen,
+Regel auf `allow`, holen, Zulieferer anhängen, noch einmal holen — das Home
+reiht drei Lesungen ein („Queued library reads after fetch", `queued: 3`), und
+keine davon wird je beantwortet. Der Weg ist wieder entfernt worden; was von
+ihm bleibt, ist diese Zeile und ein Umgebungswert, den er unterwegs nötig
+machte.
 
 **Nicht repariert, weil die Frage zwischen den Regeln liegt und jede ihren
 Grund hat.** Drei Antworten sind denkbar, und die dritte trifft die Ursache
@@ -1344,8 +1363,9 @@ hielten den Tausch für gelungen.
 **Die fünf sind der interessante Rest**, und der Grund ist Befund B39: sie
 hängen an drei Regeln, die zusammen eine Sackgasse bilden. Ein Doppelgänger mit
 TLS würde sie öffnen; Material mit nachgewiesenem Urheber nicht - das wurde
-gemessen und fiel anders aus als erwartet. Ein dritter Weg steht offen und
-wartet auf B42: über ein behaltenes Korpusergebnis, das `own_pico` trägt.
+gemessen und fiel anders aus als erwartet. Ein dritter Weg schien offen — über ein
+behaltenes Korpusergebnis — und ist am 2026-08-31 als nicht vorhanden
+nachgewiesen worden.
 
 **Ein Satz über diesen Punkt war zuerst falsch und wird hier
 zurückgenommen**, weil er einen Aufwand behauptete, den das Haus schon
