@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -48,11 +48,44 @@ const scriptsDir = join(repoRoot, 'scripts');
 const self = 'check-vacuous-gates.mjs';
 const skipped = new Set(['node_modules', '.git', 'dist', 'out', 'build', 'coverage']);
 
+/**
+ * Wie ein überspringender Prüfer dazu gebracht wird, seine Arbeit zu tun.
+ *
+ * **Ein Sprung ist kein Bestehen - und ein Sprung, hinter den nie jemand
+ * schaut, ist keine Prüfung.** Der Kommentar oben sagt seit jeher das Erste;
+ * das Zweite fehlte, und am 2026-08-31 kam genau darüber eine Meldung herein
+ * (Befund B46): `check-release-tag.mjs` überspringt sich ausserhalb eines
+ * Tag-Baus, also wurde es hier nur in seinem Sprungbein geprüft. Was es *im*
+ * Tag-Bau über einem leeren Baum tut, sah nie jemand.
+ *
+ * Deshalb sagt ein Prüfer, der sich überspringt, hier auch, womit er
+ * loslaufen würde. Der Lauf mit dieser Umgebung muss dann dasselbe leisten wie
+ * jeder andere: über einem Baum ohne Dateien nicht Erfolg melden. Wer keinen
+ * Eintrag hat, fällt auf - eine Liste von einem ist billiger als ein blinder
+ * Fleck, und der nächste überspringende Prüfer muss sich erklären.
+ *
+ * **Was hier nicht hineingehört**, gesagt statt vergessen: eine Umgebung, die
+ * einen Prüfer ins Netz schickt. `check-release-monotonic.mjs` fragt in einem
+ * Tag-Bau eine Registry, und ein Audit, das das täte, prüfte die Registry.
+ * Es steht nicht in dieser Liste, weil es sich hier gar nicht überspringt -
+ * es scheitert am Netz und endet ungleich null, was diese Prüfung ohnehin
+ * verlangt.
+ */
+const forceTheWorkingPath = new Map([
+  ['check-release-tag.mjs', {
+    env: { GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: 'v0.0.0-not-this-tree' },
+    why: 'ADR 0122. Im Tag-Bau hält der Prüfer den Tag gegen die Version in '
+      + '`package.json`. Über einem Baum ohne diese Datei gibt es nichts zu halten, und '
+      + 'genau das muss er sagen statt zu bestehen.',
+  }],
+]);
+
 const errors = [];
 const workspace = mkdtempSync(join(tmpdir(), 'pico-vacuity-'));
 let checksRun = 0;
 let skippedByDesign = 0;
 let exitedNonZero = 0;
+let skipsLookedPast = 0;
 let directoriesMirrored = 0;
 
 try {
@@ -75,6 +108,30 @@ try {
     const firstLine = (run.stdout ?? '').split('\n')[0] ?? '';
     if (/\bskipped\b/u.test(firstLine)) {
       skippedByDesign += 1;
+      const forced = forceTheWorkingPath.get(entry);
+      if (forced === undefined) {
+        errors.push(
+          `scripts/${entry} skipped over an empty tree and this audit has no way to make it `
+          + 'run. A skip is not a pass, and a skip nobody looks past is not an audit: name '
+          + 'the environment that makes it do its work beside the others in this file.',
+        );
+        continue;
+      }
+      const worked = spawnSync(process.execPath, [join(workspace, 'scripts', entry)], {
+        cwd: workspace,
+        encoding: 'utf8',
+        env: { ...process.env, ...forced.env },
+      });
+      skipsLookedPast += 1;
+      const workedLine = (worked.stdout ?? '').split('\n')[0] ?? '';
+      if (worked.status === 0) {
+        errors.push(
+          `scripts/${entry} was given the environment that makes it work `
+          + `(${JSON.stringify(forced.env)}) and still reported success over an empty tree: `
+          + `${JSON.stringify(workedLine)}. That is the same failure as any other check `
+          + 'calling nothing clean, one door further in.',
+        );
+      }
       continue;
     }
     errors.push(
@@ -88,6 +145,13 @@ try {
   rmSync(workspace, { recursive: true, force: true });
 }
 
+for (const [entry] of forceTheWorkingPath) {
+  if (!existsSync(join(scriptsDir, entry))) {
+    errors.push(
+      `${entry} is named here as a check that skips, and there is no such check.`,
+    );
+  }
+}
 if (checksRun === 0) {
   errors.push(
     'scripts/check-vacuous-gates.mjs found no checks to run, which is the failure it exists '
@@ -123,7 +187,8 @@ if (errors.length > 0) {
  */
 console.log(
   `Vacuous-gate check passed (${checksRun} checks run against ${directoriesMirrored} `
-  + `mirrored directories holding no files; ${skippedByDesign} skipped by design, `
+  + `mirrored directories holding no files; ${skippedByDesign} skipped by design and `
+  + `${skipsLookedPast} of those run again with the environment that makes them work, `
   + `${exitedNonZero} ended non-zero - refused or crashed, which this audit cannot tell `
   + 'apart - and none reported success over nothing).',
 );
