@@ -2,6 +2,26 @@
 
 ## Status
 
+Status note, 2026-09-01 (Befund B50): **Wie ein Feld zu Bytes wird, stand
+zweimal, und in vier von neunzehn Faellen sagten die beiden Fassungen etwas
+Verschiedenes.** R5 verlangt, dass der Satz einer Person aus denselben Feldern
+entsteht wie die Bytes. Eine Ebene tiefer lag eine Voraussetzung, die nie
+geprueft wurde: dass *dieselben Felder* auch dieselben Bytes ergeben. Die
+Regeln dafuer standen in `index.ts` und in `recovery.ts` doppelt, das
+Zeichenmuster ein drittes Mal in `model-context.ts`.
+
+Gemessen: die Bytes waren nie verschieden, vier von neunzehn Ablehnungen
+schon — `empty_field` gegen `invalid_field_charset`, `field_too_long` gegen
+`invalid_field_charset`. Und die Einigkeit ueber die Bytes hing daran, dass die
+eine Fassung Bytes zaehlt und die andere Zeichen und beide Zahlen nur solange
+dieselbe sind, wie das Zeichenmuster ASCII bleibt. Kein Test sah es.
+
+Die Regeln stehen jetzt in `packages/protocol/src/canonical-bytes.ts`, einem
+Blatt ohne eigene Importe, und `pnpm canonical:check` haelt sie dort. Vier
+weitere Fassungen ausserhalb des Pakets sind gezaehlt, benannt und datiert;
+was mit ihnen geschieht, haengt an einer offenen Entscheidung ueber
+Ablehnungsnamen auf dem Signierweg (Befund B51).
+
 Status note, 2026-08-28: **„jeder Aufrufer ist migriert" stimmte, als es
 geschrieben wurde, und hörte drei Wochen später auf zu stimmen.** Der Satz
 darunter zählt die Aufrufer von damals auf. Am 2026-08-16 kam einer dazu, der

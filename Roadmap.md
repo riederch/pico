@@ -864,6 +864,71 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B51 — Vier weitere Fassungen derselben Signierregel, und eine Entscheidung
+darunter (2026-09-01).** Das Tor aus B50 wurde absichtlich über den ganzen
+Baum gelassen und nicht über das Protokollpaket allein. Es fand sieben weitere
+Definitionen — und die Messung trennt sie in zwei Hälften, denn **ein Name ist
+keine Regel**:
+
+- **Vier sind dieselbe Regel, ein zweites Mal geschrieben**:
+  `assertAsciiToken` und `fixedHexBytes` in `@pico/identity`,
+  `assertAsciiToken` in `apps/companion/src/profile.ts`,
+  `canonicalHexPattern` in `@pico/vault`. Alle drei Pakete hängen bereits am
+  Protokoll und könnten die Regel von dort holen.
+- **Drei sind derselbe Name über etwas anderem**: `assertAsciiToken` im
+  Ereignisspeicher des Homes prüft mit einer Grenze von 256 statt 1024 und
+  spricht in Sätzen zu einem Betreiber — sie prüft Konfiguration und nicht,
+  was unterschrieben wird. `asciiBytes` im Vault und im Aussehen-Codec
+  kodieren **ohne jede Prüfung**; sie zusammenzulegen gäbe dem Vault eine
+  Prüfung, die er heute nicht hat, und das ist eine Änderung am Signierweg und
+  keine Aufräumarbeit. Der Aussehen-Codec hat zudem mit Absicht *keine*
+  Abhängigkeit, auch nicht auf das Protokoll.
+
+**Nicht repariert, weil darunter eine Entscheidung liegt und beide Seiten
+recht haben.** Die Fassung im Identitätspaket nimmt einen Grund als Parameter
+und sagt `invalid_delegation_id` — sie nennt das **Feld**. Die Fassung im
+Protokoll sagt `invalid_field_charset`, `empty_field`, `field_too_long` — sie
+nennt den **Fehler**. Keine ist die bessere: die eine sagt einer Person, *wo*
+etwas falsch ist, die andere *was*. Eine gemeinsame Fassung müsste beides
+sagen, und das ändert Ablehnungsnamen auf dem Signierweg — der Stelle, an der
+eine Änderung am teuersten falsch ist. Der Bestand steht mit Datum und
+Begründung im Tor, damit die Zahl nicht so aussieht, als sei sie null.
+
+**B50 — Was unterschrieben wird, entschieden zwei Dateien, und in vier von
+neunzehn Fällen verschieden (2026-09-01).** Beim Nachsehen, ob die letzte
+Zyklus-Kante aus B49 lösbar ist, gefunden: die kanonischen Bytes-Regeln standen
+zweimal im Protokollpaket — in `index.ts` für die Identitätsfamilien, in
+`recovery.ts` für die sechs Familien des Wiederherstellungswegs — und das
+Zeichenmuster ein drittes Mal in `model-context.ts`.
+
+**Gemessen und nicht geschätzt**, neunzehn Proben über Zeichenketten, Hex und
+Verkettung, beide Fassungen nebeneinander:
+
+- **Die Bytes waren nie verschieden.** Keine Probe erzeugte zwei Ergebnisse.
+- **Vier von neunzehn Ablehnungen waren verschieden.** `''` heisst in der
+  einen Fassung `empty_field`, in der anderen `invalid_field_charset`; zu lang
+  heisst dort `field_too_long` und hier wieder `invalid_field_charset`. Wer
+  eine Ablehnung liest, bekommt je nach Datei eine andere Auskunft über
+  dieselbe Sache.
+
+**Und die Einigkeit über die Bytes hing an einer dritten Tatsache.** Die eine
+Fassung misst die Länge in Bytes, die andere in Zeichen. Das fällt nur nicht
+auf, weil das Zeichenmuster ASCII zulässt und dort beide Zahlen dieselbe sind.
+Liesse eine der drei Kopien je ein mehrbytiges Zeichen zu, nähme die eine
+Fassung ein Feld an, das die andere ablehnt — bei genau der Frage, was
+unterschrieben werden darf. **Eine Einigkeit, die von einer Tatsache in einer
+dritten Datei abhängt, ist keine Regel, sondern ein Zufall mit einer Frist.**
+
+Kein Test sah es: 613 Prüfungen des Pakets liefen grün über beide Fassungen,
+weil keine je die Ablehnung festhielt.
+
+Repariert an der Ursache — die Regeln stehen in `canonical-bytes.ts`, einem
+Blatt ohne eigene Importe, und alle drei Aufrufer holen sie von dort. Das Tor
+`pnpm canonical:check` hält es, viermal gepflanzt: die Regel wieder zweimal im
+Protokoll (beisst), eine neue Kopie ausserhalb ohne Eintrag im Bestand
+(beisst), ein Bestandseintrag, der den Baum nicht mehr trifft (beisst), und
+über einem leeren Baum (beisst).
+
 **B49 — Ein Zyklus, der von der Reihenfolge lebte, ist umgefallen — an einer
 Tür, die mit ihm nichts zu tun hatte (2026-09-01).** Beim Bauen von B37 kam
 *ein* neuer Import hinzu: `pending-action.ts` holte `picoApprovalDataLayer`
