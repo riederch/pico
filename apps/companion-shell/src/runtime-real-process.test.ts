@@ -867,7 +867,35 @@ describe('Electron-hosted companion runtime against real processes', () => {
       git(['commit', '-q', '--allow-empty', '-m', 'was der Autor danach veröffentlicht hat']);
       const newer = git(['rev-parse', 'HEAD']).trim();
       expect(newer).not.toBe(commit);
-      await expect(runtime.acceptDepotOffer(remote, newer)).rejects.toThrow('no_offer_standing');
+
+      /**
+       * **Und jetzt sieht es jemand** (ADR 0143 DP1, entschieden 2026-09-01).
+       * Ein von einer Person ausgelöster Abruf fragt das Remote zusätzlich,
+       * was es veröffentlicht; der planmässige Lauf tut das nicht und bleibt
+       * eine Instandsetzung. Bis dahin schrieb niemand die Spalte, und die
+       * Annahme antwortete immer `no_offer_standing` (Befund B38).
+       */
+      await runtime.decideRule({
+        effectName: 'depot.fetch',
+        privacyDomain: 'private',
+        decision: 'allow',
+      });
+      await runtime.recordModuleConsent('depot');
+      expect(await runtime.askDepotFetch('pico-shell-offer-session'))
+        .toMatchObject({ requested: 1 });
+      expect(((await runtime.readDepots()) as {
+        depots: ReadonlyArray<Record<string, unknown>>;
+      }).depots[0]).toMatchObject({ commit, offeredCommit: newer });
+
+      /**
+       * Angenommen wird, indem der Commit genannt wird - ein Angebot, das sich
+       * zwischen Frage und Antwort bewegt hat, fällt damit auf, statt still
+       * das Falsche zu übernehmen (ADR 0137 IN5s Gestalt an höherem Einsatz).
+       */
+      await runtime.acceptDepotOffer(remote, newer);
+      expect(((await runtime.readDepots()) as {
+        depots: ReadonlyArray<Record<string, unknown>>;
+      }).depots[0]).toMatchObject({ commit: newer });
     } finally {
       await runtime.stop();
     }

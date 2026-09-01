@@ -1726,7 +1726,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.decorate('picoQueueDepotLibraryReads', queuePicoDepotLibraryReads);
 
-  const depotEffects: Record<string, PicoBoundEffect> = {
+  /**
+   * ADR 0143 DP1, seit dem 2026-09-01. Derselbe Effekt, zwei Anlässe.
+   *
+   * `asked` sagt, ob eine Person gerade *jetzt holen* gedrückt hat. Nur dann
+   * fragt der Abruf das Remote zusätzlich, was es veröffentlicht, und
+   * schreibt ein abweichendes Ergebnis als Angebot auf. Der planmässige Lauf
+   * bleibt eine Instandsetzung und fragt nichts - der Satz, mit dem ADR 0143
+   * ihn von einer Abfrage nach Commits unterscheidet, bleibt damit wahr.
+   *
+   * Als Fabrik statt als Feld im Aufruf, weil der Anlass nichts ist, was in
+   * den Aufzeichnungen einer Handlung steht: was eine Person freigibt, ist ein
+   * Abruf dieses Depots, und ob sie dabei danebenstand, gehört nicht in ihre
+   * Argumente.
+   */
+  const depotEffectsFor = (asked: boolean): Record<string, PicoBoundEffect> => ({
     'depot.fetch': (request, capabilities) => {
       const depotRemote = request.arguments
         .find((entry) => entry.name === 'remote')?.value as string;
@@ -1739,12 +1753,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       const outcome = fetchPicoDepot({
         pin: attachment.pin,
         into: depotWorkspace.ensure(depotRemote),
+        askWhatIsPublished: asked,
       });
       capabilities.write(() => {
         store.recordPicoDepotFetchOutcome({
           remote: depotRemote,
           at: new Date().toISOString(),
           ...(outcome.status === 'condition' ? { condition: outcome.condition } : {}),
+          // Absent when nobody asked, so a scheduled run says nothing about an
+          // offer rather than withdrawing one.
+          ...(outcome.status === 'fetched' && outcome.offeredCommit !== undefined
+            ? { offeredCommit: outcome.offeredCommit }
+            : {}),
         });
       });
       if (outcome.status === 'condition') {
@@ -1752,7 +1772,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       }
 
     },
-  };
+  });
 
   // Bound per manifest, because `bindPicoModuleEffects` asserts an exact match
   // in both directions: everything declared is supplied and everything
@@ -1764,12 +1784,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
   bindPicoModuleEffects({
     manifest: picoDepotModuleManifest,
-    supplied: depotEffects,
+    // Die Namen sind bei beiden Anlässen dieselben; gebunden wird gegen einen
+    // von ihnen, weil die Zusage über den Effekt geht und nicht über seinen
+    // Anlass.
+    supplied: depotEffectsFor(false),
   });
-  const moduleEffects: Record<string, PicoBoundEffect> = {
+  /** Der Zeitplan fragt nichts; wer danebensteht, fragt mit. */
+  const moduleEffectsFor = (asked: boolean): Record<string, PicoBoundEffect> => ({
     ...calendarEffects,
-    ...depotEffects,
-  };
+    ...depotEffectsFor(asked),
+  });
+  const moduleEffects = moduleEffectsFor(false);
   const emitActionFact = (type: PicoActionFactType, payload: Record<string, unknown>): string => {
     const fact = factory.create({ deviceId: config.deviceId, type, payload });
     store.append(fact);
@@ -2184,7 +2209,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           }
         }
         if (decided.decision === 'allow') {
-          executePicoAction({ decided, effects: moduleEffects, emit: emitActionFact });
+          executePicoAction({ decided, effects: moduleEffectsFor(asked), emit: emitActionFact });
           /**
            * ADR 0143 DP1 with ADR 0136 BR3. The fetch brought material, so
            * this is the moment reads can be queued - and it is here rather
@@ -5164,7 +5189,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             ...(args.approved === undefined ? {} : { approved: args.approved }),
             nowMs: Date.now(),
             monotonicNowMs: performance.now(),
-            effects: moduleEffects,
+            // Die Frage entstand, weil jemand danebenstand, und die Antwort
+            // kommt von derselben Person - also fragt dieser Abruf mit.
+            effects: moduleEffectsFor(true),
             emit: emitActionFact,
           });
           return {

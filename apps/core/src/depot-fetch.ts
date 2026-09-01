@@ -37,7 +37,22 @@ import type { PicoSupplierCondition } from '@pico/protocol/supplier-condition';
  * with a decision a person made.
  */
 export type PicoDepotFetchOutcome =
-  | { status: 'fetched'; pin: PicoDepotPin; path: string }
+  | {
+    status: 'fetched';
+    pin: PicoDepotPin;
+    path: string;
+    /**
+     * ADR 0143 DP1. Was das Remote als seinen Kopf veröffentlicht, wenn danach
+     * gefragt wurde - und nur dann.
+     *
+     * Drei Zustände, weil es drei gibt: eine Zeichenkette ist ein *Angebot*
+     * (etwas Neueres steht bereit), `null` heisst „das Remote steht auf der
+     * Anheftung" und nimmt ein stehendes Angebot zurück, und `undefined`
+     * heisst „es wurde nicht gefragt" und sagt über ein Angebot nichts. Der
+     * planmässige Lauf fragt nie, also ist er immer der dritte Fall.
+     */
+    offeredCommit?: string | null;
+  }
   /** ADR 0138 CO2. The attempt failed below the application. */
   | { status: 'condition'; condition: PicoSupplierCondition; detail: string };
 
@@ -47,6 +62,21 @@ export interface PicoDepotFetchOptions {
   into: string;
   /** Seconds before `git` is treated as gone. */
   timeoutMs?: number;
+  /**
+   * ADR 0143 DP1, entschieden am 2026-09-01. Ob dieser Abruf das Remote auch
+   * fragt, was es veröffentlicht.
+   *
+   * **Nur, wenn eine Person danach gefragt hat.** Der planmässige Lauf ist
+   * eine Instandsetzung und ausdrücklich keine Abfrage nach Commits; wer
+   * *jetzt holen* drückt, fragt dagegen genau nach diesem Depot, und die
+   * Antwort auf „gibt es etwas Neueres" ist ein Teil dessen, was er wissen
+   * wollte.
+   *
+   * Ein Ref zu lesen ist hier erlaubt und für das, was *läuft*, weiter
+   * verboten: DP1s fehlendes `branch`-Feld bleibt ein fehlendes Argument beim
+   * Holen. Was hier zurückkommt, wird aufgeschrieben und nie ausgecheckt.
+   */
+  askWhatIsPublished?: boolean;
   /** Injected so tests can run the real path without a real `git` on PATH. */
   run?: (args: readonly string[], cwd: string) => string;
 }
@@ -92,7 +122,7 @@ export function fetchPicoDepot(options: PicoDepotFetchOptions): PicoDepotFetchOu
     if (existsSync(gitDir) && headCommit(run, path) === pin.commit) {
       // Already there. A scheduled fetch over an unchanged depot must not cost
       // a clone, or the schedule becomes the reason to lengthen the interval.
-      return { status: 'fetched', pin, path };
+      return { status: 'fetched', pin, path, ...publishedHead(run, path, pin, options) };
     }
 
     if (!existsSync(gitDir)) {
@@ -122,7 +152,41 @@ export function fetchPicoDepot(options: PicoDepotFetchOptions): PicoDepotFetchOu
     throw new Error('pico_depot_fetch_pin_mismatch');
   }
 
-  return { status: 'fetched', pin, path };
+  return { status: 'fetched', pin, path, ...publishedHead(run, path, pin, options) };
+}
+
+/**
+ * Was das Remote als seinen Kopf veröffentlicht, oder Schweigen.
+ *
+ * `git ls-remote <remote> HEAD` und sonst nichts: ein Zweigname käme aus einer
+ * Konfiguration, die ADR 0143 DP1 nicht hat, und der Kopf ist das, was ein
+ * Remote von sich aus als seine Fassung zeigt.
+ *
+ * **Ein Fehlschlag ist Schweigen und keine Rücknahme.** Wer nicht antworten
+ * konnte, hat nicht gesagt, dass es nichts Neueres gibt - und ein stehendes
+ * Angebot überlebt einen Versuch, der nicht durchkam (ADR 0138 CO2 in klein).
+ */
+function publishedHead(
+  run: (args: readonly string[], cwd: string) => string,
+  path: string,
+  pin: PicoDepotPin,
+  options: PicoDepotFetchOptions,
+): { offeredCommit?: string | null } {
+  if (options.askWhatIsPublished !== true) {
+    return {};
+  }
+  let published: string;
+  try {
+    published = run(['ls-remote', pin.remote, 'HEAD'], path).split(/\s/u)[0] ?? '';
+  } catch {
+    return {};
+  }
+  if (!/^[0-9a-f]{40}$/u.test(published)) {
+    // A remote that answered something that is not a commit has answered
+    // nothing this can act on, and guessing would be inventing an offer.
+    return {};
+  }
+  return { offeredCommit: published === pin.commit ? null : published };
 }
 
 function headCommit(
