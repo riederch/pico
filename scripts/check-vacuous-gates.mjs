@@ -65,7 +65,7 @@ const skipped = new Set(['node_modules', '.git', 'dist', 'out', 'build', 'covera
  * Fleck, und der nächste überspringende Prüfer muss sich erklären.
  *
  * **Wie gross diese Sorte überhaupt ist**, damit es niemand zweimal ermitteln
- * muss: von den achtunddreissig Prüfern lesen genau drei die Umgebung, und
+ * muss: von den neununddreissig Prüfern lesen genau drei die Umgebung, und
  * zwei davon sind das Release-Paar hier. Der dritte ist dieser Audit selbst,
  * der die Umgebung nur weiterreicht. Alles andere verhält sich überall gleich
  * (gemessen am 2026-09-01).
