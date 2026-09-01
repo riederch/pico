@@ -226,7 +226,14 @@ describe('ADR 0116 W1 with ADR 0082 - the way a person actually reads their memo
     expect(asked.response.outcome).toBe('ok');
     expect(asked.result.included).toBe(1);
 
-    expect(await app.picoSweepModelJobs()).toBe(1);
+    /**
+     * ADR 0116 W1, seit dem 2026-09-01 (Befund B42): die Frage hat den Lauf
+     * beim Einreihen selbst ausgelöst, also ist hier nichts mehr zu fegen.
+     * Vorher stand an dieser Stelle ein Aufruf von Hand - und genau der
+     * verdeckte, dass eine wartende Person bis zu einer Minute auf den
+     * Zeitgeber sah.
+     */
+    expect(await app.picoSweepModelJobs()).toBe(0);
 
     const read = await send('home.recall.read', {});
     const recalls = (read.result as { recalls: Array<Record<string, unknown>> }).recalls;

@@ -2541,6 +2541,48 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return answered.reduce((total, one) => total + one, 0);
   };
 
+  /**
+   * ADR 0116 W1. Eine gestellte Frage wartet nicht auf den nächsten Takt.
+   *
+   * W1 begründet die *sofortige* Ablehnung damit, dass jemand dasteht: „a
+   * person who asked a question deserves the answer now". Kam die Frage durch,
+   * lag sie bis zum 2026-09-01 bis zu einer Minute in der Warteschlange,
+   * während die Maschine daneben nichts tat - Befund B42 hat diese Spannung
+   * gemessen und der Nutzer sie an diesem Tag entschieden.
+   *
+   * **Entprellt, und die Sperre ist der Grund, warum der Zeitgeber bleibt.**
+   * Der Takt begrenzt, wie oft dieses Home gegen einen Beschleuniger läuft, der
+   * beschäftigt sein kann; ein Aufruf je Frage nähme genau diese Grenze weg.
+   * Also läuft höchstens einer, und der nächste erst nach der Sperre - was ein
+   * Schwall Fragen kostet, ist damit ein Lauf je Fenster statt einer je Frage.
+   *
+   * **Nicht abgewartet**, denn die Antwort auf „frag das" ist die
+   * Vorgangsnummer und nicht die Antwort des Modells; wer hier wartete, machte
+   * aus einem Einreihen einen Anruf. Fehlschläge gehören dem Lauf und nicht
+   * dem Fragenden: der Zeitgeber versucht es wieder.
+   */
+  const kickModelJobSweepDebounceMs = 1_000;
+  let modelJobSweepRunning = false;
+  let modelJobSweepAllowedAtMs = 0;
+  const kickModelJobSweep = (): void => {
+    const nowMs = Date.now();
+    if (modelJobSweepRunning || nowMs < modelJobSweepAllowedAtMs) {
+      return;
+    }
+    modelJobSweepRunning = true;
+    modelJobSweepAllowedAtMs = nowMs + kickModelJobSweepDebounceMs;
+    void sweepPicoModelJobs()
+      .catch((error: unknown) => {
+        app.log.warn(
+          { reason: error instanceof Error ? error.message : 'failed' },
+          'Model job sweep after a question did not complete.',
+        );
+      })
+      .finally(() => {
+        modelJobSweepRunning = false;
+      });
+  };
+
   app.decorate('picoSweepModelJobs', sweepPicoModelJobs);
 
   app.decorate('picoSweepLinkPushes', sweepPicoLinkPushes);
@@ -3943,6 +3985,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               memoryItemIds: plan.included.map((item) => item.memoryItemId),
             },
           });
+          // After the row exists and never before it: a refused question must
+          // not cost a run, and there would be nothing for it to find.
+          kickModelJobSweep();
 
           return {
             outcome: 'ok',
