@@ -27,6 +27,10 @@
       "types": "./dist/bounded-projection.d.ts",
       "import": "./dist/bounded-projection.js"
     },
+    "./canonical-bytes": {
+      "types": "./dist/canonical-bytes.d.ts",
+      "import": "./dist/canonical-bytes.js"
+    },
     "./confidence": {
       "types": "./dist/confidence.d.ts",
       "import": "./dist/confidence.js"

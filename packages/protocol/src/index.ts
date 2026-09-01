@@ -1,3 +1,15 @@
+// Befund B50. Die kanonischen Bytes-Regeln stehen in `./canonical-bytes.js`
+// und nirgends sonst: sie standen hier und in `recovery.ts` zweimal, mit
+// denselben Bytes und vier verschiedenen Ablehnungen.
+import {
+  asciiBytes,
+  assertAsciiToken,
+  canonicalAsciiTokenPattern,
+  canonicalHexPattern,
+  canonicalTextEncoder,
+  concatCanonicalElements,
+  fixedHexBytes,
+} from './canonical-bytes.js';
 import { foundationEventTypes, type FoundationEventType } from './foundation-event-type.js';
 // ADR 0116 W2 (Befund B49). Diese Barriere gibt die Herkunftsklasse weiter und
 // benutzt sie auch selbst; `export … from` legt dafuer keinen lokalen Namen an.
@@ -5151,48 +5163,6 @@ function isNonEmptyString(value: unknown, maxLength: number | undefined): value 
     && (maxLength === undefined || value.length <= maxLength);
 }
 
-const canonicalTextEncoder = new TextEncoder();
-const canonicalAsciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
-const canonicalHexPattern = /^[0-9a-f]+$/;
-
-function concatCanonicalElements(elements: readonly Uint8Array[]): Uint8Array {
-  const parts = elements.map((element) => {
-    const length = new Uint8Array(4);
-    new DataView(length.buffer).setUint32(0, element.byteLength, false);
-    return [length, element] as const;
-  }).flat();
-  const totalLength = parts.reduce((sum, part) => sum + part.byteLength, 0);
-  const output = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.byteLength;
-  }
-
-  return output;
-}
-
-function asciiBytes(value: string): Uint8Array {
-  assertAsciiToken(value);
-  return canonicalTextEncoder.encode(value);
-}
-
-function fixedHexBytes(value: string, expectedByteLength: number, lengthReason: string): Uint8Array {
-  if (!canonicalHexPattern.test(value)) {
-    throw new Error('invalid_hex');
-  }
-  if (value.length !== expectedByteLength * 2) {
-    throw new Error(lengthReason);
-  }
-
-  const output = new Uint8Array(expectedByteLength);
-  for (let i = 0; i < expectedByteLength; i += 1) {
-    output[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
-  }
-
-  return output;
-}
 
 function kdfParameterBytes(value: number, minimumValue: number, maximumValue: number): Uint8Array {
   if (!Number.isSafeInteger(value) || value < minimumValue) {
@@ -5205,18 +5175,6 @@ function kdfParameterBytes(value: number, minimumValue: number, maximumValue: nu
   return asciiBytes(String(value));
 }
 
-function assertAsciiToken(value: string): void {
-  const bytes = canonicalTextEncoder.encode(value);
-  if (bytes.length === 0) {
-    throw new Error('empty_field');
-  }
-  if (bytes.length > 1024) {
-    throw new Error('field_too_long');
-  }
-  if (!canonicalAsciiTokenPattern.test(value)) {
-    throw new Error('invalid_field_charset');
-  }
-}
 
 /**
  * Every consumer of a protected timestamp compares it as a string: validity

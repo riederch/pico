@@ -1,3 +1,5 @@
+// Befund B50. Dasselbe Muster stand hier ein drittes Mal.
+import { canonicalAsciiTokenPattern } from './canonical-bytes.js';
 import {
   picoEventOriginClasses,
   type PicoEventOriginClass,
@@ -315,7 +317,6 @@ function parseUnit(value: unknown): PicoModelContextDataBlock {
   });
 }
 
-const canonicalAsciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
 /**
  * LF, CRLF and a lone CR, plus U+2028 LINE SEPARATOR and U+2029 PARAGRAPH
  * SEPARATOR. The last two are the interesting ones: JavaScript does not treat

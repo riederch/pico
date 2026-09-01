@@ -1,3 +1,13 @@
+// Befund B50. Die kanonischen Bytes-Regeln standen hier ein zweites Mal, mit
+// denselben Bytes und vier anderen Ablehnungen. Jetzt von dort, wo sie einmal
+// stehen - und ein Blatt ohne eigene Importe legt keine Kante (Befund B49).
+import {
+  asciiBytes,
+  assertAsciiToken,
+  canonicalTextEncoder,
+  concatCanonicalElements,
+  fixedHexBytes,
+} from './canonical-bytes.js';
 import type {
   PicoIdentityDelegationSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
@@ -637,70 +647,18 @@ interface RecoveryHashSodium {
   ): Uint8Array;
 }
 
-const textEncoder = new TextEncoder();
-const asciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
-const canonicalHexPattern = /^[0-9a-f]+$/;
 const canonicalInstantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const lifecycleOrderPattern = /^seq:[0-9]{16}$/;
 
-function concatCanonicalElements(elements: readonly Uint8Array[]): Uint8Array {
-  const parts = elements.flatMap((element) => {
-    const length = new Uint8Array(4);
-    new DataView(length.buffer).setUint32(0, element.byteLength, false);
-    return [length, element];
-  });
-  const output = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.byteLength;
-  }
-  return output;
-}
-
 function utf8Bytes(value: string): Uint8Array {
-  return textEncoder.encode(value);
-}
-
-function asciiBytes(value: string): Uint8Array {
-  assertAsciiToken(value);
-  return utf8Bytes(value);
-}
-
-function fixedHexBytes(
-  value: string,
-  expectedByteLength: number,
-  lengthReason: string,
-): Uint8Array {
-  if (typeof value !== 'string' || !canonicalHexPattern.test(value)) {
-    throw new Error('invalid_hex');
-  }
-  if (value.length !== expectedByteLength * 2) {
-    throw new Error(lengthReason);
-  }
-  const output = new Uint8Array(expectedByteLength);
-  for (let i = 0; i < expectedByteLength; i += 1) {
-    output[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
-  }
-  return output;
-}
-
-function assertAsciiToken(value: string): void {
-  if (
-    typeof value !== 'string'
-    || value.length === 0
-    || value.length > 1024
-    || !asciiTokenPattern.test(value)
-  ) {
-    throw new Error('invalid_field_charset');
-  }
+  return canonicalTextEncoder.encode(value);
 }
 
 function assertDisplayText(value: string, reason: string): void {
   if (
     typeof value !== 'string'
     || value.trim().length === 0
-    || textEncoder.encode(value).byteLength > 256
+    || canonicalTextEncoder.encode(value).byteLength > 256
     || /[\u0000-\u001f\u007f]/u.test(value)
   ) {
     throw new Error(reason);
@@ -711,7 +669,7 @@ function assertEndpointHint(value: string): void {
   if (
     typeof value !== 'string'
     || value.length === 0
-    || textEncoder.encode(value).byteLength > 2048
+    || canonicalTextEncoder.encode(value).byteLength > 2048
     || /[\u0000-\u001f\u007f]/u.test(value)
   ) {
     throw new Error('invalid_endpoint_hint');
