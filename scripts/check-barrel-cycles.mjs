@@ -83,8 +83,13 @@ if (reExported.size === 0) {
 /** The value specifiers `module` imports from the barrel. */
 function valueImportsFromBarrel(source) {
   const values = [];
+  // `[^{}]` und nicht `[\s\S]`: eine Einfuhrliste enthaelt keine Klammern, und
+  // ein fauler Ausdruck ueber beliebige Zeichen spannte am 2026-09-01 ueber
+  // einen dazwischenliegenden Import hinweg und meldete dessen Namen als Kante
+  // in die Sammelausgabe. Gefunden hat das dieses Tor an sich selbst, beim
+  // ersten Import, der zwischen die beiden geriet.
   for (const [, typeOnly, body] of source.matchAll(
-    /import\s+(type\s+)?\{([\s\S]*?)\}\s+from\s+'\.\/index\.js';/gu,
+    /import\s+(type\s+)?\{([^{}]*?)\}\s+from\s+'\.\/index\.js';/gu,
   )) {
     if (typeOnly !== undefined) {
       continue;
