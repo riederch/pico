@@ -778,13 +778,11 @@ Abschnitt nur die Frage und ihre Antwortmöglichkeiten.
   selteneren Takt; oder es bleibt bis auf Weiteres unerreichbar und der Knopf
   verschwindet.
 
-- **Darf das eigene Modell die eigenen Notizen sehen?** (Befund B39, ADR 0151
-  mit ADR 0116 W2.) Drei Regeln greifen ineinander, und `recall.ts` sagt in
-  seinem eigenen Kopf das Gegenteil dessen, was dabei herauskommt. *Antworten:*
-  Loopback als geschützten Transport anerkennen; einem erklärten eigenen Host
-  die weitere Erlaubnis ohne Zugang geben; oder — die einzige, die die Ursache
-  trifft — ADR 0116 W2 eine Schreibklasse geben, die die anwesende Person
-  wirklich nachweist.
+- ~~**Darf das eigene Modell die eigenen Notizen sehen?**~~ — **beantwortet am
+  2026-09-01**: PV4 nimmt einen erklärten eigenen Host aus, weil ein Zugang
+  beantwortet, wer am anderen Ende ist, und diese Klasse kein anderes Ende hat.
+  Gebaut, gemessen, 50 von 54 Link-Türen. Befund B39 trägt die Begründung und
+  das, was die Regel kostete, solange sie ausnahmslos war.
 
 - **Wie schnell wird eine Frage losgeschickt?** (Befund B42, ADR 0116 W1.) Die
   Ablehnung ist sofort, weil „a person who asked a question deserves the answer
@@ -792,10 +790,10 @@ Abschnitt nur die Frage und ihre Antwortmöglichkeiten.
   *Antworten:* beim Einreihen fegen, mit einer Entprellung gegen den Schwall;
   ein kurzer erster Takt; oder die Fläche sagt ausdrücklich, dass es dauert.
 
-**Was an ihnen hängt.** B39 und B42 zusammen halten die letzten fünf der
-vierundfünfzig Link-Türen zu (Befund B36) und damit die Hälfte von ADR 0116s
-Rückrufweg; B38 hält eine sechste zu. B37 hält nichts auf und ist die
-billigste von den vieren.
+**Was an ihnen hängt.** B39 ist beantwortet und hat den Rückrufweg geöffnet;
+B42 hält seither nichts mehr auf, sondern ist eine Frage der Antwortzeit. B38
+hält eine Tür zu. B37 hält nichts auf und ist die billigste der drei
+verbliebenen.
 
 ### Phase 6 — die erste echte Nützlichkeit
 
@@ -1256,14 +1254,31 @@ keine davon wird je beantwortet. Der Weg ist wieder entfernt worden; was von
 ihm bleibt, ist diese Zeile und ein Umgebungswert, den er unterwegs nötig
 machte.
 
-**Nicht repariert, weil die Frage zwischen den Regeln liegt und jede ihren
-Grund hat.** Drei Antworten sind denkbar, und die dritte trifft die Ursache
-statt des Symptoms: ob Loopback ein geschützter Transport im Sinne von PV5 ist;
-ob ein erklärter eigener Host die weitere Erlaubnis ohne Zugang verdient — er
-beweist nichts, aber es gibt auch niemanden, dem gegenüber er es beweisen
-müsste; oder ob ADR 0116 W2 eine Schreibklasse bekommt, die die anwesende
-Person wirklich nachweist, womit `recall.ts` seinen eigenen Satz wieder halten
-könnte. ADR 0151 hat die datierte Notiz.
+**Entschieden am 2026-09-01 und noch am selben Tag gebaut.** Drei Antworten
+standen zur Wahl: Loopback als geschützten Transport anzuerkennen (hülfe nur
+Hosts, die überhaupt ein Geheimnis haben — der gewöhnliche Fall hat keines);
+ADR 0116 W2 eine Schreibklasse zu geben, die die anwesende Person nachweist
+(träfe die Ursache, hülfe aber Korpuslesungen nicht, weil dort die Referenz
+zwingt); oder PV4 für einen erklärten eigenen Host auszunehmen. Der Nutzer hat
+die dritte gewählt, und ihr Grund ist PV4s eigener, zu Ende gelesen: ein Zugang
+beantwortet, *wer* am anderen Ende ist, und `declared_own_host` hat kein anderes
+Ende. Die Klassenschranke daneben bleibt — eine Maschine für seine eigene zu
+erklären macht aus einem Cloud-Connector keine.
+
+**Was danach ging.** Der Weg steht als Durchlauf: messen, entscheiden, sich den
+Lesezugang erteilen, die eigene Erinnerung fragen, die Antwort behalten und
+beides zurücknehmen — gegen ein laufendes Home, einen Vault-Daemon und einen
+Modell-Host über einfaches HTTP. `pnpm link:walk` zählt danach **50 von 54**
+statt 46; offen bleiben die beiden vertagten Identitätsrotationen, das Angebot
+ohne Erzeuger (B38) und `home.model.read.keep`.
+
+**Und das letzte hat einen neuen Grund**, gemessen statt vermutet: eine
+Korpuslesung ging jetzt bis zum Modell durch und wurde mit
+`answer_was_not_the_declared_shape` beantwortet. Der Host-Doppelgänger dieses
+Hauses ist für Messungen gebaut und kann die deklarierte Form einer Lesung
+nicht liefern. Das ist eine Grenze des Doppelgängers und keine des Produkts —
+und sie war vorher nicht sichtbar, weil die Kette schon eine Regel früher
+endete.
 
 **B38 — „Ein neuerer Commit ist ein Angebot", und niemand sieht je eines
 (2026-08-28).** Beim Gehen der Zuliefererkette gemessen. ADR 0143 DP1 sagt, ein

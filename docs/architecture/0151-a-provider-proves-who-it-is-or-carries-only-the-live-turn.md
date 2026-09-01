@@ -2,6 +2,36 @@
 
 ## Status
 
+Status note, 2026-09-01 (**Entscheidung des Nutzers**): **PV4 nimmt einen
+erklärten eigenen Host aus.** Ein Anbieter der Klasse `declared_own_host` trägt
+`live_turn_and_retrieved_memory` auch ohne `credentialRef`.
+
+**Der Grund ist der von PV4 selbst, zu Ende gelesen.** Ein Zugang beantwortet
+eine Frage: *wer* ist am anderen Ende. Für jede andere Klasse gibt es ein
+anderes Ende - ein Home, ein Vault, ein Endpunkt, ein Connector -, und der
+Nachweis ist das, was die geholte Erinnerung dieser Person davon abhält, bei
+einem Fremden zu landen, der auf derselben Adresse antwortet. `declared_own_host`
+hat kein anderes Ende. Die Person hat die Maschine als ihre erklärt, und ein
+Geheimnis für sie wäre eines, das sie an beiden Enden hält und niemandem
+beweist. Die Klassenschranke daneben bleibt und ist hier die tragende: eine
+Maschine für seine eigene zu erklären macht aus einem Cloud-Connector keine.
+
+**Was die Regel kostete, solange sie ausnahmslos war.** PV4 und PV5 schlossen
+zusammen den gesamten Erinnerungspfad für den gewöhnlichen selbst betriebenen
+Fall: ein Modell auf `127.0.0.1` hat kein TLS, über das ein Bearer reisen
+könnte, und meist gar keinen Bearer - es liess sich messen und entscheiden und
+beantwortete danach nichts. Nicht die Notizen seiner Person, und nicht einmal
+einen Korpus, den dieses Pico selbst geholt hat, weil eine Bibliothekslesung
+eine Referenz trägt und eine Referenz geholte Erinnerung *ist*, gleich welcher
+Herkunftsklasse der Auszug ist. Befund B39 hat das gegen laufende Prozesse
+gemessen, bevor diese Ausnahme geschrieben wurde.
+
+Seit der Ausnahme geht der Weg vom Fenster aus: messen, entscheiden, sich den
+Lesezugang erteilen, fragen, die Antwort behalten und beides zurücknehmen -
+gegen ein laufendes Home, einen laufenden Vault-Daemon und einen Modell-Host
+über einfaches HTTP. Damit sind 50 der 54 Link-Vorgänge von einem echten
+Client angenommen worden.
+
 Status note, 2026-08-28: **Die Notiz darunter hat die Hälfte des Falls
 geschlossen; die andere Hälfte ist gemessen und offen** (Befund B39).
 
@@ -46,12 +76,14 @@ Modellantwort nur aus einem gelaufenen Vorgang, und jeder Vorgang, der etwas
 aus einem Speicher holt, verlangt die weitere Erlaubnis. Ein Modell auf
 `127.0.0.1` ohne TLS trägt genau den lebenden Zug und sonst nichts.
 
-Drei Antworten sind denkbar und gehören entschieden statt gepatcht: ob Loopback
-ein geschützter Transport im Sinne von PV5 ist; ob ein erklärter eigener Host
-die weitere Erlaubnis ohne Zugang verdient - er beweist nichts, aber es gibt
-auch niemanden, dem gegenüber er es beweisen müsste; oder ob ADR 0116 W2 eine
-Schreibklasse bekommt, die die anwesende Person wirklich nachweist. Nur die
-dritte trifft die Ursache.
+Drei Antworten waren denkbar: ob Loopback ein geschützter Transport im Sinne
+von PV5 ist; ob ein erklärter eigener Host die weitere Erlaubnis ohne Zugang
+verdient - er beweist nichts, aber es gibt auch niemanden, dem gegenüber er es
+beweisen müsste; oder ob ADR 0116 W2 eine Schreibklasse bekommt, die die
+anwesende Person wirklich nachweist. **Der Nutzer hat am 2026-09-01 die zweite
+gewählt**; die Notiz oben trägt sie aus. Die dritte träfe die Ursache, hülfe
+aber Korpuslesungen nicht, und die erste nur Hosts, die überhaupt ein Geheimnis
+haben - was der gewöhnliche selbst betriebene Fall gerade nicht hat.
 
 Status note, 2026-08-16: **PV1's allowance stops at `own_pico`, not above
 it.** A derivation from the person's own notes stays on the live turn.
