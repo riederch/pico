@@ -1304,6 +1304,107 @@ describe('Electron-hosted companion runtime against real processes', () => {
     }
   }, 300_000);
 
+
+  /**
+   * ADR 0116 W1/W5 mit ADR 0071 - eine Person fragt ihre eigene Erinnerung,
+   * behält die Antwort und nimmt beides wieder zurück.
+   *
+   * **Dieser Weg war bis zum 2026-09-01 unmöglich** (Befund B39): ein Rückruf
+   * holt Material aus einem Speicher und verlangt damit die weitere Erlaubnis;
+   * die gab es nur mit einem Zugang; und einen Zugang nicht über einfaches
+   * HTTP. Ein Modell auf der eigenen Maschine konnte gemessen und entschieden
+   * werden und beantwortete danach nichts. Seit PV4 einen erklärten eigenen
+   * Host ausnimmt, geht er - und dass er geht, ist die Aussage dieses Tests.
+   *
+   * Die Notiz wird unter einer identitätsgebundenen Sitzung geschrieben, weil
+   * sie einer nachgewiesenen Person gehören soll; für die *Erlaubnis* spielt
+   * das seit der Ausnahme keine Rolle mehr, für die Herkunft in der Ablage
+   * schon.
+   */
+  it('fragt die eigene Erinnerung, behält die Antwort und nimmt sie zurück', async () => {
+    const modelHost = await startFakeModelHost();
+    const core = await startCore({ PICO_MODEL_JOB_SWEEP_INTERVAL_MS: '500' });
+    const { living, delegationId, signedDelegation } = await foundedDevice({
+      core,
+      prefix: 'pico-companion-recall-',
+    });
+    const session = await openIdentitySession({ daemon: living, core, delegation: signedDelegation });
+    const written = await fetch(`${core.apiBaseUrl}/api/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${session}` },
+      body: JSON.stringify({
+        deviceId: 'pico-shell-walk',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'household',
+          contentType: 'text/plain',
+          content: 'Der Zählerstand am Monatsanfang war 41870.',
+        },
+      }),
+    });
+    expect(written.status, await written.clone().text()).toBe(201);
+    const { runtime } = await runtimeFor({ core, living, delegationId });
+
+    try {
+      expect(await runtime.askModelProviderMeasurement({
+        reach: modelHost.reach,
+        model: 'a-model:measured',
+      })).toEqual({ entryId: 'a-model:measured', state: 'running' });
+      await eventually(async () => {
+        const entries = (await runtime.readModelProviderMeasurements()) as ReadonlyArray<{
+          entryId: string;
+          state: string;
+        }>;
+        const entry = entries.find((candidate) => candidate.entryId === 'a-model:measured');
+        return entry !== undefined && entry.state !== 'running' ? entry : undefined;
+      });
+      /**
+       * ADR 0151 PV4, wie er seit dem 2026-09-01 lautet: eine Maschine, die
+       * die Person als ihre erklärt, trägt geholte Erinnerung ohne Zugang -
+       * ein Zugang beantwortet, *wer* am anderen Ende ist, und hier gibt es
+       * kein anderes Ende. Über einfaches HTTP wäre ein Zugang ohnehin
+       * abgewiesen worden (PV5), was genau die Sackgasse war.
+       */
+      await runtime.decideModelProvider({
+        entryId: 'a-model:measured',
+        providerClass: 'declared_own_host',
+        carries: 'live_turn_and_retrieved_memory',
+      });
+
+      // ADR 0082. „Darf dieses Home benutzen" ist nicht „darf diesen Raum
+      // lesen" - das Gerät erteilt sich den Lesezugang selbst.
+      await runtime.grantDomainRead({ privacyDomain: 'household' });
+      const ask = await runtime.askRecall({
+        privacyDomain: 'household',
+        question: 'Was stand am Monatsanfang auf dem Zähler?',
+      });
+      expect(ask.included).toBeGreaterThan(0);
+      expect(ask.carries).toBe('live_turn_and_retrieved_memory');
+
+      const answered = await eventually(async () => {
+        const recalls = await runtime.readRecalls();
+        const recall = recalls.find((candidate) => candidate.jobId === ask.jobId);
+        return recall?.settledAt === undefined ? undefined : recall;
+      });
+      expect(answered.outcome, JSON.stringify(answered)).toBe('answered');
+
+      /**
+       * ADR 0116 W5 mit ADR 0049 und ADR 0071. Behalten ist die eigene Schrift
+       * der Person, und die beiden Rücknahmen sind zwei Sätze: „ich will diese
+       * Notiz nicht mehr" und „ich will diesen Austausch nicht mehr" nehmen
+       * Verschiedenes zurück.
+       */
+      const kept = await runtime.keepRecall(ask.jobId);
+      expect(kept).not.toBe('');
+      await runtime.forgetMemory(kept);
+      await runtime.forgetRecall(ask.jobId);
+      expect((await runtime.readRecalls()).map((recall) => recall.jobId))
+        .not.toContain(ask.jobId);
+    } finally {
+      await runtime.stop();
+      await modelHost.close();
+    }
+  }, 300_000);
 });
 
 interface RunningCore {
