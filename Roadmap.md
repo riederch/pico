@@ -750,22 +750,22 @@ Companion postet versiegelte Umschläge an `${coreUrl}/api/home/link`, und diese
 Route trägt die Zugriffsklasse `link-intake` — weder Session noch Token, weil die
 Authentifizierung im Umschlag sitzt.
 
-### Offene Entscheidungen (Stand 2026-08-29)
+### Offene Entscheidungen (Stand 2026-09-01: alle vier beantwortet)
 
-Vier Fragen, die aus den Durchläufen dieser Woche kommen und **nicht in einem
-Patch beantwortet werden können**, weil jede eine Regel verschiebt statt eine
-Zeile. Sie stehen hier zusammen, weil sie einzeln in ihren Befunden liegen und
-niemand sie dort nebeneinander sieht; die Befunde tragen die Messung, dieser
-Abschnitt nur die Frage und ihre Antwortmöglichkeiten.
+Vier Fragen kamen aus den Durchläufen der Woche zum 2026-08-29 und konnten
+**nicht in einem Patch beantwortet werden**, weil jede eine Regel verschob
+statt eine Zeile. Sie standen hier zusammen, weil sie einzeln in ihren
+Befunden liegen und niemand sie dort nebeneinander sieht. Am 2026-09-01 hat
+der Nutzer sie einzeln entschieden; jede ist gebaut, gepflanzt und gemessen.
+Der Abschnitt bleibt stehen, weil eine beantwortete Frage samt ihrer Antwort
+mehr wert ist als eine gelöschte.
 
-- **Darf eine wartende Frage sagen, woran sie hängt?** (Befund B37, ADR 0141.)
-  Zwei angehängte Depots erzeugen zwei Fragen mit demselben Satz und ohne ein
-  Feld, das sie unterscheidet — bei dem einen Effekt im Baum, der Code
-  installiert. Der Satz kommt aus dem Manifest, weil ihn die Seite schreiben
-  soll, die handelt, und nicht die, die profitiert (ADR 0139 AC4). *Antworten:*
-  einen Betreff neben den zugesagten Satz stellen, der nicht von der handelnden
-  Seite formuliert ist; oder es so lassen und sagen, dass zwei Depots eine
-  seltene Lage sind.
+- ~~**Darf eine wartende Frage sagen, woran sie hängt?**~~ — **beantwortet am
+  2026-09-01**: ja, als Daten und nicht als Satz. Die Argumente stehen
+  beschriftet neben dem zugesagten Satz, mit ihrer Herkunftsklasse, nie
+  hineininterpoliert — die Gestalt, die ADR 0141 RN3 für die
+  Zustimmungsaussage schon entschieden hatte. Gebaut, gepflanzt, und der
+  Durchlauf liest zwei Depots mit demselben Satz und zwei `remote`.
 
 - ~~**Wer darf ein Depot nach etwas Neuerem fragen?**~~ — **beantwortet am
   2026-09-01**: wer *jetzt holen* drückt, fragt mit; der planmässige Lauf
@@ -781,10 +781,11 @@ Abschnitt nur die Frage und ihre Antwortmöglichkeiten.
   2026-09-01**: beim Einreihen fegen, entprellt über eine Sekunde, Zeitgeber
   bleibt als Netz. Gebaut und mit einem Takt von einer Stunde bewiesen.
 
-**Was an ihnen hängt.** B39 ist beantwortet und hat den Rückrufweg geöffnet;
-B42 hält seither nichts mehr auf, sondern ist eine Frage der Antwortzeit. B38
-hält eine Tür zu. B37 hält nichts auf und ist die billigste der drei
-verbliebenen.
+**Was sie gekostet haben.** B39 öffnete den Rückrufweg, B42 die Antwortzeit,
+B38 die einundfünfzigste Link-Tür. B37 war die billigste — und die einzige,
+die etwas anderes freilegte als sich selbst: der eine neue Import, den sie
+brauchte, kippte die Auswertungsreihenfolge des Protokollpakets und brachte
+einen seit Langem im Code beschriebenen Zyklus zu Fall (Befund B49).
 
 ### Phase 6 — die erste echte Nützlichkeit
 
@@ -862,6 +863,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B49 — Ein Zyklus, der von der Reihenfolge lebte, ist umgefallen — an einer
+Tür, die mit ihm nichts zu tun hatte (2026-09-01).** Beim Bauen von B37 kam
+*ein* neuer Import hinzu: `pending-action.ts` holte `picoApprovalDataLayer`
+aus `@pico/protocol/approval-statement`. Danach antwortete ein laufendes Home
+auf `home.recall.keep` mit `lowestPicoOriginClass is not a function` —
+Herkunftsklassen, an einer Tür, die eine Antwort behält. Kein Typfehler, kein
+Testfehler an der Stelle des Imports, und im Baum steht kein Wort über
+Erinnerungen und Signaturen, das die beiden verbände.
+
+**Der Grund stand seit Langem im Code, als Kommentar.** `index.ts` gibt
+`model-context.js` weiter aus, und `model-context.ts` holte
+`picoEventOriginClasses` von dort zurück. Die Sammelausgabe beschrieb den
+Zyklus selbst — *„a cycle that happens to work today only because the values
+are read inside functions rather than at module evaluation"* — und liess ihn
+stehen. Der neue Import kippte die Auswertungsreihenfolge, die Sternausgabe
+kopierte aus einem halbfertigen Modul, und der Fehler kam als Ablehnung
+irgendwo anders heraus. **Eine Ordnung, die von der Reihenfolge lebt, ist
+keine Ordnung, sondern ein Zufall mit einem Datum darauf.**
+
+**Repariert an der Ursache**: die Herkunftsklassen und die Familienliste des
+Foundation-Protokolls stehen jetzt in eigenen Blättern (`origin-class.ts`,
+`foundation-event-type.ts`), die nichts importieren und deshalb in keinem
+Zyklus liegen können; die Sammelausgabe gibt beide weiter, damit kein Aufrufer
+etwas umschreiben muss. Gemessen statt geschätzt: die Barriere gibt zehn
+Module weiter, zwei davon holten Werte zurück, beide sind gelöst.
+
+**Und die Klasse hat ein Tor.** `pnpm cycle:check` sagt: ein Modul, das die
+Sammelausgabe weitergibt, darf keinen *Wert* aus ihr holen — Typen ja, die
+werden gelöscht und legen keine Kante. Dreimal gepflanzt: die alte Kante
+wieder gelegt (beisst), der genannte Ausnahmeeintrag still um einen Wert
+gewachsen (beisst), über einem leeren Baum (beisst, und `vacuity:check` zählt
+ihn seither mit).
+
+**Eine Kante steht noch, benannt und datiert**: `recovery.ts` holt drei
+Signatur-Bauer und `picoIdentitySuite` aus der Barriere. Die drei sitzen mitten
+im Identitätsteil von `index.ts` und stützen sich auf ein Dutzend dortiger
+Helfer; sie herauszulösen ist eine eigene Arbeit am Unterschreiben — der
+heikelsten Stelle im Baum — und keine Zeile, die nebenbei mitgeht. Sie steht
+im Tor mit Grund und Datum, damit die Zahl nicht so aussieht, als sei sie null.
 
 **B48 — Die neuen Wege sind noch nie in CI gelaufen, also an zwei Kernen
 nachgestellt (2026-09-01).** Die Kette riss in CI an einer Toraussage, bevor die
@@ -1350,13 +1391,31 @@ einen Effekt im Baum, der Code installiert.
 Die Ereignis-Id unterscheidet die beiden, aber sie ist keine Auskunft: sie
 steht in keiner anderen Fläche, die eine Person sieht.
 
-**Nicht repariert, und der Grund ist der Grund.** Einen Betreff neben den
-zugesagten Satz zu setzen hiesse, einen Satz daneben zu komponieren — genau
-die Gestalt, die ADR 0139 AC4 für Effektzusagen und ADR 0106 R5 für
-Unterschriften verbieten. Ob eine Frage sagen darf, *woran* sie hängt, ohne
-dass die Antwort damit von einer anderen Seite als dem Manifest formuliert
-wird, ist eine Entscheidung und keine Implementierung. Sie steht als Messung
-in `runtime-real-process.test.ts` und wartet auf ein ADR.
+**Entschieden am 2026-09-01: die Argumente stehen daneben, nie im Satz.** Die
+Sorge war, einen Satz neben den zugesagten zu komponieren — genau die Gestalt,
+die ADR 0139 AC4 für Effektzusagen und ADR 0106 R5 für Unterschriften
+verbieten. Sie entfällt, weil die Antwort schon dastand, eine Ebene höher: ADR
+0141 RN3 hatte für die Zustimmungsaussage längst entschieden, dass Picos
+eigener Satz und die ausführenden Werte zwei Schichten sind (ADR 0116 W3), und
+dass die Werte beschriftet danebenstehen und nie hineininterpoliert werden.
+
+Dieselbe Schicht steht jetzt auf einer wartenden Frage. Der Satz bleibt Wort
+für Wort der des Manifests; daneben die Argumente mit ihrer Herkunftsklasse
+und `carriesExternalContent`. Die Regel, nach der ein Wert vor die Augen einer
+Person kommt, steht dafür **einmal** — `picoApprovalDataLayer` baut sie hier
+wie dort —, denn eine Wahrheit, zweimal geschrieben, driftet, und die zweite
+Fassung wäre die nachlässigere.
+
+**Gemessen, nicht behauptet.** Der Durchlauf hängt zwei Depots an, lässt beide
+fragen und liest zwei Fragen mit demselben Satz und zwei verschiedenen
+`remote`. Die Herkunftsklasse ist dabei `own_pico` und nicht `person_present`:
+die Person hat gedrückt, aber die Werte kommen aus der Anheftungszeile, Picos
+eigenem Aufschrieb einer früheren Entscheidung — erwartet war zuerst das
+andere, und der Lauf hat es widerlegt. Gepflanzt: bleibt die Datenschicht weg,
+tragen beide Fragen wieder vier Felder und der Durchlauf sagt es.
+
+**Und der Weg dorthin hat einen zweiten Befund freigelegt**, weil der eine
+neue Import die Auswertungsreihenfolge des Protokollpakets kippte — B49.
 
 **B36 — Achtzehn von vierundfünfzig Türen waren je aufgegangen, und hinter
 einer stand niemand (2026-08-28).** Gemessen statt geschätzt: das laufende Home

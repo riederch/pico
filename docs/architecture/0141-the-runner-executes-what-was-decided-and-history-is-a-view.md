@@ -2,6 +2,31 @@
 
 ## Status
 
+Status note, 2026-09-01 (**Entscheidung des Nutzers**, Befund B37): **RN3s
+Datenschicht steht jetzt auch auf einer wartenden Frage.** RN4 gab eine
+wartende Frage bis hierher mit vier Feldern heraus - Ereignis-Id, Satz,
+Risikoklasse und Ablauf -, und der Satz kommt aus dem Manifest des Moduls
+(ADR 0139 AC4). Er nennt deshalb den Effekt und nie den Gegenstand: wer zwei
+Depots angehaengt hatte und *jetzt holen* drueckte, bekam zweimal dieselbe
+Zeile, ausgerechnet bei dem einen Effekt im Baum, der Code installiert.
+
+**Repariert in der Gestalt, die RN3 schon entschieden hatte, und nicht in
+einer neuen.** Neben den Satz treten die Argumente als beschriftete Daten -
+jedes mit seiner Herkunftsklasse, keines interpoliert - und
+`carriesExternalContent`, wenn eines von aussen kam. Der ganze Angriff auf
+eine Bestaetigung ist, sie etwas Beruhigendes *sagen* zu lassen; deshalb
+bekommt kein Wert einen Weg in das Sagen, und der Satz bleibt Wort fuer Wort
+der zugesagte. Die Regel, nach der ein Wert vor die Augen einer Person kommt,
+steht dafuer einmal und nicht zweimal: `picoApprovalDataLayer` baut sie hier
+wie in der Zustimmungsaussage.
+
+**Gemessen, nicht behauptet**: der Durchlauf haengt zwei Depots an, laesst
+beide fragen und liest zwei Fragen mit demselben Satz und zwei verschiedenen
+`remote`. Die Herkunftsklasse ist dabei `own_pico` und nicht `person_present`
+- die Person hat gedrueckt, aber die Werte kommen aus der Anheftungszeile,
+Picos eigenem Aufschrieb einer frueheren Entscheidung. Erwartet war zuerst das
+andere; der Lauf hat es widerlegt.
+
 Accepted as the execution and record contract for the action path. **RN1-RN6 are implemented** on
 2026-08-10, and this ADR is complete.
 
