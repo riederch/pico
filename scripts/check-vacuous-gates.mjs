@@ -78,6 +78,16 @@ const forceTheWorkingPath = new Map([
       + '`package.json`. Über einem Baum ohne diese Datei gibt es nichts zu halten, und '
       + 'genau das muss er sagen statt zu bestehen.',
   }],
+  ['check-release-monotonic.mjs', {
+    unforceable: true,
+    why: 'ADR 0122. Seine Arbeit *ist* eine Registry-Abfrage: er liest die veröffentlichten '
+      + 'Fassungen und hält die kommende dagegen. Ein Audit, das ihn dazu brächte, prüfte '
+      + 'eine Registry und hinge an einem Netz - und tut es in jedem Lauf, auch wenn nichts '
+      + 'freigegeben wird. Was er über einem leeren Baum täte, zeigt die Pflanzung neben '
+      + 'ihm und nicht dieser Lauf. **Aufgefallen ist die Lücke in CI und nicht hier**: '
+      + 'ohne `GITHUB_REF_TYPE` springt er gar nicht, sondern scheitert am Netz, und die '
+      + 'Regel, die einen Sprung verlangt zu erklären, sah ihn deshalb nie.',
+  }],
 ]);
 
 const errors = [];
@@ -86,6 +96,7 @@ let checksRun = 0;
 let skippedByDesign = 0;
 let exitedNonZero = 0;
 let skipsLookedPast = 0;
+let skipsArgued = 0;
 let directoriesMirrored = 0;
 
 try {
@@ -109,6 +120,12 @@ try {
     if (/\bskipped\b/u.test(firstLine)) {
       skippedByDesign += 1;
       const forced = forceTheWorkingPath.get(entry);
+      if (forced?.unforceable === true) {
+        // Argumentiert statt erzwungen: was diese Arbeit braucht, gehört nicht
+        // in ein Audit. Der Grund steht oben, damit er gelesen werden kann.
+        skipsArgued += 1;
+        continue;
+      }
       if (forced === undefined) {
         errors.push(
           `scripts/${entry} skipped over an empty tree and this audit has no way to make it `
@@ -188,7 +205,8 @@ if (errors.length > 0) {
 console.log(
   `Vacuous-gate check passed (${checksRun} checks run against ${directoriesMirrored} `
   + `mirrored directories holding no files; ${skippedByDesign} skipped by design and `
-  + `${skipsLookedPast} of those run again with the environment that makes them work, `
+  + `${skipsLookedPast} of those run again with the environment that makes them work and `
+  + `${skipsArgued} argued as unforceable, `
   + `${exitedNonZero} ended non-zero - refused or crashed, which this audit cannot tell `
   + 'apart - and none reported success over nothing).',
 );
