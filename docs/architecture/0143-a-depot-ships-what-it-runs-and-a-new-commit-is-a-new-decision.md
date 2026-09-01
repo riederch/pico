@@ -2,6 +2,28 @@
 
 ## Status
 
+Status note, 2026-09-01 (**Entscheidung des Nutzers**): **Wer *jetzt holen*
+drückt, fragt mit.** Ein von einer Person ausgelöster Abruf fragt das Remote
+zusätzlich, was es veröffentlicht (`git ls-remote <remote> HEAD`), und ein
+abweichender Commit wird als Angebot aufgeschrieben. Der planmässige Lauf
+fragt nichts - der Satz, mit dem diese ADR ihn von einer Abfrage nach Commits
+unterscheidet, bleibt damit wahr.
+
+**Ein Ref zu lesen ist hier erlaubt und beim Holen weiter verboten.** DP1s
+fehlendes `branch`-Feld bleibt ein fehlendes Argument: was ankommt, ist der
+angeheftete Commit, und was das Remote veröffentlicht, wird aufgeschrieben und
+nie ausgecheckt. Drei Zustände statt zwei, weil es drei gibt - ein Commit ist
+ein Angebot, `null` nimmt ein stehendes zurück, und Schweigen sagt nichts: wer
+nicht antworten konnte, hat nicht gesagt, dass es nichts Neueres gibt.
+
+**Der Preis ist benannt:** wer nie *jetzt holen* drückt, erfährt nie von einem
+Angebot. Das passt zu diesem Baum, in dem ohne Frage nichts geschieht, und ist
+die Antwort auf die Frage, die die Notiz darunter offen liess. Der Weg steht
+als Durchlauf gegen echte Prozesse: der Autor legt einen neueren Commit hin,
+eine Person drückt *jetzt holen*, das Angebot erscheint neben der Anheftung,
+und die Annahme bewegt sie - womit `home.depot.offer.accept` die 51. der 54
+Link-Türen ist, die ein echter Client hat annehmen lassen.
+
 Status note, 2026-08-28: **„Ein neuerer Commit ist ein Angebot" ist wieder
 eine Aussage über einen Typ und nicht über ein Pico.** Die Notiz vom
 2026-08-12 hielt genau das schon einmal fest - `offered` sei „already declared,

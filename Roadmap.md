@@ -767,16 +767,9 @@ Abschnitt nur die Frage und ihre Antwortmöglichkeiten.
   Seite formuliert ist; oder es so lassen und sagen, dass zwei Depots eine
   seltene Lage sind.
 
-- **Wer darf ein Depot nach etwas Neuerem fragen, und was heisst „neuer"?**
-  (Befund B38, ADR 0143.) Die Spalte, der Zustand, der Vergleich, die Annahme,
-  die Link-Operation und der Knopf sind gebaut; nur schreibt niemand die Spalte,
-  also antwortet die Annahme immer `no_offer_standing`. Der planmässige Lauf
-  darf nicht danach suchen — die ADR nennt ihn eine Instandsetzung —, und
-  DP1s fehlendes `branch`-Feld verbietet einem Ref zu folgen für das, was
-  *läuft*, nicht für das, was angeboten wird. *Antworten:* die Person, die
-  *jetzt holen* drückt, fragt auch nach dem Angebot; oder ein eigener,
-  selteneren Takt; oder es bleibt bis auf Weiteres unerreichbar und der Knopf
-  verschwindet.
+- ~~**Wer darf ein Depot nach etwas Neuerem fragen?**~~ — **beantwortet am
+  2026-09-01**: wer *jetzt holen* drückt, fragt mit; der planmässige Lauf
+  bleibt eine Instandsetzung. Gebaut, gepflanzt, 51 von 54 Link-Türen.
 
 - ~~**Darf das eigene Modell die eigenen Notizen sehen?**~~ — **beantwortet am
   2026-09-01**: PV4 nimmt einen erklärten eigenen Host aus, weil ein Zugang
@@ -1323,14 +1316,26 @@ Gestalt. Der Unterschied, auf den es ankäme - ein Feld, das eine *Tatsache*
 trägt, gegen eines, das eine Vorgabe übersteuert - ist ein Urteil und keine
 Syntax.
 
-**Nicht repariert, und der Grund ist eine offene Entscheidung.** *Woher* ein
-Home erfährt, dass es etwas Neueres gibt, steht nirgends. Zwei Sätze grenzen
-es ein: der planmässige Lauf darf es nicht sein — die ADR nennt ihn
-ausdrücklich eine Instandsetzung und keine Abfrage nach Commits —, und DP1s
-fehlendes `branch`-Feld verbietet einem Ref zu folgen für das, was *läuft*,
-nicht für das, was angeboten wird. Wer stattdessen fragen darf und was „neuer"
-heisst, gehört in ein ADR. ADR 0143 hat die datierte Notiz; die Messung steht
-in `runtime-real-process.test.ts`.
+**Entschieden am 2026-09-01: wer *jetzt holen* drückt, fragt mit.** Zwei Sätze
+grenzten die Antwort ein — der planmässige Lauf darf es nicht sein, weil die
+ADR ihn ausdrücklich eine Instandsetzung und keine Abfrage nach Commits nennt,
+und DP1s fehlendes `branch`-Feld verbietet einem Ref zu folgen für das, was
+*läuft*, nicht für das, was angeboten wird. Der Nutzer hat den von einer Person
+ausgelösten Abruf gewählt: er fragt das Remote zusätzlich, was es
+veröffentlicht, und ein abweichender Commit wird aufgeschrieben und nie
+ausgecheckt.
+
+**Drei Zustände statt zwei**, weil es drei gibt: ein Commit ist ein Angebot,
+`null` nimmt ein stehendes zurück, und Schweigen sagt nichts — wer nicht
+antworten konnte, hat nicht gesagt, dass es nichts Neueres gibt, und ein
+stehendes Angebot überlebt einen Versuch, der nicht durchkam.
+
+**Der Preis ist benannt**: wer nie *jetzt holen* drückt, erfährt nie von einem
+Angebot. Das passt zu diesem Baum, in dem ohne Frage nichts geschieht. Der Weg
+steht als Durchlauf — der Autor legt einen neueren Commit hin, eine Person
+drückt *jetzt holen*, das Angebot erscheint neben der Anheftung, und die
+Annahme bewegt sie —, und `pnpm link:walk` zählt danach **51 von 54**.
+Gepflanzt: fragt der Abruf nicht, erscheint kein Angebot.
 
 **B37 — Zwei Depots stellen zwei Fragen, die nichts unterscheidet
 (2026-08-28).** Beim Gehen von `home.depot.fetch.ask` gemessen und nicht
