@@ -784,11 +784,9 @@ Abschnitt nur die Frage und ihre Antwortmöglichkeiten.
   Gebaut, gemessen, 50 von 54 Link-Türen. Befund B39 trägt die Begründung und
   das, was die Regel kostete, solange sie ausnahmslos war.
 
-- **Wie schnell wird eine Frage losgeschickt?** (Befund B42, ADR 0116 W1.) Die
-  Ablehnung ist sofort, weil „a person who asked a question deserves the answer
-  now"; die Antwort wartet auf einen Zeitgeber mit sechzig Sekunden.
-  *Antworten:* beim Einreihen fegen, mit einer Entprellung gegen den Schwall;
-  ein kurzer erster Takt; oder die Fläche sagt ausdrücklich, dass es dauert.
+- ~~**Wie schnell wird eine Frage losgeschickt?**~~ — **beantwortet am
+  2026-09-01**: beim Einreihen fegen, entprellt über eine Sekunde, Zeitgeber
+  bleibt als Netz. Gebaut und mit einem Takt von einer Stunde bewiesen.
 
 **Was an ihnen hängt.** B39 ist beantwortet und hat den Rückrufweg geöffnet;
 B42 hält seither nichts mehr auf, sondern ist eine Frage der Antwortzeit. B38
@@ -1082,10 +1080,24 @@ derselbe, der die Wartezeit fragwürdig macht: wer dasitzt und wartet, wartet im
 schlechtesten Fall eine Minute, bevor die Frage überhaupt losgeschickt wird,
 und im Leerlauf kostet ein Fegen nichts.
 
-**Nicht repariert, weil auch das eine Entscheidung ist.** Beim Einreihen zu
-fegen ist eine Zeile; was sie kostet, ist die Grenze, für die der Zeitgeber da
-ist - ein Schwall Fragen fegte dann pro Frage. Entweder eine Entprellung, ein
-kurzer erster Takt oder ein ausdrückliches „das dauert" in der Fläche.
+**Entschieden am 2026-09-01: beim Einreihen fegen, entprellt.** Eine
+eingereihte Frage löst den Lauf selbst aus, mit einer Sperre von einer Sekunde
+davor; der Zeitgeber bleibt als Netz für alles, was ohne Anwesende entsteht.
+Die Sperre ist der Grund, warum er bleiben kann - er begrenzt, wie oft dieses
+Home gegen einen Beschleuniger läuft, der beschäftigt sein kann, und ein Lauf
+je Frage nähme diese Grenze weg. Ausgelöst wird erst nach dem tatsächlichen
+Einreihen: eine abgewiesene Frage kostet keinen Lauf.
+
+Die beiden anderen Antworten sind benannt und nicht gewählt: ein kurzer Takt
+zahlte für immer Leerlauf, damit ein seltenes Ereignis schneller wird, und ein
+„das dauert" in der Fläche liesse die Person weiter warten, während die
+Maschine daneben nichts tut - als *Ergänzung* bleibt es sinnvoll, sobald ein
+echter Anbieter langsam antwortet.
+
+**Der Weg beweist es, statt es zu behaupten**: er stellt den Takt auf eine
+Stunde. Käme die Antwort vom Zeitgeber, wäre er nach einer Stunde fertig statt
+nach Sekunden; ohne den Auslöser fällt er nach einer Minute mit
+`never_settled`, was daneben gepflanzt und gesehen wurde.
 
 **Und der Takt ist seit dem 2026-08-31 stellbar**, was ihn von einer Vermutung
 zu einer Zahl macht: `PICO_MODEL_JOB_SWEEP_INTERVAL_MS` steht jetzt neben den

@@ -1323,7 +1323,13 @@ describe('Electron-hosted companion runtime against real processes', () => {
    */
   it('fragt die eigene Erinnerung, behält die Antwort und nimmt sie zurück', async () => {
     const modelHost = await startFakeModelHost();
-    const core = await startCore({ PICO_MODEL_JOB_SWEEP_INTERVAL_MS: '500' });
+    /**
+     * **Der Takt steht hier auf einer Stunde, und das ist die Aussage.** Seit
+     * dem 2026-09-01 löst eine gestellte Frage den Lauf selbst aus (Befund
+     * B42); käme die Antwort vom Zeitgeber, wäre dieser Weg nach einer Stunde
+     * fertig statt nach Sekunden.
+     */
+    const core = await startCore({ PICO_MODEL_JOB_SWEEP_INTERVAL_MS: '3600000' });
     const { living, delegationId, signedDelegation } = await foundedDevice({
       core,
       prefix: 'pico-companion-recall-',

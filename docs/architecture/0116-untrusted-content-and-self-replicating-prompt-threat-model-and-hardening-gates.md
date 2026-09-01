@@ -13,6 +13,19 @@ dafür. Kommt die Frage durch, liegt sie in der Modellwarteschlange, und die
 einzige Stelle, die sie herausholt, ist ein Zeitgeber mit sechzig Sekunden.
 Einen zweiten Auslöser gibt es nicht.
 
+**Entschieden und gebaut am 2026-09-01.** Eine eingereihte Frage löst den Lauf
+jetzt selbst aus, entprellt über eine Sperre von einer Sekunde; der Zeitgeber
+bleibt als Netz für alles, was ohne Anwesende entsteht. Die Sperre ist der
+Grund, warum der Zeitgeber bleiben kann: er begrenzt, wie oft dieses Home gegen
+einen Beschleuniger läuft, der beschäftigt sein kann, und ein Lauf je Frage
+nähme genau diese Grenze weg - so ist es ein Lauf je Fenster. Ausgelöst wird
+erst, wenn die Zeile wirklich in der Warteschlange steht: eine abgewiesene
+Frage kostet keinen Lauf. Gewartet wird nicht, denn die Antwort auf „frag das"
+ist die Vorgangsnummer und nicht die Antwort des Modells.
+
+Der Realprozess-Weg stellt den Takt dafür auf eine Stunde: käme die Antwort vom
+Zeitgeber, wäre er nach einer Stunde fertig statt nach Sekunden.
+
 Kein Widerspruch: die Fläche ist ausdrücklich asynchron, `askRecall` gibt eine
 Vorgangsnummer zurück. Aber der Satz, der die Sofort-Ablehnung begründet, macht
 die Wartezeit zu einer Frage - und im Leerlauf kostet ein Fegen nichts. Beim
