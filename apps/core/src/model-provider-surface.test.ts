@@ -299,13 +299,15 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
 
   it('passes the parser\'s refusal out rather than flattening it', async () => {
     // ADR 0151 PV4: the wider allowance without a credential is a sentence
-    // about what the decision needed, not a generic bad request.
+    // about what the decision needed, not a generic bad request. About a class
+    // with another end - `declared_own_host` has none and is exempt since
+    // 2026-09-01.
     const { app, person } = await bootWithPerson();
     const response = await app.inject({
       method: 'POST',
       url: '/api/model/providers/a-measured-host/decision',
       headers: { authorization: person },
-      payload: { providerClass: 'declared_own_host', carries: 'live_turn_and_retrieved_memory' },
+      payload: { providerClass: 'pico_endpoint', carries: 'live_turn_and_retrieved_memory' },
     });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: 'pico_model_provider_allowance_without_credential' });
@@ -474,10 +476,11 @@ describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () =
     // wants the simple layer here anyway: no throughput figure travels.
     expect(listedBefore.generationTokensPerSecond).toBeUndefined();
 
-    // ADR 0151 PV4's refusal reaches the device as itself, not as a shrug.
+    // ADR 0151 PV4's refusal reaches the device as itself, not as a shrug -
+    // for a class that has another end to prove.
     const refused = await send('home.model.provider.decision.submit', {
       entryId: 'a-measured-host',
-      providerClass: 'declared_own_host',
+      providerClass: 'pico_endpoint',
       carries: 'live_turn_and_retrieved_memory',
     });
     expect(refused.response.outcome).toBe('invalid_arguments');

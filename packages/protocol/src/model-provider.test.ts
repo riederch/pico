@@ -110,10 +110,31 @@ describe('ADR 0151 - the proof buys the memory, not the provider', () => {
 
   it('cannot write the wider allowance without the thing that earns it', () => {
     // PV4, and the construction matters: this is not a validation message
-    // about a missing field, it is that there is no such entry.
+    // about a missing field, it is that there is no such entry. Said about a
+    // class that *has* another end - the exception below is about the one
+    // that does not.
     expect(() => parsePicoModelProviderEntry(entry({
+      providerClass: 'pico_endpoint',
       carries: 'live_turn_and_retrieved_memory',
     }))).toThrow('pico_model_provider_allowance_without_credential');
+  });
+
+  it('lets a machine the person declares is theirs carry it with no credential', () => {
+    /**
+     * PV4's exception, decided 2026-09-01. A credential answers *who* is on
+     * the other end; `declared_own_host` has no other end, so a secret would
+     * be one the person holds at both ends and proves to nobody.
+     *
+     * The plain-HTTP reach is the point rather than an oversight: this is the
+     * ordinary self-hosted case, and PV5 would refuse a credential here - which
+     * is exactly why demanding one closed the whole memory path (Roadmap B39).
+     */
+    const parsed = parsePicoModelProviderEntry(entry({
+      reach: 'http://127.0.0.1:11434',
+      carries: 'live_turn_and_retrieved_memory',
+    }));
+    expect(parsed.carries).toBe('live_turn_and_retrieved_memory');
+    expect(parsed.credentialRef).toBeUndefined();
   });
 
   it('accepts the wider allowance once a credential stands behind it', () => {

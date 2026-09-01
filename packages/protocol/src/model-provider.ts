@@ -416,10 +416,33 @@ export function parsePicoModelProviderEntry(value: unknown): PicoModelProviderEn
   }
 
   if (carries === 'live_turn_and_retrieved_memory') {
-    if (credentialRef === undefined) {
-      // ADR 0151 PV4. Not a lax entry - not an entry. The narrower allowance
-      // is what saying nothing yields, and the wider one is stated together
-      // with the thing that earns it.
+    /**
+     * ADR 0151 PV4. Not a lax entry - not an entry. The narrower allowance is
+     * what saying nothing yields, and the wider one is stated together with
+     * the thing that earns it.
+     *
+     * **A machine the person declares is theirs is the one exception, decided
+     * on 2026-09-01.** A credential answers one question: *who* is on the other
+     * end. For every other class there is another end - a Home, a Vault, a
+     * connector, somebody's endpoint - and the proof is what keeps this
+     * person's retrieved memory from going to a stranger who answers on the
+     * same address. `declared_own_host` has no other end. The person named the
+     * machine as their own, and a secret handed to it would be a secret they
+     * hold at both ends and prove to nobody.
+     *
+     * **What this cost while it stood.** PV4 and PV5 together closed the whole
+     * memory path for the ordinary self-hosted case: a model on `127.0.0.1`
+     * has no TLS to carry a bearer over and usually no bearer to carry, so it
+     * could be measured and decided and then answer nothing - not the person's
+     * notes, and not even a corpus this Pico fetched itself, because a library
+     * read carries a reference and a reference is retrieved memory whatever
+     * its origin class. Roadmap finding B39 measured that against running
+     * processes before this exception was written.
+     *
+     * The class gate below still stands, and it is the one that matters here:
+     * declaring a machine yours does not make a cloud connector into one.
+     */
+    if (credentialRef === undefined && providerClass !== 'declared_own_host') {
       throw new Error('pico_model_provider_allowance_without_credential');
     }
     if (!picoModelProviderClassMayCarryRetrievedMemory(providerClass)) {

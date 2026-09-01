@@ -269,13 +269,15 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
   it('refuses a decision that could not produce an entry, where it is made', async () => {
     // ADR 0151 PV4. The wider allowance without a credential does not parse,
     // and the refusal belongs at the moment of deciding rather than on read.
+    // Said about a class with another end: `declared_own_host` has none, and
+    // carries it without a credential since 2026-09-01.
     const { registry: store, consent, close } = await registry();
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
       expect(() => consent.decide({
         entryId: 'a-measured-host',
         picoIdentityFingerprintHex: alice,
-        providerClass: 'declared_own_host',
+        providerClass: 'pico_endpoint',
         carries: 'live_turn_and_retrieved_memory',
         at: '2026-08-13T18:01:00.000Z',
       })).toThrow('pico_model_provider_allowance_without_credential');
