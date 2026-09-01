@@ -874,6 +874,23 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B48 — Die neuen Wege sind noch nie in CI gelaufen, also an zwei Kernen
+nachgestellt (2026-09-01).** Die Kette riss in CI an einer Toraussage, bevor die
+Testphase überhaupt begann — die elf Realprozess-Wege dieser Woche haben dort
+also noch nichts bewiesen. Sie starten echte Prozesse (Home, Vault-Daemon,
+Relay, Modell-Host), und der Runner hat zwei Kerne gegen sechzehn hier; genau
+diese Sorte Test ist in diesem Baum schon einmal an Systemlast zerbrochen.
+
+Nachgestellt mit `taskset -c 0,1`, der Form, mit der dieses Haus einen Runner
+schon einmal approximiert hat: **316 von 316 grün** in der Companion-Shell, 317
+Sekunden statt 97, und 91 von 91 im Web in fünf. Die Wege halten also auch,
+wenn ihnen ein Achtel der Maschine bleibt.
+
+Was das nicht sagt: ein Runner ist nicht nur langsamer, er hat auch weniger
+Speicher und eine andere Platte. Die Aussage ist über die Kerne und über nichts
+sonst — und sie ist billig genug, um sie vor dem nächsten Push zu wiederholen,
+statt sie zu vermuten.
+
 **B47 — Vier Wege ohne Pflanzung, nachgeholt (2026-08-31).** Beim Durchsehen
 der eigenen Woche gezählt: von den elf Realprozess-Wegen, die zwischen dem
 2026-08-27 und dem 2026-08-29 dazukamen, tragen sieben eine Pflanzung und vier
