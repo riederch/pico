@@ -1,7 +1,7 @@
 import {
   picoEventOriginClasses,
   type PicoEventOriginClass,
-} from './index.js';
+} from './origin-class.js';
 
 /**
  * ADR 0116 W3 - structural context assembly.

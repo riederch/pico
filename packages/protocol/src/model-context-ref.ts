@@ -1,7 +1,7 @@
 import {
   picoEventOriginClasses,
   type PicoEventOriginClass,
-} from './index.js';
+} from './origin-class.js';
 
 /**
  * ADR 0060, made real - **the reference a job carries, not the one a reader

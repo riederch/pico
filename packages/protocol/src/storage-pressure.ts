@@ -1,4 +1,4 @@
-import { foundationEventTypes, type FoundationEventType } from './index.js';
+import { foundationEventTypes, type FoundationEventType } from './foundation-event-type.js';
 
 /**
  * ADR 0119 Q1/Q2 - resource exhaustion posture.

@@ -95,6 +95,10 @@
       "types": "./dist/instant.d.ts",
       "import": "./dist/instant.js"
     },
+    "./foundation-event-type": {
+      "types": "./dist/foundation-event-type.d.ts",
+      "import": "./dist/foundation-event-type.js"
+    },
     "./home-address": {
       "types": "./dist/home-address.d.ts",
       "import": "./dist/home-address.js"
@@ -138,6 +142,10 @@
     "./offline-floor": {
       "types": "./dist/offline-floor.d.ts",
       "import": "./dist/offline-floor.js"
+    },
+    "./origin-class": {
+      "types": "./dist/origin-class.d.ts",
+      "import": "./dist/origin-class.js"
     },
     "./pico-rules": {
       "types": "./dist/pico-rules.d.ts",

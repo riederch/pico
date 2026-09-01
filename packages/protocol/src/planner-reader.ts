@@ -1,4 +1,4 @@
-import type { PicoEventOriginClass } from './index.js';
+import type { PicoEventOriginClass } from './origin-class.js';
 import {
   assemblePicoModelContext,
   mayPicoOriginInstruct,
