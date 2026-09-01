@@ -927,6 +927,21 @@ Drei Pflanzungen halten das fest: ein überspringender Prüfer ohne Eintrag, ein
 Eintrag für einen Prüfer, den es nicht gibt, und ein Prüfer, der unter der
 erzwungenen Umgebung doch Erfolg meldet. Alle drei bissen.
 
+**Und die Regel selbst fiel am nächsten Tag um, in der einzigen Umgebung, in
+der sie geprüft worden war: der falschen.** In CI meldete
+`vacuity:check` den zweiten Release-Prüfer als übersprungen und ohne Erklärung.
+Der Grund ist genau die Umgebungsabhängigkeit, über die dieser Befund
+geschrieben wurde: `check-release-monotonic.mjs` überspringt sich, wenn
+`GITHUB_REF_TYPE` gesetzt und kein Tag ist — auf einem Zweiglauf also immer —,
+und hier ist die Variable gar nicht gesetzt, weshalb er nicht springt, sondern
+am Netz scheitert. Die neue Regel sah ihn deshalb nie.
+
+Ein Eintrag darf jetzt auch *begründen, dass er nicht erzwingbar ist*, und
+dieser tut es: die Arbeit dieses Prüfers **ist** eine Registry-Abfrage, und ein
+Audit, das ihn dazu brächte, prüfte eine Registry und hinge in jedem Lauf an
+einem Netz. Beide Umgebungen sind jetzt nachgefahren — mit und ohne
+`GITHUB_REF_TYPE` —, was beim ersten Mal zu tun gewesen wäre.
+
 **B45 — Ein Argument ist ein Satz von damals, und drei waren abgelaufen
 (2026-08-29).** Die Tore dieses Hauses lassen eine Lücke stehen, wenn jemand
 sie *begründet* — rund vierzig solcher Sätze stehen verteilt in
