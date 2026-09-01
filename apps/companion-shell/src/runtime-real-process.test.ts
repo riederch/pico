@@ -704,17 +704,19 @@ describe('Electron-hosted companion runtime against real processes', () => {
       expect(await runtime.readPendingActions(session)).toEqual([]);
 
       /**
-       * **Gemessen, nicht behauptet: zwei Depots stellen zwei Fragen, die
-       * nichts unterscheidet.** Der Eintrag trägt vier Felder - Ereignis-Id,
-       * Satz, Risikoklasse und Ablauf -, und der Satz ist der des Effekts. Wer
-       * zwei Depots angehängt hat, bekommt zweimal dieselbe Zeile und
-       * beantwortet sie, ohne zu wissen, welches Depot gemeint ist - bei dem
-       * einen Effekt im Baum, der Code installiert.
+       * **Zwei Depots stellen zwei Fragen, und sie unterscheiden sich** (ADR
+       * 0141 RN3 mit RN4, Befund B37, entschieden am 2026-09-01). Bis hierher
+       * trug ein Eintrag vier Felder - Ereignis-Id, Satz, Risikoklasse und
+       * Ablauf -, und der Satz ist der des Effekts: wer zwei Depots angehaengt
+       * hatte, bekam zweimal dieselbe Zeile und beantwortete sie, ohne zu
+       * wissen, welches Depot gemeint war, bei dem einen Effekt im Baum, der
+       * Code installiert.
        *
-       * Das steht hier als Messung und nicht als Reparatur: *was* eine Person
-       * gefragt wird, entscheidet ADR 0139 AC4 (der Satz kommt aus dem
-       * Manifest, nicht vom Aufrufer), und einen Betreff daneben zu setzen ist
-       * eine Entscheidung und keine Implementierung. Befund B37 hält sie fest.
+       * Repariert in der Gestalt, die RN3 fuer die Zustimmungsaussage schon
+       * entschieden hatte, und nicht in einer neuen: der Satz bleibt der des
+       * Manifests (ADR 0139 AC4), und die Argumente stehen als beschriftete
+       * Daten daneben. Deshalb steht unten beides - derselbe Satz zweimal, und
+       * zwei verschiedene `remote`.
        */
       await runtime.attachDepot({
         remote: 'file:///srv/depots/others',
@@ -730,11 +732,37 @@ describe('Electron-hosted companion runtime against real processes', () => {
         prompt: string;
         risk: string;
         expiresAt: string;
+        arguments: ReadonlyArray<{ name: string; value: unknown; originClass: string }>;
+        carriesExternalContent: boolean;
       }>;
       expect(both).toHaveLength(2);
+      // Der Satz ist unveraendert derselbe. Das ist keine Schwaeche mehr,
+      // sondern die Aussage: es wird nicht daneben komponiert.
       expect(new Set(both.map((waiting) => waiting.prompt)).size).toBe(1);
-      expect(Object.keys(both[0]!).sort())
-        .toEqual(['expiresAt', 'prompt', 'requestedEventId', 'risk']);
+      expect(Object.keys(both[0]!).sort()).toEqual([
+        'arguments', 'carriesExternalContent', 'expiresAt', 'prompt', 'requestedEventId', 'risk',
+      ]);
+      expect(new Set(both.map((waiting) =>
+        waiting.arguments.find((argument) => argument.name === 'remote')?.value)))
+        .toEqual(new Set([remote, 'file:///srv/depots/others']));
+      /**
+       * Die Herkunftsklasse reist mit, und sie ist `own_pico` und nicht
+       * `person_present`: die Person hat *jetzt holen* gedrueckt, aber die
+       * Werte selbst kommen aus der Anheftungszeile - Picos eigener Aufschrieb
+       * einer frueheren Entscheidung, nicht etwas, das eben getippt wurde.
+       * Erwartet war hier zuerst `person_present`; der Lauf hat das
+       * widerlegt, und die Zeile im Home, die es entscheidet, sagt genau
+       * diesen Grund.
+       *
+       * Nichts an dieser Frage kam von aussen, und das sagt das letzte Feld -
+       * ADR 0116 W3 heisst hier, dass eine Bestaetigung nichts Beruhigendes
+       * sagen kann, was ein fremder Wert ihr in den Mund gelegt haette.
+       */
+      for (const waiting of both) {
+        expect(waiting.carriesExternalContent).toBe(false);
+        expect(waiting.arguments.map((argument) => argument.originClass))
+          .toEqual(['own_pico', 'own_pico']);
+      }
     } finally {
       await runtime.stop();
     }

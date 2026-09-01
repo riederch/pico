@@ -1,3 +1,4 @@
+import type { PicoActionArgument } from '@pico/protocol/action';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 
 /**
@@ -392,6 +393,15 @@ export interface PicoCompanionPendingApproval {
   prompt: string;
   risk: string;
   expiresAt: string;
+  /**
+   * ADR 0141 RN3's data layer, on a question that is still waiting (Befund
+   * B37, 2026-09-01). Was ausgefuehrt wird, als beschriftete Daten - nie im
+   * Satz, damit kein fremder Wert eine Bestaetigung etwas sagen lassen kann.
+   * Zwei Depots unterscheiden sich hier und sonst nirgends.
+   */
+  arguments: readonly PicoActionArgument[];
+  /** True, wenn eines dieser Argumente von ausserhalb dieses Picos kam. */
+  carriesExternalContent: boolean;
 }
 
 /**

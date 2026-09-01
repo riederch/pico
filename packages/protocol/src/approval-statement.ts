@@ -92,6 +92,69 @@ export interface PicoApprovalStatementInput {
 }
 
 /**
+ * ADR 0116 W3's data layer, alone: the values that will execute, as labeled
+ * data, and whether any of them came from outside.
+ *
+ * **Warum das eine eigene Funktion ist** (2026-09-01, Befund B37). Die
+ * Zustimmungsaussage ist nicht die einzige Stelle, an der eine Person Daten
+ * neben einem Satz liest: eine *wartende* Frage (ADR 0141 RN4) steht in
+ * derselben Lage, und ohne diese Schicht standen dort zwei Depots als zwei
+ * ununterscheidbare Zeilen. Die Regel, nach der ein Wert vor die Augen einer
+ * Person kommt - Feld fuer Feld neu gebaut, kein Durchreichen, die
+ * Herkunftsklasse durch die gemeinsame Rangpruefung -, darf nicht zweimal
+ * geschrieben sein: eine Wahrheit, zweimal geschrieben, driftet, und die
+ * zweite Fassung waere die nachlaessigere.
+ */
+export function picoApprovalDataLayer(requestArguments: unknown): {
+  arguments: readonly PicoActionArgument[];
+  carriesExternalContent: boolean;
+} {
+  if (!Array.isArray(requestArguments)) {
+    throw new Error('invalid_pico_approval_statement_input');
+  }
+
+  const args = (requestArguments as unknown[]).map((entry) => {
+    const argument = isRecord(entry) ? entry : undefined;
+    if (argument === undefined) {
+      throw new Error('invalid_pico_approval_argument');
+    }
+    assertExactKeys(
+      argument,
+      ['name', 'value', 'originClass'],
+      'invalid_pico_approval_argument',
+    );
+    if (typeof argument.name !== 'string') {
+      throw new Error('invalid_pico_approval_argument');
+    }
+    if (typeof argument.value !== 'string'
+      && typeof argument.value !== 'number'
+      && typeof argument.value !== 'boolean') {
+      throw new Error('invalid_pico_approval_argument');
+    }
+    if (typeof argument.originClass !== 'string') {
+      throw new Error('invalid_pico_approval_argument');
+    }
+    // Through the shared rank check, so no unknown class reaches a person.
+    const originClass = argument.originClass as PicoActionArgument['originClass'];
+    picoOriginTrustRank(originClass);
+    // Rebuilt field by field rather than spread: a passthrough would carry
+    // whatever else happened to be on the object into what a person reads.
+    return Object.freeze({
+      name: argument.name,
+      value: argument.value,
+      originClass,
+    }) satisfies PicoActionArgument;
+  });
+
+  return Object.freeze({
+    arguments: Object.freeze(args),
+    carriesExternalContent: args.some(
+      (argument) => argument.originClass === 'external_content',
+    ),
+  });
+}
+
+/**
  * ADR 0141 RN3. Composes the statement from the fields that will execute.
  *
  * There is no parameter for a prompt, a summary or a rationale. That absence
@@ -145,42 +208,7 @@ export function buildPicoApprovalStatement(
     // that is not one would be prose arriving in the sentence.
     throw new Error('invalid_pico_approval_instance');
   }
-  if (!Array.isArray(request.arguments)) {
-    throw new Error('invalid_pico_approval_statement_input');
-  }
-
-  const args = (request.arguments as unknown[]).map((entry) => {
-    const argument = isRecord(entry) ? entry : undefined;
-    if (argument === undefined) {
-      throw new Error('invalid_pico_approval_argument');
-    }
-    assertExactKeys(
-      argument,
-      ['name', 'value', 'originClass'],
-      'invalid_pico_approval_argument',
-    );
-    if (typeof argument.name !== 'string') {
-      throw new Error('invalid_pico_approval_argument');
-    }
-    if (typeof argument.value !== 'string'
-      && typeof argument.value !== 'number'
-      && typeof argument.value !== 'boolean') {
-      throw new Error('invalid_pico_approval_argument');
-    }
-    if (typeof argument.originClass !== 'string') {
-      throw new Error('invalid_pico_approval_argument');
-    }
-    // Through the shared rank check, so no unknown class reaches a person.
-    const originClass = argument.originClass as PicoActionArgument['originClass'];
-    picoOriginTrustRank(originClass);
-    // Rebuilt field by field rather than spread: a passthrough would carry
-    // whatever else happened to be on the object into what a person reads.
-    return Object.freeze({
-      name: argument.name,
-      value: argument.value,
-      originClass,
-    }) satisfies PicoActionArgument;
-  });
+  const data = picoApprovalDataLayer(request.arguments);
 
   return Object.freeze({
     schema: picoApprovalStatementSchema,
@@ -191,10 +219,7 @@ export function buildPicoApprovalStatement(
       instance: record.instance as string | null,
       privacyDomain: record.privacyDomain,
     }),
-    arguments: Object.freeze(args),
-    carriesExternalContent: args.some(
-      (argument) => argument.originClass === 'external_content',
-    ),
+    ...data,
   });
 }
 

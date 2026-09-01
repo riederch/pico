@@ -1,3 +1,6 @@
+import { picoApprovalDataLayer } from '@pico/protocol/approval-statement';
+import type { PicoActionArgument } from '@pico/protocol/action';
+
 import type { PicoActionDecision } from './action-path.js';
 
 /**
@@ -66,12 +69,32 @@ export class PicoPendingActions {
     return { ok: true };
   }
 
-  /** What is still standing, newest last, for the device that asked. */
+  /**
+   * What is still standing, newest last, for the device that asked.
+   *
+   * **Der Satz und die Daten daneben, und nie ineinander** (2026-09-01,
+   * Befund B37, Entscheidung des Nutzers). Bis hierher trug eine wartende
+   * Frage vier Felder, und `prompt` kommt aus dem Manifest des Moduls (ADR
+   * 0139 AC4) - es nennt also den Effekt und nie den Gegenstand. Wer zwei
+   * Depots angehaengt hatte und *jetzt holen* drueckte, bekam zweimal
+   * dieselbe Zeile, ausgerechnet an dem einen Effekt im Baum, der Code
+   * installiert.
+   *
+   * Repariert in der Gestalt, die ADR 0141 RN3 fuer die Zustimmungsaussage
+   * schon entschieden hat, und nicht in einer neuen: der Satz bleibt
+   * unveraendert das, was das Modul zugesagt hat, und die Argumente stehen
+   * als beschriftete Daten daneben - nie hineininterpoliert, jedes mit seiner
+   * Herkunftsklasse, und `carriesExternalContent`, wenn eines von aussen kam.
+   * Der ganze Angriff auf eine Bestaetigung ist, sie etwas Beruhigendes
+   * *sagen* zu lassen; deshalb bekommt kein Wert einen Weg in das Sagen.
+   */
   public forSession(presenceSessionId: string): ReadonlyArray<{
     requestedEventId: string;
     prompt: string;
     risk: string;
     expiresAt: string;
+    arguments: readonly PicoActionArgument[];
+    carriesExternalContent: boolean;
   }> {
     this.prune();
     return Object.freeze([...this.waiting.values()]
@@ -81,6 +104,9 @@ export class PicoPendingActions {
         prompt: entry.prompt,
         risk: entry.risk,
         expiresAt: new Date(entry.endsAtMs).toISOString(),
+        // Durch dieselbe Funktion wie die Zustimmungsaussage: die Regel, nach
+        // der ein Wert vor die Augen einer Person kommt, steht einmal.
+        ...picoApprovalDataLayer(entry.decided.request.arguments),
       })));
   }
 
