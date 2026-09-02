@@ -797,6 +797,7 @@ describe('Electron-hosted companion runtime against real processes', () => {
   it('holt ein echtes Depot und hängt den Zulieferer an, den es erklärt', async () => {
     const { remote, commit, git } = createDepotRemote();
 
+    const modelHost = await startFakeModelHost();
     const core = await startCore();
     const { living, delegationId } = await foundedDevice({ core, prefix: 'pico-companion-supplier-' });
 
@@ -866,6 +867,74 @@ describe('Electron-hosted companion runtime against real processes', () => {
       expect(((await runtime.readSuppliers()).suppliers as ReadonlyArray<Record<string, unknown>>)[0])
         .toMatchObject({ mayReachOutside: true, mayReachUnasked: true });
 
+      /**
+       * **Und was das Depot erklärt hat, wird auch gelesen** (ADR 0116 W5 mit
+       * ADR 0136 BR2, Befund B53).
+       *
+       * `home.model.read.keep` war bis zum 2026-09-02 die eine Link-Tür, die
+       * niemand je aufbekommen hat, und der Grund lag im Produkt und nicht im
+       * Doppel: das Haus sagte einem Modell für einen `token` nur `string` an
+       * und hielt die Antwort danach gegen ein Muster, also fiel jede
+       * Bibliotheksmessung als `answer_was_not_the_declared_shape` durch.
+       * Seit die Ansage vollständig ist, geht der Weg.
+       *
+       * Der Anbieter trägt hier die breitere Erlaubnis, und das ist keine
+       * Bequemlichkeit: ein Bibliothekslesen schliesst einen Auszug aus einem
+       * Dokument ein, also verlangt es mehr als den lebenden Zug.
+       */
+      await runtime.askModelProviderMeasurement({
+        reach: modelHost.reach,
+        model: 'a-model:measured',
+      });
+      expect(await eventually(async () => {
+        const entries = (await runtime.readModelProviderMeasurements()) as ReadonlyArray<{
+          entryId: string;
+          state: string;
+        }>;
+        const entry = entries.find((candidate) => candidate.entryId === 'a-model:measured');
+        return entry !== undefined && entry.state !== 'running' ? entry : undefined;
+      })).toMatchObject({ state: 'settled' });
+      await runtime.decideModelProvider({
+        entryId: 'a-model:measured',
+        providerClass: 'declared_own_host',
+        carries: 'live_turn_and_retrieved_memory',
+      });
+
+      /**
+       * Die Lesearbeit entsteht beim Holen und nicht beim Anhängen: der
+       * Zulieferer sagt erst jetzt, wohin das Material gehört, also wird erst
+       * jetzt etwas eingereiht. Deshalb hier ein zweiter Abruf.
+       */
+      await runtime.decideRule({
+        effectName: 'depot.fetch',
+        privacyDomain: 'private',
+        decision: 'allow',
+      });
+      expect(await runtime.askDepotFetch('pico-shell-read-session'))
+        .toMatchObject({ requested: 1 });
+
+      const answered = await eventually(async () => {
+        const reads = (await runtime.readAnsweredReads()) as ReadonlyArray<{
+          jobId: string;
+          supplier: string;
+        }>;
+        return reads.find((read) => read.supplier === 'git-library');
+      });
+      /**
+       * Was die Messung gefunden hat, steht *nicht* darin. ADR 0116 W5: ein
+       * Gerät, das den Wert schon zeigte, hätte abgeleitetes Material auf
+       * einen Bildschirm geschrieben, bevor jemand ja gesagt hat.
+       */
+      expect(Object.keys(answered!).sort())
+        .toEqual(['answeredAt', 'jobId', 'revision', 'supplier']);
+
+      // Der Druck ist der Schreibvorgang, und er geht durch dieselbe Tür wie
+      // ein behaltener Rückruf (ADR 0126 P3).
+      const keptItemId = await runtime.keepAnsweredRead(answered!.jobId);
+      expect(keptItemId).toMatch(/^memory_[0-9a-f]{32}$/u);
+      // ADR 0071. Und der Schreibvorgang hat eine Rücknahme.
+      await runtime.forgetMemory(keptItemId);
+
       await runtime.detachSupplier('git-library');
       const detached = await runtime.readSuppliers();
       expect(detached.suppliers).toEqual([]);
@@ -875,22 +944,14 @@ describe('Electron-hosted companion runtime against real processes', () => {
         .map((entry) => entry.identifier)).toEqual(['git-library']);
 
       /**
-       * **Und das Angebot, das kein Home je sieht** (Befund B38).
+       * **Und das Angebot, das lange kein Home je sah** (Befund B38).
        *
        * Der Autor des Depots legt einen neueren Commit hin. ADR 0143 DP1 sagt,
        * das sei ein Angebot: nichts wird deswegen geholt, und eine Person
-       * entscheidet. Der Weg dorthin endet aber immer hier - `offered_commit`
-       * hat in diesem Baum keinen Erzeuger. `recordPicoDepotFetchOutcome` ist
-       * die einzige Tür in die Spalte, und ihr einziger Aufrufer im Produkt
-       * gibt das Feld nie mit, also ist `offeredCommit` an einem echten Home
-       * immer abwesend und `home.depot.offer.accept` antwortet immer
-       * `no_offer_standing`.
-       *
-       * Das steht hier als Messung und nicht als Reparatur: *woher* ein Home
-       * erfährt, dass es etwas Neueres gibt, ist offen. Die ADR verbietet dem
-       * planmässigen Lauf, danach zu suchen - er ist eine Instandsetzung und
-       * keine Abfrage nach Commits -, und sie sagt nicht, wer stattdessen
-       * fragen darf. ADR 0143 hat die datierte Notiz dazu.
+       * entscheidet. Der Weg dorthin endete bis zum 2026-09-01 immer hier -
+       * `offered_commit` hatte in diesem Baum keinen Erzeuger, also war
+       * `offeredCommit` an einem echten Home immer abwesend und
+       * `home.depot.offer.accept` antwortete immer `no_offer_standing`.
        */
       git(['commit', '-q', '--allow-empty', '-m', 'was der Autor danach veröffentlicht hat']);
       const newer = git(['rev-parse', 'HEAD']).trim();

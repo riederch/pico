@@ -88,6 +88,50 @@ export interface PicoFakeModelHost {
   close(): Promise<void>;
 }
 
+/**
+ * Ein Wert, der die angesagte Form wirklich einhaelt.
+ *
+ * **Vorher las das nur `type`, und das war lange genug** (2026-09-02, Befund
+ * B53). Ein echter Host mit `format` erzeugt gegen das Schema; dieser hier
+ * soll dasselbe tun, sonst misst ein Durchlauf die Nachsicht des Doppels statt
+ * die Strenge des Hauses. Solange das Schema fuer ein `token` nur `string`
+ * sagte, konnte er das gar nicht: er antwortete einen Satz, das Haus warf ihn
+ * als `answer_was_not_the_declared_shape` weg, und `home.model.read.keep`
+ * blieb die eine Link-Tuer, die nie jemand aufbekommen hat.
+ *
+ * Jetzt trage `pattern` und `maxLength` mit, also werden sie befolgt: ein
+ * Muster erzeugt einen Wert, der darauf passt, statt einen, der nur eine
+ * Zeichenkette ist.
+ */
+function answerFor(
+  declared: { type?: string; pattern?: string; maxLength?: number } | undefined,
+  text: string | undefined,
+): unknown {
+  if (declared?.type === 'boolean') {
+    return true;
+  }
+  if (declared?.type === 'number' || declared?.type === 'integer') {
+    return 1;
+  }
+  const said = text ?? 'Answered by a host that exists only in a test.';
+  if (declared?.pattern === undefined) {
+    return declared?.maxLength === undefined ? said : said.slice(0, declared.maxLength);
+  }
+  const pattern = new RegExp(declared.pattern, 'u');
+  if (pattern.test(said)) {
+    return said;
+  }
+  // Kein Loesen des Musters, sondern zwei Antworten, die dieser Baum kennt:
+  // die Zeichenform eines Tokens und die kanonische Form eines Zeitpunkts. Ein
+  // drittes Muster faellt hier auf, statt still etwas Falsches zu erzeugen.
+  for (const candidate of ['answered-by-a-test-host', '2026-01-01T00:00:00.000Z']) {
+    if (pattern.test(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`this fake host has no answer that satisfies ${declared.pattern}`);
+}
+
 export async function startPicoFakeModelHost(
   options: PicoFakeModelHostOptions = {},
 ): Promise<PicoFakeModelHost> {
@@ -193,17 +237,14 @@ export async function startPicoFakeModelHost(
        * A job rather than a measurement: the runtime asks for a shape, so the
        * answer is built from that shape.
        */
-      const format = sent.format as
-        { properties?: Record<string, { type?: string }>; required?: string[] } | undefined;
+      const format = sent.format as {
+        properties?: Record<string, { type?: string; pattern?: string; maxLength?: number }>;
+        required?: string[];
+      } | undefined;
       if (format !== undefined) {
         const answer: Record<string, unknown> = {};
         for (const name of format.required ?? []) {
-          const declared = format.properties?.[name]?.type;
-          answer[name] = declared === 'boolean'
-            ? true
-            : (declared === 'number' || declared === 'integer'
-              ? 1
-              : options.text ?? 'Answered by a host that exists only in a test.');
+          answer[name] = answerFor(format.properties?.[name], options.text);
         }
         resident.set(requestedModel, sizeVram);
         send({

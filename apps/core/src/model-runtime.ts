@@ -18,8 +18,11 @@ import {
   picoModelProviderDigestMatches,
   type PicoModelProviderEntry,
 } from '@pico/protocol/model-provider';
+import { picoCanonicalInstantPattern } from '@pico/protocol/instant';
 import {
+  maxPicoReaderTextChars,
   picoReaderOutputSchema,
+  picoReaderTokenPattern,
   type PicoReaderValue,
   type PicoReaderValueType,
 } from '@pico/protocol/planner-reader';
@@ -93,13 +96,31 @@ export function picoModelJobDeadlineMs(
   return residency.coldLoadMs + (generationMs + promptMs) * 2;
 }
 
-const jsonTypeForReaderValue: Record<PicoReaderValueType, string> = {
-  token: 'string',
-  text: 'string',
-  number: 'number',
-  boolean: 'boolean',
-  instant: 'string',
-  reference: 'string',
+/**
+ * Jeder Wertetyp als das, was ein Modell einhalten soll - und zwar ganz.
+ *
+ * **Vorher stand hier nur `type`** (2026-09-02, Befund B53). Ein `token` wurde
+ * dem Host als `string` angesagt und danach gegen
+ * `picoReaderTokenPattern` gehalten; ein `text` als `string` und danach gegen
+ * eine Laengengrenze; ein `instant` als `string` und danach gegen die
+ * kanonische Form. Das Haus hielt eine Antwort an drei Regeln fest, die es nie
+ * gesagt hatte - und warf sie als `answer_was_not_the_declared_shape` weg. Der
+ * `topic` einer Depot-Bibliotheksmessung ist genau so ein `token`: ein Modell,
+ * das einen Satz antwortet, hat getan, was ihm gesagt wurde.
+ *
+ * **Abgeleitet und nicht abgeschrieben.** Das Muster und die Grenze kommen aus
+ * `@pico/protocol/planner-reader`, wo die Pruefung sie liest - eine Wahrheit,
+ * zweimal geschrieben, driftet, und hier waere die zweite Fassung die, die ein
+ * Modell zu sehen bekommt.
+ */
+const jsonSchemaForReaderValue: Record<PicoReaderValueType, Readonly<Record<string, unknown>>> = {
+  token: Object.freeze({ type: 'string', pattern: picoReaderTokenPattern.source }),
+  text: Object.freeze({ type: 'string', maxLength: maxPicoReaderTextChars }),
+  number: Object.freeze({ type: 'number' }),
+  boolean: Object.freeze({ type: 'boolean' }),
+  instant: Object.freeze({ type: 'string', pattern: picoCanonicalInstantPattern.source }),
+  // ADR 0060. Eine Referenz traegt dieselbe Zeichenform wie ein Token.
+  reference: Object.freeze({ type: 'string', pattern: picoReaderTokenPattern.source }),
 };
 
 /**
@@ -115,14 +136,14 @@ const jsonTypeForReaderValue: Record<PicoReaderValueType, string> = {
 export function picoModelAnswerSchema(job: PicoModelJob): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   for (const expectation of job.expects) {
-    const jsonType = jsonTypeForReaderValue[expectation.type as PicoReaderValueType];
-    if (jsonType === undefined) {
+    const declared = jsonSchemaForReaderValue[expectation.type as PicoReaderValueType];
+    if (declared === undefined) {
       throw new PicoModelDispatchError(
         'answer_was_not_the_declared_shape',
         `unknown expectation type ${expectation.type}`,
       );
     }
-    properties[expectation.name] = { type: jsonType };
+    properties[expectation.name] = declared;
   }
   return {
     type: 'object',

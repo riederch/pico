@@ -166,13 +166,43 @@ describe('ADR 0049 - one job, one entry, one answer', () => {
   });
 
   it('constrains the decoder rather than asking politely', () => {
-    // ADR 0117 X2 at the wire: a shape declared, not hoped for.
+    /**
+     * ADR 0117 X2 at the wire: a shape declared, not hoped for.
+     *
+     * **Und die Ansage war bis zum 2026-09-02 nur halb** (Befund B53). Dieser
+     * Test hielt `{ type: 'string' }` fuer einen `token` fest - waehrend das
+     * Haus die Antwort danach gegen `picoReaderTokenPattern` hielt und sie als
+     * `answer_was_not_the_declared_shape` wegwarf. Ein Modell, das einen Satz
+     * antwortete, hatte getan, was ihm gesagt wurde. Das Muster steht jetzt
+     * mit in der Ansage, und dieser Test ist die Stelle, an der es auffaellt,
+     * wenn es wieder verschwindet.
+     */
     expect(picoModelAnswerSchema(job())).toEqual({
       type: 'object',
-      properties: { month: { type: 'string' }, certain: { type: 'boolean' } },
+      properties: {
+        month: { type: 'string', pattern: '^[A-Za-z0-9._:-]{1,64}$' },
+        certain: { type: 'boolean' },
+      },
       required: ['month', 'certain'],
       additionalProperties: false,
     });
+  });
+
+  it('says the length limit for a text and the canonical form for an instant', () => {
+    // Dieselbe Aussage fuer die beiden anderen Typen, die eine Regel tragen:
+    // eine Antwort, die das Haus an einer ungesagten Grenze misst, ist keine
+    // angesagte Form.
+    const shape = picoModelAnswerSchema(job({
+      expects: [
+        { name: 'summary', type: 'text' },
+        { name: 'when', type: 'instant' },
+        { name: 'source', type: 'reference' },
+      ],
+    })) as { properties: Record<string, Record<string, unknown>> };
+    expect(shape.properties.summary).toEqual({ type: 'string', maxLength: 8_000 });
+    expect(shape.properties.when)
+      .toEqual({ type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$' });
+    expect(shape.properties.source).toEqual({ type: 'string', pattern: '^[A-Za-z0-9._:-]{1,64}$' });
   });
 });
 
