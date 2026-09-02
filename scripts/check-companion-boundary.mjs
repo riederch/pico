@@ -129,12 +129,18 @@ for (const name of preloadChannels.keys()) {
  * one, or that the window calls it - the two ends of the wire whose absence
  * would be exactly that.
  *
- * Measured before being written: all 57 channels are handled or sent, and all
- * 57 exposed methods are called by `renderer.ts`. So this direction starts
- * green with **no exemptions at all**, which is the cheapest a rule in this
+ * Measured before being written: all 57 channels were handled or sent, and all
+ * 57 exposed methods called by `renderer.ts`. So this direction started green
+ * with **no exemptions at all**, which is the cheapest a rule in this
  * repository gets - and it is worth having because the same shape (a door
  * with nobody behind it, or nobody in front) has been found five times in
  * other layers this month.
+ *
+ * **Nachgezaehlt am 2026-09-02: es sind 68**, und weiter ohne eine einzige
+ * Ausnahme. Die Zahl steht datiert daneben statt an ihrer Stelle: ein Satz,
+ * der eine Entscheidung mit einer Zahl begruendet, ist nur so lange wahr wie
+ * die Zahl - und im Nachbarpruefer stand deshalb bis heute die Behauptung,
+ * es gebe 44 (Befund B58).
  *
  * Two channels are `send` rather than `handle`: the main process pushes them
  * at the window, so a handler would be the wrong end to look for.
@@ -196,6 +202,12 @@ const rendererHtml = readFileSync(join(shellRoot, 'src', 'renderer', 'index.html
  * drei davon sind ein Abschnitt, ein zweiter Abschnitt und der Absendeknopf
  * eines Formulars, dessen Handler am Formular hängt. Eine Regel, die die drei
  * meldet, hätte drei falsche Fehlschläge und keinen richtigen.
+ *
+ * **Nachgezaehlt am 2026-09-02: 114 verlangte Elemente, 118 `id`s, vier nicht
+ * verlangt** - und die vier haben dieselbe Gestalt wie die drei von damals:
+ * `measure-host`, `reader-custody` und `relay-claim` sind Abschnitte, und
+ * `recall-ask` ist der Absendeknopf von `recall-form`, dessen Handler am
+ * Formular haengt. Das Argument gilt also weiter; nur die Zahl war alt.
  */
 const rendererScriptForElements = readFileSync(join(shellRoot, 'src', 'renderer.ts'), 'utf8');
 const declaredIds = new Set(
