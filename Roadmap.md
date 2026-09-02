@@ -864,6 +864,51 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B58 — Ein Sammelruf bürgte für zwölf Flächen, und die Messung hatte
+dieselbe zu enge Auswahl wie ihr Zwilling (2026-09-02).** `pnpm link:walk`
+zählte Operationen, und zwei der 54 sind Sammelrufe: `home.authority.list` und
+`home.authority.submit` verzweigen über ein `resource`-Feld. Wer eine von
+ihnen einmal durchbrachte, färbte damit alle zwölf Ressourcen dahinter grün —
+eine Auflösungsstufe, auf der genau die Frage wieder offen war, die diese
+Messung beantworten soll.
+
+Die Lücke war nicht neu: `check-link-reachability` hat sie eine Ebene darüber
+schon einmal gefunden, als `reader_custody_domains` vom Home ausgeliefert und
+von keinem Client je erfragt wurde. Dort ging es um *benannt*, hier um
+*angenommen*.
+
+Die Mitschrift trägt jetzt die Ressource mit. Das Ergebnis in zwei Schritten,
+und der zweite ist der Befund:
+
+- Mit der bisherigen Auswahl — nur die Companion-Shell-Testmenge — **11 von
+  12**. Es fehlte `home_state`.
+- Mit **jeder Testmenge, die ein echtes Home startet** — dieselbe Korrektur wie
+  in B54, nur eine Messung tiefer — **12 von 12**: der Vault-Daemon fährt seine
+  Link-Zeremonien und liest dabei den Zustand des Homes.
+
+Die Operationszahl blieb bei 52 von 54. Auf der oberen Ebene trug die eine
+Testmenge also alles; erst eine Auflösung tiefer fiel auf, dass die Auswahl zu
+eng war. **Zwei Messungen, dieselbe Krankheit, im Abstand von Stunden
+gefunden** — beide, weil jemand gefragt hat, wofür die Zahl eigentlich steht.
+
+**Und beim Umbau wäre die Zahl fast still falsch geworden.** Der Leser erkannte
+eine angenommene Operation an `endsWith(' ok')`. Das war richtig, solange zwei
+Felder dastanden, und wurde mit dem dritten falsch: jede Autoritätsanfrage
+hätte als abgelehnt gezählt. Aufgefallen ist es beim Schreiben, weil das Format
+sich änderte — der Leser liest jetzt Felder und kann daran nicht mehr
+zerbrechen.
+
+**Nebenbei eine Grenze, die ihren Grund überlebt hatte.**
+`check-link-reachability` sagte über sich, zwischen einer Laufzeitmethode und
+ihrem Kanal und zwischen einer Brückenfunktion und einem Bedienelement prüfe
+nichts, und begründete den Verzicht mit einer Messung von **44** Kanälen.
+Nachgemessen: `check-companion-boundary` hält heute **68 Kanäle auf beiden
+Seiten gleich benannt, 68 vom Hauptprozess beantwortet und 68 angebotene
+Methoden je vom Fenster gerufen**, dazu 114 Elemente. Die Kette ist nicht nur
+heil, sie wird gehalten. Was weiter niemand prüft, ist die letzte Spanne: dass
+ein *Druck* wirklich bei einem laufenden Home ankommt — dieselbe Lücke wie B36,
+und sie braucht ein echtes Fenster statt einer dritten Textprüfung.
+
 **B57 — Ein Pfad, der dasteht und nie gegangen wird: der Prüfer sieht keinen
 Transportschalter (2026-09-02).** Nach B56 blieben drei Routen mit Aufrufer und
 ohne Durchlauf. Beim Nachsehen, was ihnen fehlt, kam etwas anderes heraus als
