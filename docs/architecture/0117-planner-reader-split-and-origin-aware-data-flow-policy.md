@@ -2,6 +2,25 @@
 
 ## Status
 
+Status note, 2026-09-02 (Befund B53): **X2s angesagte Form war halb, und
+deshalb war eine Tuer nie aufgegangen.** Die Antwortform wird als JSON Schema
+mitgeschickt, damit ein Leser an sie gehalten werden kann statt darum gebeten
+zu werden. Fuer vier der sechs Wertetypen sagte sie aber nur `type`: ein
+`token` ging als `string` hinaus und wurde danach gegen
+`picoReaderTokenPattern` gehalten, ein `text` gegen eine Laengengrenze von
+8.000, ein `instant` gegen die kanonische Form. Ein Modell, das einen Satz
+antwortete, hatte getan, was ihm gesagt wurde - und das Haus warf die Antwort
+als `answer_was_not_the_declared_shape` weg.
+
+Die Folge war messbar und stand als falscher Grund im Baum: `topic` einer
+Depot-Bibliotheksmessung ist so ein `token`, also fiel jede Messung durch, und
+`home.model.read.keep` galt als die eine Link-Tuer, die das Test-Doppel nicht
+aufbekommt. Der Grund lag im Produkt.
+
+Muster und Grenze werden jetzt aus `planner-reader` und
+`@pico/protocol/instant` **abgeleitet** statt danebengeschrieben. Der Weg steht
+als Durchlauf gegen echte Prozesse, und `pnpm link:walk` zaehlt 52 von 54.
+
 Accepted as a pre-implementation security constraint refining ADR 0116
 W3; the split and its scope were chosen explicitly by the user on
 2026-08-01 within the ADR 0116 security initiative. X1, X2 and **X4 as a

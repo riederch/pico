@@ -864,6 +864,72 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B53 — Das Haus hielt eine Antwort an einer Regel fest, die es nie gesagt
+hatte — und das war die 52. Tür (2026-09-02).** `home.model.read.keep` war die
+eine Link-Operation, die niemand je aufbekommen hat, und der geschriebene
+Grund dafür war falsch: es hiess, das Test-Doppel könne die angesagte Form
+einer Bibliotheksmessung nicht erzeugen. Das Doppel konnte sie nicht erzeugen,
+aber der Grund lag im Produkt.
+
+`picoModelAnswerSchema` sagte einem Modell für einen `token` nur
+`{ type: 'string' }` an. Danach hielt `planner-reader` die Antwort gegen
+`picoReaderTokenPattern` — höchstens 64 Zeichen, keine Leerzeichen — und warf
+sie als `answer_was_not_the_declared_shape` weg. Der `topic` einer
+Depot-Bibliotheksmessung ist genau so ein `token`: **ein Modell, das einen Satz
+antwortet, hat getan, was ihm gesagt wurde.** Dasselbe für `text` (eine
+Längengrenze von 8.000, nie gesagt), für `instant` (die kanonische Form, nie
+gesagt) und für `reference`. Vier von sechs Wertetypen.
+
+Der Kommentar über der Funktion sagte die ganze Zeit, worum es geht: *„a shape
+declared, not hoped for … constraining the decoder is the difference between a
+shape that is declared and a shape that is hoped for"*. Die Ansage war halb.
+Und der Test, der das festhielt, hiess *„constrains the decoder rather than
+asking politely"* — er hielt die halbe Fassung fest.
+
+Repariert, indem das Muster und die Grenze aus `planner-reader` und
+`@pico/protocol/instant` **abgeleitet** werden statt abgeschrieben. Das Doppel
+befolgt jetzt, was ihm angesagt wird. Der Weg steht als Durchlauf: ein echtes
+Depot wird geholt, der Zulieferer angehängt, ein gemessener Anbieter trägt die
+breitere Erlaubnis, die Messung wird beantwortet, die Antwort behalten und
+zurückgenommen. `pnpm link:walk` zählt danach **52 von 54**; es bleiben die
+zwei aufgeschobenen Identitätsdrehungen (ADR 0114 T4). Gepflanzt: die halbe
+Ansage wiederhergestellt, und der Durchlauf endet in `never_settled`.
+
+**B52 — Neun Kopien der schwachen Zeitpunktregel, und das Tor dagegen sah nur
+seine eigene Gestalt (2026-09-02).** ADR-Notiz und Torkommentar sagen seit dem
+2026-08-20 dasselbe: „is this a canonical instant" existierte neunmal, jede
+Kopie prüfte nur den `toISOString`-Rundlauf, die erweiterte Jahresform kommt
+dadurch — `+275760-09-13T00:00:00.000Z` ist ein echtes `Date`, das sich selbst
+zurückgibt, und `+` steht unter jeder Ziffer, also sortiert die fernste
+Zukunft als Zeichenkette **vor jedem gewöhnlichen Jahr**. Die Regel zog nach
+`@pico/protocol/instant`, und das Tor sollte „die zehnte Kopie" abweisen.
+
+**Es gab neun, und es sah keine.** Der Sucher lautete
+`toISOString\(\)\s*===\s*\w+` — genau die Gestalt, aus der die Regel
+herausgelöst worden war: ein *Prädikat*, das wahr zurückgibt. Jede verbliebene
+Kopie war eine *Wache*: `!==`, die wirft, und rechts oft ein Zugriff wie
+`record.value` statt eines Bezeichners. Gemessen am 2026-09-02, neun Stellen —
+und sie teilen sich:
+
+- **Fünf trugen die Lücke selbst** (nur der Rundlauf, keine feste Breite):
+  `@pico/identity`, das `dueAt` eines fälligen Eintrags im Home, die
+  Zuliefererantwort im Protokoll, und zweimal `planner-reader` — der Wert, den
+  ein *Modell* antwortet, und der Ablauf einer opaken Referenz. Nachgemessen
+  statt behauptet: `planner-reader` nahm `+275760-…` an, `isPicoInstant` lehnt
+  es ab.
+- **Vier waren vollständig**, aber ein zweites Mal geschrieben:
+  Companion-Erstlauf, Companion-Wiederherstellung, `recovery.ts` im Protokoll,
+  `@pico/sync`.
+
+Alle neun rufen jetzt `isPicoInstant`. Das Tor liest beide Vergleiche und
+beide Seiten; gepflanzt mit genau der Wache, die dort stand — das alte Muster
+findet null, das neue eines.
+
+**Ein Tor, das nur die Gestalt kennt, aus der es entstanden ist, prüft seinen
+eigenen Anlass und nicht seine Klasse.** Das ist die verallgemeinerbare Zeile
+aus diesem Befund, und sie gilt für jedes Tor in diesem Verzeichnis, das aus
+einer einzelnen Reparatur entstanden ist.
+
 **B51 — Vier weitere Fassungen derselben Signierregel, und eine Entscheidung
 darunter (2026-09-01).** Das Tor aus B50 wurde absichtlich über den ganzen
 Baum gelassen und nicht über das Protokollpaket allein. Es fand sieben weitere
