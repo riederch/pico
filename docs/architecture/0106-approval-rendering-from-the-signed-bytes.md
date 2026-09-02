@@ -2,6 +2,23 @@
 
 ## Status
 
+Status note, 2026-09-02 (**Entscheidung des Nutzers**, Befund B51): **Eine
+Regel, und der Aufrufer darf sein Feld benennen.** Die vier Fassungen von
+`assertAsciiToken` und `fixedHexBytes` ausserhalb des Protokolls sind
+zusammengelegt; `assertAsciiToken(value, reason?)` wirft ohne Grund den
+Fehlernamen wie bisher, mit Grund den Grund, und traegt den Fehler als
+`.fault` mit.
+
+Kein Ablehnungsname aendert sich - das war die Bedingung, unter der die
+Aenderung auf dem Signierweg vertretbar ist, und sieben Proben belegen sie.
+Dieselbe Gestalt, die R5 eine Ebene hoeher verlangt: eine Regel entscheidet die
+Bytes, und was eine Person liest, entsteht aus denselben Feldern statt daneben
+komponiert zu werden.
+
+Die Regel hat seither auch einen eigenen Test. Sechshundertdreizehn Pruefungen
+des Pakets liefen gruen ueber zwei verschiedene Ablehnungen, weil keine eine
+festhielt.
+
 Status note, 2026-09-01 (Befund B50): **Wie ein Feld zu Bytes wird, stand
 zweimal, und in vier von neunzehn Faellen sagten die beiden Fassungen etwas
 Verschiedenes.** R5 verlangt, dass der Satz einer Person aus denselben Feldern

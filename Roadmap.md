@@ -1160,15 +1160,39 @@ keine Regel**:
   keine Aufräumarbeit. Der Aussehen-Codec hat zudem mit Absicht *keine*
   Abhängigkeit, auch nicht auf das Protokoll.
 
-**Nicht repariert, weil darunter eine Entscheidung liegt und beide Seiten
-recht haben.** Die Fassung im Identitätspaket nimmt einen Grund als Parameter
-und sagt `invalid_delegation_id` — sie nennt das **Feld**. Die Fassung im
-Protokoll sagt `invalid_field_charset`, `empty_field`, `field_too_long` — sie
-nennt den **Fehler**. Keine ist die bessere: die eine sagt einer Person, *wo*
-etwas falsch ist, die andere *was*. Eine gemeinsame Fassung müsste beides
-sagen, und das ändert Ablehnungsnamen auf dem Signierweg — der Stelle, an der
-eine Änderung am teuersten falsch ist. Der Bestand steht mit Datum und
-Begründung im Tor, damit die Zahl nicht so aussieht, als sei sie null.
+**Entschieden am 2026-09-02: eine Regel, und der Aufrufer darf sein Feld
+benennen.** Die Fassung im Identitätspaket nahm einen Grund als Parameter und
+sagte `invalid_delegation_id` — sie nannte das **Feld**. Die des Protokolls
+sagt `invalid_field_charset`, `empty_field`, `field_too_long` — sie nennt den
+**Fehler**. Keine war die bessere: die eine sagt einer Person, *wo* etwas
+falsch ist, die andere *was*.
+
+**Und die Messung hat die Frage geschärft, nachdem der Nutzer sie zurückgab.**
+Ich hatte zunächst geschrieben, kein Test halte diese Namen fest. Das stimmt
+nur für `invalid_delegation_id` (eine Aufrufstelle, nirgends festgehalten);
+die **drei Namen des Protokolls sind sehr wohl festgehalten** — in
+`index.test.ts` an vier Stellen, in `memory-content-crypto.test.ts` und in
+`link-direct.test.ts`. Damit fielen zwei der vier angebotenen Antworten aus,
+und die empfohlene war eine fünfte, die ich vorher nicht gesehen hatte.
+
+`assertAsciiToken(value, reason?)` wirft ohne Grund den Fehlernamen wie bisher
+und mit Grund den Grund — und trägt den Fehler als `.fault` mit. **Kein
+einziger Ablehnungsname ändert sich**, sieben Proben belegen es, und beide
+Auskünfte existieren zum ersten Mal nebeneinander. Es ist die Gestalt, die
+`PicoModelProviderNarrowingError` mit `refusal` und `measured` schon benutzt:
+eine Ablehnung ohne ihre zweite Hälfte lässt raten.
+
+Zwei Dinge fielen dabei mit ab. `value` ist jetzt `unknown` — die Fassung im
+Companion-Profil hatte das, und sie hatte recht: ohne diese Zeile machte
+`encode` aus einer Zahl klaglos ein Feld. Und die Regel bekommt zum ersten Mal
+**einen eigenen Test**: 613 Prüfungen liefen grün über zwei verschiedene
+Ablehnungen, weil keine eine festhielt, und ein Tor kann das nicht nachholen —
+`check-canonical-bytes.mjs` zählt Definitionen, es führt keine aus. Gepflanzt:
+die Meldung nennt wieder nur den Fehler (beisst), die Länge wieder in Zeichen
+(beisst).
+
+Der Bestand im Tor steht damit auf **null gleiche Regeln** und drei
+Fundstellen, die nur den Namen teilen.
 
 **B50 — Was unterschrieben wird, entschieden zwei Dateien, und in vier von
 neunzehn Fällen verschieden (2026-09-01).** Beim Nachsehen, ob die letzte
