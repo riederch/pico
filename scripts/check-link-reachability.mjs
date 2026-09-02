@@ -29,16 +29,23 @@ import { readPicoLinkDirectOperations } from './link-operations.mjs';
  * **What this cannot do is follow the chain to a button.** An operation named
  * by a client library passes here, and a client function nobody calls is the
  * same disease one layer down - which is exactly how these three got past a
- * store check. `check-companion-boundary` ties the contract's channels to the
- * preload's; between a runtime method and its channel, and between a bridge
- * function and a control, nothing checks. Said rather than implied, so the
- * green line is read for what it claims.
+ * store check. Said rather than implied, so the green line is read for what it
+ * claims.
  *
- * **Measured before it was left open**, so nobody spends the effort twice: all
- * 44 IPC channels have a handler, every bridge function is called by the
- * renderer, and every runtime method is reached from main. The chain is whole
- * today. A third gate would find nothing and would have to be maintained
- * anyway, which is why the limit is stated rather than closed.
+ * **Und der Satz darunter war ueberholt** (2026-09-02 nachgemessen). Hier
+ * stand, zwischen einer Laufzeitmethode und ihrem Kanal und zwischen einer
+ * Brueckenfunktion und einem Bedienelement pruefe nichts, und daneben eine
+ * Messung von 44 Kanaelen, die den Verzicht begruendete. Beides stimmt nicht
+ * mehr: `check-companion-boundary` haelt heute **68 Kanaele auf beiden Seiten
+ * gleich benannt, 68 vom Hauptprozess beantwortet und 68 angebotene Methoden
+ * je vom Fenster gerufen**, dazu 114 Elemente, die das Fenster verlangt und
+ * `index.html` erklaert. Die Kette ist also nicht nur heil, sie wird gehalten.
+ *
+ * Was weiter niemand prueft, ist die letzte Spanne: dass ein *Druck* auf eines
+ * dieser Elemente wirklich bei einem laufenden Home ankommt. Das ist dieselbe
+ * Luecke, die Befund B36 eine Ebene hoeher gemessen hat - benannt ist nicht
+ * angenommen -, und sie braucht ein echtes Fenster und keine dritte
+ * Textpruefung.
  */
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));

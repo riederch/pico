@@ -47,10 +47,26 @@ const builtApp = join(repoRoot, 'apps', 'core', 'dist', 'app.js');
 const dispatchLine =
   '    const dispatchPicoLinkOperation = async (operation, args, principal, scheduleAfterReply) => {\n';
 
+/**
+ * **Und die Ressource dahinter, seit dem 2026-09-02** (Befund B58).
+ *
+ * `home.authority.list` und `home.authority.submit` sind Sammelrufe: sie
+ * verzweigen ueber ein `resource`-Feld, und die Zahl oben zaehlt den *Namen*.
+ * Wer eine der beiden Operationen einmal durchbringt, faerbt damit alle
+ * zwoelf Ressourcen dahinter gruen - eine Aufloesungsstufe, auf der genau die
+ * Frage wieder offen ist, die diese Messung beantworten soll.
+ *
+ * `check-link-reachability` hat dieselbe Luecke eine Ebene darueber schon
+ * einmal gefunden: `reader_custody_domains` wurde vom Home ausgeliefert und
+ * von keinem Client je erfragt. Dort ging es um *benannt*; hier geht es um
+ * *angenommen*.
+ */
 const traced = (tracePath) => dispatchLine
   + '        const __picoTraced = await __picoDispatchInner(operation, args, principal, scheduleAfterReply);\n'
   + `        try { (await import('node:fs')).appendFileSync(${JSON.stringify(tracePath)}, `
-  + 'operation + " " + __picoTraced.outcome + "\\n"); } catch {}\n'
+  + 'operation + " " + __picoTraced.outcome '
+  + '+ ((args && typeof args.resource === "string") ? " " + args.resource : "") '
+  + '+ "\\n"); } catch {}\n'
   + '        return __picoTraced;\n'
   + '    };\n'
   + '    const __picoDispatchInner = async (operation, args, principal, scheduleAfterReply) => {\n';
@@ -101,8 +117,14 @@ let failed;
 try {
   writeFileSync(builtApp, source.replace(dispatchLine, traced(tracePath)));
   writeFileSync(tracePath, '');
-  process.stdout.write('Running the companion-shell suite against a Home that writes down what it accepts.\n');
-  execFileSync('npx', ['pnpm@9.0.0', '--filter', '@pico/companion-shell', 'test'], {
+  process.stdout.write('Running every suite that starts a real Home, against one that writes down what it accepts.\n');
+  execFileSync('npx', [
+    'pnpm@9.0.0',
+    '--filter', '@pico/companion-shell',
+    '--filter', '@pico/vault-daemon',
+    '--filter', '@pico/web',
+    'test',
+  ], {
     cwd: repoRoot,
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -114,11 +136,44 @@ try {
   restore();
 }
 
+/**
+ * Eine Zeile ist `Operation Ergebnis [Ressource]`.
+ *
+ * Nach Feldern gelesen und nicht am Zeilenende erkannt: `endsWith(' ok')` war
+ * richtig, solange nur zwei Felder dastanden, und wurde am 2026-09-02 mit dem
+ * dritten still falsch - jede angenommene Autoritaetsanfrage waere als
+ * abgelehnt gezaehlt worden. Aufgefallen beim Schreiben, weil das Format sich
+ * aenderte; ein Leser, der Felder liest, kann daran nicht zerbrechen.
+ */
 const lines = readFileSync(tracePath, 'utf8').split('\n').filter((line) => line !== '');
-const accepted = new Set(lines.filter((line) => line.endsWith(' ok')).map((line) => line.split(' ')[0]));
-const refusedOnly = new Set(lines
-  .map((line) => line.split(' ')[0])
+const entries = lines.map((line) => {
+  const [operation, outcome, resource] = line.split(' ');
+  return { operation, outcome, resource };
+});
+const accepted = new Set(entries.filter((entry) => entry.outcome === 'ok')
+  .map((entry) => entry.operation));
+const refusedOnly = new Set(entries
+  .map((entry) => entry.operation)
   .filter((operation) => !accepted.has(operation)));
+
+/**
+ * ADR 0107 D4. Die Ressourcen hinter den zwei Sammelrufen, aus dem Home
+ * gelesen statt danebengeschrieben.
+ */
+const homeSource = readFileSync(join(repoRoot, 'apps', 'core', 'src', 'app.ts'), 'utf8');
+const servedResources = new Set();
+for (const name of ['executeHomeAuthorityList', 'executeHomeAuthoritySubmit']) {
+  const body = new RegExp(`function ${name}\\(([\\s\\S]*?)\\n  \\}`, 'u').exec(homeSource);
+  if (body === null) {
+    continue;
+  }
+  for (const found of body[1].matchAll(/case '(\w+)':/gu)) {
+    servedResources.add(found[1]);
+  }
+}
+const acceptedResources = new Set(entries
+  .filter((entry) => entry.outcome === 'ok' && entry.resource !== undefined)
+  .map((entry) => entry.resource));
 rmSync(workspace, { recursive: true, force: true });
 
 if (lines.length === 0 && failed === undefined) {
@@ -130,6 +185,24 @@ if (lines.length === 0 && failed === undefined) {
 
 const unwalked = operations.filter((operation) => !accepted.has(operation));
 console.log(`\n${accepted.size} of ${operations.length} operations were accepted by a running Home.`);
+
+/**
+ * Und die Aufloesungsstufe darunter, weil ein Sammelruf sonst fuer alles
+ * buergt, was hinter ihm liegt (Befund B58).
+ */
+if (servedResources.size === 0) {
+  console.log('No authority resource could be read from the Home, so nothing was measured one level down.');
+} else {
+  const unwalkedResources = [...servedResources].filter((resource) => !acceptedResources.has(resource));
+  console.log(`${acceptedResources.size} of ${servedResources.size} authority resources behind `
+    + '`home.authority.list` and `home.authority.submit` were accepted with an `ok`.');
+  if (unwalkedResources.length > 0) {
+    console.log('No resource of these was accepted in this run:');
+    for (const resource of unwalkedResources.sort()) {
+      console.log(`  ${resource}`);
+    }
+  }
+}
 if (refusedOnly.size > 0) {
   console.log(`${refusedOnly.size} reached it and were only ever refused: ${[...refusedOnly].join(', ')}`);
 }
