@@ -864,6 +864,68 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B55 — Der Aufrufer-Prüfer konnte nur fallen, wenn er zu streng war
+(2026-09-02).** Aus B54 blieben sechs Routen übrig, die einen Aufrufer haben
+und nie begangen wurden. Beim Nachsehen, wer sie ruft, stellte sich bei dreien
+heraus: **niemand.**
+
+- `GET /api/events`, der Blättern-Zwilling von `/api/events/tail`. Die Fläche
+  liest den Schwanz und schreibt mit `POST`.
+- `GET /api/memory/domains/:d/items/:id`, das Einzelstück neben seiner Liste.
+- `GET /api/memory/retention-policies/:id`, dasselbe neben seiner.
+
+**Drei Mechanismen, und jeder für sich reicht.**
+
+*Der Stamm bürgte für die Route darunter.* Der Prüfer schnitt die Adresse am
+ersten Parameter ab und schrieb daneben, der Stamm müsse „enden, wo die Route
+endet". Die Vorschau `(?![A-Za-z0-9_-])` hielt das für ein angehängtes
+*Zeichen* (`/api/auth/session` gegen `/api/auth/sessions`) und nicht für ein
+angehängtes *Segment*: `/api/events` steht mitten in `/api/events/tail`. Jetzt
+wird die ganze Route gebaut, Parameter als Platzhalter für genau ein Segment,
+Ende an einer URL-Grenze. **Fünf von 61 Urteilen ändern sich, jedes von Hand
+nachgesehen, kein Fehlalarm** — und damit fällt weg, was B44 für unauffindbar
+erklärt hatte („ein Muster, das sie fände, meldete auch Richtiges als falsch").
+
+*Prosa bürgte.* Für `GET /api/events` standen vier **Kommentare** im
+Protokollpaket — „the current Foundation POST /api/events" und drei ähnliche.
+Ein Kommentar enthält kein `'POST'` in Anführungszeichen, also sah die
+Verbprüfung dort gar kein Verb und liess die Nennung für jedes Verb gelten.
+`check-fingerprint-display` entfernt Kommentare seit dem 2026-08-21 und sagt
+auch warum; dieser Prüfer tat es nicht.
+
+*Und ein Präfix stellte sieben gerufene Routen still.* Das Argument für
+`/api/home/reader-custody/` sagte, das Produkt trage diese Aufzeichnungen über
+Link. Für sieben der zwölf Routen ist das falsch: die Zeremonien des
+Vault-Daemons rufen `domains`, `reader-grants`, `reader-grant-lifecycle` und
+`kek-rotations` genau dort, über HTTP, gegen ein echtes Home. Das Argument
+trägt jetzt nur noch `items` und `writer-grant*`.
+
+**Der eigentliche Befund ist aber die Form des Prüfers.** Er hatte genau eine
+Art zu fallen — eine Route ohne Aufrufer und ohne Argument. **Zu grosszügig zu
+sein war unsichtbar**, und daran sind B44 und B55 vorbeigekommen: die
+Pflanzungen (alter Stamm-Abgleich, Kommentare wieder mitgelesen) liessen ihn
+bestehen, nur mit anderen Zahlen.
+
+Die Gegenprobe ist entscheidbar und steht jetzt darin: **was als *ohne
+Aufrufer* begründet ist, darf der Abgleich nicht finden.** Wird es gefunden,
+ist entweder ein Client gebaut worden und das Argument hat ihn überlebt, oder
+der Abgleich ist zu weit geworden. Drei Pflanzungen, alle beissen — und die
+erste Messung dieser Regel sagte „null Widersprüche", was ein Artefakt war:
+die Prüfung stand *hinter* dem `continue` für gerufene Routen und lief genau
+für die Fälle nie, um die es geht. Erst als sie an die richtige Stelle rutschte,
+kamen die sieben heraus.
+
+**Und eine Doppelung fiel dabei mit.** Die Route-Einträge trugen ihre Adresse
+zweimal — einmal als `route`, einmal als `prefix` —, allein damit die
+Schlussprüfung („ein Argument über eine Route, die es nicht gibt") sie nicht
+meldete. Eine Wahrheit, zweimal geschrieben, und die zweite Fassung war nur
+dafür da, eine Prüfung stillzustellen; damit prüfte sie die Route-Einträge
+überhaupt nicht. Sie liest jetzt beide Gestalten, und bei einem Route-Eintrag
+auch sein Verb.
+
+Die Zeile des Prüfers sagt seither **37 mit Aufrufer und 24 begründet**, wo sie
+vorher 40 und 21 sagte.
+
 **B54 — Die Routenzahl war zu niedrig, weil die Messung sich ihre Zeugen
 ausgesucht hatte (2026-09-02).** `pnpm route:walk` meldete 26 von 61, und zehn
 der angeblich nie begangenen Routen waren die Reader-Custody-Familie. Der
@@ -1233,6 +1295,12 @@ neben ihrer Liste, `GET /api/memory/domains/:d/items/:id` neben ihrer -, hat
 kein eigenes Stück, an dem ein Muster sie festhalten könnte. Beide sind gelesen
 und beide haben keinen Aufrufer; sie stehen hier, weil ein Muster, das sie
 fände, auch Richtiges als falsch meldete.
+
+*Nachtrag 2026-09-02 (B55): das war zu früh aufgegeben.* Ein Abgleich über die
+**ganze** Route statt über ihren Stamm findet beide, und er meldet nichts
+Richtiges als falsch — fünf von 61 Urteilen ändern sich, jedes nachgesehen.
+Beide sind jetzt begründet statt unsichtbar, und eine dritte kam dazu, die
+niemand kannte.
 
 **Und das Pflanzen fand den Fehler, den das Schreiben nicht fand.** Das erste
 Argument für die Anbieter-Entscheidung war ein Präfix mit Verb - genau genug
