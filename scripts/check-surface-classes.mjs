@@ -614,6 +614,27 @@ function reached(route, named) {
  * Adresse aus Teilen zusammensetzt, statt sie an einer Stelle hinzuschreiben.
  * Keiner tut das heute (2026-09-02 gemessen), und der Tag, an dem einer es
  * tut, ist der Tag, an dem dieser Prüfer über ihn nichts sagt.
+ *
+ * **Und einen Transportschalter sieht er auch nicht** (2026-09-02 gemessen,
+ * Befund B57). Die Zeremonien des Vault-Daemons nennen einen Foundation-Pfad
+ * und stellen die Anfrage *entweder* darüber *oder* über Link -
+ * `picoFoundationRequest` entscheidet das an einem `linkClient`, und
+ * `picoLinkFoundationRequest` bildet denselben Pfad auf eine
+ * Autoritätsressource ab. Wo jeder Produktaufrufer einen Link-Client mitgibt,
+ * wird der HTTP-Weg nie genommen, obwohl der Pfad dasteht.
+ *
+ * Von den sieben so abgebildeten Pfaden trifft das heute zwei:
+ * `/api/home/membership-lifecycle` und
+ * `/api/home/reader-custody/reader-grant-lifecycle` - beide werden nur von
+ * `apps/companion/src/home-authority.ts` aufgerufen, und die gibt in beiden
+ * Fällen `livingDeviceLinkClient` mit. Die anderen fünf stehen in `cli.ts`,
+ * wo der Standardtransport `local` ist, also wirklich HTTP.
+ *
+ * Das steht hier und nicht als Argument in der Liste unten: ein Argument sagt
+ * „diese Route hat keinen Aufrufer", und die Gegenprobe würde es sofort
+ * widerlegen, weil der Abgleich den Pfad findet. Was fehlt, ist keine
+ * Begründung, sondern eine Auflösung, die einen Transportschalter lesen kann -
+ * und die hat ein Textleser nicht.
  */
 function wholeRoutePattern(route) {
   const body = route.split('/')
