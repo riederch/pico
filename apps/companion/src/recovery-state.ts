@@ -1,3 +1,4 @@
+import { isPicoInstant } from '@pico/protocol/instant';
 import {
   chmodSync,
   closeSync,
@@ -216,17 +217,11 @@ function assertToken(value: unknown, reason: string): asserts value is string {
 }
 
 function assertInstant(value: unknown): number {
-  if (
-    typeof value !== 'string'
-    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
-  ) {
+  // Befund B52. Dieselbe Regel, von Hand ein zweites Mal.
+  if (!isPicoInstant(value)) {
     throw new Error('invalid_companion_recovery_instant');
   }
-  const milliseconds = Date.parse(value);
-  if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== value) {
-    throw new Error('invalid_companion_recovery_instant');
-  }
-  return milliseconds;
+  return Date.parse(value);
 }
 
 function fsyncPath(path: string, flags: 'r' | 'r+'): void {

@@ -1,3 +1,4 @@
+import { isPicoInstant } from './instant.js';
 import { isPicoConfidenceLevel, type PicoConfidenceLevel } from './confidence.js';
 
 /**
@@ -62,9 +63,8 @@ function assertExactKeys(record: Record<string, unknown>, keys: readonly string[
 }
 
 function assertInstant(value: unknown, error: string): string {
-  if (typeof value !== 'string'
-    || Number.isNaN(Date.parse(value))
-    || new Date(value).toISOString() !== value) {
+  // Befund B52. Stand hier ohne die feste Breite.
+  if (!isPicoInstant(value)) {
     throw new Error(error);
   }
   return value;

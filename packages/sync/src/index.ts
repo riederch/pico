@@ -1,3 +1,4 @@
+import { isPicoInstant } from '@pico/protocol/instant';
 import { randomUUID } from 'node:crypto';
 import {
   closeSync,
@@ -4304,12 +4305,9 @@ function assertLifecycleOrder(value: string): void {
 }
 
 function assertCanonicalInstant(value: string): void {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
-    throw new Error('invalid_sync_instant');
-  }
-  const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime())
-    || parsed.toISOString() !== value) {
+  // Befund B52. Beide Haelften standen hier von Hand, richtig und ein zweites
+  // Mal.
+  if (!isPicoInstant(value)) {
     throw new Error('invalid_sync_instant');
   }
 }

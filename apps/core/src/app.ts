@@ -1,3 +1,4 @@
+import { isPicoInstant } from '@pico/protocol/instant';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   PicoModelProviderMeasurements,
@@ -9534,10 +9535,10 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
   // ADR 0118 O1. Canonical, not merely parseable: two spellings of the same
   // instant sort apart, and this value decides when something reaches the
   // person.
-  if (payload.dueAt !== undefined
-    && (typeof payload.dueAt !== 'string'
-      || Number.isNaN(Date.parse(payload.dueAt))
-      || new Date(payload.dueAt).toISOString() !== payload.dueAt)) {
+  // Befund B52. Hier stand nur die Rundlaufhaelfte - und der Kommentar
+  // darueber sagt selbst, dass dieser Wert entscheidet, wann etwas eine Person
+  // erreicht. `+275760-…` kam durch und sortiert vor jedem gewoehnlichen Jahr.
+  if (payload.dueAt !== undefined && !isPicoInstant(payload.dueAt)) {
     return { ok: false, error: 'dueAt must be a canonical ISO-8601 instant when provided.' };
   }
 

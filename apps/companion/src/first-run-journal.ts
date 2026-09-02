@@ -1,3 +1,4 @@
+import { isPicoInstant } from '@pico/protocol/instant';
 import {
   chmodSync,
   closeSync,
@@ -433,16 +434,12 @@ function assertToken(value: unknown, reason: string): asserts value is string {
 }
 
 function assertInstant(value: unknown): number {
-  if (typeof value !== 'string'
-    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)) {
+  // Befund B52. Beide Haelften standen hier von Hand, richtig und ein zweites
+  // Mal - `@pico/protocol/instant` ist die Regel, die sie meinen.
+  if (!isPicoInstant(value)) {
     throw new Error('invalid_first_run_instant');
   }
-  const milliseconds = Date.parse(value);
-  if (!Number.isFinite(milliseconds)
-    || new Date(milliseconds).toISOString() !== value) {
-    throw new Error('invalid_first_run_instant');
-  }
-  return milliseconds;
+  return Date.parse(value);
 }
 
 function assertCoreUrl(value: unknown): asserts value is string {

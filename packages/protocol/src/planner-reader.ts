@@ -1,3 +1,4 @@
+import { isPicoInstant } from './instant.js';
 import type { PicoEventOriginClass } from './origin-class.js';
 import {
   assemblePicoModelContext,
@@ -168,9 +169,11 @@ function parseValue(value: unknown): PicoReaderValue {
       break;
     }
     case 'instant': {
-      if (typeof record.value !== 'string'
-        || Number.isNaN(Date.parse(record.value))
-        || new Date(record.value).toISOString() !== record.value) {
+      // Befund B52: hier stand die schwache Haelfte - `toISOString`-Rundlauf
+      // ohne die feste Breite. `+275760-09-13T00:00:00.000Z` kam durch, und
+      // ein solcher Wert sortiert als Zeichenkette vor jedem gewoehnlichen
+      // Jahr. Was hier hereinkommt, hat ein Modell geantwortet.
+      if (!isPicoInstant(record.value)) {
         throw new Error('invalid_pico_reader_value');
       }
       break;
@@ -221,9 +224,9 @@ function parseReference(value: unknown): PicoOpaqueReference {
     || !picoReaderTokenPattern.test(record.referenceId)) {
     throw new Error('invalid_pico_opaque_reference');
   }
-  if (typeof record.expiresAt !== 'string'
-    || Number.isNaN(Date.parse(record.expiresAt))
-    || new Date(record.expiresAt).toISOString() !== record.expiresAt) {
+  // Befund B52. Dieselbe schwache Haelfte an einem Ablauf - und ein Ablauf,
+  // der vor allem sortiert, ist keine Frist.
+  if (!isPicoInstant(record.expiresAt)) {
     // ADR 0060: a reference that never expires is a standing grant, and this
     // one is handed to a model.
     throw new Error('invalid_pico_opaque_reference_expiry');

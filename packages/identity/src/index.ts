@@ -1,3 +1,4 @@
+import { isPicoInstant } from '@pico/protocol/instant';
 import {
   buildPicoHomeContinuitySignatureInput,
   buildPicoIdentityDelegationSignatureInput,
@@ -1028,10 +1029,11 @@ function assertInstant(value: string, reason: string): void {
     throw new Error(reason);
   }
 
-  // Re-serializing rejects impossible dates the shape check admits: `new Date`
-  // rolls `2026-02-30` forward to March 2 instead of failing.
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
+  // Befund B52. Hier stand nur die Rundlaufhaelfte: sie weist unmoegliche
+  // Daten ab (`new Date` rollt `2026-02-30` auf den 2. Maerz), laesst aber die
+  // erweiterte Jahresform durch - und die sortiert als Zeichenkette vor jedem
+  // gewoehnlichen Jahr, wo eine Lebenslauf-Abfrage sie vergleicht.
+  if (!isPicoInstant(value)) {
     throw new Error(reason);
   }
 }

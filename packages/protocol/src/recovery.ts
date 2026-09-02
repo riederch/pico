@@ -8,6 +8,7 @@ import {
   concatCanonicalElements,
   fixedHexBytes,
 } from './canonical-bytes.js';
+import { isPicoInstant } from './instant.js';
 import type {
   PicoIdentityDelegationSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
@@ -647,7 +648,6 @@ interface RecoveryHashSodium {
   ): Uint8Array;
 }
 
-const canonicalInstantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const lifecycleOrderPattern = /^seq:[0-9]{16}$/;
 
 function utf8Bytes(value: string): Uint8Array {
@@ -678,12 +678,8 @@ function assertEndpointHint(value: string): void {
 
 function assertInstant(value: string): void {
   assertAsciiToken(value);
-  const parsed = new Date(value);
-  if (
-    !canonicalInstantPattern.test(value)
-    || Number.isNaN(parsed.getTime())
-    || parsed.toISOString() !== value
-  ) {
+  // Befund B52. Beide Haelften standen hier richtig - und ein zweites Mal.
+  if (!isPicoInstant(value)) {
     throw new Error('invalid_instant');
   }
 }
