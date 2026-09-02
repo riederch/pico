@@ -63,32 +63,13 @@ const singleTruths = [
  *
  * `same: true` heisst: dieselbe Regel, ein zweites Mal geschrieben - das, was
  * driftet. `same: false` heisst: derselbe Name ueber etwas anderem.
+ *
+ * **Am 2026-09-02 sind die vier `same: true` verschwunden** (Befund B51, vom
+ * Nutzer entschieden): Identitaetspaket, Companion-Profil und Vault holen die
+ * Regel jetzt aus `canonical-bytes.ts`. Uebrig sind die drei, die nur den
+ * Namen teilen - und die bleiben, weil sie etwas anderes tun.
  */
 const elsewhere = [
-  {
-    where: 'packages/identity/src/index.ts',
-    name: 'assertAsciiToken',
-    same: true,
-    why: 'Dasselbe Muster und dieselbe Grenze von 1024, aber in Zeichen statt in Bytes '
-      + 'gemessen, und mit einem Grund als Parameter: sie sagt `invalid_delegation_id` und '
-      + 'nennt damit das *Feld*, wo die Fassung im Protokoll `invalid_field_charset` sagt und '
-      + 'den *Fehler* nennt. Keine der beiden ist die bessere, und welche gilt, ist eine '
-      + 'Entscheidung ueber Ablehnungsnamen auf dem Signierweg - Befund B51.',
-  },
-  {
-    where: 'packages/identity/src/index.ts',
-    name: 'fixedHexBytes',
-    same: true,
-    why: 'Zeichen fuer Zeichen dieselbe Regel, nur ohne den `typeof`-Schutz und mit dem '
-      + 'Muster als Literal statt als Konstante. Haengt an derselben Entscheidung wie die '
-      + 'Zeile darueber (B51).',
-  },
-  {
-    where: 'apps/companion/src/profile.ts',
-    name: 'assertAsciiToken',
-    same: true,
-    why: 'Dieselbe Regel mit einem Grund als Parameter, wie im Identitaetspaket (B51).',
-  },
   {
     where: 'apps/core/src/event-store.ts',
     name: 'assertAsciiToken',
@@ -96,13 +77,6 @@ const elsewhere = [
     why: 'Andere Regel unter demselben Namen: die Grenze ist 256 und nicht 1024, und die '
       + 'Meldung ist ein Satz fuer einen Betreiber statt ein Ablehnungsname. Sie prueft '
       + 'Konfigurationswerte des Homes und nicht, was unterschrieben wird.',
-  },
-  {
-    where: 'packages/vault/src/index.ts',
-    name: 'canonicalHexPattern',
-    same: true,
-    why: 'Dasselbe Muster, ein zweites Mal geschrieben. Der Vault haengt am Protokoll und '
-      + 'koennte es holen (B51).',
   },
   {
     where: 'packages/vault/src/index.ts',
@@ -249,6 +223,6 @@ console.log(
   `Canonical-bytes check passed (${singleTruths.length} rules for turning a field into signed `
   + `bytes have exactly one definition each inside the protocol package, all of them in ${home}; `
   + `outside it ${carriedSame + carriedNameOnly} copies are named and dated - ${carriedSame} `
-  + `the same rule written twice and awaiting the decision in finding B51, ${carriedNameOnly} `
-  + `the same name over a different rule; ${files.length} TypeScript sources read).`,
+  + `the same rule written twice, ${carriedNameOnly} the same name over a different rule; `
+  + `${files.length} TypeScript sources read).`,
 );
