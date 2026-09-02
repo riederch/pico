@@ -864,6 +864,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B54 — Die Routenzahl war zu niedrig, weil die Messung sich ihre Zeugen
+ausgesucht hatte (2026-09-02).** `pnpm route:walk` meldete 26 von 61, und zehn
+der angeblich nie begangenen Routen waren die Reader-Custody-Familie. Der
+Verdacht lag nahe, dass dort ein ganzes Merkmal ungegangen ist — es hat in
+genau dieser Familie schon zweimal etwas gefunden (B34, B35).
+
+**Der Verdacht war falsch, und das Nachsehen war die Arbeit.** Es gibt
+`apps/companion-shell/src/reader-custody-real-process.test.ts`: sieben
+Durchläufe, die den Raum anlegen, hineinschreiben, das zweite Gerät
+hereinlassen, den Zugang zurücknehmen und das Schloss wechseln. Ein zweiter
+Durchlauf wäre ein Duplikat gewesen; er ist geschrieben und wieder verworfen
+worden, und das ist billiger als der Befund, den er nicht gefunden hätte.
+
+**Der Grund lag in der Messung.** Sie fuhr zwei Testmengen — Web und
+Companion-Shell —, und die Zahl las sich wie „so viele der bedienten Routen
+sind je begangen worden". Sie hiess in Wahrheit „so viele hat *diese Auswahl*
+begangen". Der Vault-Daemon fährt seine Zeremonien gegen ein echtes,
+abgespaltetes Home und ruft dabei `/api/home/reader-custody/domains` und
+`/reader-grants` über HTTP — eine dritte Testmenge, die niemand ausgewählt
+hatte.
+
+Die Auswahl ist jetzt die Eigenschaft, die sie meinte: **jede Testmenge, die
+ein echtes Home startet.** Es sind genau drei, aus dem Baum gelesen statt
+aufgezählt. Danach: **33 von 61** statt 26, ohne dass eine Zeile Produktcode
+sich geändert hätte.
+
+**Dieselbe Familie wie B52, eine Ebene höher.** Dort keyte ein Tor auf die
+Gestalt seines Anlasses; hier fuhr eine Messung die Testmengen, die es zur
+Zeit ihres Schreibens gab. Beide Male stand die Zahl da und stimmte — für eine
+Frage, die enger war als die, die danebenstand.
+
 **B53 — Das Haus hielt eine Antwort an einer Regel fest, die es nie gesagt
 hatte — und das war die 52. Tür (2026-09-02).** `home.model.read.keep` war die
 eine Link-Operation, die niemand je aufbekommen hat, und der geschriebene
@@ -927,8 +958,29 @@ findet null, das neue eines.
 
 **Ein Tor, das nur die Gestalt kennt, aus der es entstanden ist, prüft seinen
 eigenen Anlass und nicht seine Klasse.** Das ist die verallgemeinerbare Zeile
-aus diesem Befund, und sie gilt für jedes Tor in diesem Verzeichnis, das aus
-einer einzelnen Reparatur entstanden ist.
+aus diesem Befund — und sie wurde am selben Tag gegen die anderen Tore
+gehalten, statt als Verdacht stehen zu bleiben. Vier Detektoren wurden
+nachgemessen, jeder mit der Gestalt, die er *nicht* sucht:
+
+- `check-instant-rules`, Tagesarithmetik: sucht `24*60*60` und `86_400_000`,
+  nicht die umgekehrte Reihenfolge `1000*60*60*24`. **Null lebende Fälle.**
+- `check-store-writers`: sucht `  public name(`, und in TypeScript ist eine
+  Methode ohne Modifikator öffentlich. Mit optionalem `public` nachgezählt:
+  **dieselben 83.**
+- `check-fingerprint-display`: sucht den Namen unmittelbar vor `.slice(`, also
+  keinen Zwischenwert. 44 Stellen legen einen Fingerabdruck auf eine lokale
+  Bindung; **keine davon kürzt ihn.**
+- `check-wire-labels`: sucht `export const NAME = '…'` ohne Typannotation.
+  **Keine versionierte Zeichenkette steht in der anderen Gestalt.**
+
+Der Blindfleck besteht also jeweils, und er ist nirgends belegt. Und vier der
+fünf sagen ihre Grenze bereits selbst — `check-fingerprint-display` nennt sogar
+den Grund, warum es die weitere Gestalt *nicht* fangen will („eine Regel, die
+bei jedem `.slice(0, N)` anschlüge, ist eine, die man umgeht"). Das
+Zeitpunkt-Tor war der Ausreisser, und der Grund ist lehrreich: **die Reparatur
+selbst hat die Gestalt entfernt, auf die das Tor dann keyte.** Aus Prädikaten
+wurde eine gemeinsame Funktion, stehen blieben Wachen — und danach suchte es
+nur noch nach dem, was es gerade beseitigt hatte.
 
 **B51 — Vier weitere Fassungen derselben Signierregel, und eine Entscheidung
 darunter (2026-09-01).** Das Tor aus B50 wurde absichtlich über den ganzen
@@ -1192,7 +1244,9 @@ ganz.
 geantwortet, und ein Aufrufer bürgt für drei Verben (2026-08-29).** Dieselbe
 Mitschrift wie bei den Link-Vorgängen, eine Fläche darüber: das gebaute Home
 schreibt für die Dauer eines Laufs mit, welche Route mit welchem Status
-antwortet, und gefahren werden die Web- und die Companion-Shell-Testmenge. Seit
+antwortet, und gefahren wurden damals die Web- und die
+Companion-Shell-Testmenge — eine Auswahl, die sich am 2026-09-02 als der Grund
+für sieben fehlende Routen herausstellte (Befund B54). Seit
 dem 2026-08-31 ist das ein Werkzeug statt eines Einzelfalls: `pnpm route:walk`,
 der Zwilling von `pnpm link:walk`, dreimal von Hand gebaut und zweimal
 weggeworfen, bevor es dafür eine Datei gab.
