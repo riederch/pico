@@ -864,6 +864,47 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B57 — Ein Pfad, der dasteht und nie gegangen wird: der Prüfer sieht keinen
+Transportschalter (2026-09-02).** Nach B56 blieben drei Routen mit Aufrufer und
+ohne Durchlauf. Beim Nachsehen, was ihnen fehlt, kam etwas anderes heraus als
+erwartet.
+
+**Zwei davon werden im Produkt gar nicht über HTTP gerufen.** Die Zeremonien
+des Vault-Daemons nennen einen Foundation-Pfad und stellen die Anfrage
+*entweder* darüber *oder* über Link: `picoFoundationRequest` entscheidet das an
+einem `linkClient`, und `picoLinkFoundationRequest` bildet denselben Pfad auf
+eine Autoritätsressource ab. Gemessen: von sieben so abgebildeten Pfaden werden
+zwei — `/api/home/membership-lifecycle` und
+`/api/home/reader-custody/reader-grant-lifecycle` — ausschliesslich von
+`apps/companion/src/home-authority.ts` gerufen, und die gibt **in beiden Fällen**
+`livingDeviceLinkClient` mit. Der HTTP-Weg wird nie genommen, obwohl der Pfad
+dasteht. Die anderen fünf stehen in `cli.ts`, wo der Standardtransport `local`
+ist — also wirklich HTTP.
+
+**Das ist der dritte Mechanismus nach B55**, und der einzige, den ein Textleser
+nicht schliessen kann: ein Argument („diese Route hat keinen Aufrufer") würde
+die Gegenprobe sofort widerlegen, weil der Abgleich den Pfad ja findet. Was
+fehlt, ist keine Begründung, sondern eine Auflösung, die einen
+Transportschalter liest. Der Prüfer sagt das jetzt über sich, mit Datum und
+mit den beiden Namen.
+
+**Die dritte Route wird getroffen und richtig abgelehnt.**
+`POST /api/home/reader-custody/kek-rotations` ruft die CLI-Zeremonie
+`rotate-domain` über den Standardtransport, und der Test fährt sie. Sie
+antwortet `invalid_rotation_causes`, und das ist die richtige Antwort: eine
+Drehung beantwortet einen Entzug (ADR 0088, Rotationsschuld), und eine Domäne
+ohne Leser hat nichts zu drehen. Der Testkommentar sagt es seit jeher; was er
+nicht sagte, ist die genaue fehlende Zutat, und die steht jetzt hier: ein
+grüner Durchlauf braucht **erst einen Lesezugang, dann dessen Entzug als
+Ursache** — und für den Entzug gibt es keine CLI-Zeremonie, sondern nur den
+Companion-Weg über Link.
+
+**Und eine Hypothese wurde beim Messen verworfen**, statt als Behauptung
+stehenzubleiben: dass die Abbildungstabelle in `claim-home-ceremony.ts` allein
+für diese Pfade bürge. Sie tut es nicht — jeder der sieben wird auch dort
+genannt, wo die Anfrage wirklich gestellt wird. Zwei Minuten Messen statt einer
+falschen Zeile in dieser Datei.
+
 **B56 — Das Schreddern war noch nie gelungen, nur abgelehnt (2026-09-02).**
 Nach B55 blieben fünf Routen mit Aufrufer und ohne Durchlauf. Zwei davon sind
 jetzt gegangen, und beide haben beim Gehen etwas gesagt.
