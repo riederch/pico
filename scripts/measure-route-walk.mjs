@@ -13,6 +13,15 @@ import { fileURLToPath } from 'node:url';
  * einen Aufrufer hat, und das ist eine andere Aussage als die, dass ein Home
  * sie je angenommen hat. Am 2026-08-29 waren es 27 von 61 (Befund B43).
  *
+ * **Welche Testmengen gefahren werden, ist abgeleitet und nicht gewaehlt**
+ * (2026-09-02, Befund B54). Bis dahin standen hier zwei - Web und
+ * Companion-Shell -, und die Zahl las sich wie „so viele der bedienten Routen
+ * sind je begangen worden". Sie hiess in Wahrheit „so viele hat *diese Auswahl*
+ * begangen". Der Vault-Daemon faehrt seine Zeremonien gegen ein echtes,
+ * abgespaltetes Home und ruft dabei Routen, die hier als nie begangen
+ * gemeldet wurden. Die Auswahl ist jetzt die Eigenschaft, die sie meinte: jede
+ * Testmenge, die ein echtes Home startet.
+ *
  * **Kein Tor**, und der Name sagt es: `measure-` statt `check-`. Es fährt zwei
  * Testmengen mit echten Prozessen, dauert Minuten, urteilt nicht und fasst eine
  * Datei im Bauverzeichnis an - `release:verify` ruft es nicht.
@@ -92,9 +101,13 @@ let failed;
 try {
   writeFileSync(builtApp, source.replace(registerLine, traced(tracePath)));
   writeFileSync(tracePath, '');
-  process.stdout.write('Running the web and companion-shell suites against a Home that writes down what it answers.\n');
+  process.stdout.write('Running every suite that starts a real Home, against one that writes down what it answers.\n');
   execFileSync('npx', [
-    'pnpm@9.0.0', '--filter', '@pico/web', '--filter', '@pico/companion-shell', 'test',
+    'pnpm@9.0.0',
+    '--filter', '@pico/web',
+    '--filter', '@pico/companion-shell',
+    '--filter', '@pico/vault-daemon',
+    'test',
   ], { cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe'] });
 } catch (error) {
   failed = String(error.stderr ?? '').slice(-800);
