@@ -103,8 +103,20 @@ const owners = new Set([
  * the part that looks sufficient: it is an exact calendar check, and it reads
  * like the whole rule. The fixed-width pattern beside it is what the string
  * comparisons actually need, and it is the half that kept being dropped.
+ *
+ * **Und es sah acht Jahre lang nur seine eigene Gestalt** (2026-09-02, Befund
+ * B52). Bis hierher stand `===\s*\w+` - genau die Form, aus der die Regel am
+ * 2026-08-20 herausgeloest worden war: ein *Praedikat*, das wahr zurueckgibt.
+ * Jede verbliebene Kopie war aber eine *Wache*: `!==`, die wirft. Neun standen
+ * an dem Tag noch im Baum, und dieses Tor meldete zu jedem Lauf, es gebe
+ * keine - fuenf davon ohne die Breitenhaelfte, darunter das `dueAt` eines
+ * faelligen Eintrags und der Ablauf einer opaken Referenz.
+ *
+ * **Ein Tor, das nur die Gestalt kennt, aus der es entstanden ist, prueft
+ * seinen eigenen Anlass und nicht seine Klasse.** Jetzt beide Vergleiche und
+ * beide Seiten: ein Bezeichner oder ein Zugriff wie `record.value`.
  */
-const handWrittenInstantRule = /toISOString\(\)\s*===\s*\w+/g;
+const handWrittenInstantRule = /toISOString\(\)\s*(?:===|!==)\s*[\w.[\]]+/g;
 
 /**
  * An instant-shaped field, named the way this tree names them.
