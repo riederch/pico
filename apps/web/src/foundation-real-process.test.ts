@@ -92,7 +92,9 @@ async function waitFor(condition: () => boolean, label: string): Promise<void> {
   throw new Error(`timed_out_waiting_for:${label}`);
 }
 
-async function startHome(): Promise<RunningHome> {
+async function startHome(
+  options: { memoryEncryption?: boolean } = {},
+): Promise<RunningHome> {
   const port = await freePort();
   let linkPort = await freePort();
   while (linkPort === port) {
@@ -114,6 +116,13 @@ async function startHome(): Promise<RunningHome> {
       PICO_FOUNDATION_ACCESS_MODE: 'loopback-dev',
       PICO_LINK_INTAKE_HOST: '127.0.0.1',
       PICO_LINK_INTAKE_PORT: String(linkPort),
+      /**
+       * ADR 0104. Die Entscheidung gilt beim *Start*, nicht beim Umlegen -
+       * deshalb steht sie hier und nicht als Aufruf im Durchlauf. Genau das
+       * ist der Grund, warum das Schreddern im Durchlauf darueber nur
+       * abgelehnt wird: dieses Home liegt im Klartext.
+       */
+      ...(options.memoryEncryption === true ? { PICO_MEMORY_ENCRYPTION: 'true' } : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -322,6 +331,92 @@ describe('the Foundation surface against a running Home', () => {
    * eine Nachricht, die er nicht versteht, wirft er weg, und ohne diesen
    * Durchlauf sähe das genauso aus wie ein Home, das schweigt.
    */
+  /**
+   * ADR 0071 mit ADR 0072. Einen Raum wirklich schreddern - und nicht nur die
+   * Ablehnung daneben gehen.
+   *
+   * **Bis zum 2026-09-02 war `POST /api/memory/domains/:d/shred` die eine
+   * Route, die ein getrennter Prozess nur *abgelehnt* bekommen hatte** (Befund
+   * B44/B54, `pnpm route:walk`). Der Durchlauf darueber geht die Ablehnung,
+   * und die ist richtig: ohne Verschluesselung gibt es keine Schluessel zu
+   * zerstoeren. Der Erfolgsweg aber - der, bei dem wirklich etwas
+   * unwiederbringlich wird - war nie gegangen.
+   *
+   * Er braucht ein *anderes* Home, weil die Entscheidung beim Start gilt und
+   * nicht beim Umlegen (ADR 0104). Deshalb steht hier ein zweites, mit
+   * `PICO_MEMORY_ENCRYPTION` von Anfang an.
+   */
+  it('schreddert einen Raum, dessen Inhalt wirklich verschlüsselt liegt', async () => {
+    const home = await startHome({ memoryEncryption: true });
+    await bootstrapOperator(home);
+    const access = { operatorSession: await loginOperator(home.baseUrl, OPERATOR_PASSPHRASE) };
+
+    // Jetzt sagt die Fläche, was der Start entschieden hat - und nicht, was
+    // jemand aufgeschrieben hat: `enabled`, nicht nur `decided`.
+    expect(await readMemoryEncryption(home.baseUrl, access)).toMatchObject({ enabled: true });
+
+    /**
+     * Etwas hineinlegen, über die Tür, die eine Person dafür hat. Zwei Räume,
+     * weil ein Schreddern, das den Nachbarraum mitnimmt, sonst wie ein Erfolg
+     * aussähe.
+     */
+    const kept = await createTimeBoundEntry(home.baseUrl, access, {
+      deviceId: 'pico-web-walk',
+      privacyDomain: 'household',
+      kind: 'reminder',
+      title: 'Der Ersatzschlüssel liegt beim Nachbarn.',
+      dueAt: '2027-01-01T10:00:00.000Z',
+    });
+    expect(kept.memoryItemId).not.toBe('');
+    const elsewhere = await createTimeBoundEntry(home.baseUrl, access, {
+      deviceId: 'pico-web-walk',
+      privacyDomain: 'ownnotes',
+      kind: 'reminder',
+      title: 'Und der Zählerstand war 41870.',
+      dueAt: '2027-01-02T10:00:00.000Z',
+    });
+
+    const before = await listDomainContent(home.baseUrl, access, 'household');
+    expect(before.items.length).toBeGreaterThan(0);
+
+    /**
+     * ADR 0072. Der Raum wird beim Namen genannt, und zwar zweimal: einmal in
+     * der Adresse und einmal als Bestätigung. Ein Schreddern, das aus einem
+     * Klick folgt, wäre eines, das aus einem Klick folgt.
+     */
+    const shredded = await shredPrivacyDomain(home.baseUrl, access, {
+      privacyDomain: 'household',
+      confirm: 'household',
+      reason: 'walked against a running Home',
+    });
+    expect(shredded.removedKeyVersions).toBeGreaterThan(0);
+
+    /**
+     * **Die Zeile bleibt, der Inhalt ist fort** - und das ist die genauere
+     * Aussage als „weg". Erwartet war hier zuerst eine leere Liste; der
+     * Durchlauf hat das widerlegt und dabei gezeigt, was Schreddern in diesem
+     * Haus heisst: die Schlüssel sind zerstört, also sagt der Eintrag
+     * `contentUnavailable: 'key_shredded'` und steht weiter als `active` da.
+     * Ein Haus, das die Zeile mitnaehme, verloere die Auskunft, *dass* es
+     * etwas gab - und ADR 0071 unterscheidet Vergessen von Verschwiegenheit.
+     */
+    const after = await listDomainContent(home.baseUrl, access, 'household');
+    expect(after.items.length).toBe(before.items.length);
+    for (const item of after.items) {
+      expect(item).toMatchObject({
+        contentUnavailable: 'key_shredded',
+        deletionState: 'active',
+      });
+      expect(item).not.toHaveProperty('content');
+    }
+
+    // Und der Nachbarraum steht, mit lesbarem Inhalt.
+    const neighbour = await listDomainContent(home.baseUrl, access, 'ownnotes');
+    expect(neighbour.items.length).toBeGreaterThan(0);
+    expect(neighbour.items.every((item) => item.contentUnavailable === undefined)).toBe(true);
+    expect(elsewhere.memoryItemId).not.toBe(kept.memoryItemId);
+  }, 120_000);
+
   it('zieht ein Ticket, hört zu und bekommt ein Ereignis', async () => {
     const home = await startHome();
     await bootstrapOperator(home);

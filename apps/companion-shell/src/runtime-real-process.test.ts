@@ -1114,6 +1114,81 @@ describe('Electron-hosted companion runtime against real processes', () => {
         carries: 'live_turn',
       });
 
+      /**
+       * **Und die Betreiberfläche verengt, was das Gerät gemessen hat** (ADR
+       * 0152 SE4, Befund B55).
+       *
+       * `POST /api/model/providers/:entryId/narrowing` hat einen Aufrufer -
+       * `narrowModelProvider` in `apps/web/src/api.ts` - und hatte nie einem
+       * getrennten Prozess mit einem Erfolg geantwortet. Der Grund ist die
+       * Arbeitsteilung: der Eintrag entsteht auf dem Gerät der Person, über
+       * Link, und verengt wird er auf der Fläche des Betreibers. Keine der
+       * beiden Testmengen hatte beide Hälften.
+       *
+       * Hier stehen sie beide. Die Anfrage wird - wie die anderen
+       * Foundation-Schritte in dieser Datei - von Hand gestellt und nicht über
+       * den Web-Client geschickt: dieses Paket hängt nicht an `@pico/web`, und
+       * eine Abhängigkeit dafür einzuführen wäre eine Änderung am Baum für
+       * einen Testweg.
+       *
+       * **Und sie braucht eine Betreibersitzung**, anders als die
+       * Ereignis-Schritte weiter oben: `narrowing` steht in der Klasse
+       * `host-admin`, und `loopback-dev` lässt sie nicht durch. Gemessen und
+       * nicht angenommen - der erste Lauf bekam 401, und das ist die richtige
+       * Antwort: wer die Maschine des Hauses enger stellt, spricht als
+       * Betreiber und nicht als Gerät.
+       */
+      const operatorPassphrase = 'walked-operator-passphrase-2026';
+      const bootstrapped = await fetch(`${core.apiBaseUrl}/api/auth/bootstrap`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          bootstrapCode: core.operatorBootstrapCode,
+          passphrase: operatorPassphrase,
+        }),
+      });
+      expect(bootstrapped.status, await bootstrapped.clone().text()).toBe(201);
+      const loggedIn = await fetch(`${core.apiBaseUrl}/api/auth/session`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ passphrase: operatorPassphrase }),
+      });
+      expect(loggedIn.status, await loggedIn.clone().text()).toBe(201);
+      const operatorSession = ((await loggedIn.json()) as { session: string }).session;
+      const asOperator = {
+        'content-type': 'application/json',
+        authorization: `Bearer ${operatorSession}`,
+      };
+
+      const narrowed = await fetch(
+        `${core.apiBaseUrl}/api/model/providers/${encodeURIComponent('a-model:measured')}/narrowing`,
+        {
+          method: 'POST',
+          headers: asOperator,
+          body: JSON.stringify({ contextTokens: 2_048, concurrentJobs: 1 }),
+        },
+      );
+      expect(narrowed.status, await narrowed.clone().text()).toBe(200);
+      expect(await narrowed.json())
+        .toEqual({ narrowing: { contextTokens: 2_048, concurrentJobs: 1 } });
+
+      /**
+       * **Und mehr als gemessen wurde, geht nicht.** Eine Verengung, die über
+       * den Befund hinausginge, wäre keine - und die Ablehnung nennt die Zahl,
+       * gegen die gehalten wurde, weil „zu gross" ohne sie eine Person raten
+       * lässt (ADR 0152 SE4 mit ADR 0119 Q5).
+       */
+      const tooWide = await fetch(
+        `${core.apiBaseUrl}/api/model/providers/${encodeURIComponent('a-model:measured')}/narrowing`,
+        {
+          method: 'POST',
+          headers: asOperator,
+          body: JSON.stringify({ contextTokens: 1_000_000 }),
+        },
+      );
+      expect(tooWide.status).toBe(409);
+      expect(await tooWide.json()).toMatchObject({ measured: expect.anything() });
+
       // ADR 0082. Und lesen darf dieses Gerät die Domäne erst, wenn es sich
       // den Zugang erteilt hat - „darf dieses Home benutzen" ist nicht „darf
       // diesen Raum lesen" (ADR 0077).
