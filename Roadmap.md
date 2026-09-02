@@ -864,6 +864,45 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B59 — Der einzige Beweis am echten Fenster lief seit Monaten nicht, und er
+wäre gefallen (2026-09-02).** B58 liess eine Spanne offen: dass ein *Druck*
+wirklich ankommt. Beim Suchen nach einem Harness dafür stellte sich heraus,
+dass es eines gibt — `apps/companion-shell/src/electron-smoke.ts`, hinter
+`pnpm test:electron`. Es fährt Preload, Dokument und Fensteroptionen des
+Produkts und prüft die Isolationsnaht: kein `process`, kein `require`, und
+genau die freigegebenen Namen.
+
+**Es hat keinen Aufrufer.** Nicht in `release:verify`, nicht in `ci.yml`, in
+keinem Skript, in keinem Dokument. Gesucht wurde im ganzen Baum.
+
+**Und es wäre gefallen.** Der erwartete Satz von Brückenschlüsseln stand als
+Liste von **neun** Namen; das Preload bietet **achtundsechzig**. Ausgeführt
+statt vermutet: `electron_renderer_boundary_failed`, dazu zwölf Zeilen
+`No handler registered for …`, weil das Fenster beim Laden mehr Kanäle ruft
+als der Lauf hielt. Die Aussage dieses Baums, dass die Naht am echten Fenster
+steht, war seit dem Wachsen der Brücke unbelegt.
+
+**Repariert an der Ursache, nicht an der Zahl.** Die Erwartung wird jetzt aus
+dem Kanalvertrag *abgeleitet*, der auch das Preload baut — eine Liste daneben
+ist genau die zweite Fassung, die driftet (B50s Satz, hier zum vierten Mal).
+Jeder Kanal bekommt einen Halter, ebenfalls abgeleitet. Und der Lauf steht in
+`release:verify`, direkt vor der Paketprüfung; er braucht kein Display, das
+wurde ohne `DISPLAY` nachgemessen.
+
+**Die offene Spanne ist damit zu.** Der Lauf drückt den Prüf-Knopf des
+Ruhezustands — im echten Dokument, über den echten Zuhörer, durch das echte
+Preload — und der Hauptprozess sagt, ob es ankam: `pressReachedMain:
+"requestCheck"`. Das ist die Kette vom Bedienelement bis zum Hauptprozess, und
+sie ist zum ersten Mal begangen statt behauptet. Was weiter offen bleibt und
+hier steht statt zu fehlen: ein Druck des *Fenstersystems*. Der stellt sich
+bei der sicheren Eingabe, und dort beantwortet ihn ein echter Tastendruck.
+
+Zweimal gepflanzt, beide beissen: eine Brücke verschwindet aus dem gebauten
+Preload (`electron_renderer_boundary_failed`), und **der Knopf verliert seinen
+Zuhörer** — er steht da und tut nichts, und der Lauf sagt
+`electron_press_did_not_reach_main`. Für die zweite hatte dieser Baum bis
+heute keinen Prüfer.
+
 **B58 — Ein Sammelruf bürgte für zwölf Flächen, und die Messung hatte
 dieselbe zu enge Auswahl wie ihr Zwilling (2026-09-02).** `pnpm link:walk`
 zählte Operationen, und zwei der 54 sind Sammelrufe: `home.authority.list` und
