@@ -1,3 +1,6 @@
+// Befund B51. Dieselbe Regel wie im Protokoll, nur mit einem Feldnamen -
+// jetzt von dort, wo sie einmal steht.
+import { assertAsciiToken, fixedHexBytes } from '@pico/protocol/canonical-bytes';
 import { isPicoInstant } from '@pico/protocol/instant';
 import {
   buildPicoHomeContinuitySignatureInput,
@@ -1006,12 +1009,6 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function assertAsciiToken(value: string, reason: string): void {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 1024 || !/^[A-Za-z0-9._:/+-]+$/.test(value)) {
-    throw new Error(reason);
-  }
-}
-
 function assertFingerprint(value: string): void {
   if (!/^[0-9a-f]{64}$/.test(value)) {
     throw new Error('invalid_fingerprint_length');
@@ -1053,22 +1050,6 @@ function assertSigningCapableKeyRecord(
   if (keyRecord.keyRole === 'device_key_agreement' || keyRecord.keyRole === 'home_host_key_agreement') {
     throw new Error(reason);
   }
-}
-
-function fixedHexBytes(value: string, expectedByteLength: number, lengthReason: string): Uint8Array {
-  if (!/^[0-9a-f]+$/.test(value)) {
-    throw new Error('invalid_hex');
-  }
-  if (value.length !== expectedByteLength * 2) {
-    throw new Error(lengthReason);
-  }
-
-  const output = new Uint8Array(expectedByteLength);
-  for (let i = 0; i < expectedByteLength; i += 1) {
-    output[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
-  }
-
-  return output;
 }
 
 function bytesToHex(bytes: Uint8Array): string {

@@ -67,25 +67,68 @@ export function concatCanonicalElements(elements: readonly Uint8Array[]): Uint8A
   return output;
 }
 
+/** Was einem kanonischen Feld fehlen kann. Drei, und nicht mehr. */
+export type PicoCanonicalFieldFault = 'empty_field' | 'field_too_long' | 'invalid_field_charset';
+
 /**
- * Prueft ein kanonisches Feld und sagt, *was* ihm fehlt.
+ * Ein abgelehntes Feld, mit dem Fehler *und* - wenn der Aufrufer ihn nennen
+ * konnte - dem Feld.
+ *
+ * **Warum beides** (2026-09-02, Entscheidung des Nutzers, Befund B51). Diese
+ * Regel stand viermal im Baum, und die zwei ausgebauten Fassungen lehnten
+ * verschieden ab: das Protokoll sagte, *was* falsch ist (`field_too_long`),
+ * das Identitaetspaket, *welches Feld* (`invalid_delegation_id`). Keine der
+ * beiden war die bessere - die eine sagt einer Person, wo etwas falsch ist,
+ * die andere was.
+ *
+ * Also sagt die gemeinsame Fassung beides, und zwar so, dass sich kein
+ * Ablehnungsname aendert: die Meldung bleibt, was der Aufrufer schon bekam,
+ * und der Fehler reist als Feld mit. Dieselbe Gestalt, die
+ * `PicoModelProviderNarrowingError` mit `refusal` und `measured` benutzt, und
+ * aus demselben Grund: eine Ablehnung ohne die zweite Haelfte laesst raten.
+ */
+export class PicoCanonicalFieldError extends Error {
+  public constructor(
+    public readonly fault: PicoCanonicalFieldFault,
+    reason?: string,
+  ) {
+    super(reason ?? fault);
+    this.name = 'PicoCanonicalFieldError';
+  }
+}
+
+/**
+ * Prueft ein kanonisches Feld und sagt, *was* ihm fehlt - und woran, wenn der
+ * Aufrufer es benennt.
  *
  * Drei Gruende statt einem, weil es drei sind: leer, zu lang, falsche
  * Zeichen. Die Fassung in `recovery.ts` warf fuer alle drei
  * `invalid_field_charset` - richtig in der Richtung, unbrauchbar als Auskunft.
  * Gemessen in Bytes, nicht in Zeichen: die Grenze ist eine ueber das, was
  * unterschrieben wird, und unterschrieben werden Bytes.
+ *
+ * `reason` ist der Name, den der Aufrufer seinem Feld gibt. Ohne ihn heisst
+ * die Meldung wie der Fehler - unveraendert fuer alles, was heute daran
+ * haengt; mit ihm heisst sie wie das Feld, und der Fehler steht auf `.fault`.
+ *
+ * **Was hier nicht steht, ist eine Zeichenkette**: `value` ist `unknown`, weil
+ * die Fassung im Companion-Profil es so hatte und recht damit hatte. Was keine
+ * Zeichenkette ist, ist kein kanonisches Feld, und ohne diese Zeile machte
+ * `encode` aus einer Zahl klaglos eine.
  */
-export function assertAsciiToken(value: string): void {
+export function assertAsciiToken(value: unknown, reason?: string): asserts value is string {
+  if (typeof value !== 'string') {
+    throw new PicoCanonicalFieldError('invalid_field_charset', reason);
+  }
   const bytes = canonicalTextEncoder.encode(value);
   if (bytes.length === 0) {
-    throw new Error('empty_field');
+    throw new PicoCanonicalFieldError('empty_field', reason);
   }
   if (bytes.length > 1024) {
-    throw new Error('field_too_long');
+    throw new PicoCanonicalFieldError('field_too_long', reason);
   }
   if (!canonicalAsciiTokenPattern.test(value)) {
-    throw new Error('invalid_field_charset');
+    throw new PicoCanonicalFieldError('invalid_field_charset', reason);
   }
 }
 

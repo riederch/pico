@@ -1,3 +1,5 @@
+// Befund B51. Dieselbe Regel, jetzt von dort, wo sie einmal steht.
+import { assertAsciiToken } from '@pico/protocol/canonical-bytes';
 import { assertPicoHomeCoreUrl } from '@pico/protocol/home-address';
 import {
   chmodSync,
@@ -160,7 +162,6 @@ function fsyncDirectory(path: string): void {
   }
 }
 
-const asciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
 const hexPattern = /^[0-9a-f]{64}$/;
 
 function assertExactKeys(
@@ -184,17 +185,6 @@ function assertExactKeys(
 
 function assertHex32(value: unknown, reason: string): void {
   if (typeof value !== 'string' || !hexPattern.test(value)) {
-    throw new Error(reason);
-  }
-}
-
-function assertAsciiToken(value: unknown, reason: string): void {
-  if (
-    typeof value !== 'string'
-    || value.length === 0
-    || value.length > 1024
-    || !asciiTokenPattern.test(value)
-  ) {
     throw new Error(reason);
   }
 }

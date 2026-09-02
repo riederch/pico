@@ -1,3 +1,5 @@
+// Befund B51. Dasselbe Muster, jetzt von dort, wo es einmal steht.
+import { canonicalHexPattern } from '@pico/protocol/canonical-bytes';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { wordlist as bip39EnglishWordlist } from '@scure/bip39/wordlists/english.js';
@@ -541,7 +543,6 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
 };
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-const canonicalHexPattern = /^[0-9a-f]+$/;
 
 /**
  * Read-only view of the V4 catalog above, so a caller outside this module can
