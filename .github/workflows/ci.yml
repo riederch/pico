@@ -110,9 +110,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Ueber den Skriptnamen und nicht am ihm vorbei: `release:tag-check` war
+      # der einzige der 90 Skripte dieses Baums ohne jeden Aufrufer, weil hier
+      # die Datei direkt stand. Zwei Wege zu einer Pruefung heissen, dass der
+      # eine sich aendern kann, ohne dass der andere es merkt (2026-09-02).
       - name: Verify release tag matches package version
         if: github.ref_type == 'tag'
-        run: node scripts/check-release-tag.mjs
+        run: pnpm release:tag-check
 
       # ADR 0122 Y4. Before the build, not after: a refusal is only useful
       # while nothing has been pushed. Nothing here makes a GHCR tag immutable
