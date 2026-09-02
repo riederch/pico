@@ -903,6 +903,26 @@ Zuhörer** — er steht da und tut nichts, und der Lauf sagt
 `electron_press_did_not_reach_main`. Für die zweite hatte dieser Baum bis
 heute keinen Prüfer.
 
+**Und weil ein Druck nicht alle Drücke sind** — genau der Satz, mit dem B36
+anfing —, wurden am selben Tag einmalig *alle* gedrückt. Einunddreissig
+Knöpfe trägt das Dokument; **zwanzig erreichen den Hauptprozess bei einem
+blossen Druck**. Die anderen elf wurden einzeln nachgelesen, und alle elf sind
+richtig: `home-rotate`, `device-add` und `device-renew-other` öffnen zuerst
+eine Tafel, und `recall-grant`, `reader-custody-write`, `measure-submit`,
+`depot-attach-submit`, `relay-claim-submit`, `first-run-restore`,
+`first-run-join` und `recall-ask` weisen ein leeres Formular ab und sagen es —
+bei einer steht der Grund sogar im Code: *„Ein leerer Satz ist kein Satz."*
+**Kein toter Knopf.**
+
+**Der Sammeldruck bleibt eine Messung und wird kein Werkzeug**, und der Grund
+ist der Fund darin: gedrückt wird in Dokumentreihenfolge, und dabei *leckt
+Zustand*. `device-add-camera` rief `renewOtherDevice`, weil zwei Drücke vorher
+`device-renew-other` die Tafel auf „erneuern" gestellt hatte. Als stehende
+Zahl gelesen wäre das ein Befund gewesen, den es nicht gibt. Wer diesen Weg
+später baut, braucht pro Knopf einen gesetzten Zustand — und bis dahin ist
+eine Zahl, die „braucht ein Formular" und „ist tot" in einen Topf wirft,
+schlechter als keine.
+
 **B58 — Ein Sammelruf bürgte für zwölf Flächen, und die Messung hatte
 dieselbe zu enge Auswahl wie ihr Zwilling (2026-09-02).** `pnpm link:walk`
 zählte Operationen, und zwei der 54 sind Sammelrufe: `home.authority.list` und

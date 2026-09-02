@@ -103,6 +103,18 @@ async function smoke(): Promise<void> {
    * Druck des Fenstersystems dort ankommt, ist eine andere Frage - sie stellt
    * sich bei der sicheren Eingabe, und dort beantwortet sie ein echter
    * Tastendruck.
+   *
+   * **Warum ein Knopf und nicht alle**, gemessen bevor es hier stand: am
+   * 2026-09-02 wurden einmalig alle einunddreissig gedrueckt. Zwanzig
+   * erreichen den Hauptprozess sofort; die elf anderen oeffnen zuerst eine
+   * Tafel oder weisen ein leeres Formular ab, und jede der elf wurde
+   * nachgelesen - keine ist tot.
+   *
+   * Ein stehender Sammeldruck waere trotzdem schlechter als dieser eine: in
+   * Dokumentreihenfolge gedrueckt *leckt Zustand*. `device-add-camera` rief
+   * dabei `renewOtherDevice`, weil zwei Druecke vorher die Tafel auf
+   * „erneuern" gestellt worden war - als Zahl gelesen ein Befund, den es
+   * nicht gibt. Wer den Weg baut, braucht pro Knopf einen gesetzten Zustand.
    */
   const before = invoked.length;
   await window.webContents.executeJavaScript(
