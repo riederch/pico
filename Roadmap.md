@@ -864,6 +864,41 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B56 — Das Schreddern war noch nie gelungen, nur abgelehnt (2026-09-02).**
+Nach B55 blieben fünf Routen mit Aufrufer und ohne Durchlauf. Zwei davon sind
+jetzt gegangen, und beide haben beim Gehen etwas gesagt.
+
+**`POST /api/memory/domains/:d/shred`** stand in der Messung als *erreicht und
+nur abgelehnt*. Der bestehende Durchlauf geht die Ablehnung, und die ist
+richtig: ohne Verschlüsselung gibt es keine Schlüssel zu zerstören, und ADR
+0070 verlangt, das zu sagen statt zu lügen. Der Erfolgsweg — der, bei dem
+wirklich etwas unwiederbringlich wird — war nie gegangen. Er braucht ein
+*anderes* Home, weil die Entscheidung beim Start gilt und nicht beim Umlegen
+(ADR 0104), und steht jetzt als zweiter Durchlauf mit
+`PICO_MEMORY_ENCRYPTION` von Anfang an.
+
+**Und er hat meine Erwartung widerlegt.** Erwartet war eine leere Liste. Was
+zurückkommt, ist die genauere Aussage: **die Zeile bleibt, der Inhalt ist
+fort** — `contentUnavailable: 'key_shredded'`, und der Eintrag steht weiter als
+`active` da. Ein Haus, das die Zeile mitnähme, verlöre die Auskunft, *dass* es
+etwas gab; ADR 0071 unterscheidet Vergessen von Verschwiegenheit, und dies ist
+die Seite, auf der etwas verschwiegen wird. Gepflanzt: nimmt das Schreddern den
+Nachbarraum mit, sagt es der Durchlauf.
+
+**`POST /api/model/providers/:entryId/narrowing`** hatte einen Aufrufer
+(`narrowModelProvider` auf der Betreiberfläche) und keinen Durchlauf, und der
+Grund ist die Arbeitsteilung: der Eintrag entsteht auf dem Gerät der Person
+über Link, verengt wird er auf der Fläche des Betreibers. **Keine Testmenge
+hatte beide Hälften.** Jetzt stehen sie zusammen im Modell-Durchlauf. Auch hier
+hat der erste Lauf etwas gesagt: **401**. Die Route steht in der Klasse
+`host-admin`, und `loopback-dev` lässt sie nicht durch — wer die Maschine des
+Hauses enger stellt, spricht als Betreiber und nicht als Gerät. Der Durchlauf
+holt sich deshalb eine Betreibersitzung, und er geht auch die Ablehnung: mehr
+als gemessen wurde, geht nicht, und die Antwort nennt die Zahl.
+
+`pnpm route:walk` zählt danach **35 von 61**, und die Zeile „erreicht und nur
+abgelehnt" ist leer.
+
 **B55 — Der Aufrufer-Prüfer konnte nur fallen, wenn er zu streng war
 (2026-09-02).** Aus B54 blieben sechs Routen übrig, die einen Aufrufer haben
 und nie begangen wurden. Beim Nachsehen, wer sie ruft, stellte sich bei dreien
@@ -925,6 +960,26 @@ auch sein Verb.
 
 Die Zeile des Prüfers sagt seither **37 mit Aufrufer und 24 begründet**, wo sie
 vorher 40 und 21 sagte.
+
+**Und die drei Geschwister wurden am selben Tag gemessen**, statt den Verdacht
+stehen zu lassen. Drei Tore stellen dieselbe Frage („X hat einen Aufrufer"):
+
+- `check-link-reachability` verlangt den Operationsnamen **in
+  Anführungszeichen**, und genau das rettet es: von 54 Operationen wird keine
+  einzige ausserhalb des Homes nur in einem Kommentar genannt. Die Gegenprobe
+  hat es längst, nur anders formuliert — „an exemption that outlives its
+  reason".
+- `check-store-writers` sucht `.name(`, und dieser Baum schreibt
+  `` `Registry.put()` `` in Kommentare — das Tor selbst tut es in seiner
+  Kopfzeile. Nachgemessen mit entfernten Kommentaren: **dieselben 83**, keine
+  lebende Instanz. Die Gegenprobe hat es ebenfalls.
+- `check-capability-reach` entfernt Kommentare und hat die Gegenprobe.
+
+Also: die Klasse ist echt, belegt war sie nur an einer Stelle, und zwei der
+drei Geschwister trugen die Antwort schon. Das ist das zweite Mal an diesem
+Tag, dass ein Verdacht sich beim Nachmessen auf einen einzigen Fall
+zusammenzog — und beide Male war das Nachmessen billiger als der Umbau, den
+der Verdacht nahegelegt hätte.
 
 **B54 — Die Routenzahl war zu niedrig, weil die Messung sich ihre Zeugen
 ausgesucht hatte (2026-09-02).** `pnpm route:walk` meldete 26 von 61, und zehn
