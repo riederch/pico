@@ -353,6 +353,45 @@ for (const probe of probes) {
  * capability nobody has.
  */
 const arguedRoutes = [
+  /**
+   * Die drei Einzelstücke neben ihren Listen, gefunden am 2026-09-02 (B55).
+   *
+   * Sie stehen hier zusammen, weil sie dieselbe Gestalt haben und derselbe
+   * Satz sie trägt: **eine Liste hat einen Aufrufer, ihr Einzelstück nicht.**
+   * Das ist kein „die Tür in Gebrauch ist woanders" wie bei den Einträgen
+   * darunter - hier fehlt ein Client, und das ist der Unterschied, den ein
+   * Argument nicht verwischen darf.
+   *
+   * Zwei davon standen seit dem 2026-08-29 in Befund B44 als *unauffindbar*:
+   * eine Route aus Sammeladresse und Parameter habe kein eigenes Stück, an dem
+   * ein Muster sie festhalten könnte. Der Abgleich über die ganze Route findet
+   * sie, und er meldet nichts Richtiges als falsch - fünf Urteile ändern sich,
+   * jedes von Hand nachgesehen. Die dritte, `GET /api/events`, war bis dahin
+   * gar nicht bekannt: für sie bürgten vier *Kommentare* im Protokollpaket.
+   *
+   * Was daraus wird - gelöscht oder bedient -, ist eine Entscheidung über die
+   * Foundation-Fläche und keine Zeile in einem Prüfer.
+   */
+  {
+    method: 'GET',
+    route: '/api/events',
+    why: 'ADR 0030. Der Blättern-Zwilling von `/api/events/tail`: die Fläche liest den '
+      + 'Schwanz und schreibt mit `POST`, und niemand blättert. Kein Client, keine Tür '
+      + 'woanders - gefunden am 2026-09-02, Befund B55',
+  },
+  {
+    method: 'GET',
+    route: '/api/memory/domains/:privacyDomain/items/:memoryItemId',
+    why: 'ADR 0071. Das Einzelstück neben `/items`: die Fläche listet einen Raum und zeigt '
+      + 'aus der Liste. Kein Client - gefunden am 2026-09-02, Befund B55',
+  },
+  {
+    method: 'GET',
+    route: '/api/memory/retention-policies/:retentionPolicyId',
+    why: 'ADR 0074. Das Einzelstück neben der Liste: geändert und gelöscht wird über '
+      + 'dieselbe Adresse, gelesen wird aus der Liste. Kein Client - gefunden am '
+      + '2026-09-02, Befund B55',
+  },
   {
     prefix: '/api/home/domain-read-grant',
     why: 'ADR 0082 with ADR 0130 E5. The door in use is the Link operation '
@@ -366,14 +405,34 @@ const arguedRoutes = [
       + 'Link operation either - this family has no door in use at all, which is the same '
       + 'absence ADR 0130 E5 stays open on',
   },
+  /**
+   * **Zwei Stuecke der Familie, und nicht mehr die ganze** (2026-09-02, B55).
+   *
+   * Hier stand `/api/home/reader-custody/` als Praefix, und das Argument sagte,
+   * das Produkt trage diese Aufzeichnungen ueber Link. Fuer sieben der zwoelf
+   * Routen war das falsch: die Zeremonien des Vault-Daemons rufen `domains`,
+   * `reader-grants`, `reader-grant-lifecycle` und `kek-rotations` genau hier,
+   * ueber HTTP, gegen ein echtes Home. Ein Praefix-Argument hatte sie
+   * stillgestellt, und die Zeile des Pruefers zaehlte sie als *begruendet ohne
+   * Aufrufer*, wo sie einen haben.
+   *
+   * Aufgefallen ist das erst, als die Widerspruchspruefung an die richtige
+   * Stelle rutschte - davor nahm eine gerufene Route den ersten Ausgang. Das
+   * Argument hatte schon einmal seine Wahrheit ueberlebt (Notiz vom
+   * 2026-08-29), und ein Praefix ist die Gestalt, in der so etwas unbemerkt
+   * bleibt.
+   */
   {
-    prefix: '/api/home/reader-custody/',
-    why: 'ADR 0086/0117 with ADR 0130 E5. The Foundation transport of records the product '
-      + 'carries over Link instead: the window creates a reader-custody space, writes into '
-      + 'it, lets a second device in and rotates the lock, and every one of those goes '
-      + 'through an authority resource rather than through these routes. The argument here '
-      + 'said until 2026-08-29 that nothing in the product writes reader-custody content, '
-      + 'which stopped being true on 2026-08-26',
+    prefix: '/api/home/reader-custody/writer-grant',
+    why: 'ADR 0086/0117 mit ADR 0130 E5. Schreibzugaenge fuer einen fremden Schreiber gibt '
+      + 'es als Fläche und in keinem Produktweg - weder ueber Link noch hier. Diese '
+      + 'Abwesenheit ist dieselbe, auf der ADR 0130 E5 offen steht (2026-09-02, B55)',
+  },
+  {
+    prefix: '/api/home/reader-custody/items',
+    why: 'ADR 0086/0117. Der Foundation-Transport der Aufzeichnungen selbst: das Fenster '
+      + 'schreibt und liest sie ueber eine Autoritaetsressource, nicht ueber diese Routen '
+      + '(2026-09-02, B55)',
   },
   {
     prefix: '/api/auth/bootstrap',
@@ -398,7 +457,6 @@ const arguedRoutes = [
   },
   {
     route: '/api/auth/session',
-    prefix: '/api/auth/session',
     method: 'GET',
     why: 'ADR 0076. Die Betreiberfläche hält ihre Sitzung im Speicher, solange ihr Reiter '
       + 'offen ist, und fragt niemanden, ob sie noch gilt - ein Aufruf, der scheitert, sagt '
@@ -407,7 +465,6 @@ const arguedRoutes = [
   },
   {
     route: '/api/auth/session',
-    prefix: '/api/auth/session',
     method: 'DELETE',
     why: 'ADR 0076. Abgemeldet wird alles auf einmal - die Fläche ruft '
       + '`DELETE /api/auth/sessions` -, weil eine Person, die aufhört, nicht meint '
@@ -456,8 +513,28 @@ const collectRouteCallers = (directory) => {
   }
 };
 collectRouteCallers(repoRoot);
+/**
+ * Ein Kommentar ist kein Aufrufer.
+ *
+ * **Gefunden am 2026-09-02 (Befund B55).** `GET /api/events` wird von nichts
+ * gerufen - die Fläche liest `/api/events/tail` und schreibt mit `POST` -, und
+ * dieser Prüfer nannte sie erreicht. Der Grund stand in vier Saetzen im
+ * Protokollpaket: „the current Foundation POST /api/events", „what
+ * `POST /api/events` accepts" und zwei weitere. Prosa über eine Route zaehlte
+ * als Nennung, und weil in einem Kommentar kein `'POST'` *in
+ * Anfuehrungszeichen* steht, sah die Verbpruefung dort gar kein Verb und liess
+ * die Nennung fuer jedes gelten.
+ *
+ * `check-fingerprint-display` macht das seit dem 2026-08-21 richtig, und der
+ * Kommentar dort sagt auch, was es kostete, es nicht zu tun: „half the files
+ * that argue about this defect quote it".
+ */
+const stripComments = (source) => source
+  .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+  .replace(/(^|[^:'"`\\])\/\/[^\n]*/gu, '$1');
+
 const routeCallerText = routeCallerFiles
-  .map((path_) => readFileSync(path_, 'utf8'))
+  .map((path_) => stripComments(readFileSync(path_, 'utf8')))
   .join('\n');
 
 /**
@@ -509,51 +586,63 @@ function reached(route, named) {
 }
 
 /**
- * Und was hinter einem Parameter noch kommt, muss auch jemand nennen.
+ * Die *ganze* Route als Muster, und nicht ihr Stamm.
  *
- * Der Stamm endet am ersten `:`, also steht `/api/model/providers` für
- * `/api/model/providers/:entryId/decision` genauso wie für
- * `/api/model/providers/mine` - eine Sammeladresse bürgt für alles, was hinter
- * ihr liegt. Wo eine Route hinter dem Parameter weitergeht, wird dieses letzte
- * Stück deshalb eigens verlangt.
+ * **Bis zum 2026-09-02 stand hier ein Stamm** - die Adresse, am ersten `:`
+ * abgeschnitten - und daneben die Zusage, er müsse „enden, wo die Route
+ * endet". Die Vorschau `(?![A-Za-z0-9_-])` hielt das für ein *angehängtes
+ * Zeichen* (`/api/auth/session` gegen `/api/auth/sessions`) und nicht für ein
+ * *angehängtes Segment*: `/api/events` stand deshalb mitten in
+ * `/api/events/tail`, und die Liste bürgte für die Einzelroute daneben. Befund
+ * B55.
  *
- * **Was auch das nicht fängt**, gesagt statt geglaubt: eine Route, die *nur*
- * aus Sammeladresse und Parameter besteht - `GET /api/memory/retention-policies/:id`
- * neben der Liste, `GET /api/memory/domains/:d/items/:id` neben ihrer -, hat
- * kein eigenes Stück, an dem sie sich festhalten liesse. Zwei solche Routen
- * gibt es (Stand 2026-08-29), beide gelesen und beide ohne Aufrufer; sie
- * stehen in Befund B44 statt in einem Muster, das sie nicht sieht.
+ * Jetzt wird die Route ganz gebaut: feste Stücke wörtlich, jeder Parameter als
+ * Platzhalter für genau ein Segment, und das Ganze muss an einer URL-Grenze
+ * enden - Anführungszeichen, Backtick, `?`, `#` oder Zeilenende. Ein Aufrufer,
+ * der `` `/api/model/providers/${id}/decision` `` schreibt, wird gefunden; die
+ * Liste `/api/memory/retention-policies` bürgt nicht mehr für
+ * `/api/memory/retention-policies/:id`.
+ *
+ * **Damit fällt weg, was B44 für unauffindbar hielt.** Dort stand, eine Route
+ * aus Sammeladresse und Parameter habe „kein eigenes Stück, an dem ein Muster
+ * sie festhalten könnte", und ein Muster, das sie fände, meldete auch
+ * Richtiges als falsch. Gemessen, bevor es hier stand: **fünf** von 61 Routen
+ * ändern ihr Urteil, und jede einzelne wurde von Hand nachgesehen. Keine ist
+ * ein Fehlalarm.
+ *
+ * **Was auch das nicht fängt**, gesagt statt geglaubt: einen Aufrufer, der die
+ * Adresse aus Teilen zusammensetzt, statt sie an einer Stelle hinzuschreiben.
+ * Keiner tut das heute (2026-09-02 gemessen), und der Tag, an dem einer es
+ * tut, ist der Tag, an dem dieser Prüfer über ihn nichts sagt.
  */
-function tailNamed(route) {
-  const parts = route.route.split('/');
-  const parameterAt = parts.findIndex((part) => part.startsWith(':'));
-  if (parameterAt < 0 || parameterAt === parts.length - 1) {
-    return true;
-  }
-  return parts.slice(parameterAt + 1)
-    .filter((part) => !part.startsWith(':'))
-    .every((part) => new RegExp(`/${part}(?![A-Za-z0-9_-])`, 'u').test(routeCallerText));
+function wholeRoutePattern(route) {
+  const body = route.split('/')
+    .filter((part) => part !== '')
+    .map((part) => (part.startsWith(':')
+      // Ein Parameter ist genau ein Segment: ein `${…}` im Template oder ein
+      // hingeschriebener Wert. Kein `/`, sonst bürgte er wieder für die Route
+      // darunter.
+      ? '(?:\\$\\{[^}]*\\}|[A-Za-z0-9_.:%-]+)'
+      : part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')))
+    .join('/');
+  return new RegExp(`/${body}(?=[\`'"?#]|\\s|$)`, 'gu');
 }
 
 let routesChecked = 0;
 let routesArgued = 0;
 for (const route of registered) {
   routesChecked += 1;
-  const stem = route.route.split('/:')[0];
   /**
-   * The stem must end where the route ends. A plain `includes` made
-   * `/api/auth/session` look reached because the dashboard names
-   * `/api/auth/sessions` four lines away - one route standing in for another
-   * by being a prefix of it, which is exactly the confusion this direction
-   * exists to catch.
+   * Beide Fragen werden gestellt, und dann erst entschieden.
+   *
+   * **Die Reihenfolge war der Fehler** (2026-09-02, beim Pflanzen gefunden,
+   * Befund B55). Zuerst stand hier `if (reached) continue;` und die
+   * Widerspruchspruefung darunter - also lief sie fuer genau die Routen nie,
+   * um die es geht: eine begruendete Route, die der Abgleich *doch* findet,
+   * nahm den ersten Ausgang und kam am Widerspruch vorbei. Die Pflanzung
+   * bestand weiter, nur mit anderen Zahlen, und das war der Beweis.
    */
-  const named = new RegExp(
-    `${stem.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![A-Za-z0-9_-])`,
-    'gu',
-  );
-  if (reached(route, named) && tailNamed(route)) {
-    continue;
-  }
+  const isReached = reached(route, wholeRoutePattern(route.route));
   /**
    * Ein Argument darf ein Verb nennen, und wo es eines nennt, gilt es nur
    * dafür. `/api/auth/session` ist ein Präfix von `/api/auth/sessions`, und ein
@@ -566,11 +655,39 @@ for (const route of registered) {
    * `POST /api/model/providers/:entryId/narrowing` mit stumm - eine Route, die
    * gerufen wird. Aufgefallen ist es beim Pflanzen, nicht beim Schreiben.
    */
-  if (arguedRoutes.some((entry) => (entry.route === undefined
+  const argument = arguedRoutes.find((entry) => (entry.route === undefined
     ? route.route.startsWith(entry.prefix)
     : entry.route === route.route)
-    && (entry.method === undefined || entry.method === route.method))) {
+    && (entry.method === undefined || entry.method === route.method));
+  if (argument === undefined && isReached) {
+    continue;
+  }
+  if (argument !== undefined) {
     routesArgued += 1;
+    /**
+     * **Ein Argument, das nicht mehr stimmt, ist eine Luege in dieser Datei.**
+     *
+     * Bis zum 2026-09-02 hatte dieser Pruefer genau *eine* Art zu fallen: eine
+     * Route ohne Aufrufer und ohne Argument. Zu *grosszuegig* zu sein war
+     * unsichtbar - und genau daran sind B44 und B55 vorbeigekommen. Zwei
+     * Pflanzungen zeigten es: mit dem alten Stamm-Abgleich und ohne das
+     * Entfernen von Kommentaren bestand er weiter, nur mit anderen Zahlen.
+     *
+     * Diese Richtung ist die Gegenprobe und sie ist entscheidbar: was hier als
+     * *ohne Aufrufer* begruendet steht, darf der Abgleich nicht finden. Wird
+     * es gefunden, ist entweder inzwischen ein Client gebaut worden - dann
+     * gehoert das Argument weg - oder der Abgleich ist zu weit geworden.
+     * Gemessen, bevor es hier stand: heute null Widersprueche.
+     */
+    if (isReached) {
+      errors.push(
+        `${appPath}: ${route.method} ${route.route} is argued here as having no caller, and `
+        + 'the caller search finds one. Either somebody built the client and this argument '
+        + 'outlived it, or the search grew wide enough to vouch for a route from something '
+        + 'that is not its caller. Both are worth stopping for; a stale argument is a lie in '
+        + 'this file.',
+      );
+    }
     continue;
   }
   errors.push(
@@ -585,11 +702,26 @@ if (routesChecked === 0) {
     + 'nothing.',
   );
 }
-/** An argument for a prefix no route carries is a sentence about nothing. */
+/**
+ * Ein Argument über eine Route, die es nicht gibt, ist ein Satz über nichts.
+ *
+ * **Und bis zum 2026-09-02 prüfte das die Route-Einträge gar nicht** (Befund
+ * B55). Die Schleife las nur `entry.prefix`, also trugen die Route-Einträge
+ * ihre Adresse ein zweites Mal als `prefix` - allein, um hier durchzukommen.
+ * Eine Wahrheit, zweimal geschrieben, und die zweite Fassung war nur dafür da,
+ * eine Prüfung stillzustellen. Jetzt liest die Schleife beide Gestalten, und
+ * bei einem Route-Eintrag auch sein Verb.
+ */
 for (const entry of arguedRoutes) {
-  if (!registered.some((route) => route.route.startsWith(entry.prefix))) {
+  const covered = entry.route === undefined
+    ? registered.some((route) => route.route.startsWith(entry.prefix))
+    : registered.some((route) => route.route === entry.route
+      && (entry.method === undefined || route.method === entry.method));
+  if (!covered) {
     errors.push(
-      `${entry.prefix} is argued here as uncalled and no route starts with it.`,
+      `${entry.method === undefined ? '' : `${entry.method} `}`
+      + `${entry.route ?? entry.prefix} is argued here as uncalled and no served route `
+      + 'matches it.',
     );
   }
 }
