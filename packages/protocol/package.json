@@ -31,6 +31,10 @@
       "types": "./dist/canonical-bytes.d.ts",
       "import": "./dist/canonical-bytes.js"
     },
+    "./canonical-transport": {
+      "types": "./dist/canonical-transport.d.ts",
+      "import": "./dist/canonical-transport.js"
+    },
     "./confidence": {
       "types": "./dist/confidence.d.ts",
       "import": "./dist/confidence.js"

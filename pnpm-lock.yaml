@@ -29,6 +29,9 @@ importers:
       '@pico/link-relay-client':
         specifier: workspace:*
         version: link:../../packages/link-relay-client
+      '@pico/module-spatial-recall':
+        specifier: workspace:*
+        version: link:../../modules/spatial-recall
       '@pico/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

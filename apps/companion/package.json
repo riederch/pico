@@ -138,6 +138,10 @@
       "types": "./dist/vault-product-session.d.ts",
       "import": "./dist/vault-product-session.js"
     },
+    "./observation-condensation": {
+      "types": "./dist/observation-condensation.d.ts",
+      "import": "./dist/observation-condensation.js"
+    },
     "./observations": {
       "types": "./dist/observations.d.ts",
       "import": "./dist/observations.js"
@@ -159,6 +163,7 @@
   },
   "dependencies": {
     "@pico/link-relay-client": "workspace:*",
+    "@pico/module-spatial-recall": "workspace:*",
     "@pico/protocol": "workspace:*",
     "@pico/vault": "workspace:*",
     "@pico/vault-daemon": "workspace:*"
