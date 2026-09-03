@@ -35,7 +35,8 @@ import {
   defaultPicoCompanionPlatformUnlockPath,
 } from '@pico/companion/platform-unlock';
 import { createPicoCompanionLinkClient } from '@pico/companion/recovery-controller';
-import { submitPicoCompanionObservations } from '@pico/companion/observations';
+import { keepPicoCompanionDerivedObservation } from '@pico/companion/observations';
+import { condensePicoCompanionObservations } from '@pico/companion/observation-condensation';
 import { parsePicoLocationFix } from '@pico/protocol/spatial-recall';
 import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import { connectPicoAndroidKeystorePort } from './keystore-port.mjs';
@@ -129,26 +130,63 @@ try {
     await daemonClient.hello();
     try {
       const linkClient = await createPicoCompanionLinkClient({ profile, daemonClient, sodium });
-      const { appended } = await submitPicoCompanionObservations({
-        linkClient,
-        observations: [
-          ...fixes.map((fix) => ({ kind: 'location_fix', payload: JSON.stringify(fix) })),
-          ...mobility.map((sample) => ({
-            kind: 'mobility_sample', payload: JSON.stringify(sample),
-          })),
-        ],
-      });
+
       /**
-       * **Erst leeren, wenn das Home sie hat** - und nur, wenn es alle hat.
-       * Ein Puffer, der geleert wird, weil ein Teil ankam, verliert genau die
-       * Messungen, aus denen eine Ableitung ihren Schluss zieht. Bleibt die
-       * Datei stehen, werden dieselben Messungen später noch einmal angeboten:
-       * Wiederholung ist der laute Fehlschlag, Verlust der leise.
+       * **ADR 0126 P3, seit dem 2026-09-03: verdichtet wird hier, nicht dort.**
+       *
+       * Bis dahin gingen die Messungen selbst an den Home, der sie pufferte.
+       * P3s andere Hälfte dreht das um: der Puffer liegt auf diesem Gerät, die
+       * Ableitung auch, und was die Zustandsgrenze überquert, ist eine
+       * Erinnerung. Der Home sieht die Messungen nie.
+       *
+       * **Nichts abgeleitet heisst nichts verbraucht.** Die Datei bleibt
+       * stehen, bis eine Ableitung entstanden *und* angekommen ist - dieselbe
+       * Reihenfolge wie vorher und aus demselben Grund: Wiederholung ist der
+       * laute Fehlschlag, Verlust der leise.
+       *
+       * **Und heute leitet das hier nichts ab**, gemessen und nicht vermutet:
+       * `readMobilitySamples` gibt leer zurück, weil Bewegungsarten bei
+       * Android aus den Play-Diensten kommen, die diese Sonde nicht hat. Ohne
+       * den Übergang von fahrend zu gehend hat ein Parkplatz kein Merkmal.
+       * Der Weg steht trotzdem: bis dahin sammelte der Home Rohstandorte, aus
+       * denen nichts entstand.
        */
-      if (appended === fixes.length + mobility.length) {
-        writeFileSync(takenPath, '', 'utf8');
+      const derived = condensePicoCompanionObservations({
+        locationFixes: fixes,
+        mobilitySamples: mobility,
+      });
+      if (derived === undefined) {
+        say({ step: 'nothing_derived', held: fixes.length + mobility.length });
+      } else {
+        const kept = await keepPicoCompanionDerivedObservation({ linkClient, derived });
+        /**
+         * Nur die Messungen bis zum Übergang, aus dem die Ableitung ihren
+         * Schluss zog. Was danach gemessen wurde, gehört zur nächsten Fahrt.
+         */
+        if (kept.crossed) {
+          const consumedThrough = Date.parse(derived.consumedThrough);
+          const kept_ = readFileSync(takenPath, 'utf8').split('\n')
+            .filter((line) => {
+              if (line.trim() === '') {
+                return false;
+              }
+              try {
+                return Date.parse(JSON.parse(line).at) > consumedThrough;
+              } catch {
+                // Eine Zeile, die keine Messung ist, wird nicht aufbewahrt -
+                // sie war auch keine Eingabe.
+                return false;
+              }
+            });
+          writeFileSync(takenPath, kept_.length === 0 ? '' : `${kept_.join('\n')}\n`, 'utf8');
+        }
+        say({
+          step: 'derived_kept',
+          crossed: kept.crossed,
+          memoryItemId: kept.memoryItemId,
+          from: fixes.length + mobility.length,
+        });
       }
-      say({ step: 'submitted', offered: fixes.length + mobility.length, appended });
     } finally {
       await daemonClient.close();
     }

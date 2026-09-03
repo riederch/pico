@@ -21,7 +21,11 @@ import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-s
 import type { PicoCompanionPresentation } from './contract.js';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
 import { exchangePicoCompanionLinkMailbox } from '@pico/companion/link-mailbox';
-import { submitPicoCompanionObservations } from '@pico/companion/observations';
+import {
+  keepPicoCompanionDerivedObservation,
+  submitPicoCompanionObservations,
+} from '@pico/companion/observations';
+import { condensePicoCompanionObservations } from '@pico/companion/observation-condensation';
 import { startPicoCompanionShellRuntime } from './runtime.js';
 
 const CLI = join(import.meta.dirname, '..', '..', 'vault-daemon', 'dist', 'cli.js');
@@ -529,11 +533,14 @@ describe('Electron-hosted companion runtime against real processes', () => {
 
       // Die Zustimmung ist eine Handlung der Person an ihrem Home und kommt
       // nicht von dem Gerät, das aufzeichnen möchte.
+      // Einmal angemeldet und weitergereicht: ein zweiter Beitritt desselben
+      // Betreibers wird abgelehnt, und das ist richtig.
+      const session = await operatorSession(core);
       const consented = await fetch(`${core.apiBaseUrl}/api/home/modules/capture`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${await operatorSession(core)}`,
+          authorization: `Bearer ${session}`,
         },
         body: JSON.stringify({ identifier: 'spatial-recall', capturing: true }),
       });
@@ -548,6 +555,73 @@ describe('Electron-hosted companion runtime against real processes', () => {
         linkClient,
         observations: measured,
       })).toEqual({ appended: 2 });
+
+      /**
+       * **Und die andere Hälfte der Zustandsgrenze** (ADR 0126 P3, Phase 3,
+       * aufgemacht am 2026-09-03).
+       *
+       * Bis hierher geht der Weg von 2026-08-26: das Gerät schickt Messungen,
+       * der Home puffert sie. P3 will das Gegenteil — der Puffer liegt auf dem
+       * Gerät, die Verdichtung auch, und was die Grenze überquert, ist eine
+       * Erinnerung. `derived_observation` stand seit dem 2026-08-18 als
+       * Übergangsart im Vokabular, deklariert und unbenutzt.
+       *
+       * Hier wird sie benutzt. Verdichtet wird mit derselben Funktion, die auf
+       * dem Telefon läuft; über die Tür geht nur ihr Ergebnis.
+       */
+      const derived = condensePicoCompanionObservations({
+        locationFixes: [
+          { at: '2026-09-03T08:00:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.37, accuracyM: 8 },
+          { at: '2026-09-03T08:10:00.000Z', latitudeDeg: 48.21, longitudeDeg: 16.38, accuracyM: 8 },
+        ],
+        mobilitySamples: [
+          { at: '2026-09-03T08:00:00.000Z', mobility: 'car', confidence: 'high' },
+          { at: '2026-09-03T08:13:00.000Z', mobility: 'walking', confidence: 'high' },
+        ],
+      });
+      expect(derived, 'die Verdichtung muss hier etwas ergeben').toBeDefined();
+
+      const kept = await keepPicoCompanionDerivedObservation({
+        linkClient,
+        derived: derived!,
+      });
+      expect(kept.crossed).toBe(true);
+      expect(kept.memoryItemId).toMatch(/^mem_derived_[0-9a-f]{32}$/u);
+
+      /**
+       * **Und die Übergabe ist aufgeschrieben** — das ist ADR 0126s tragende
+       * Aussage: „a rule a surface enforces is a rule anything else walks
+       * past; here promoting *is* recording." Der Nachweis ist deshalb die
+       * Aufzeichnung und nicht der Rückgabewert.
+       *
+       * Sie ist inhaltsfrei: welche Übergangsart, in welchen Raum, aus wie
+       * vielen Quellen — nie, *was* übergegangen ist.
+       */
+      const tail = await fetch(`${core.apiBaseUrl}/api/events/tail?limit=50`, {
+        headers: { authorization: `Bearer ${session}` },
+      });
+      expect(tail.status, await tail.clone().text()).toBe(200);
+      const events = ((await tail.json()) as {
+        events: ReadonlyArray<{ type: string; payload: Record<string, unknown> }>;
+      }).events;
+      const crossing = events.find((event) => event.type === 'home.state_crossed'
+        && event.payload.kind === 'derived_observation');
+      expect(crossing, JSON.stringify(events.map((event) => event.type))).toBeDefined();
+      expect(crossing!.payload).toMatchObject({
+        kind: 'derived_observation',
+        privacyDomain: 'private',
+        sourceCount: 1,
+      });
+      // Inhaltsfrei: der Text der Ableitung steht nicht in der Aufzeichnung.
+      expect(JSON.stringify(crossing!.payload)).not.toContain('parkedAt');
+
+      /**
+       * Und ein zweites Mal dieselbe Ableitung ist kein Fehler, aber auch kein
+       * zweiter Übergang: nur „gerade angekommen" erlaubt einem Gerät, seinen
+       * Puffer zu leeren.
+       */
+      const again = await keepPicoCompanionDerivedObservation({ linkClient, derived: derived! });
+      expect(again.memoryItemId).toBe(kept.memoryItemId);
     } finally {
       await daemonClient.close();
     }

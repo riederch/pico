@@ -149,17 +149,16 @@ const arguedModuleNames = [
       + 'es nicht gibt',
   ],
   [
-    'picoDeriveParkingCandidate',
-    'ADR 0129 SR2/SR5, Befund B4 - **und der Grund ist seit dem 2026-08-26 ein anderer, '
-      + 'kleinerer**. Er lautete: "Wo habe ich geparkt" braucht Beobachtungen, und '
-      + '`appendPicoObservations` hat außerhalb seiner Tests keinen Aufrufer. Den hat es '
-      + 'jetzt: `home.observations.submit` füllt den Puffer von einem Telefon aus, am Gerät '
-      + 'bewiesen, mit echten Messungen des `LocationManager`. Was der Ableitung fehlt, ist '
-      + 'die zweite Hälfte ihrer Eingabe - Bewegungsarten. Die kommen bei Android aus den '
-      + 'Play-Diensten, die diese handgebaute Sonde nicht hat, und ohne den Übergang von '
-      + '"fahrend" zu "gehend" hat ein Parkplatz kein Merkmal, an dem er zu erkennen wäre. '
-      + 'Ein Aufrufer, der sie ohne diesen Übergang fragte, bekäme "nichts gefunden" und '
-      + 'nicht "hier war es"',
+    'submitPicoCompanionObservations',
+    'ADR 0129 SR2 mit ADR 0126 P3 - **und die Abwesenheit ist seit dem 2026-09-03 ein '
+      + 'Ergebnis und kein Versehen**. Bis dahin war dies der Weg des Telefons: Messungen '
+      + 'an den Home, der sie puffert. Phase 3 hat ihn umgedreht - `capture.mjs` verdichtet '
+      + 'jetzt auf dem Gerät und gibt über `home.observation.derived.keep` nur das Ergebnis '
+      + 'ab, damit der Home keine Rohstandorte mehr sieht. Der Puffer im Home *bleibt* '
+      + 'trotzdem: ADR 0129 SR2 behält seine fünf beantworteten Stellen, und ADR 0126 sagt '
+      + 'ausdrücklich, er höre nur auf, der einzige Ort für Beobachtungen zu sein. Diese '
+      + 'Funktion ist also die Tür zu einem Puffer, den das Produkt vorerst nicht mehr '
+      + 'füllt - begangen bleibt sie im Durchlauf gegen ein laufendes Home',
   ],
   [
     'picoParkingAnswer',
