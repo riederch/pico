@@ -2,6 +2,29 @@
 
 ## Status
 
+Status note, 2026-09-03 (**vom Nutzer aufgemacht**): **P3s andere Haelfte ist
+gebaut.** Was ein Geraet gemessen hat, wird auf dem Geraet zu dem, was es
+bedeutet, und nur das ueberquert die Grenze - `home.observation.derived.keep`
+fuehrt es ueber `crossPicoStateBoundary` mit der Art `derived_observation`,
+die seit dem 2026-08-18 deklariert und unbenutzt hier stand. Der Home sieht
+die Messungen nicht mehr.
+
+**Der Satz „P3 moves a store that currently works" gilt weiter, aber kleiner
+als er klang**: gemessen am 2026-09-03 leitet die Ableitung ohne
+Bewegungsarten nichts ab, und die handgebaute Android-Sonde hat keine. Der
+Home sammelte also Rohstandorte, aus denen nichts entsteht - was das Argument
+fuer diesen Schritt ist und nicht dagegen.
+
+**Zwei Dinge fand erst der Durchlauf.** Die kanonische Form der
+Link-Argumente traegt keine Fliesskommazahlen, also reist der Ort als Text -
+dieselbe Wand wie beim Puffer-Weg, eine Verdichtung spaeter. Und ein zweites
+Angebot derselben Ableitung stuerzte ab: ein Geraet nach einem
+Verbindungsabbruch bekam einen Fehler fuer etwas, das laengst angekommen war.
+Jetzt antwortet der Home „schon da", und nur „gerade angekommen" erlaubt ihm,
+seine Messungen zu loeschen.
+
+Gegangen gegen echte Prozesse, nicht auf einem Telefon: es hing keines an.
+
 Accepted as an architecture boundary; P1 and P5 implemented, P2/P3/P6 open
 and P4 blocked. P3's door was widened on 2026-08-18 to the sibling keep that
 was walking past it - see the gate. The number was

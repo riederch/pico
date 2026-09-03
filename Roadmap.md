@@ -641,11 +641,59 @@ Was jetzt fehlt, ist ein Erfassungs-Adapter darauf; die Fläche deklariert nicht
 einmal eine Standortberechtigung. Damit war die offene Frage keine technische
 mehr, sondern die alte Produktfrage ohne ihren technischen Vorwand.
 
-**Am 2026-08-22 gestellt und beantwortet: vertagt lassen.** Phase 3 bleibt
-damit zu, und Phase 6 hängt weiter daran - aber die Vertagung steht jetzt auf
-einer Entscheidung von heute statt auf einer Tatsache von gestern. Wer diese
+**Am 2026-08-22 gestellt und beantwortet: vertagt lassen.** Phase 3 blieb
+damit zu, und Phase 6 hing weiter daran - aber die Vertagung stand auf einer
+Entscheidung von jenem Tag statt auf einer Tatsache von gestern. Wer diese
 Zeile das nächste Mal liest, muss die Frage nicht erneut aufmachen, um zu
 erfahren, ob sie schon gestellt wurde.
+
+**Am 2026-09-03 vom Nutzer aufgemacht — und die Vermessung davor hat den
+Auftrag verschoben.** Vier Dinge wurden gemessen, bevor eine Zeile entstand:
+
+1. **Die Voraussetzung ist erfüllt.** Die Vertagung stand auf „es gibt keine
+   Erfassung auf einem Gerät"; die gibt es seit dem 2026-08-26.
+2. **Die Übergangsart existierte schon.** `derived_observation` steht seit dem
+   2026-08-18 im geschlossenen Vokabular von ADR 0126 P3 — *„Declared here and
+   unused until a presence with a sensor exists."* Phase 3 brauchte **keine
+   ADR-Änderung**, nur ihre Benutzung.
+3. **Es fehlte genau eine Tür.** `home.observations.submit` trägt nur
+   Rohmessungen; für eine *abgeleitete* Erinnerung gab es keine Operation.
+4. **Und die Zeile, die alles verschiebt**, ausgeführt statt gelesen:
+   `picoDeriveParkingCandidate` gibt ohne Bewegungsarten `undefined` zurück,
+   und `readMobilitySamples` der handgebauten Sonde liefert eine leere Liste.
+   **Der Home sammelte also Rohstandorte, aus denen nichts entsteht.**
+
+Punkt 4 ist der Grund, es trotzdem zu bauen, und nicht der Grund, es zu
+lassen: Phase 3 nimmt dem Home eine Datenkenntnis, die ihm heute nichts
+einbringt. Der Datenschutzgewinn ist sofort da, die Funktion kommt, wenn die
+zweite Eingabehälfte existiert.
+
+**Was gebaut ist.** Die Verdichtung liegt auf der Geräteseite
+(`apps/companion/src/observation-condensation.ts`), sie nennt keine Domäne —
+die ist die einzige Custody, die eine Beobachtung trägt, und der Home nennt
+sie —, und die 55. Operation `home.observation.derived.keep` führt das
+Ergebnis über `crossPicoStateBoundary` mit der Art `derived_observation`. Der
+Ort hängt als Kernspalte am Eintrag (ADR 0129 SR3).
+
+**Und das Gehen hat zwei Dinge gefunden, die das Schreiben nicht fand.**
+
+- **Die kanonische Form der Link-Argumente trägt keine Fließkommazahlen.** Der
+  Ort reist deshalb als Text — dieselbe Wand, die der Puffer-Weg am 2026-08-26
+  gefunden hat, eine Verdichtung später. Gefunden vom Durchlauf gegen ein
+  laufendes Home, nicht vom Lesen.
+- **Ein zweites Angebot derselben Ableitung stürzte ab.** Ein Gerät, dessen
+  Verbindung nach dem Übergang abbrach, bekam einen Fehler für etwas, das
+  längst angekommen war — und behielte seine Messungen im Klartext, also genau
+  den leisen Verlust, den ADR 0129 SR5 vermeiden will. Jetzt antwortet der
+  Home „schon da", und nur „gerade angekommen" erlaubt dem Gerät, zu leeren.
+
+**Bewiesen, und was nicht.** Der Durchlauf steht gegen echte Prozesse: das
+Gerät verdichtet, der Home nimmt an, die Aufzeichnung `home.state_crossed`
+steht da und ist inhaltsfrei — Art, Raum, Quellenzahl, nie was. `pnpm
+link:walk` zählt **53 von 55**. Auf einem echten Telefon ist nichts davon
+gelaufen: **es hing keines an** (`adb devices` leer), und das steht hier statt
+zu fehlen. Der letzte Schritt ist ein Gerät und `capture.mjs`, das statt der
+Messungen ihr Ergebnis abgibt.
 
 ### Phase 5 — Android-Ceremonies (ADR 0131 A5, A3) — abgeschlossen am 2026-08-25
 
