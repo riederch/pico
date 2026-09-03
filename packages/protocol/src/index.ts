@@ -744,6 +744,23 @@ export const picoLinkDirectOperations = [
   'home.reader_custody.rotation.read',
   'home.reader_custody.item.submit',
   'home.observations.submit',
+  /**
+   * ADR 0126 P3 mit ADR 0129 SR2. Was ein Gerät aus seinen eigenen Messungen
+   * gemacht hat, auf dem Weg über die Zustandsgrenze.
+   *
+   * **Der Zwilling von `home.observations.submit`, und sein Gegenteil.** Der
+   * schickt Messungen, die der Home puffert; dieser schickt das, was aus
+   * ihnen wurde, und der Home sieht die Messungen nie. P3 nennt das seine
+   * andere Hälfte, und `derived_observation` steht seit dem 2026-08-18 als
+   * Übergangsart im Vokabular - deklariert und unbenutzt, bis es eine Präsenz
+   * mit einem Sensor gibt.
+   *
+   * **Die Domäne reist auch hier nicht mit.** Sie ist die einzige Custody,
+   * die eine Beobachtung trägt, und ein Absender, der seine eigene nennen
+   * dürfte, legte sie in den Raum eines anderen - dieselbe Regel wie beim
+   * Puffern, eine Verdichtung später.
+   */
+  'home.observation.derived.keep',
   'home.modules.consent.read',
   'home.modules.consent.record',
 ] as const;

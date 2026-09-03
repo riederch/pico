@@ -4965,6 +4965,127 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
            */
           return { outcome: 'ok', result: { appended } };
         }
+        /**
+         * ADR 0126 P3 mit ADR 0129 SR2. Was ein Gerät aus seinen eigenen
+         * Messungen gemacht hat, überquert hier die Zustandsgrenze.
+         *
+         * **Die Messungen kommen nie an**, und das ist der ganze Punkt: der
+         * Puffer liegt auf dem Gerät, die Verdichtung auch, und was der Home
+         * sieht, ist eine Erinnerung. P3 nennt das seine andere Hälfte.
+         *
+         * **Dieselben zwei Entscheidungen wie beim Puffern**, weil sie
+         * dieselben sind: *ob* überhaupt gemessen werden darf (SR6) und *in
+         * welchem Raum* das Ergebnis liegt. Die Domäne reist nicht mit - ein
+         * Absender, der seine eigene nennen dürfte, legte sie in den Raum
+         * eines anderen.
+         */
+        case 'home.observation.derived.keep': {
+          if (principal === undefined
+            || typeof args.contentType !== 'string'
+            || typeof args.content !== 'string'
+            || typeof args.at !== 'string'
+            || typeof args.place !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (!store.picoCapturingModules().includes('spatial-recall')) {
+            /**
+             * Auch hier benannt und nicht stumm: wer nicht messen darf, darf
+             * auch das Ergebnis einer Messung nicht abliefern. Die Zusage der
+             * Person ist eine über ihr Leben (SR6) und nicht über einen
+             * Transportweg.
+             */
+            return { outcome: 'invalid_arguments', result: { refusal: 'capture_not_consented' } };
+          }
+          let place;
+          try {
+            // Als Text, weil die kanonische Form der Link-Argumente keine
+            // Fließkommazahlen trägt - dieselbe Sprache, die der Puffer daneben
+            // spricht.
+            place = parsePicoPlace(JSON.parse(args.place));
+          } catch {
+            return { outcome: 'invalid_arguments', result: { refusal: 'invalid_pico_place' } };
+          }
+          if (!isPicoInstant(args.at)) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'invalid_instant' } };
+          }
+          const derivedItemId = `mem_derived_${createHash('sha256')
+            .update(`derived_observation\u0000${args.at}\u0000${args.content}`)
+            .digest('hex').slice(0, 32)}`;
+          /**
+           * **Ein zweites Mal ist kein zweiter Uebergang** (ADR 0126 P3).
+           *
+           * Ein Geraet, dessen Verbindung nach dem Uebergang abbrach, bietet
+           * dieselbe Ableitung noch einmal an - und das ist kein Fehler,
+           * sondern der laute Fehlschlag, den ADR 0129 SR5 dem leisen Verlust
+           * vorzieht. Ohne diese Zeile legte der Uebergang den Eintrag ein
+           * zweites Mal an und scheiterte; das Geraet bekaeme einen Fehler
+           * fuer etwas, das laengst angekommen ist, und behielte seine
+           * Messungen im Klartext. **Gefunden beim Gehen, nicht beim
+           * Schreiben.**
+           *
+           * Die Kennung ist aus dem Inhalt gebildet, also ist „schon da" eine
+           * Aussage ueber dieselbe Ableitung und nicht ueber eine zufaellige
+           * Namensgleichheit.
+           */
+          const already = store.memory()
+            .getInDomain(derivedItemId, spatialCapturePrivacyDomain);
+          if (already !== undefined) {
+            return {
+              outcome: 'ok',
+              result: { memoryItemId: derivedItemId, crossed: false },
+            };
+          }
+          const crossed = crossPicoStateBoundary({
+            store,
+            kind: 'derived_observation',
+            privacyDomain: spatialCapturePrivacyDomain,
+            owner: principal.picoIdentityFingerprintHex,
+            controller: principal.picoIdentityFingerprintHex,
+            contentType: args.contentType,
+            content: args.content,
+            /**
+             * ADR 0116 W2. Abgeleitet aus dem, was das eigene Gerät gemessen
+             * hat - also Picos Eigenes und nicht die Person, die daneben
+             * stand. Eine Ableitung ist keine Anweisung.
+             */
+            origin: 'own_pico',
+            /**
+             * Eins, und die Zahl ist das Einzige, was über die Quellen gesagt
+             * wird: der Home hat die Messungen nicht gesehen und kann sie
+             * nicht zählen. Was er zählt, ist das, was ankam.
+             */
+            sourceCount: 1,
+            deviceId: config.deviceId,
+            memoryItemId: derivedItemId,
+            appendEvent: ({ type, payload }) => {
+              const crossingEvent = factory.create({
+                deviceId: config.deviceId,
+                type,
+                payload,
+              });
+              store.append(crossingEvent);
+              broadcast(crossingEvent);
+            },
+          });
+          if (!crossed.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: crossed.refusal } };
+          }
+          /**
+           * ADR 0129 SR3. Der Ort ist eine Kernspalte und wird an den Eintrag
+           * gehängt, nachdem es ihn gibt - genau wie ein fälliger Zeitpunkt.
+           */
+          store.setPicoMemoryItemPlace({ memoryItemId: derivedItemId, place });
+          /**
+           * `memoryItemId` zurück, damit das Gerät weiss, was angekommen ist,
+           * und `crossed`, damit „schon da" von „gerade angekommen"
+           * unterscheidbar bleibt - nur das Zweite erlaubt dem Gerät, seinen
+           * Puffer zu leeren.
+           */
+          return {
+            outcome: 'ok',
+            result: { memoryItemId: derivedItemId, crossed: true },
+          };
+        }
         case 'home.modules.consent.read': {
           if (principal === undefined) {
             return { outcome: 'invalid_arguments', result: {} };
