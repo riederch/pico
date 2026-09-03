@@ -1792,8 +1792,11 @@ erklären macht aus einem Cloud-Connector keine.
 Lesezugang erteilen, die eigene Erinnerung fragen, die Antwort behalten und
 beides zurücknehmen — gegen ein laufendes Home, einen Vault-Daemon und einen
 Modell-Host über einfaches HTTP. `pnpm link:walk` zählt danach **50 von 54**
-statt 46; offen bleiben die beiden vertagten Identitätsrotationen, das Angebot
-ohne Erzeuger (B38) und `home.model.read.keep`.
+statt 46; offen waren an jenem Tag die beiden vertagten Identitätsrotationen,
+das Angebot ohne Erzeuger (B38) und `home.model.read.keep`. Die letzten beiden
+sind seither zu — B38 am 2026-09-01, die Korpuslesung am 2026-09-02 (B53) —,
+und diese Zeile steht im Imperfekt, damit sie nicht weiter behauptet, was
+einmal galt.
 
 **Und das letzte hat einen neuen Grund**, gemessen statt vermutet: eine
 Korpuslesung ging jetzt bis zum Modell durch und wurde mit
