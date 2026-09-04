@@ -2,6 +2,23 @@
 
 ## Status
 
+Status note, 2026-09-03: **SR2s Puffer liegt jetzt auf dem Geraet.** ADR 0126
+P3 wurde vom Nutzer aufgemacht und gebaut: das Telefon verdichtet mit
+`picoDeriveParkingCandidate`, und nur die Ableitung ueberquert die Grenze. Der
+Home sieht keine Rohstandorte mehr.
+
+**SR2 behaelt seine fuenf beantworteten Stellen** - ADR 0126 sagt, der Puffer
+hoere nur auf, der einzige Ort fuer Beobachtungen zu sein, und genau das ist
+eingetreten: `home.observations.submit` steht weiter, und im Produkt fuellt
+seit heute niemand mehr den Puffer im Home.
+
+**Die zweite Eingabehaelfte fehlt weiter**, und das ist gemessen und nicht
+vermutet: ohne Bewegungsarten gibt die Ableitung `undefined` zurueck, auf dem
+Geraet genauso wie vorher im Home. Der Umzug bringt deshalb heute
+Datenschutz und keine Funktion - was das Argument dafuer ist und nicht
+dagegen, denn bis dahin sammelte der Home Rohstandorte, aus denen nichts
+entstand.
+
 Status note, 2026-08-26: **SR5s Port hat sein anderes Ende, und es lief auf
 einem A34.** Das Gate erklärte die Erfassung für unimplementiert und gab dafür
 einen Grund an, der ein Zustand der Welt war: *„whoever fills this port is a

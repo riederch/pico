@@ -25,8 +25,13 @@ seine Messungen zu loeschen.
 
 Gegangen gegen echte Prozesse, nicht auf einem Telefon: es hing keines an.
 
-Accepted as an architecture boundary; P1 and P5 implemented, P2/P3/P6 open
-and P4 blocked. P3's door was widened on 2026-08-18 to the sibling keep that
+Accepted as an architecture boundary; P1, P3 and P5 implemented, P2/P6 open
+and P4 blocked. **P3 is complete since 2026-09-03**: its crossing landed
+2026-08-16, its widening 2026-08-18, and its deferred half - the observation
+buffer on the device instead of in the Home - was built when the user opened
+Phase 3. Was heisst „vollstaendig" hier: der Home sieht keine Rohstandorte
+mehr. Was es nicht heisst: dass auf einem Telefon etwas abgeleitet wird - die
+zweite Eingabehaelfte fehlt weiter, und die Statusnotiz oben sagt, warum. P3's door was widened on 2026-08-18 to the sibling keep that
 was walking past it - see the gate. The number was
 reserved on 2026-08-02 with the work order in
 `docs/development/briefs/multi-presence.md`. The two terminology
@@ -323,10 +328,14 @@ version of a concept, and the versions drift where nobody is looking.
   What P2 does not do is the half ADR 0126 already calls the hard one:
   ownership, selection and takeover are P4, and P4 stays blocked on an Action
   Runner that does not exist.
-- **P3 - The state crossing (half implemented 2026-08-16, widened 2026-08-18,
-  half deferred by the user):** the crossing exists as a door and both keeps
-  now go through it; the SR2 buffer stays where it is until a runtime with a
-  sensor exists.
+- **P3 - The state crossing (implemented 2026-08-16, widened 2026-08-18,
+  completed 2026-09-03):** the crossing exists as a door, all three keeps go
+  through it, and the SR2 buffer now lives on the device. The sentence that
+  stood here until 2026-09-03 - *"the SR2 buffer stays where it is until a
+  runtime with a sensor exists"* - was true from 2026-08-16 and stopped being
+  true on 2026-08-26, when a phone first measured. The user opened Phase 3 on
+  2026-09-03 and it was built; `derived_observation`, declared here and unused
+  since 2026-08-18, is what it crosses as.
 
   **The door had a sibling walking past it.** ADR 0116 W5 has two keeps -
   a recall answer and a model read's named values - and they are one act: a
