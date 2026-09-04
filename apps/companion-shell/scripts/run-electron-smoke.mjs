@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { accessSync, constants, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,13 +38,41 @@ import { selectChromiumSandboxProbe } from './chromium-sandbox-probe.mjs';
  */
 const here = fileURLToPath(new URL('.', import.meta.url));
 const shellRoot = join(here, '..');
-const electron = createRequire(join(shellRoot, 'package.json')).resolve('electron');
-const binary = `${spawnSync(process.execPath, ['-p', `require(${JSON.stringify(electron)})`], {
-  encoding: 'utf8',
-}).stdout}`.trim();
 
-if (binary === '') {
-  process.stderr.write('electron did not resolve to a binary path\n');
+/**
+ * **Den Pfad holen, nicht aus einer Ausgabe herauslesen.**
+ *
+ * Die erste Fassung startete ein Kind-Node, liess es `require('electron')`
+ * ausfuehren und nahm dessen **ganzes stdout** als Pfad. Das ging gut, solange
+ * die Binaerdatei schon dalag - und nur dann. Electron 44 veroeffentlicht
+ * naemlich *kein* Installationsskript mehr (die Registry sagt zu 44.0.0
+ * `scripts: undefined`); die Binaerdatei kommt beim **ersten `require`**, und
+ * `index.js` meldet das mit `console.log('Downloading Electron binary...')`
+ * auf stdout, bevor es den Pfad zurueckgibt.
+ *
+ * Auf einem frischen Laeufer stand darum genau das in `binary`:
+ *
+ *     "Downloading Electron binary...\n/pfad/zur/electron"
+ *
+ * Nicht leer, also lief die Pruefung auf den leeren Pfad ins Leere; `spawnSync`
+ * darauf endete mit `ENOENT`, `status: null` und **keiner Zeile Ausgabe** -
+ * das Bild, mit dem CI am 2026-09-04 zurueckkam und das wie ein
+ * Sandbox-Abbruch aussah. Nachgestellt, nicht vermutet.
+ *
+ * Hier wird der Pfad jetzt in diesem Prozess geholt. Der Rueckgabewert ist der
+ * Pfad; was der Download dabei auf stdout meldet, ist eine Meldung an den
+ * Menschen und nicht mehr die Antwort.
+ */
+let binary;
+try {
+  binary = createRequire(join(shellRoot, 'package.json'))('electron');
+} catch (cause) {
+  process.stderr.write(`electron did not resolve to a binary path: ${cause.message}\n`);
+  process.exit(1);
+}
+
+if (typeof binary !== 'string' || binary.trim() === '') {
+  process.stderr.write(`electron resolved to ${JSON.stringify(binary)}, which is not a path\n`);
   process.exit(1);
 }
 
@@ -68,26 +97,75 @@ const run = spawnSync(
   [...probe.arguments, '--headless', join(shellRoot, 'dist', 'electron-smoke.js')],
   { stdio: 'inherit' },
 );
-process.stdout.write(`chromium sandbox: ${probe.mode}\n`);
-
 /**
- * **Ein Fehlschlag hier soll sagen, was ihm fehlt.**
+ * **Ein Fehlschlag hier soll sagen, was ihm fehlt - und zwar das, was er
+ * *weiss*, nicht das, was er vermutet.**
  *
- * Der Namensraum-Modus braucht unprivilegierte User-Namespaces. Wo sie
- * gesperrt sind - Ubuntu 24.04 tut das per AppArmor fuer unconfined
- * Programme -, bricht Chromium mit einer Zeile ab, die nach einem Fehler im
- * Fenster aussieht und keiner ist. Am 2026-09-02 hat genau das einen
- * CI-Durchgang gekostet, und die Diagnose stand nirgends.
+ * Die erste Fassung dieser Zeilen nannte zwei Ursachen, die gleich aussehen,
+ * und liess die eine Zahl weg, die dieser Prozess bereits in der Hand hielt.
+ * Am 2026-09-04 kam der Laeufer damit zurueck: `chromium sandbox:
+ * user_namespace`, danach die Diagnose - und **kein einziges Wort von
+ * Chromium selbst**. Aus derselben Ausgabe folgen mindestens drei Lagen, und
+ * die Diagnose nannte zwei davon:
+ *
+ *   * die Namensraum-Sandbox darf nicht (Ubuntu 24.04 sperrt unprivilegierte
+ *     User-Namespaces per AppArmor);
+ *   * das Kind starb an einem Signal, also ohne Zeile auf stderr;
+ *   * `spawnSync` kam gar nicht bis zum Start - eine fehlende Binaerdatei
+ *     ergibt `status: null`, `signal: null`, `error: ENOENT` und **keine
+ *     Ausgabe**, exakt das Bild vom Laeufer. Nachgestellt, nicht vermutet.
+ *
+ * Die dritte fehlte, weil `status ?? 1` den Unterschied zwischen „beendet mit
+ * 1" und „nie gestartet" wegwirft. Es steht jetzt alles da: der Weg zur
+ * Binaerdatei, ob sie ausfuehrbar ist, Status, Signal, Spawn-Fehler und die
+ * Schalter, an denen die Namensraum-Sandbox haengt.
+ *
+ * **Eine Ursache ist ausgeschlossen und steht deshalb nicht mehr als
+ * Vermutung da:** eine fehlende Anzeige ist es nicht. Derselbe Lauf ist hier
+ * ohne `DISPLAY` und ohne `WAYLAND_DISPLAY` gruen - Electron 44 nimmt
+ * `--headless` an.
  */
+const readSwitch = (path) => {
+  try {
+    return readFileSync(path, 'utf8').trim();
+  } catch {
+    return 'absent';
+  }
+};
+const binaryState = () => {
+  try {
+    accessSync(binary, constants.X_OK);
+    return 'executable';
+  } catch (cause) {
+    return `unusable (${cause.code})`;
+  }
+};
+const namespaceSwitches = [
+  `apparmor_restrict_unprivileged_userns=${readSwitch('/proc/sys/kernel/apparmor_restrict_unprivileged_userns')}`,
+  `unprivileged_userns_clone=${readSwitch('/proc/sys/kernel/unprivileged_userns_clone')}`,
+  `max_user_namespaces=${readSwitch('/proc/sys/user/max_user_namespaces')}`,
+].join(', ');
+
+process.stdout.write(`chromium sandbox: ${probe.mode} (${namespaceSwitches})\n`);
+
 if (run.status !== 0) {
   process.stderr.write(
-    'The window did not come up. Two causes look alike here and neither is a '
-    + 'defect in the renderer:\n'
-    + '  * unprivileged user namespaces are restricted - on Ubuntu 24.04 lift '
-    + 'it with `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`;\n'
-    + '  * no display and no headless flag - this runner passes `--headless`.\n'
+    'The window did not come up. What this process knows:\n'
+    + `  * electron binary: ${binary} - ${binaryState()}\n`
+    + `  * exit status: ${run.status ?? 'none'}, signal: ${run.signal ?? 'none'}`
+    + `, spawn error: ${run.error ? `${run.error.code} (${run.error.message})` : 'none'}\n`
+    + `  * sandbox arguments: ${probe.arguments.join(' ') || '(none)'}\n`
+    + `  * ${namespaceSwitches}\n`
+    + `  * DISPLAY: ${process.env.DISPLAY ?? 'unset'}\n`
+    + 'Reading it: a spawn error means the binary never ran, so the sandbox is '
+    + 'not the question. A signal means Chromium died before it could speak - '
+    + 'with the namespace sandbox that is usually a restricted user namespace, '
+    + 'and on Ubuntu 24.04 `sudo sysctl -w '
+    + 'kernel.apparmor_restrict_unprivileged_userns=0` lifts it. A missing '
+    + 'display is not a cause here: this run is green without one, because '
+    + 'Electron takes `--headless`.\n'
     + 'Turning the sandbox off with `--no-sandbox` would make this pass and '
     + 'measure a different program than the one that ships.\n',
   );
 }
-process.exit(run.status ?? 1);
+process.exit(run.status === 0 ? 0 : 1);

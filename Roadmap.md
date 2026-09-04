@@ -912,6 +912,59 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B64 — Der Rauchtest kam nie bis zu Chromium, und meine Diagnose beschuldigte
+die Sandbox (2026-09-04).** Der zweite CI-Lauf kam bis Schritt 38 und riss
+dort. Die Ausgabe: meine Zeile `chromium sandbox: user_namespace`, danach meine
+Diagnose — und **kein einziges Wort von Chromium**. Genau daran hätte ich es
+merken müssen: ein blockierter Namensraum bricht *laut* ab.
+
+**Die Ursache ist meine, und sie steht drei Zeilen über der Diagnose.** Die
+Auflösung des Electron-Pfades startete ein Kind-Node, liess es
+`require('electron')` ausführen und nahm dessen **ganzes stdout** als Pfad. Das
+ging gut, solange die Binärdatei schon dalag — und nur dann. Electron 44
+veröffentlicht nämlich *kein* Installationsskript mehr (die Registry sagt zu
+`44.0.0`: `scripts: undefined`); die Binärdatei kommt beim **ersten `require`**,
+und `index.js` meldet das vorher mit `console.log('Downloading Electron
+binary...')`. Auf einem frischen Läufer stand darum das in `binary`:
+
+```
+"Downloading Electron binary...\n/pfad/zur/electron"
+```
+
+Nicht leer — also lief die einzige Prüfung, die es gab, ins Leere. Nachgestellt
+statt vermutet: dieselbe Lage lokal hergestellt (das `dist`-Verzeichnis
+beiseite), die **alte** Auflösung darauf losgelassen, und heraus kam
+`{"status":null,"signal":null,"error":"ENOENT"}` **ohne eine Zeile Ausgabe** —
+das Bild vom Läufer, Punkt für Punkt.
+
+**Behoben, wo es entsteht:** der Pfad wird jetzt in diesem Prozess geholt statt
+aus einer Ausgabe gelesen. Was der Download dabei meldet, ist eine Meldung an
+den Menschen und nicht mehr die Antwort. In derselben nachgestellten Lage läuft
+der Rauchtest damit **grün**, mit `Downloading Electron binary...` davor.
+
+**Und die Diagnose selbst war der zweite Fehler.** Sie nannte zwei Ursachen,
+die gleich aussehen, und liess die Zahlen weg, die dieser Prozess in der Hand
+hielt: `status`, `signal`, `error` — `status ?? 1` warf sogar den Unterschied
+zwischen *„mit 1 beendet"* und *„nie gestartet"* weg. Aus einer Ausgabe, die
+zwei Ursachen zeigen sollte, folgten in Wahrheit **drei** Lagen, und die
+richtige war nicht dabei. Jetzt steht da, was gemessen ist: Pfad und
+Ausführbarkeit der Binärdatei, Status, Signal, Spawn-Fehler, die drei Schalter,
+an denen die Namensraum-Sandbox hängt, und `DISPLAY`. Beide Gestalten gepflanzt
+und gelesen — fehlende Binärdatei (`ENOENT`, nie gestartet) und fehlende App
+(`status: 1`).
+
+**Eine Ursache ist damit ausgeschlossen und steht nicht mehr als Vermutung da:**
+eine fehlende Anzeige ist es nicht. Derselbe Lauf ist hier ohne `DISPLAY` und
+ohne `WAYLAND_DISPLAY` grün, weil Electron 44 `--headless` annimmt — gemessen,
+nachdem die alte Fassung es *behauptet* hatte.
+
+**Was über den Läufer weiterhin offen ist, und diesmal ausdrücklich:** ob die
+Namensraum-Sandbox dort überhaupt eine Hürde ist, weiss niemand — der Rauchtest
+kam nie so weit. Der `sysctl`-Schritt aus B62 bleibt deshalb stehen; ihn jetzt
+zu entfernen hiesse, in die andere Richtung zu raten. Er sagt jetzt, **was er
+vorfand**, bevor er ihn setzt, denn sonst liest der Rauchtest daneben eine
+Null, die dieser Schritt selbst geschrieben hat.
+
 **B63 — Die Behebung von damals ist die Lücke von heute (2026-09-04).** Der
 Prüfschritt neben `release:verify` riss den Auftrag: acht hohe Meldungen, sechs
 davon gegen `fast-uri`, zwei mittlere gegen Fastify selbst. Lokal Zeile für

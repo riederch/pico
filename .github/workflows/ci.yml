@@ -60,6 +60,12 @@ jobs:
       # verbietet sie auf jeder Produktionsflaeche, und ein Rauchtest, der die
       # Sandbox abschaltet, prueft eine andere Lage als die ausgelieferte.
       #
+      # Ob dieser Schritt ueberhaupt etwas hebt, war bis zum 2026-09-04
+      # unbekannt: der Rauchtest kam nie bis zu Chromium (Befund B64), also
+      # hat der Laeufer die Frage nie beantwortet. Er sagt jetzt, was er
+      # vorfand, statt ihn nur zu setzen - sonst liest der Rauchtest daneben
+      # eine Null, die dieser Schritt selbst geschrieben hat.
+      #
       # Der Schalter existiert nur, wo AppArmor ihn mitbringt. `sysctl -w`
       # endet auf einem Kernel ohne ihn mit 1 und risse diesen Auftrag aus
       # einem *neuen* Grund - dieselbe Umgebungsannahme, nur eine Zeile
@@ -69,6 +75,7 @@ jobs:
       - name: Allow the Chromium namespace sandbox
         run: |
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            echo "before: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           else
             echo "no AppArmor userns restriction on this image; nothing to lift"
