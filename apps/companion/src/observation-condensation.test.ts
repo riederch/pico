@@ -106,24 +106,45 @@ describe('ADR 0126 P3 - was das Gerät ableitet, überquert die Grenze', () => {
     })).toBeUndefined();
   });
 
-  it('leitet nichts ab, was ein echtes Telefon heute liefert', () => {
+  it('leitet aus blossen Messungen ab, was ein echtes Telefon liefert', () => {
     /**
-     * **Die gemessene Wahrheit dieses Wegs am 2026-09-03.** Die handgebaute
-     * Android-Sonde hat keine Bewegungsarten — die kommen bei Android aus den
-     * Play-Diensten —, also gibt `readMobilitySamples` eine leere Liste
-     * zurück. Ohne den Übergang von „fahrend" zu „gehend" hat ein Parkplatz
-     * kein Merkmal.
+     * **Diese Probe stand am 2026-09-03 umgekehrt da** und sagte: die
+     * handgebaute Sonde hat keine Bewegungsarten, also wird nichts abgeleitet.
+     * Sie war die geschriebene Grenze dieses Wegs — *„wer sie baut, sieht hier
+     * zuerst, dass diese Probe umschlägt."* Am 2026-09-04 hat der Nutzer
+     * entschieden, die Bewegungsarten aus den Messungen selbst abzuleiten, und
+     * sie ist umgeschlagen.
      *
-     * Diese Probe steht hier, damit die Grenze nicht in einem Kommentar
-     * behauptet wird: der Weg ist gebaut und leitet auf einem echten Gerät
-     * nichts ab, bis die zweite Eingabehälfte existiert. Wer sie baut, sieht
-     * hier zuerst, dass diese Probe umschlägt.
+     * Ohne einen einzigen Klassifikator-Wert: eine Fahrt, ein Halt, ein
+     * Weggehen — und daraus ein Parkplatz.
+     */
+    const derived = condensePicoCompanionObservations({
+      locationFixes: [
+        fix('2026-09-04T08:00:00.000Z', 48.2000, 16.3700),
+        fix('2026-09-04T08:01:00.000Z', 48.2000, 16.3821),
+        fix('2026-09-04T08:02:00.000Z', 48.2000, 16.3942),
+        fix('2026-09-04T08:03:00.000Z', 48.2000, 16.39427),
+        fix('2026-09-04T08:04:00.000Z', 48.2000, 16.39548),
+      ],
+      mobilitySamples: [],
+    });
+    expect(derived, 'eine Fahrt mit Halt und Weggehen muss einen Kandidaten ergeben')
+      .toBeDefined();
+    expect(derived?.place.accuracyM).toBeGreaterThan(0);
+  });
+
+  it('erfindet nichts, wo niemand gefahren ist', () => {
+    /**
+     * Dieselben Messungen ohne Fahrt: langsam los, langsam weiter. Was in der
+     * mehrdeutigen Spanne zwischen Gehen und Fahren liegt, heisst `unknown`
+     * und ist kein `car` — also gibt es keinen Parkplatz, und das ist die
+     * richtige Antwort.
      */
     expect(condensePicoCompanionObservations({
       locationFixes: [
-        fix('2026-09-03T08:00:00.000Z', 48.2000, 16.3700),
-        fix('2026-09-03T08:10:00.000Z', 48.2100, 16.3800),
-        fix('2026-09-03T08:12:00.000Z', 48.2101, 16.3801),
+        fix('2026-09-04T08:00:00.000Z', 48.2000, 16.3700),
+        fix('2026-09-04T08:10:00.000Z', 48.2100, 16.3800),
+        fix('2026-09-04T08:12:00.000Z', 48.2101, 16.3801),
       ],
       mobilitySamples: [],
     })).toBeUndefined();

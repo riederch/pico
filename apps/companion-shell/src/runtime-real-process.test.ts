@@ -569,15 +569,21 @@ describe('Electron-hosted companion runtime against real processes', () => {
        * Hier wird sie benutzt. Verdichtet wird mit derselben Funktion, die auf
        * dem Telefon läuft; über die Tür geht nur ihr Ergebnis.
        */
+      /**
+       * **Ohne einen einzigen Klassifikator-Wert** (seit dem 2026-09-04): die
+       * Bewegungsarten leitet das Gerät aus den Messungen selbst ab. Was hier
+       * hineingeht, ist genau das, was ein Telefon liefert — eine Fahrt, ein
+       * Halt, ein Weggehen.
+       */
       const derived = condensePicoCompanionObservations({
         locationFixes: [
-          { at: '2026-09-03T08:00:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.37, accuracyM: 8 },
-          { at: '2026-09-03T08:10:00.000Z', latitudeDeg: 48.21, longitudeDeg: 16.38, accuracyM: 8 },
+          { at: '2026-09-04T08:00:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.37, accuracyM: 8 },
+          { at: '2026-09-04T08:01:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.3821, accuracyM: 8 },
+          { at: '2026-09-04T08:02:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.3942, accuracyM: 8 },
+          { at: '2026-09-04T08:03:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.39427, accuracyM: 8 },
+          { at: '2026-09-04T08:04:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.39548, accuracyM: 8 },
         ],
-        mobilitySamples: [
-          { at: '2026-09-03T08:00:00.000Z', mobility: 'car', confidence: 'high' },
-          { at: '2026-09-03T08:13:00.000Z', mobility: 'walking', confidence: 'high' },
-        ],
+        mobilitySamples: [],
       });
       expect(derived, 'die Verdichtung muss hier etwas ergeben').toBeDefined();
 

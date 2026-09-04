@@ -5,6 +5,7 @@ import type {
   PicoMobilitySample,
 } from '@pico/protocol/spatial-recall';
 import { picoDeriveParkingCandidate } from '@pico/module-spatial-recall/parking';
+import { picoMobilityFromLocationFixes } from '@pico/module-spatial-recall/speed-mobility';
 
 /**
  * ADR 0126 P3 mit ADR 0129 SR2 - die Verdichtung, auf dem Gerät.
@@ -28,13 +29,13 @@ import { picoDeriveParkingCandidate } from '@pico/module-spatial-recall/parking'
  * der Kernspalte aus ADR 0129 SR3. Ein Modul, das hier Prosa schriebe, wäre
  * genau die Drift, die `check-one-voice` misst.
  *
- * **Und eine gemessene Wahrheit, die diesem Weg heute die Wirkung nimmt**
- * (2026-09-03, ausgeführt statt gelesen): ohne Bewegungsarten gibt
- * `picoDeriveParkingCandidate` `undefined` zurück, und die handgebaute
- * Android-Sonde hat keine - die kommen bei Android aus den Play-Diensten. Auf
- * einem echten Telefon leitet dieser Weg deshalb heute nichts ab. Das ist
- * kein Grund, ihn nicht zu gehen, sondern der stärkste dafür: der Home sammelt
- * bis dahin Rohstandorte, aus denen nichts entsteht.
+ * **Und die Wirkung kam einen Tag später** (2026-09-04). Am 2026-09-03 gab
+ * `picoDeriveParkingCandidate` hier `undefined` zurück, weil die zweite
+ * Eingabehälfte fehlte: Bewegungsarten kommen bei Android aus den
+ * Play-Diensten, die die handgebaute Sonde nicht hat. Der Nutzer hat
+ * entschieden, sie aus den Messungen selbst abzuleiten -
+ * `picoMobilityFromLocationFixes` tut das, und was es nicht unterscheiden
+ * kann, sagt es als `unknown` statt zu raten.
  */
 
 /** Was das Gerät hält, und was der Home nie zu sehen bekommt. */
@@ -73,9 +74,24 @@ export const picoCompanionParkingEventContentType = 'application/vnd.pico.parkin
 export function condensePicoCompanionObservations(
   input: PicoCompanionCondensationInput,
 ): PicoCompanionDerivedObservation | undefined {
+  /**
+   * **Die zweite Eingabehaelfte, seit dem 2026-09-04** (Entscheidung des
+   * Nutzers). Ein Klassifikator liefert sie hier nicht - der kaeme bei Android
+   * aus den Play-Diensten -, also kommt sie aus den Messungen selbst: eine
+   * Geschwindigkeit zwischen zwei Fixes, einer Spanne zugeordnet, mit einer
+   * Zuversicht, die Genauigkeit und Zeitabstand traegt.
+   *
+   * Was ein Klassifikator daneben liefert, wird nicht ersetzt, sondern
+   * ergaenzt: `mobility.ts` sortiert beide Quellen zusammen, und der Kommentar
+   * dort sah genau diesen Fall vor.
+   */
+  const mobilitySamples = [
+    ...input.mobilitySamples,
+    ...picoMobilityFromLocationFixes(input.locationFixes),
+  ];
   const derived = picoDeriveParkingCandidate({
     locationFixes: input.locationFixes,
-    mobilitySamples: input.mobilitySamples,
+    mobilitySamples,
   });
   if (derived === undefined) {
     return undefined;
