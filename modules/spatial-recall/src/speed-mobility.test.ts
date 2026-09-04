@@ -5,8 +5,11 @@ import { picoMobilityTransitions } from './mobility.js';
 import { picoDeriveParkingCandidate } from './parking.js';
 
 /**
- * ADR 0129 SR1. Bewegungsarten aus den Messungen selbst — und die drei
+ * ADR 0129 SR1. Bewegungsarten aus den Messungen selbst — und die vier
  * Stellen, an denen sie *nichts* behaupten.
+ *
+ * Die vierte kam vom Gerät und nicht vom Schreibtisch: eine Lücke zwischen
+ * zwei Messungen ergab „gehend" mit hoher Zuversicht (Befund B61).
  */
 
 /** Ein Fix, um `metres` nach Osten versetzt gegen den vorigen. */
@@ -48,6 +51,26 @@ describe('ADR 0129 SR1 - Bewegungsart aus der Geschwindigkeit', () => {
      * Fehler, ist keine Aussage.
      */
     const samples = picoMobilityFromLocationFixes([at(0, 0, 50), at(30, 30, 50)]);
+    expect(samples[0]).toMatchObject({ mobility: 'unknown', confidence: 'low' });
+  });
+
+  it('sagt `unknown`, wenn zwischen zwei Messungen eine Lücke liegt', () => {
+    /**
+     * **Gefunden auf einem echten Telefon** (Befund B61, 2026-09-04). Der
+     * Erfassungsdienst legte einen Fix sechs Minuten und zweihundert Kilometer
+     * neben den vorigen, und die Nachrechnung zeigte den Fehler: ein Telefon,
+     * das acht Stunden aus war und dann vierzig Kilometer weiter misst, ergab
+     * `walking` mit *hoher* Zuversicht. Niemand ist gegangen — das Telefon hat
+     * nur nicht hingesehen.
+     *
+     * Ein Mittelwert über eine Lücke ist keine Geschwindigkeit, sondern eine
+     * Erfindung, damit etwas dasteht. Und ein falsches „gehend" ist genau das,
+     * wonach die Parkplatzableitung sucht.
+     */
+    const samples = picoMobilityFromLocationFixes([
+      { at: '2026-09-04T00:00:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.37, accuracyM: 8 },
+      { at: '2026-09-04T08:00:00.000Z', latitudeDeg: 48.2, longitudeDeg: 16.91, accuracyM: 8 },
+    ]);
     expect(samples[0]).toMatchObject({ mobility: 'unknown', confidence: 'low' });
   });
 

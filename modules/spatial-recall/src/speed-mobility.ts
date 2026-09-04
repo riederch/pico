@@ -62,6 +62,22 @@ export interface PicoSpeedMobilityThresholds {
    * Geschwindigkeit: der Fehler waechst mit `1/dt`.
    */
   minimumSeparationSeconds: number;
+  /**
+   * Und zwei, die zu weit auseinanderliegen, ebenso wenig - aus dem
+   * entgegengesetzten Grund.
+   *
+   * **Gefunden am 2026-09-04 auf einem echten Telefon** (Befund B61): der
+   * Erfassungsdienst legte einen Fix sechs Minuten und zweihundert Kilometer
+   * neben den vorigen. Nachgerechnet: ein Telefon, das acht Stunden aus war
+   * und dann vierzig Kilometer weiter misst, ergab `walking` mit *hoher*
+   * Zuversicht - niemand ist gegangen, das Telefon hat nur nicht hingesehen.
+   *
+   * Ein Mittelwert ueber eine Luecke ist keine Geschwindigkeit, sondern eine
+   * Erfindung, damit etwas dasteht - genau der Fehlschlag, gegen den ADR 0129
+   * geschrieben ist. Und ein falsches „gehend" ist das, wonach die
+   * Parkplatzableitung sucht.
+   */
+  maximumSeparationSeconds: number;
 }
 
 export const defaultPicoSpeedMobilityThresholds: PicoSpeedMobilityThresholds = Object.freeze({
@@ -69,6 +85,10 @@ export const defaultPicoSpeedMobilityThresholds: PicoSpeedMobilityThresholds = O
   walkingMetresPerSecond: 2.5,
   vehicleMetresPerSecond: 8,
   minimumSeparationSeconds: 5,
+  // Fuenf Minuten: eine Erfassung, die dichter misst, hat gemessen; wo laenger
+  // nichts kam, hat sie nicht hingesehen, und was dazwischen geschah, steht in
+  // keinem der beiden Werte.
+  maximumSeparationSeconds: 300,
 });
 
 /** Entfernung auf der Kugel, in Metern. */
@@ -161,7 +181,9 @@ export function picoMobilityFromLocationFixes(
     const from = ordered[index - 1]!;
     const to = ordered[index]!;
     const seconds = (Date.parse(to.at) - Date.parse(from.at)) / 1_000;
-    if (!Number.isFinite(seconds) || seconds < thresholds.minimumSeparationSeconds) {
+    if (!Number.isFinite(seconds)
+      || seconds < thresholds.minimumSeparationSeconds
+      || seconds > thresholds.maximumSeparationSeconds) {
       samples.push(Object.freeze({ at: to.at, mobility: 'unknown', confidence: 'low' }));
       continue;
     }

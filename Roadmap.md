@@ -978,6 +978,20 @@ genau die eine *nach* dem Übergang stehen; alles bis dahin war verbraucht und
 weg. Das ist die Regel, die am Vortag noch als ungeprüfte Zeile im
 Sondenskript stand.
 
+**Und das Gerät hat einen Fehler gezeigt, den der Schreibtisch nicht hatte.**
+Der Erfassungsdienst legte einen echten Fix sechs Minuten und zweihundert
+Kilometer neben die gestellten. Nachgerechnet: ein Telefon, das acht Stunden
+aus war und dann vierzig Kilometer weiter misst, ergab **`walking` mit hoher
+Zuversicht**. Niemand ist gegangen — das Telefon hat nur nicht hingesehen, und
+der Mittelwert über die Lücke ist keine Geschwindigkeit, sondern eine
+Erfindung, damit etwas dasteht. Ein falsches „gehend" ist ausgerechnet das,
+wonach die Parkplatzableitung sucht.
+
+Die Regel hatte eine Mindestdauer und keine Höchstdauer. Sie hat jetzt beide:
+über fünf Minuten trägt ein Paar nichts. **Am selben Tag gebaut, am selben Tag
+vom Gerät widerlegt** — der Schreibtisch hätte diese Lücke nie erzeugt, weil
+dort jede Probe eine gleichmässige Reihe ist.
+
 **Was weiter nicht bewiesen ist, und dasteht statt zu fehlen.** Die Fixe waren
 gestellt — eine Fahrt entsteht am Schreibtisch nicht. Der
 `LocationManager`-Weg selbst ist am 2026-08-26 mit sieben echten Fixes
