@@ -134,10 +134,26 @@ if (!displayReachable && spawnSync(virtualDisplay[0], ['--help'], { stdio: 'igno
   process.exit(1);
 }
 
+/**
+ * **Unter der gestellten Anzeige wird die Flaeche benannt.**
+ *
+ * `xvfb-run` setzt `DISPLAY`, und trotzdem waehlte Ozone die *Wayland*-Flaeche
+ * und starb mit „Failed to initialize Wayland platform" - hier nachgestellt,
+ * mit echtem Xvfb, am 2026-09-04. Wo dieser Lauf die Anzeige selbst stellt,
+ * weiss er auch, welche Sorte sie ist, und sagt es.
+ *
+ * **Gefunden hat das erst das echte Xvfb.** Vorher stand hier eine Attrappe
+ * auf dem Pfad, die statt einer virtuellen Anzeige die *echte* zurueckgab; sie
+ * belegte Erkennung, Umhuellung und Reihenfolge - und verdeckte genau diesen
+ * Fehler, weil Ozones Wayland-Wahl mit einer Wayland-Sitzung ja aufgeht. Eine
+ * Attrappe, die das Echte zurueckgibt, prueft die Verdrahtung und luegt ueber
+ * die Welt.
+ */
 const command = displayReachable ? binary : virtualDisplay[0];
 const commandArguments = [
   ...(displayReachable ? [] : [...virtualDisplay.slice(1), binary]),
   ...probe.arguments,
+  ...(displayReachable ? [] : ['--ozone-platform=x11']),
   join(shellRoot, 'dist', 'electron-smoke.js'),
 ];
 const run = spawnSync(command, commandArguments, { stdio: 'inherit' });

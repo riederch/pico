@@ -955,13 +955,40 @@ Umgehung, sondern das, was ein Fenstertest braucht — im Unterschied zu
 `--no-sandbox`, das die Lage änderte, die hier gemessen wird. Die Erkennung
 fragt jetzt nach allen drei Namen.
 
-**Begangen, und was daran offen bleibt — vor dem Ausliefern gesagt.** Drei
-Zweige, zwei davon hier gelaufen: mit Anzeige grün; ohne Anzeige und ohne
+**Zwei Zweige liefen sofort:** mit Anzeige grün; ohne Anzeige und ohne
 `xvfb-run` eine Absage, die sagt, was fehlt. Der dritte — ohne Anzeige, mit
-`xvfb-run` — ist der Weg des Läufers, und dieser Rechner hat kein Xvfb. Seine
-**Verdrahtung** ist mit einer Attrappe belegt (Flags verzehrt, Binärdatei,
-Sandbox-Argumente und App-Pfad in der richtigen Reihenfolge, Lauf grün);
-**dass Xvfb selbst das Fenster trägt, ist hier nicht bewiesen.**
+`xvfb-run` — ist der Weg des Läufers, und dieser Rechner hatte kein Xvfb. Für
+ihn stand hier eine **Attrappe** auf dem Pfad, die die Flags verzehrte und den
+Rest startete; sie belegte Erkennung, Umhüllung und Reihenfolge, und der Lauf
+war grün. Was fehlte, stand ausdrücklich da, bevor es ausgeliefert wurde:
+*dass Xvfb selbst das Fenster trägt, ist hier nicht bewiesen.*
+
+**Der Nutzer hat Xvfb daraufhin installiert, und der erste echte Lauf war
+rot.**
+
+```
+Failed to connect to Wayland display: Datei oder Verzeichnis nicht gefunden
+Failed to initialize Wayland platform
+The platform failed to initialize.  Exiting.       exit status: 133
+```
+
+`xvfb-run` setzt `DISPLAY`, und Ozone wählte trotzdem die **Wayland**-Fläche.
+Es fehlte `--ozone-platform=x11`: wo dieser Lauf die Anzeige selbst stellt,
+weiss er auch, welche Sorte sie ist, und sagt es jetzt.
+
+**Und damit der eigentliche Befund dieses Eintrags.** Die Attrappe hatte
+*genau diesen* Fehler verdeckt — sie gab statt einer virtuellen Anzeige die
+**echte** zurück, und mit einer Wayland-Sitzung geht Ozones Wayland-Wahl ja
+auf. Sie prüfte die Verdrahtung und log über die Welt. Das ist dieselbe Form
+wie zwei Absätze weiter oben, wo zwei entfernte Namen für eine entfernte
+Anzeige gehalten wurden: **ein Ersatz, der das Echte durchreicht, misst den
+Ersatz.**
+
+**Vier Gestalten, alle begangen**, mit echtem Xvfb und `pressReachedMain:
+requestCheck` in jeder grünen: Anzeige da; keine Anzeige und kein `xvfb-run`
+(Absage); keine Anzeige mit `xvfb-run` und ohne `XDG_RUNTIME_DIR`; und
+`XDG_RUNTIME_DIR` gesetzt, aber ohne Wayland-Sockel — die beiden letzten sind
+die zwei Gestalten, die der Läufer haben kann.
 
 **B64 — Der Rauchtest kam nie bis zu Chromium, und meine Diagnose beschuldigte
 die Sandbox (2026-09-04).** Der zweite CI-Lauf kam bis Schritt 38 und riss
