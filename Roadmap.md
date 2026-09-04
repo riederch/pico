@@ -956,6 +956,14 @@ aussehen, und sagt dazu, dass `--no-sandbox` ihn zwar grün machen würde — un
 damit ein anderes Programm messen als das ausgelieferte. Gepflanzt: ein
 scheiternder Lauf, und die Diagnose steht da.
 
+**Und die Zeile, die ich gegen den dritten Punkt schrieb, machte selbst eine
+Umgebungsannahme.** `sudo sysctl -w` endet auf einem Kernel ohne diesen
+Schalter mit **1** — nachgemessen, nicht vermutet — und hätte den Auftrag aus
+einem *neuen* Grund gerissen: derselbe Fehler, nur eine Zeile weiter. Der
+Schalter wird jetzt gesucht statt vorausgesetzt, und der Schritt sagt, in
+welcher der beiden Welten er steht. Ein `|| true` daneben hätte auch ein
+kaputtes `sudo` versteckt.
+
 **Was ich daraus nicht behaupte:** dass es jetzt grün ist. Ich habe die Kette
 lokal in CI-Gestalt und mit dem CI-Flag laufen lassen; der Läufer selbst
 bleibt ungeprüft, bis er läuft. Das ist derselbe Satz wie beim ersten Mal, nur

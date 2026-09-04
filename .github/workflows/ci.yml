@@ -59,8 +59,20 @@ jobs:
       # Die Alternative waere `--no-sandbox`, und die ist keine: dieses Haus
       # verbietet sie auf jeder Produktionsflaeche, und ein Rauchtest, der die
       # Sandbox abschaltet, prueft eine andere Lage als die ausgelieferte.
+      #
+      # Der Schalter existiert nur, wo AppArmor ihn mitbringt. `sysctl -w`
+      # endet auf einem Kernel ohne ihn mit 1 und risse diesen Auftrag aus
+      # einem *neuen* Grund - dieselbe Umgebungsannahme, nur eine Zeile
+      # weiter. Deshalb wird er gesucht statt vorausgesetzt, und der Schritt
+      # sagt, in welcher der beiden Welten er steht. Ein `|| true` daneben
+      # verstecke stattdessen auch ein kaputtes `sudo`.
       - name: Allow the Chromium namespace sandbox
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          else
+            echo "no AppArmor userns restriction on this image; nothing to lift"
+          fi
 
       - name: Type check, test and build
         env:
