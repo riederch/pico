@@ -13,6 +13,10 @@
       "types": "./dist/mobility.d.ts",
       "import": "./dist/mobility.js"
     },
+    "./speed-mobility": {
+      "types": "./dist/speed-mobility.d.ts",
+      "import": "./dist/speed-mobility.js"
+    },
     "./parking": {
       "types": "./dist/parking.d.ts",
       "import": "./dist/parking.js"

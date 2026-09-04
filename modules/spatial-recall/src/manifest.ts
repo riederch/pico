@@ -27,7 +27,9 @@ export const picoSpatialRecallModuleManifest: PicoModuleManifest = Object.freeze
   kind: 'product',
   packageName: '@pico/module-spatial-recall',
   dependencies: Object.freeze([]),
-  publishedSubpaths: Object.freeze(['./manifest', './mobility', './parking', './ports']),
+  publishedSubpaths: Object.freeze([
+    './manifest', './mobility', './parking', './ports', './speed-mobility',
+  ]),
   surfaces: Object.freeze([
     'Foundation API: the last likely parking place, with its certainty',
     'Foundation API: confirming or rejecting a parking candidate',
