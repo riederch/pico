@@ -936,6 +936,19 @@ eine Zeile mit `?` ist eine Lücke und keine Bestätigung. Zwei Pflanzungen,
 beide beissen — eine driftende Zahl (genau der heutige Fall) und ein Tor, das
 seine Zeile umformuliert.
 
+**Und das Werkzeug hatte beim ersten Lauf selbst ein Loch.** Es prüfte
+siebzehn Zahlen aus *einem Absatz* — die Testzahlen und die Schrittzahl
+daneben nicht. Nachgemessen: die Schrittzahl stand richtig (43, an dem Tag
+zweimal von Hand mitgezogen — Glück, nicht Verfahren), und sie wird jetzt aus
+`package.json` gezählt statt aus einer Torzeile gelesen: `release:verify` ist
+eine `&&`-Kette, und ihre Glieder sind zählbar. **Die Testzahlen wichen an
+drei Stellen ab** — Core 1.095 gegen 1.096, Companion-Core 264 gegen 273, Web
+91 gegen 92, Summe 2.911 gegen 2.922 —, und alle drei kamen von Änderungen
+desselben und des Vortags. Sie bleiben ungeprüft, weil sie einen vollen Lauf
+von Minuten brauchen und ein Werkzeug, das Minuten braucht, nicht benutzt
+wird; das steht als Grenze in seiner Ausgabe, mit dem Datum der letzten
+Handzählung.
+
 **Und derselbe Fehler war an dem Tag in meiner eigenen Berichterstattung.**
 Ich habe dem Nutzer mehrfach „~79 ungepushte Commits" gesagt. Es waren
 **sieben**: die Zahl stammte aus einer Zusammenfassung vor einer

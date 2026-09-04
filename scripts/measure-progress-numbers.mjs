@@ -112,6 +112,34 @@ const progress = readFileSync(join(repoRoot, 'progress.md'), 'utf8');
 let differing = 0;
 let unchecked = 0;
 
+/**
+ * Die Schrittzahl der Kette, aus `package.json` gezaehlt statt aus einer
+ * Torzeile gelesen.
+ *
+ * Die einzige Zahl hier, die keine Ausgabe braucht - und deshalb die
+ * verlaesslichste: `release:verify` ist eine `&&`-Kette, und ihre Glieder sind
+ * zaehlbar. Sie stand am 2026-09-04 richtig, und das war Glueck: sie wurde an
+ * dem Tag zweimal von Hand mitgezogen.
+ */
+{
+  const chain = JSON.parse(
+    readFileSync(join(repoRoot, 'package.json'), 'utf8'),
+  ).scripts['release:verify'];
+  const measured = chain.split('&&').length;
+  const written = /umfasst (\d+) Schritte/u.exec(progress);
+  if (written === null) {
+    unchecked += 1;
+    process.stdout.write('?    Schritte in release:verify: steht so nicht in progress.md\n');
+  } else if (Number(written[1]) !== measured) {
+    differing += 1;
+    process.stdout.write(
+      `XX   Schritte in release:verify: progress.md sagt ${written[1]}, gezaehlt ${measured}\n`,
+    );
+  } else {
+    process.stdout.write(`     Schritte in release:verify: ${measured}\n`);
+  }
+}
+
 for (const claim of claims) {
   const found = claim.from.exec(output);
   if (found === null) {
@@ -139,9 +167,23 @@ for (const claim of claims) {
   process.stdout.write(`     ${claim.phrase}: ${measured}\n`);
 }
 
+const total = claims.length + 1;
 process.stdout.write(
-  `\n${claims.length - differing - unchecked} von ${claims.length} Behauptungen stimmen, `
+  `\n${total - differing - unchecked} von ${total} Behauptungen stimmen, `
   + `${differing} weichen ab, ${unchecked} konnten nicht geprüft werden.\n`,
+);
+/**
+ * **Was hier nicht geprueft wird, und warum es dasteht.** Die Testzahlen -
+ * „2.922 Tests: Core 1.096, …" - brauchen einen vollen Lauf von Minuten, und
+ * dieses Werkzeug soll in Sekunden antworten, sonst wird es nicht benutzt. Sie
+ * sind am 2026-09-04 von Hand nachgezaehlt worden, und dabei wichen drei ab:
+ * Core, Companion-Core und Web, alle drei von Aenderungen desselben Tages.
+ * Wer sie nachrechnen will: `pnpm test` und die `Tests  N passed`-Zeilen je
+ * Paket addieren.
+ */
+process.stdout.write(
+  'Die Testzahlen prueft dies nicht - sie brauchen einen vollen Lauf. '
+  + 'Zuletzt von Hand nachgezaehlt am 2026-09-04.\n',
 );
 if (unchecked > 0) {
   process.stdout.write(
