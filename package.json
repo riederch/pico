@@ -33,6 +33,7 @@
     "label:check": "node scripts/check-signature-labels.mjs",
     "license:check": "node scripts/check-license.mjs",
     "link:check": "node scripts/check-link-seal.mjs",
+    "progress:walk": "node scripts/measure-progress-numbers.mjs",
     "link:walk": "node scripts/measure-link-walk.mjs",
     "route:walk": "node scripts/measure-route-walk.mjs",
     "module:check": "node scripts/check-modules.mjs",
