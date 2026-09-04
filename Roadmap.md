@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B66 — Der Messer hielt acht gelungene Wiederherstellungen für Ablehnungen
+(2026-09-04).** `pnpm link:walk` zählte eine Operation als angenommen, wenn das
+Home `outcome === 'ok'` antwortete. Das Home antwortet aber auf **drei** Wegen
+erfolgreich, und zwei heissen anders: `recovery_pending` und
+`rotation_pending`. Beide *nehmen* an — sie legen einen anhängigen Vorgang an
+und starten das Vetofenster. Im letzten Lauf standen **acht** solcher Zeilen in
+der Spur, jede als Ablehnung gezählt.
+
+**Die Kopfzahl hat es nicht verschoben**, und das ist der Grund, warum es so
+lange stehen konnte: `home.device.recovery.submit` liefert in einer anderen
+Stufe ein `ok`, also war der Name ohnehin grün. Ein Fehler, den das Ergebnis
+zufällig deckt, ist trotzdem einer — und beim nächsten Mal hätte er gedeckt,
+dass die Wurzelrotation nie ankommt.
+
+**Und der dritte Sammelruf hatte keine Auflösungsstufe.**
+`home.device.recovery.submit` verzweigt über `args.phase` in `prepare` (Kopf
+lesen), `initiate` (Geräte-Satz ersetzen, Vetofenster starten) und `complete`.
+Die Flächenliste nennt alle drei ausdrücklich; die Messung zählte den Namen.
+Eine Stufe durchzubringen färbte die anderen grün — dieselbe Lücke wie bei den
+zwölf Autoritätsressourcen (B58), nur eine Tür weiter.
+
+**Was die Messung dann sagte, und es war nicht, was ich vermutet hatte:**
+
+```
+3 of 3 phases behind `home.device.recovery.submit` were accepted.
+recovery_pending x8 - accepted (ADR 0110: … das Vetofenster läuft)
+```
+
+Alle drei Stufen sind begangen, auch die folgenreiche. Der Verdacht, hinter dem
+Sammelruf liege eine nie gegangene Stufe, war **falsch** — und das ist jetzt
+gemessen statt gehofft. Der Fehler lag im Messer, nicht im Haus.
+
+**Damit sich das nächste Erfolgswort nicht verstecken kann**, druckt der Lauf
+jetzt jedes gesehene Ergebnis mit seiner Zählung daneben — `recovery_vetoed`,
+`recovery_not_effective` und `recovery_lapsed` stehen dort als Ablehnungen, wo
+sie hingehören. Und die Spur nennt ihren Unterscheider beim Namen
+(`resource:` / `phase:`) statt ihn an die Position zu hängen: dieselbe Zeile
+hatte am 2026-09-02 schon einmal still die Bedeutung gewechselt, als ein
+drittes Feld dazukam.
+
+**Gepflanzt und gelesen:** heisst der Fall im Home anders, sagt der Leser „keine
+Stufe lesbar" statt einer falschen Null.
+
 **B65 — Eine Prüfung, die den Namen einer Sache entfernt, hat die Sache nicht
 entfernt (2026-09-04).** Der dritte Lauf kam durch bis Chromium — die Behebung
 aus B64 trug, `Downloading Electron binary...` stand da —, und diesmal sagte

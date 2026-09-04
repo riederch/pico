@@ -65,7 +65,8 @@ const traced = (tracePath) => dispatchLine
   + '        const __picoTraced = await __picoDispatchInner(operation, args, principal, scheduleAfterReply);\n'
   + `        try { (await import('node:fs')).appendFileSync(${JSON.stringify(tracePath)}, `
   + 'operation + " " + __picoTraced.outcome '
-  + '+ ((args && typeof args.resource === "string") ? " " + args.resource : "") '
+  + '+ ((args && typeof args.resource === "string") ? " resource:" + args.resource : "") '
+  + '+ ((args && typeof args.phase === "string") ? " phase:" + args.phase : "") '
   + '+ "\\n"); } catch {}\n'
   + '        return __picoTraced;\n'
   + '    };\n'
@@ -147,11 +148,34 @@ try {
  */
 const lines = readFileSync(tracePath, 'utf8').split('\n').filter((line) => line !== '');
 const entries = lines.map((line) => {
-  const [operation, outcome, resource] = line.split(' ');
-  return { operation, outcome, resource };
+  const [operation, outcome, ...qualifiers] = line.split(' ');
+  const named = (prefix) => qualifiers
+    .find((qualifier) => qualifier.startsWith(prefix))?.slice(prefix.length);
+  return { operation, outcome, resource: named('resource:'), phase: named('phase:') };
 });
-const accepted = new Set(entries.filter((entry) => entry.outcome === 'ok')
-  .map((entry) => entry.operation));
+
+/**
+ * **Was „angenommen" heisst, und warum es nicht `ok` allein ist** (2026-09-04,
+ * Befund B66).
+ *
+ * Diese Messung las bis heute `outcome === 'ok'`. Das Home antwortet auf drei
+ * Wegen erfolgreich, und zwei davon heissen anders: eine eingeleitete
+ * Wiederherstellung und eine eingereichte Wurzelrotation *nehmen* an - sie
+ * legen einen anhaengigen Vorgang an und starten das Vetofenster. Sie als
+ * Ablehnung zu zaehlen hiesse, den folgenreichsten Weg des Hauses fuer
+ * verschlossen zu halten.
+ *
+ * Die Liste steht hier mit Grund statt als drei Woerter, und der Lauf sagt
+ * unten zu *jedem* gesehenen Ergebnis, wie er es gezaehlt hat - ein viertes
+ * Erfolgswort kann sich damit nicht als Ablehnung verstecken.
+ */
+const acceptingOutcomes = new Map([
+  ['ok', 'die gewöhnliche Annahme'],
+  ['recovery_pending', 'ADR 0110: die Wiederherstellung ist eingeleitet und das Vetofenster läuft'],
+  ['rotation_pending', 'ADR 0114: die Wurzelrotation ist eingereicht und das Vetofenster läuft'],
+]);
+const wasAccepted = (entry) => acceptingOutcomes.has(entry.outcome);
+const accepted = new Set(entries.filter(wasAccepted).map((entry) => entry.operation));
 const refusedOnly = new Set(entries
   .map((entry) => entry.operation)
   .filter((operation) => !accepted.has(operation)));
@@ -172,8 +196,30 @@ for (const name of ['executeHomeAuthorityList', 'executeHomeAuthoritySubmit']) {
   }
 }
 const acceptedResources = new Set(entries
-  .filter((entry) => entry.outcome === 'ok' && entry.resource !== undefined)
+  .filter((entry) => wasAccepted(entry) && entry.resource !== undefined)
   .map((entry) => entry.resource));
+
+/**
+ * **Und der dritte Sammelruf, der bis heute für alles einstand** (Befund B66).
+ *
+ * `home.device.recovery.submit` verzweigt über `args.phase` in drei Stufen:
+ * `prepare` liest den Kopf, `initiate` ersetzt den Geräte-Satz und startet das
+ * Vetofenster, `complete` schliesst ab. Eine davon durchzubringen färbte den
+ * Namen grün - und die eine, auf die es ankommt, ist nicht die harmloseste.
+ *
+ * Aus dem Home gelesen statt danebengeschrieben, wie die Ressourcen darüber.
+ */
+const servedPhases = new Set();
+const recoveryCase = /case 'home\.device\.recovery\.submit':([\s\S]*?)\n        case '/u
+  .exec(homeSource);
+if (recoveryCase !== null) {
+  for (const found of recoveryCase[1].matchAll(/args\.phase === '(\w+)'/gu)) {
+    servedPhases.add(found[1]);
+  }
+}
+const acceptedPhases = new Set(entries
+  .filter((entry) => wasAccepted(entry) && entry.phase !== undefined)
+  .map((entry) => entry.phase));
 rmSync(workspace, { recursive: true, force: true });
 
 if (lines.length === 0 && failed === undefined) {
@@ -203,8 +249,36 @@ if (servedResources.size === 0) {
     }
   }
 }
+if (servedPhases.size === 0) {
+  console.log('No recovery phase could be read from the Home, so nothing was measured one level down there.');
+} else {
+  const unwalkedPhases = [...servedPhases].filter((phase) => !acceptedPhases.has(phase));
+  console.log(`${acceptedPhases.size} of ${servedPhases.size} phases behind `
+    + '`home.device.recovery.submit` were accepted.');
+  if (unwalkedPhases.length > 0) {
+    console.log('No walk in this run got past this phase:');
+    for (const phase of unwalkedPhases.sort()) {
+      console.log(`  ${phase}`);
+    }
+  }
+}
+
+/**
+ * Jedes gesehene Ergebnis mit der Zählung daneben. Ein neues Erfolgswort des
+ * Homes taucht hier als „refused" auf, statt die Zahl oben still zu senken.
+ */
+const seenOutcomes = new Map();
+for (const entry of entries) {
+  seenOutcomes.set(entry.outcome, (seenOutcomes.get(entry.outcome) ?? 0) + 1);
+}
+console.log('\nEvery outcome this run saw, and how it was counted:');
+for (const [outcome, count] of [...seenOutcomes].sort((a, b) => b[1] - a[1])) {
+  const reason = acceptingOutcomes.get(outcome);
+  console.log(`  ${outcome} x${count} - ${reason === undefined ? 'refused' : `accepted (${reason})`}`);
+}
+
 if (refusedOnly.size > 0) {
-  console.log(`${refusedOnly.size} reached it and were only ever refused: ${[...refusedOnly].join(', ')}`);
+  console.log(`\n${refusedOnly.size} reached it and were only ever refused: ${[...refusedOnly].join(', ')}`);
 }
 if (unwalked.length > 0) {
   console.log('\nNot accepted by any walk in this run:');
