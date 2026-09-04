@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { accessSync, constants, readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,11 +92,55 @@ if (typeof binary !== 'string' || binary.trim() === '') {
  * ein zweites Mal blind auszuliefern.
  */
 const probe = selectChromiumSandboxProbe({ rootOwnedPackageProbe: false });
-const run = spawnSync(
-  binary,
-  [...probe.arguments, '--headless', join(shellRoot, 'dist', 'electron-smoke.js')],
-  { stdio: 'inherit' },
-);
+
+/**
+ * **Ein Fenster braucht eine Anzeige, und dieser Lauf besorgt sich eine.**
+ *
+ * `--headless` stand hier bis zum 2026-09-04 und tat **nichts**. Electron 44
+ * nimmt das Flag entgegen und startet trotzdem Ozones X11-Flaeche; auf dem
+ * Laeufer endete das mit `Could not open the default X display`, einem
+ * `Gtk-ERROR` und `SIGTRAP`. Alle kopflosen Wege sind durchprobiert und keiner
+ * traegt: `--ozone-platform=headless` (auch mit `--disable-gpu`,
+ * `--use-gl=swiftshader`, `--in-process-gpu`) endet im Speicherzugriffsfehler,
+ * `--headless=new` ebenso.
+ *
+ * **Und mein Beweis, dass es ohne Anzeige liefe, war keiner.** Er entfernte
+ * `DISPLAY` und `WAYLAND_DISPLAY` - also die *Namen* der Anzeige, nicht die
+ * Anzeige: Ozone findet den Wayland-Sockel auch als `wayland-0` unter
+ * `XDG_RUNTIME_DIR`. Mit diesem dritten Namen weg scheitert derselbe Lauf hier
+ * genauso wie auf dem Laeufer. Deshalb fragt die Erkennung unten nach allen
+ * dreien und nicht nach zweien.
+ *
+ * Wo keine Anzeige ist, wird eine gestellt. Das ist keine Umgehung, sondern
+ * das, was ein Fenstertest braucht - im Gegensatz zu `--no-sandbox`, das die
+ * Lage aendern wuerde, die hier gemessen wird.
+ */
+const waylandSocket = process.env.XDG_RUNTIME_DIR
+  ? join(process.env.XDG_RUNTIME_DIR, process.env.WAYLAND_DISPLAY || 'wayland-0')
+  : undefined;
+const displayReachable = (process.env.DISPLAY ?? '') !== ''
+  || (process.env.WAYLAND_DISPLAY ?? '') !== ''
+  || (waylandSocket !== undefined && existsSync(waylandSocket));
+
+const virtualDisplay = ['xvfb-run', '--auto-servernum', '--server-args=-screen 0 1280x1024x24'];
+if (!displayReachable && spawnSync(virtualDisplay[0], ['--help'], { stdio: 'ignore' }).error) {
+  process.stderr.write(
+    'No display and no `xvfb-run` to make one. This test drives a real window, '
+    + 'so it needs a display server; Electron 44 has no working headless mode '
+    + '(measured: `--headless` is ignored, `--ozone-platform=headless` and '
+    + '`--headless=new` crash). Install xvfb, or run this where DISPLAY, '
+    + 'WAYLAND_DISPLAY or $XDG_RUNTIME_DIR/wayland-0 is reachable.\n',
+  );
+  process.exit(1);
+}
+
+const command = displayReachable ? binary : virtualDisplay[0];
+const commandArguments = [
+  ...(displayReachable ? [] : [...virtualDisplay.slice(1), binary]),
+  ...probe.arguments,
+  join(shellRoot, 'dist', 'electron-smoke.js'),
+];
+const run = spawnSync(command, commandArguments, { stdio: 'inherit' });
 /**
  * **Ein Fehlschlag hier soll sagen, was ihm fehlt - und zwar das, was er
  * *weiss*, nicht das, was er vermutet.**
@@ -156,14 +200,15 @@ if (run.status !== 0) {
     + `, spawn error: ${run.error ? `${run.error.code} (${run.error.message})` : 'none'}\n`
     + `  * sandbox arguments: ${probe.arguments.join(' ') || '(none)'}\n`
     + `  * ${namespaceSwitches}\n`
-    + `  * DISPLAY: ${process.env.DISPLAY ?? 'unset'}\n`
+    + `  * DISPLAY: ${process.env.DISPLAY ?? 'unset'}, WAYLAND_DISPLAY: ${process.env.WAYLAND_DISPLAY ?? 'unset'}, wayland socket: ${waylandSocket ?? 'no XDG_RUNTIME_DIR'} -> ${displayReachable ? 'display reachable' : 'none, ran under xvfb-run'}\n`
     + 'Reading it: a spawn error means the binary never ran, so the sandbox is '
     + 'not the question. A signal means Chromium died before it could speak - '
     + 'with the namespace sandbox that is usually a restricted user namespace, '
     + 'and on Ubuntu 24.04 `sudo sysctl -w '
     + 'kernel.apparmor_restrict_unprivileged_userns=0` lifts it. A missing '
-    + 'display is not a cause here: this run is green without one, because '
-    + 'Electron takes `--headless`.\n'
+    + 'display is the cause when SIGTRAP arrives with `Could not open the '
+    + 'default X display` above it - Electron 44 has no working headless '
+    + 'mode, so this run makes its own display with xvfb-run.\n'
     + 'Turning the sandbox off with `--no-sandbox` would make this pass and '
     + 'measure a different program than the one that ships.\n',
   );

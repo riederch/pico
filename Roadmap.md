@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B65 — Eine Prüfung, die den Namen einer Sache entfernt, hat die Sache nicht
+entfernt (2026-09-04).** Der dritte Lauf kam durch bis Chromium — die Behebung
+aus B64 trug, `Downloading Electron binary...` stand da —, und diesmal sagte
+das Protokoll alles:
+
+```
+Could not open the default X display
+Gtk-ERROR: Can't create a GtkStyleContext without a display connection
+exit status: none, signal: SIGTRAP, spawn error: none
+apparmor_restrict_unprivileged_userns=0, unprivileged_userns_clone=1,
+max_user_namespaces=31590
+DISPLAY: unset
+```
+
+**Die Sandbox war nie eine Hürde.** Die Schalter standen offen. Der
+`sysctl`-Schritt aus B62 war die Antwort auf eine Frage, die niemand gestellt
+hatte — er bleibt stehen und sagt seit heute, *was er vorfand*, damit sich das
+beim nächsten Mal von selbst klärt.
+
+**Die Ursache ist die eine, die meine eigene Fehlerzeile ausdrücklich
+ausschloss:** die fehlende Anzeige. `--headless` stand seit dem 2026-09-02 im
+Aufruf und tut bei Electron 44 **nichts** — es wird angenommen und Ozone
+startet trotzdem die X11-Fläche. Alle kopflosen Wege durchgemessen, keiner
+trägt: `--ozone-platform=headless` endet im Speicherzugriffsfehler, auch mit
+`--disable-gpu`, `--use-gl=swiftshader` oder `--in-process-gpu`;
+`--headless=new` ebenso.
+
+**Und mein Beweis vom Vortag war keiner.** Ich hatte `DISPLAY` und
+`WAYLAND_DISPLAY` entfernt, der Lauf blieb grün, und daraus wurde die Zeile
+*„a missing display is not a cause here"* — eine Behauptung, die im
+Fehlertext des Prüfers stand und andere in die Irre geführt hätte. Entfernt
+hatte ich die **Namen** der Anzeige, nicht die Anzeige: Ozone findet den
+Wayland-Sockel auch als `wayland-0` unter `XDG_RUNTIME_DIR`. Mit dem dritten
+Namen weg scheitert derselbe Lauf hier mit demselben `SIGTRAP` wie auf dem
+Läufer. **Zwei Namen zu entfernen und Grün zu sehen heisst nicht, dass es ohne
+die Sache geht** — es heisst, dass man den dritten Namen nicht kannte.
+
+**Behoben, indem der Test sich seine Anzeige selbst besorgt:** ist keine
+erreichbar, läuft er unter `xvfb-run --auto-servernum`. Das ist keine
+Umgehung, sondern das, was ein Fenstertest braucht — im Unterschied zu
+`--no-sandbox`, das die Lage änderte, die hier gemessen wird. Die Erkennung
+fragt jetzt nach allen drei Namen.
+
+**Begangen, und was daran offen bleibt — vor dem Ausliefern gesagt.** Drei
+Zweige, zwei davon hier gelaufen: mit Anzeige grün; ohne Anzeige und ohne
+`xvfb-run` eine Absage, die sagt, was fehlt. Der dritte — ohne Anzeige, mit
+`xvfb-run` — ist der Weg des Läufers, und dieser Rechner hat kein Xvfb. Seine
+**Verdrahtung** ist mit einer Attrappe belegt (Flags verzehrt, Binärdatei,
+Sandbox-Argumente und App-Pfad in der richtigen Reihenfolge, Lauf grün);
+**dass Xvfb selbst das Fenster trägt, ist hier nicht bewiesen.**
+
 **B64 — Der Rauchtest kam nie bis zu Chromium, und meine Diagnose beschuldigte
 die Sandbox (2026-09-04).** Der zweite CI-Lauf kam bis Schritt 38 und riss
 dort. Die Ausgabe: meine Zeile `chromium sandbox: user_namespace`, danach meine
