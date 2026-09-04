@@ -912,6 +912,47 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B63 — Die Behebung von damals ist die Lücke von heute (2026-09-04).** Der
+Prüfschritt neben `release:verify` riss den Auftrag: acht hohe Meldungen, sechs
+davon gegen `fast-uri`, zwei mittlere gegen Fastify selbst. Lokal Zeile für
+Zeile dieselbe Ausgabe — **das ist die Welt und nicht der Baum.** Genau dafür
+steht dieser Schritt *neben* der Kette und nicht darin (ADR 0122 Y1): eine
+veröffentlichte Meldung soll nicht aussehen wie ein kaputtes Haus. Diese
+Entscheidung ist heute das erste Mal eingelöst worden.
+
+**Und die Lücke trägt einen Namen, den dieses Haus aufgeschrieben hat.** In
+ADR 0122 stand seit dem 2026-08-06 der Satz, drei Meldungen seien behoben
+*„durch Neuauflösen auf `find-my-way@9.7.0` und `fast-uri@3.1.5`"*. Der
+reparierte Bereich lautet inzwischen `>=3.1.6` — **die notierte Behebung ist
+die verwundbare Fassung.** Eine Version, die als Antwort dasteht, ist eine
+Aussage über einen Tag und keine Eigenschaft des Pakets; der Absatz steht jetzt
+im Imperfekt, nennt sein Datum und sagt dazu, dass der Fänger für das nächste
+Mal dieser Schritt ist und keine hier notierte Zahl.
+
+**Behoben wurde wie beim ersten Mal, und das ist die eigentliche Zeile:** kein
+`override`, kein Ignorieren, keine gesenkte Schwelle. Die Bereiche, die der
+Baum längst deklariert — `^3.0.0` und `^4.0.0` —, lassen die reparierten
+Fassungen zu; festgehalten hatte die alten allein die Sperrdatei. Neu aufgelöst
+auf `fast-uri@3.1.7` und `4.1.4`, dazu Fastify von `5.11.2` auf `5.12.3` gegen
+die beiden mittleren Meldungen unter `<5.12.1`. Danach: `No known
+vulnerabilities found`, auch auf `moderate`.
+
+**Keine der beiden mittleren findet hier eine Fläche**, gesucht statt
+angenommen: `trustProxy` kommt im ganzen Baum kein einziges Mal vor, und von
+67 Routen im Kern deklariert **keine** ein Fastify-Schema — die Argumente
+werden selbst gelesen, nicht von der Bibliothek geprüft. Das steht hier, weil
+es die Antwort *nicht* ändert. Eine Meldung, die heute keine Fläche findet, ist
+keine Zusage für morgen, und die Fassung zu heben kostet weniger als das
+Argument, warum man sie nicht heben müsste.
+
+**Was daran begangen wurde.** Fastify ist die HTTP-Fläche des Homes, und eine
+Nebenversion, deren Änderung *Schemaprüfung* heißt, ist keine Zahl, die man
+ungesehen tauscht. Gelaufen sind `pnpm check`, **2.933 Tests**, dieselbe Menge
+noch einmal unter verschobener Uhr — und `pnpm link:walk` gegen ein echtes
+Home über echtes HTTP: **53 von 55, dazu 12 von 12 Autoritätsressourcen**, unverändert. Die Paketprüfung (Schritt 39)
+blieb aus, weil sie `sudo chown root:root` braucht und dieser Rechner dafür ein
+Passwort will; sie hängt an keiner der beiden Fassungen.
+
 **B62 — Ich habe ein Tor in die Kette gehängt und nur auf meinem Rechner
 geprüft (2026-09-04 gemeldet, für den Stand vom 2026-09-02).** Der Rauchtest am
 echten Fenster kam am 2026-09-02 in `release:verify` — Befund B59, und die

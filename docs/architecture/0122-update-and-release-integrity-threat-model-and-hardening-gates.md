@@ -210,11 +210,22 @@ so loudly.
   unrecorded. That last one was unmet when the check was written, which
   is how it was noticed.
 
-  The audit found three high-severity advisories on the first run -
-  `find-my-way` HTTP/2 denial of service and two `fast-uri` host
-  confusions, all transitive under Fastify. They are fixed by
-  re-resolving to `find-my-way@9.7.0` and `fast-uri@3.1.5`, not by
-  lowering the threshold.
+  The audit found three high-severity advisories on its first run
+  (2026-08-06) - `find-my-way` HTTP/2 denial of service and two
+  `fast-uri` host confusions, all transitive under Fastify. They were
+  fixed by re-resolving to `find-my-way@9.7.0` and `fast-uri@3.1.5`, not
+  by lowering the threshold.
+
+  **`fast-uri@3.1.5` is what the audit failed on the next time** (2026-09-04,
+  finding B63): eight high advisories, six of them that same package, whose
+  fixed range moved to `>=3.1.6`. The remedy was the same one and stays the
+  same - re-resolve inside the ranges the tree already declares (`^3.0.0`
+  and `^4.0.0`), which is why no override and no ignore entry appears
+  anywhere; Fastify itself went to `5.12.3` for two moderate advisories
+  against `<5.12.1`. What changed is this paragraph. A version named as the
+  fix is a fact about a day, so it now carries its date and stands in the
+  past tense - and the thing that catches the next one is this step, which
+  reads the world at build time, not a version written down here.
 
   Install scripts stay enabled and the exception is recorded in the
   workflow: `better-sqlite3` is a native module whose build runs during
