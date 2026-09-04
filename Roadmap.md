@@ -953,15 +953,38 @@ ein Schluss ist keine Messung. Sie trägt *dass* verdichtet wurde und nicht
 *was*: ein Geräteprotokoll mit dem abgeleiteten Ort wäre genau die
 Rohkenntnis, die Phase 3 dem Home gerade genommen hat, nur eine Datei weiter.
 
-**Was damit nicht bewiesen ist, und dasteht statt zu fehlen.** Die Fixe waren
-gestellt — eine Fahrt entsteht am Schreibtisch nicht —, und sie sind nach dem
-Lauf vom Gerät gelöscht worden, damit erfundene Messungen nie einem echten
-Home als gemessen angeboten werden. Der `LocationManager`-Weg selbst ist am
-2026-08-26 mit sieben echten Fixes bewiesen worden. Und der Übergang in ein
-Home fehlt weiter: er braucht einen Beitritt, und ein Beitritt braucht einen
-Menschen — `finish-join.sh` sagt es selbst, es tippt keine Passphrase und
-beantwortet keine Bewilligung, *„dieser Tipp ist das Einzige, wofür die
-Zeremonie da ist."*
+**Und dann ist der Nutzer den Beitritt mitgegangen, und die letzte Spanne
+schloss sich am selben Tag.** Ein frisches Labor-Home, die Passphrase und der
+eine CONTINUE von ihm, die drei Codes von `finish-join.sh` getragen — *„This
+device is yours."* Danach der ganze Weg, auf echter Hardware:
+
+```
+{"step":"derived_locally","from":6}
+{"step":"derived_kept","crossed":true,
+ "memoryItemId":"mem_derived_22029af0…","from":6}
+```
+
+`from: 6`, weil der Erfassungsdienst einen **echten** Fix zu den gestellten
+fünf dazugelegt hatte. Und die Gegenprobe am Home, die die ganze Phase trägt:
+
+| | |
+|---|---|
+| `pico_observation` | **0 Zeilen** — keine einzige Rohmessung |
+| Eintrag | `mem_derived_22029af0…` · `application/vnd.pico.parking-event` |
+| Aufzeichnung | `kind: derived_observation, privacyDomain: private, sourceCount: 1` |
+
+**Auch die Aufbewahrungsregel ist am Gerät bewiesen.** Von den Messungen blieb
+genau die eine *nach* dem Übergang stehen; alles bis dahin war verbraucht und
+weg. Das ist die Regel, die am Vortag noch als ungeprüfte Zeile im
+Sondenskript stand.
+
+**Was weiter nicht bewiesen ist, und dasteht statt zu fehlen.** Die Fixe waren
+gestellt — eine Fahrt entsteht am Schreibtisch nicht. Der
+`LocationManager`-Weg selbst ist am 2026-08-26 mit sieben echten Fixes
+bewiesen worden, und einer davon hat hier mitgemessen; was fehlt, ist die
+Kette an *einem* Stück: ein echter Parkvorgang mit echtem Sensor. Alle
+gestellten Messungen sind nach dem Lauf vom Gerät gelöscht worden, damit
+erfundene Werte nie einem Home als gemessen angeboten werden.
 
 **B60 — Eine von Hand nachgerechnete Zahl ist einmal richtig (2026-09-04).**
 Am 2026-09-02 wurden die sechzehn Zahlen, die `progress.md` über den Zustand

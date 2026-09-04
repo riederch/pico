@@ -23,7 +23,11 @@ Verbindungsabbruch bekam einen Fehler fuer etwas, das laengst angekommen war.
 Jetzt antwortet der Home „schon da", und nur „gerade angekommen" erlaubt ihm,
 seine Messungen zu loeschen.
 
-Gegangen gegen echte Prozesse, nicht auf einem Telefon: es hing keines an.
+Am 2026-09-04 auf einem A34 zu Ende gegangen: das Telefon verdichtet, der
+Uebergang kommt an (`derived_observation`), und das Home haelt danach
+**null Zeilen** in `pico_observation` - kein Rohstandort, ein abgeleiteter
+Eintrag. Die Fixe waren gestellt; der Sensorweg selbst ist am 2026-08-26
+bewiesen worden.
 
 Accepted as an architecture boundary; P1, P3 and P5 implemented, P2/P6 open
 and P4 blocked. **P3 is complete since 2026-09-03**: its crossing landed
