@@ -115,9 +115,44 @@ try {
   const since = new Date(Date.now() - 48 * 60 * 60 * 1_000).toISOString();
   const fixes = await androidCapturePorts.readLocationFixes(since);
   const mobility = await androidCapturePorts.readMobilitySamples(since);
+  /**
+   * **Verdichten, bevor irgendetwas aufgeschlossen wird** (ADR 0126 P3).
+   *
+   * Die Reihenfolge stand bis zum 2026-09-04 andersherum: erst den Vault
+   * entsperren und den Link aufbauen, dann verdichten. Das faellt auf einem
+   * Geraet ohne erreichbares Home sofort auf - dort endet der Lauf mit
+   * `ECONNREFUSED`, und niemand erfaehrt, ob es ueberhaupt etwas zu sagen
+   * gab. Aber der Grund ist nicht der Test: **einen Vault aufzuschliessen, um
+   * dann festzustellen, dass man nichts zu sagen hatte, ist ein Preis fuer
+   * nichts** - und das Entsperren ist eine sicherheitsrelevante Handlung, kein
+   * Vorbereitungsschritt.
+   *
+   * Verdichtet wird auf diesem Geraet, aus diesem Puffer, ohne Netz. Erst wenn
+   * dabei etwas herauskommt, gibt es einen Grund, jemanden zu fragen.
+   */
+  const derived = fixes.length === 0 && mobility.length === 0
+    ? undefined
+    : condensePicoCompanionObservations({
+      locationFixes: fixes,
+      mobilitySamples: mobility,
+    });
+
   if (fixes.length === 0 && mobility.length === 0) {
     say({ step: 'nothing_measured' });
+  } else if (derived === undefined) {
+    // Nichts abgeleitet heisst nichts verbraucht - und kein Vault angefasst.
+    say({ step: 'nothing_derived', held: fixes.length + mobility.length });
   } else {
+    /**
+     * **Dass verdichtet wurde, steht da, bevor irgendwer gefragt wird** - und
+     * *was* verdichtet wurde, steht nirgends. Ein Protokoll auf dem Geraet,
+     * das den abgeleiteten Ort truege, waere genau die Rohkenntnis, die Phase
+     * 3 dem Home gerade genommen hat, nur eine Datei weiter.
+     *
+     * Ohne diese Zeile war „hat es abgeleitet?" ein Schluss aus dem Ausbleiben
+     * von `nothing_derived`. Ein Schluss ist keine Messung.
+     */
+    say({ step: 'derived_locally', from: fixes.length + mobility.length });
     const socketPath = join(files, 'vault', 'run', 'daemon.sock');
     await (await connectDaemon(socketPath)).close();
     const keystore = await connectPicoAndroidKeystorePort(join(files, 'keystore-capture.sock'));
@@ -135,32 +170,17 @@ try {
       const linkClient = await createPicoCompanionLinkClient({ profile, daemonClient, sodium });
 
       /**
-       * **ADR 0126 P3, seit dem 2026-09-03: verdichtet wird hier, nicht dort.**
-       *
-       * Bis dahin gingen die Messungen selbst an den Home, der sie pufferte.
-       * P3s andere Hälfte dreht das um: der Puffer liegt auf diesem Gerät, die
-       * Ableitung auch, und was die Zustandsgrenze überquert, ist eine
-       * Erinnerung. Der Home sieht die Messungen nie.
-       *
        * **Nichts abgeleitet heisst nichts verbraucht.** Die Datei bleibt
        * stehen, bis eine Ableitung entstanden *und* angekommen ist - dieselbe
-       * Reihenfolge wie vorher und aus demselben Grund: Wiederholung ist der
-       * laute Fehlschlag, Verlust der leise.
+       * Reihenfolge, die der Rohweg vorher hatte, und aus demselben Grund:
+       * Wiederholung ist der laute Fehlschlag, Verlust der leise.
        *
-       * **Und heute leitet das hier nichts ab**, gemessen und nicht vermutet:
-       * `readMobilitySamples` gibt leer zurück, weil Bewegungsarten bei
-       * Android aus den Play-Diensten kommen, die diese Sonde nicht hat. Ohne
-       * den Übergang von fahrend zu gehend hat ein Parkplatz kein Merkmal.
-       * Der Weg steht trotzdem: bis dahin sammelte der Home Rohstandorte, aus
-       * denen nichts entstand.
+       * Die Bewegungsarten kommen seit dem 2026-09-04 aus den Messungen
+       * selbst: `readMobilitySamples` gibt hier leer zurueck, weil ein
+       * Klassifikator bei Android aus den Play-Diensten kaeme, die diese Sonde
+       * nicht hat.
        */
-      const derived = condensePicoCompanionObservations({
-        locationFixes: fixes,
-        mobilitySamples: mobility,
-      });
-      if (derived === undefined) {
-        say({ step: 'nothing_derived', held: fixes.length + mobility.length });
-      } else {
+      {
         const kept = await keepPicoCompanionDerivedObservation({ linkClient, derived });
         /**
          * Nur die Messungen bis zum Übergang, aus dem die Ableitung ihren

@@ -69,11 +69,21 @@ tar -C "$repo/apps/companion" -cf /tmp/pico-companion-dist.tar dist package.json
 # dort neu gibt. Ein fehlender Export bricht ESM beim Verknuepfen ab - vor
 # jedem `try`, also ohne ein Wort im Protokoll.
 tar -C "$repo/packages/protocol" -cf /tmp/pico-protocol-dist.tar dist package.json
+# Und das Modul, seit ADR 0126 P3: die Verdichtung liegt auf dem Geraet, und
+# sie leitet ihre Bewegungsarten selbst ab. `@pico/companion` haengt seit dem
+# 2026-09-03 daran - genau die Lage, vor der der Absatz darueber warnt, nur
+# eine Abhaengigkeit weiter.
+tar -C "$repo/modules/spatial-recall" -cf /tmp/pico-spatial-dist.tar dist package.json
 adb push /tmp/pico-companion-dist.tar /data/local/tmp/pico-companion-dist.tar > /dev/null
 adb push /tmp/pico-protocol-dist.tar /data/local/tmp/pico-protocol-dist.tar > /dev/null
+adb push /tmp/pico-spatial-dist.tar /data/local/tmp/pico-spatial-dist.tar > /dev/null
 adb shell "run-as $pkg sh -c 'cp /data/local/tmp/pico-capture.mjs files/stage/capture.mjs \
   && cd files/stage && /system/bin/tar -xf /data/local/tmp/pico-companion-dist.tar \
   && cd node_modules/@pico/protocol && /system/bin/tar -xf /data/local/tmp/pico-protocol-dist.tar \
+  && cd ../../.. \
+  && mkdir -p node_modules/@pico/module-spatial-recall \
+  && cd node_modules/@pico/module-spatial-recall \
+  && /system/bin/tar -xf /data/local/tmp/pico-spatial-dist.tar \
   && cd ../../.. \
   && cd .. && rm -f capture.log fixes.jsonl'"
 
