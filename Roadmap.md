@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B61 — Phase 3 leitet auf einem echten Telefon ab, und der Weg dorthin drehte
+eine Reihenfolge um (2026-09-04).** Der Nutzer hat ein A34 angesteckt. Was
+dabei herauskam, in der Reihenfolge, in der es passierte:
+
+**Der Beitritt war schon tot, bevor ich etwas anfasste.** Das Profil auf dem
+Telefon ist auf die Host-Schlüssel eines Labor-Homes festgenagelt, dessen
+Datenverzeichnis in `/tmp` lag — vom Reboot geleert. Es gibt kein Home mehr,
+dem dieses Telefon vertrauen könnte. Das war die Antwort auf die Frage, ob
+`build-and-run.sh` etwas Wertvolles zerstört: es zerstört nur, was der Reboot
+schon unbrauchbar gemacht hatte. Gefragt wurde trotzdem vorher.
+
+**Ein Modul fehlte auf dem Gerät, und das Skript hatte davor gewarnt.**
+`run-capture-probe.sh` schiebt Companion und Protokoll nach, und sein
+Kommentar sagt: *„Ein neues Modul ohne seinen Eintrag scheitert beim Import —
+vor jedem `try`, also ohne ein Wort im Protokoll (am 2026-08-26 genau so
+passiert)."* Seit Phase 3 hängt der Companion an
+`@pico/module-spatial-recall`. Der Läufer schiebt es jetzt mit.
+
+**Und dann die Reihenfolge, die das Gerät auffliegen liess.** `capture.mjs`
+entsperrte erst den Vault und baute den Link auf, *dann* verdichtete es. Auf
+einem Telefon ohne erreichbares Home endet das mit `ECONNREFUSED`, und
+niemand erfährt, ob es überhaupt etwas zu sagen gab. Der Grund, es zu drehen,
+ist aber nicht der Test: **einen Vault aufzuschliessen, um dann festzustellen,
+dass man nichts zu sagen hatte, ist ein Preis für nichts** — und das Entsperren
+ist eine sicherheitsrelevante Handlung, kein Vorbereitungsschritt. Verdichtet
+wird jetzt zuerst, ohne Netz und ohne Schlüssel.
+
+**Das Ergebnis, auf dem Gerät gemessen:**
+
+```
+{"step":"derived_locally","from":5}
+{"step":"capture_failed","reason":"connect ECONNREFUSED …/daemon.sock"}
+```
+
+Fünf rohe Standortmessungen hinein, ein Parkplatz heraus — **auf dem Telefon,
+ohne Klassifikator und ohne Netz.** Die erste Zeile war anfangs nicht da; „hat
+es abgeleitet?" war ein Schluss aus dem Ausbleiben von `nothing_derived`, und
+ein Schluss ist keine Messung. Sie trägt *dass* verdichtet wurde und nicht
+*was*: ein Geräteprotokoll mit dem abgeleiteten Ort wäre genau die
+Rohkenntnis, die Phase 3 dem Home gerade genommen hat, nur eine Datei weiter.
+
+**Was damit nicht bewiesen ist, und dasteht statt zu fehlen.** Die Fixe waren
+gestellt — eine Fahrt entsteht am Schreibtisch nicht —, und sie sind nach dem
+Lauf vom Gerät gelöscht worden, damit erfundene Messungen nie einem echten
+Home als gemessen angeboten werden. Der `LocationManager`-Weg selbst ist am
+2026-08-26 mit sieben echten Fixes bewiesen worden. Und der Übergang in ein
+Home fehlt weiter: er braucht einen Beitritt, und ein Beitritt braucht einen
+Menschen — `finish-join.sh` sagt es selbst, es tippt keine Passphrase und
+beantwortet keine Bewilligung, *„dieser Tipp ist das Einzige, wofür die
+Zeremonie da ist."*
+
 **B60 — Eine von Hand nachgerechnete Zahl ist einmal richtig (2026-09-04).**
 Am 2026-09-02 wurden die sechzehn Zahlen, die `progress.md` über den Zustand
 dieses Baums behauptet, gegen die Ausgaben der Tore gehalten: sechzehn
