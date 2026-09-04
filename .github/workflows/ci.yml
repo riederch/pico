@@ -50,6 +50,18 @@ jobs:
       - name: Audit dependencies
         run: pnpm audit --prod --audit-level high
 
+      # ADR 0113 C3. Chromiums Namensraum-Sandbox braucht unprivilegierte
+      # User-Namespaces, und Ubuntu 24.04 sperrt sie fuer unconfined Programme
+      # per AppArmor. Ohne diese Zeile faellt jeder Electron-Start hier zurueck
+      # auf den setuid-Helfer, der in einem ausgepackten `node_modules` nicht
+      # root gehoert - genau der Abbruch vom 2026-09-02 (Befund B62).
+      #
+      # Die Alternative waere `--no-sandbox`, und die ist keine: dieses Haus
+      # verbietet sie auf jeder Produktionsflaeche, und ein Rauchtest, der die
+      # Sandbox abschaltet, prueft eine andere Lage als die ausgelieferte.
+      - name: Allow the Chromium namespace sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Type check, test and build
         env:
           PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE: "1"

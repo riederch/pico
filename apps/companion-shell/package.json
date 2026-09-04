@@ -14,7 +14,7 @@
     "prepackage:linux": "pnpm build",
     "preverify:linux": "pnpm build",
     "start": "electron dist/main.js",
-    "test:electron": "electron --headless dist/electron-smoke.js",
+    "test:electron": "node scripts/run-electron-smoke.mjs",
     "verify:linux": "node scripts/verify-linux-package.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
