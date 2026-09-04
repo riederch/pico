@@ -912,6 +912,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B60 — Eine von Hand nachgerechnete Zahl ist einmal richtig (2026-09-04).**
+Am 2026-09-02 wurden die sechzehn Zahlen, die `progress.md` über den Zustand
+dieses Baums behauptet, gegen die Ausgaben der Tore gehalten: sechzehn
+Treffer. Zwei Tage später, nach Phase 3, wich eine ab — **433 exportierte
+Fähigkeiten gegen 436 gemessene**, weil drei neue Ausfuhren dazukamen und
+niemand die Zeile mitzog.
+
+Das ist die Klasse in Reinform: eine Zahl, die eine Aussage trägt, gepflegt
+von Hand, und ein Nachrechnen, das nur einmal stimmte. `pnpm progress:walk`
+rechnet sie jetzt nach — siebzehn Behauptungen, gegen neun schnelle Tore,
+ohne Netz.
+
+**Kein Tor, und der Name sagt es** (`measure-`, wie `link:walk` und
+`route:walk`): es liest **Prosa** auf beiden Seiten, und ein Muster über Prosa
+greift irgendwann daneben. Das ist keine Vermutung — beim ersten Lauf traf
+mein eigenes Muster die Wire-Label-Zeile nicht, weil das Tor „129 protocol
+labels spelled once" schreibt und ich „wire labels" gesucht hatte. Ein Tor,
+das so danebengreift, meldet einen Fehlschlag, den niemand verursacht hat.
+
+Dafür sagt es, was es **nicht** prüfen konnte, statt es als richtig zu zählen:
+eine Zeile mit `?` ist eine Lücke und keine Bestätigung. Zwei Pflanzungen,
+beide beissen — eine driftende Zahl (genau der heutige Fall) und ein Tor, das
+seine Zeile umformuliert.
+
+**Und derselbe Fehler war an dem Tag in meiner eigenen Berichterstattung.**
+Ich habe dem Nutzer mehrfach „~79 ungepushte Commits" gesagt. Es waren
+**sieben**: die Zahl stammte aus einer Zusammenfassung vor einer
+Kontextverdichtung, und ich habe sie hochgezählt, ohne sie je gegen
+`origin/main` zu halten. Eine geerbte Zahl, die eine Aussage trägt, die
+niemand nachrechnet — dieselbe Krankheit, die dieser Abschnitt zwölfmal im
+Baum beschreibt, einmal in dem, der ihn schreibt.
+
 **B59 — Der einzige Beweis am echten Fenster lief seit Monaten nicht, und er
 wäre gefallen (2026-09-02).** B58 liess eine Spanne offen: dass ein *Druck*
 wirklich ankommt. Beim Suchen nach einem Harness dafür stellte sich heraus,
