@@ -912,6 +912,55 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B62 — Ich habe ein Tor in die Kette gehängt und nur auf meinem Rechner
+geprüft (2026-09-04 gemeldet, für den Stand vom 2026-09-02).** Der Rauchtest am
+echten Fenster kam am 2026-09-02 in `release:verify` — Befund B59, und die
+Zeile darin lautete, ein Prüfer ohne Aufrufer sei kein Prüfer. Er bekam einen
+Aufrufer und **riss CI beim ersten Lauf**:
+
+```
+The SUID sandbox helper binary was found, but is not configured
+correctly. Rather than run without sandboxing I'm aborting now.
+```
+
+**Das ist B48, noch einmal, von der Hand, die B48 geschrieben hat.** Dort steht:
+*„Die neuen Wege sind noch nie in CI gelaufen."* Ich habe lokal grün gesehen
+und daraus geschlossen, dass die Kette grün ist. Ein Rechner ist keine Klasse
+von Rechnern.
+
+**Drei Unterschiede zwischen meinem Rechner und dem Läufer, und jeder allein
+hätte gereicht:**
+
+1. **Der setuid-Helfer.** In einem ausgepackten `node_modules` gehört
+   `chrome-sandbox` nicht root. Die Antwort stand längst im Haus:
+   `selectChromiumSandboxProbe` wählt ohne das Paket-Flag den
+   **Namensraum**-Modus und gibt `--disable-setuid-sandbox` mit. Der Kern der
+   Antwort ist, was sie *nicht* ist — `--no-sandbox`, das
+   `check-companion-boundary` auf jeder Produktionsfläche verbietet. Die
+   Sandbox bleibt an, nur nicht die setuid-Variante. Geholt statt
+   abgeschrieben: eine zweite Fassung davon entschiede über eine Sandbox.
+2. **Das CI-Flag.** `ci.yml` setzt `PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE=1`
+   für den *ganzen* Schritt, weil die Paketprüfung den root-eigenen Helfer aus
+   dem `.deb` verlangt. Mein Wähler hätte die Umgebung gelesen, den Paket-Zweig
+   genommen und geworfen — **derselbe Fehlschlag noch einmal, nur mit einem
+   anderen Satz.** Gefunden, indem die CI-Datei gelesen und der Lauf mit ihrem
+   Flag nachgestellt wurde, statt ihn ein zweites Mal blind auszuliefern.
+3. **Der Namensraum selbst.** Ubuntu 24.04 sperrt unprivilegierte
+   User-Namespaces per AppArmor; mein Fedora-Rechner kennt den Schalter nicht
+   einmal. Der Arbeitsablauf hebt die Sperre jetzt ausdrücklich auf, mit dem
+   Grund daneben.
+
+**Und weil ich den dritten Punkt von hier aus nicht prüfen kann**, erklärt sich
+ein Fehlschlag jetzt selbst: der Läufer nennt beide Ursachen, die gleich
+aussehen, und sagt dazu, dass `--no-sandbox` ihn zwar grün machen würde — und
+damit ein anderes Programm messen als das ausgelieferte. Gepflanzt: ein
+scheiternder Lauf, und die Diagnose steht da.
+
+**Was ich daraus nicht behaupte:** dass es jetzt grün ist. Ich habe die Kette
+lokal in CI-Gestalt und mit dem CI-Flag laufen lassen; der Läufer selbst
+bleibt ungeprüft, bis er läuft. Das ist derselbe Satz wie beim ersten Mal, nur
+diesmal vor dem Ausliefern gesagt.
+
 **B61 — Phase 3 leitet auf einem echten Telefon ab, und der Weg dorthin drehte
 eine Reihenfolge um (2026-09-04).** Der Nutzer hat ein A34 angesteckt. Was
 dabei herauskam, in der Reihenfolge, in der es passierte:
