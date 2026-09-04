@@ -108,3 +108,50 @@ export function condensePicoCompanionObservations(
     consumedThrough: derived.sourceTransitionAt,
   });
 }
+
+/**
+ * Was das Gerät behalten muss, nachdem eine Ableitung angekommen ist.
+ *
+ * **Hier liegt der leise Fehlschlag**, und deshalb steht diese Entscheidung
+ * hier und nicht im Sondenskript: `tools/android-runtime-probe` liegt nicht im
+ * Arbeitsbereich und hat keine Tests, also wäre eine Zeile dort eine Zeile,
+ * die niemand prüfen kann. Verlorene Messungen sind genau das, was ADR 0129
+ * SR5 der Wiederholung vorzieht zu vermeiden.
+ *
+ * **Die Schnittkante ist der Übergang, nicht der Zeitpunkt des Abgebens.** Was
+ * *nach* dem Übergang gemessen wurde, aus dem die Ableitung ihren Schluss zog,
+ * gehört zur nächsten Fahrt: wer bis „jetzt" leerte, nähme dem nächsten
+ * Parkvorgang seinen Anfang.
+ *
+ * **Eine Zeile ohne lesbaren Zeitpunkt wird verworfen**, und das ist eine
+ * Entscheidung und keine Nachlässigkeit: sie war nie eine Eingabe - der Leser
+ * daneben übergeht sie ebenfalls - und sie zu behalten liesse die Datei
+ * unbegrenzt wachsen, ohne dass je etwas daraus würde.
+ */
+export function retainPicoCompanionObservationLines(input: {
+  lines: readonly string[];
+  consumedThrough: string;
+}): readonly string[] {
+  const cut = Date.parse(input.consumedThrough);
+  if (Number.isNaN(cut)) {
+    /**
+     * Ohne lesbare Schnittkante wird nichts verworfen. Ein Puffer, der bei
+     * einer unlesbaren Angabe geleert würde, verlöre alles wegen eines
+     * Tippfehlers; einer, der stehen bleibt, bietet dieselben Messungen noch
+     * einmal an.
+     */
+    return Object.freeze([...input.lines]);
+  }
+  return Object.freeze(input.lines.filter((line) => {
+    if (line.trim() === '') {
+      return false;
+    }
+    let at;
+    try {
+      at = Date.parse((JSON.parse(line) as { at?: unknown }).at as string);
+    } catch {
+      return false;
+    }
+    return !Number.isNaN(at) && at > cut;
+  }));
+}

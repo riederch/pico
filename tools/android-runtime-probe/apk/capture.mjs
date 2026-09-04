@@ -36,7 +36,10 @@ import {
 } from '@pico/companion/platform-unlock';
 import { createPicoCompanionLinkClient } from '@pico/companion/recovery-controller';
 import { keepPicoCompanionDerivedObservation } from '@pico/companion/observations';
-import { condensePicoCompanionObservations } from '@pico/companion/observation-condensation';
+import {
+  condensePicoCompanionObservations,
+  retainPicoCompanionObservationLines,
+} from '@pico/companion/observation-condensation';
 import { parsePicoLocationFix } from '@pico/protocol/spatial-recall';
 import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import { connectPicoAndroidKeystorePort } from './keystore-port.mjs';
@@ -164,21 +167,22 @@ try {
          * Schluss zog. Was danach gemessen wurde, gehört zur nächsten Fahrt.
          */
         if (kept.crossed) {
-          const consumedThrough = Date.parse(derived.consumedThrough);
-          const kept_ = readFileSync(takenPath, 'utf8').split('\n')
-            .filter((line) => {
-              if (line.trim() === '') {
-                return false;
-              }
-              try {
-                return Date.parse(JSON.parse(line).at) > consumedThrough;
-              } catch {
-                // Eine Zeile, die keine Messung ist, wird nicht aufbewahrt -
-                // sie war auch keine Eingabe.
-                return false;
-              }
-            });
-          writeFileSync(takenPath, kept_.length === 0 ? '' : `${kept_.join('\n')}\n`, 'utf8');
+          /**
+           * **Die Entscheidung, was bleibt, liegt nicht hier.** Sie steht in
+           * `@pico/companion/observation-condensation`, weil dieser Baum nicht
+           * im Arbeitsbereich liegt und keine Tests hat - eine Zeile hier wäre
+           * eine, die niemand prüfen kann, an genau der Stelle, an der Verlust
+           * der leise Fehlschlag ist.
+           */
+          const remaining = retainPicoCompanionObservationLines({
+            lines: readFileSync(takenPath, 'utf8').split('\n'),
+            consumedThrough: derived.consumedThrough,
+          });
+          writeFileSync(
+            takenPath,
+            remaining.length === 0 ? '' : `${remaining.join('\n')}\n`,
+            'utf8',
+          );
         }
         say({
           step: 'derived_kept',

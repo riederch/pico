@@ -3,6 +3,7 @@ import type { PicoMobilityKind, PicoMobilitySample } from '@pico/protocol/spatia
 
 import {
   condensePicoCompanionObservations,
+  retainPicoCompanionObservationLines,
 } from './observation-condensation.js';
 
 /**
@@ -126,5 +127,52 @@ describe('ADR 0126 P3 - was das Gerät ableitet, überquert die Grenze', () => {
       ],
       mobilitySamples: [],
     })).toBeUndefined();
+  });
+});
+
+describe('ADR 0129 SR5 - was das Gerät behalten muss', () => {
+  const line = (at: string) => JSON.stringify({ at, latitudeDeg: 48.2, longitudeDeg: 16.37, accuracyM: 8 });
+
+  it('behält, was nach dem Übergang gemessen wurde', () => {
+    /**
+     * Die Schnittkante ist der Übergang und nicht „jetzt": was danach kam,
+     * gehört zur nächsten Fahrt, und wer bis jetzt leerte, nähme dem nächsten
+     * Parkvorgang seinen Anfang.
+     */
+    expect(retainPicoCompanionObservationLines({
+      lines: [
+        line('2026-09-03T08:00:00.000Z'),
+        line('2026-09-03T08:13:00.000Z'),
+        line('2026-09-03T09:00:00.000Z'),
+      ],
+      consumedThrough: '2026-09-03T08:13:00.000Z',
+    })).toEqual([line('2026-09-03T09:00:00.000Z')]);
+  });
+
+  it('verwirft nichts, wenn die Schnittkante unlesbar ist', () => {
+    /**
+     * Ein Puffer, der bei einer unlesbaren Angabe geleert würde, verlöre alles
+     * wegen eines Tippfehlers. Wiederholung ist der laute Fehlschlag.
+     */
+    const lines = [line('2026-09-03T08:00:00.000Z'), line('2026-09-03T09:00:00.000Z')];
+    expect(retainPicoCompanionObservationLines({ lines, consumedThrough: 'gestern' }))
+      .toEqual(lines);
+  });
+
+  it('verwirft eine Zeile, die nie eine Messung war', () => {
+    // Sie war nie eine Eingabe - der Leser daneben übergeht sie ebenfalls -,
+    // und sie zu behalten liesse die Datei unbegrenzt wachsen.
+    expect(retainPicoCompanionObservationLines({
+      lines: ['{kaputt', '', line('2026-09-03T09:00:00.000Z')],
+      consumedThrough: '2026-09-03T08:13:00.000Z',
+    })).toEqual([line('2026-09-03T09:00:00.000Z')]);
+  });
+
+  it('behält eine Messung genau auf der Kante nicht', () => {
+    // Sie war die Quelle des Übergangs, also ist sie verbraucht.
+    expect(retainPicoCompanionObservationLines({
+      lines: [line('2026-09-03T08:13:00.000Z')],
+      consumedThrough: '2026-09-03T08:13:00.000Z',
+    })).toEqual([]);
   });
 });
