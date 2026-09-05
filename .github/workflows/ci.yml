@@ -159,7 +159,7 @@ jobs:
   home_image:
     name: Build and smoke-test the Pico Home container
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, suites]
     # ADR 0122 Y1. These live on the one job that publishes, rather than on
     # the workflow where the verify job would inherit permissions it has no use
     # for.
@@ -381,7 +381,7 @@ jobs:
   relay_image:
     name: Build and smoke-test the Pico Relay container
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, suites]
     # ADR 0153. A second published image, so a second set of the permissions
     # ADR 0122 Y1/Y2 put on the job that publishes rather than on the workflow.
     permissions:
@@ -634,7 +634,7 @@ jobs:
   client_package:
     name: Publish the Pico Client package
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, suites]
     # Only on a tag. `main` builds the package and verifies it on every push;
     # what a tag adds is a place to download it from, and a release asset that
     # appeared on every commit would make "released" mean nothing.

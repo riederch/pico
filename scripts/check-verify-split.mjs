@@ -43,14 +43,37 @@ const flatten = (chainText) => flattenPicoVerifyChain(scripts, chainText);
 const chain = flatten(scripts['release:verify'] ?? '');
 
 /**
- * Was der Läufer startet. Gelesen wie `check-workflow-pinning.mjs` liest: mit
- * einem Ausdruck über den Text, weil dieses Haus keine YAML-Abhängigkeit hat.
- * Eine Matrix zählt mit - dort steht der Aufruf im Eintrag und nicht im
- * `run:`.
+ * Was der Läufer startet, **je Auftrag**. Gelesen wie
+ * `check-workflow-pinning.mjs` liest: mit einem Ausdruck über den Text, weil
+ * dieses Haus keine YAML-Abhängigkeit hat. Eine Matrix zählt mit - dort steht
+ * der Aufruf im Eintrag und nicht im `run:`.
  */
+const jobs = [];
+{
+  const body = workflow.slice(workflow.indexOf('\njobs:'));
+  let current;
+  for (const line of body.split('\n')) {
+    const header = /^ {2}([A-Za-z_][\w-]*):\s*$/u.exec(line);
+    if (header !== null) {
+      current = { name: header[1], lines: [] };
+      jobs.push(current);
+      continue;
+    }
+    current?.lines.push(line);
+  }
+}
 const started = [];
-for (const found of workflow.matchAll(/(?:^|\n)\s*(?:-\s*)?(?:run|verify):\s*(pnpm [^\n#]+)/gu)) {
-  started.push(found[1].trim());
+for (const job of jobs) {
+  job.started = [];
+  const text = job.lines.join('\n');
+  for (const found of text.matchAll(/(?:^|\n)\s*(?:-\s*)?(?:run|verify):\s*(pnpm [^\n#]+)/gu)) {
+    job.started.push(found[1].trim());
+    started.push(found[1].trim());
+  }
+  const needs = /(?:^|\n)\s{4}needs:\s*(\[[^\]]*\]|[\w-]+)/u.exec(text);
+  job.needs = needs === null
+    ? []
+    : needs[1].replace(/[[\]]/gu, '').split(',').map((name) => name.trim()).filter(Boolean);
 }
 if (started.length === 0) {
   errors.push(`${workflowPath} starts nothing with pnpm, so this check has no subject. A reader that finds no subject is broken, not clean.`);
@@ -158,6 +181,30 @@ for (const [leaf] of reached) {
   }
 }
 
+/**
+ * **Und wer auf die Kette wartet, muss auf die ganze warten.**
+ *
+ * Bis zum 2026-09-05 hiess `needs: verify` „alles ist grün", weil `verify`
+ * die ganze Kette fuhr. Seit der Teilung heisst es nur noch „die Tore sind
+ * grün" - ein Bild könnte veröffentlicht werden, während eine Testmenge
+ * daneben rot ist. Genau das stand nach der Teilung eine Stunde lang in
+ * `ci.yml`, und diese Regel ist die Antwort darauf.
+ */
+const chainJobs = jobs
+  .filter((job) => job.started.some((start) => flatten(start).some((leaf) => chainSteps.has(keyFor(leaf)))))
+  .map((job) => job.name);
+for (const job of jobs) {
+  const waited = job.needs.filter((name) => chainJobs.includes(name));
+  const missing = chainJobs.filter((name) => !job.needs.includes(name));
+  if (waited.length > 0 && missing.length > 0) {
+    errors.push(
+      `Job \`${job.name}\` waits for ${waited.join(', ')} but not for ${missing.join(', ')}. `
+      + 'Since the chain is split, waiting for one half means starting while the other half may '
+      + 'still be red - and this job publishes or packages what that half was checking.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Verify-split check failed:');
   for (const error of errors) {
@@ -169,5 +216,6 @@ if (errors.length > 0) {
 console.log(
   `Verify-split check passed (${chain.length} steps in \`release:verify\`, each started exactly `
   + `once across ${started.length} pnpm invocations in ci.yml; `
-  + `${besideTheChain.size} run beside the chain with a reason).`,
+  + `${besideTheChain.size} run beside the chain with a reason; `
+  + `${chainJobs.length} jobs carry the chain, and everything that waits for one waits for all).`,
 );

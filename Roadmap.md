@@ -997,6 +997,20 @@ seinen Fehlschlag in einer Sekunde melden; ihn vierzig Minuten später zu melden
 heisst, für eine vertippte Zeile den ganzen Auftrag zu bezahlen. Es steht jetzt
 neben `supply:check`, dem anderen Leser von `ci.yml`.
 
+**Und der Fehler, den die Teilung selbst erst gemacht hat.** Drei Aufträge —
+Home-Bild, Relay-Bild, Client-Paket — standen auf `needs: verify`. Das hiess
+bis zum 2026-09-05 *„alles ist grün"*, weil `verify` die ganze Kette fuhr;
+seit der Teilung heisst es nur noch *„die Tore sind grün"*. **Ein Bild hätte
+veröffentlicht werden können, während eine Testmenge daneben rot ist** — genau
+das stand nach meinem eigenen Umbau eine Stunde lang in `ci.yml`, und keiner
+der bisherigen Prüfer sah es, weil sie Schritte lesen und keine Abhängigkeiten.
+
+`split:check` liest jetzt auch die Aufträge: wer auf eine Hälfte der Kette
+wartet, muss auf beide warten. Die Regel hat den Fehler in allen drei
+Aufträgen gefunden, bevor er den Läufer erreichte. Zwei weitere Pflanzungen
+dazu gelesen — ein Auftrag, der wieder nur auf eine Hälfte wartet, und eine
+Testmenge, die ganz aus der Matrix fällt.
+
 **Eine Wahrheit, ein Zuhause:** das Flachklopfen der Kette steht in
 `scripts/verify-chain.mjs` und wird von beiden Lesern geholt. Der zweite ist
 `measure-progress-numbers.mjs`, der die Schrittzahl für `progress.md` zählt —
