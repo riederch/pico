@@ -956,6 +956,58 @@ fängt, wäre geraten gewesen. `pnpm check` bleibt als Skript für die Hand; aus
 der Kette ist es raus, und `build` fängt denselben Fehler **elf Schritte
 früher**.
 
+**Und dann die Aufteilung selbst.** Die drei Durchgänge wissen voneinander
+nichts — sie wollen nur je eine andere Umgebung —, also stehen sie jetzt
+nebeneinander auf eigenen Läufern statt hintereinander in einem Auftrag:
+`test`, `clock:check`, Kiritimati, Niue. Die Wanduhr wird `max` statt `summe`;
+lokal fällt die Kette damit von ~24 auf ~9 Minuten, und keine einzige Prüfung
+geht verloren. Der ehrliche Preis: vier Mal Checkout, Install und Bau, also
+mehr abgerechnete Minuten für weniger Wartezeit. `display-zone:check` nimmt
+dafür eine Zone als Argument und sagt in seiner Schlusszeile selbst, wenn er
+nur eine Hälfte gefahren ist — ein halber Lauf soll nicht wie ein ganzer
+aussehen.
+
+**Der Preis der Aufteilung ist eine zweite Stelle, an der die Kette steht**, und
+den bezahlt kein Mensch, sondern ein Tor. `split:check` klopft `release:verify`
+flach und hält jeden Blattschritt gegen das, was `ci.yml` startet: keiner darf
+fehlen, keiner doppelt bezahlt werden, keiner im Läufer stehen, den die Kette
+nicht kennt. Wer einen Schritt einhängt und den Läufer vergisst, hätte sonst
+ein Tor, das lokal läuft und in CI nie — und beide Seiten sähen grün aus.
+
+Drei Begriffe braucht das, jeder mit Grund statt als Ausnahme: was *neben* der
+Kette stehen darf (der Install, der Audit-Schritt aus ADR 0122 Y1, der
+Tag-Prüfer), was **geteilt** ist (`display-zone:check` in zwei Hälften), und
+was **Voraussetzung** statt Tor ist (`pnpm build`, weil kein Läufer ohne `dist`
+etwas importieren kann). Die ersten beiden Einträge hat das Tor selbst
+gefunden: beim allerersten Lauf meldete es den Audit-Schritt und den
+Tag-Prüfer, die längst dastanden.
+
+**Vier Pflanzungen, alle gelesen:** ein Durchgang in `verify:passes`, den die
+Matrix nicht kennt (*„passes on a desk and never on the runner, and both look
+green"*); eine Zone, die aus dem Läufer fällt (*„shared in 2 parts, and one of
+them is missing"*); ein Schritt, den CI zweimal startet; und derselbe Schritt
+zweimal in der Kette. Die letzte kam aus einer Pflanzung, die etwas anderes
+zeigen sollte — der Bericht nannte die Folge zweimal statt die Ursache einmal,
+und das ist jetzt eine eigene Regel.
+
+**Und `split:check` stand zuerst falsch — am Ende der Tore.** Der erste
+Probelauf zeigte es: er lief nach `companion:release-check`, also nach allem
+Teuren. Ein Tor, das nur zwei Konfigurationsdateien gegeneinander hält, kann
+seinen Fehlschlag in einer Sekunde melden; ihn vierzig Minuten später zu melden
+heisst, für eine vertippte Zeile den ganzen Auftrag zu bezahlen. Es steht jetzt
+neben `supply:check`, dem anderen Leser von `ci.yml`.
+
+**Eine Wahrheit, ein Zuhause:** das Flachklopfen der Kette steht in
+`scripts/verify-chain.mjs` und wird von beiden Lesern geholt. Der zweite ist
+`measure-progress-numbers.mjs`, der die Schrittzahl für `progress.md` zählt —
+er hätte nach der Teilung **zwei** gezählt und die Zahl der Hälften für die der
+Schritte gehalten.
+
+**Was hier nicht bewiesen ist, vor dem Ausliefern gesagt:** dass fünf Aufträge
+auf dem Läufer schneller fertig sind als einer. Der Vorlauf je Auftrag —
+Checkout, Install, Bau — ist von hier aus nicht messbar; die Rechnung geht auf,
+solange er kleiner ist als die 22 Minuten, die die Reihe gekostet hat.
+
 **Nicht angerührt:** `display-zone:check` und `clock:check` inhaltlich. Beide
 haben einen aufgeschriebenen Anlass — drei Tests, die an einem Vormittag
 umfielen, und drei, die den erwarteten Tag von Hand nachbauten. Sie sind teuer,

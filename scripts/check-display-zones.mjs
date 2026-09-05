@@ -34,7 +34,29 @@ import { fileURLToPath } from 'node:url';
  * hieße, für eine Aussage über fünf Pakete bei siebzehn zu bezahlen.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const zones = ['Pacific/Kiritimati', 'Pacific/Niue'];
+
+/**
+ * **Die beiden Enden, und warum eine Zone auf der Kommandozeile stehen darf.**
+ *
+ * Ohne Argument werden beide gefahren - das ist die Aussage, und sie bleibt die
+ * Vorgabe fuer jede Hand und fuer `release:verify`. Mit Argument faehrt dieser
+ * Lauf genau die genannte Zone: CI stellt die beiden seit dem 2026-09-05
+ * nebeneinander auf zwei Laeufer, weil sie voneinander nichts wissen (Befund
+ * B67). Ein Lauf mit *einer* Zone sagt das auch in seiner Schlusszeile, damit
+ * ein halber Lauf nicht wie ein ganzer aussieht.
+ */
+const bothEnds = ['Pacific/Kiritimati', 'Pacific/Niue'];
+const asked = process.argv.slice(2);
+const unknown = asked.filter((zone) => !bothEnds.includes(zone));
+if (unknown.length > 0) {
+  console.error(
+    `Display-zone check refuses ${unknown.join(', ')}: this check exists for the two ends of `
+    + `the day (${bothEnds.join(' and ')}). A third zone would be a different question, and `
+    + 'one that no test here answers.',
+  );
+  process.exit(1);
+}
+const zones = asked.length === 0 ? bothEnds : asked;
 const marks = /when-display|picoDisplayDate|picoDisplayInstant|Intl\.DateTimeFormat/u;
 
 /** Jedes Arbeitspaket mit einem `src`, und der Name, unter dem pnpm es kennt. */
@@ -116,6 +138,11 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
+console.log(
+  zones.length === bothEnds.length ? '' : `Only ${zones.join(', ')} was asked for, so this run `
+    + `is one half of the check; the other end (${bothEnds.filter((zone) => !zones.includes(zone)).join(', ')}) `
+    + 'is somebody else\'s run.',
+);
 console.log(
   `Display-zone check passed (${showing.length} packages show a person a day, each green in `
   + `${zones.join(' and ')}).`,

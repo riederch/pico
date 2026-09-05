@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { flattenPicoVerifyChain } from './verify-chain.mjs';
+
 /**
  * Die Zahlen, die `progress.md` über den Zustand dieses Baums behauptet,
  * gegen das gehalten, was die Tore drucken.
@@ -122,10 +124,12 @@ let unchecked = 0;
  * dem Tag zweimal von Hand mitgezogen.
  */
 {
-  const chain = JSON.parse(
-    readFileSync(join(repoRoot, 'package.json'), 'utf8'),
-  ).scripts['release:verify'];
-  const measured = chain.split('&&').length;
+  const { scripts } = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+  // Aufgefaltet statt gezaehlt: seit dem 2026-09-05 ist `release:verify` nur
+  // noch `verify:gates && verify:passes`, damit CI die Testdurchgaenge
+  // nebeneinander fahren kann. Zwei waere hier die Zahl der Haelften und nicht
+  // der Schritte (Befund B67).
+  const measured = flattenPicoVerifyChain(scripts, scripts['release:verify']).length;
   const written = /umfasst (\d+) Schritte/u.exec(progress);
   if (written === null) {
     unchecked += 1;
