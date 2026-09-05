@@ -1017,6 +1017,22 @@ Testmenge, die ganz aus der Matrix fällt.
 er hätte nach der Teilung **zwei** gezählt und die Zahl der Hälften für die der
 Schritte gehalten.
 
+**Und der zweite Auftrag, 19 Minuten — dort ist es nicht nur Zeit.** Die
+Containeraufträge bauen jedes Bild **zweimal**: einmal geladen und
+rauchgetestet (amd64, dann arm64 unter QEMU), einmal für die
+Veröffentlichung — und einen Schichtenspeicher gab es nirgends. **Was
+veröffentlicht wurde, hatte also niemand angefasst.**
+
+Der Satz dagegen steht im selben Arbeitsablauf schon da, eine Fläche weiter,
+für das Client-Paket (ADR 0153 PK6): *„the artifact a person downloads is the
+one that was verified — not a second build made for publishing, which is one
+build of one artifact too many."* Für die Bilder galt er nicht.
+
+Alle sechs Bauschritte teilen jetzt einen Schichtenspeicher, je Bild ein
+eigener `scope`. Der Release-Schritt setzt damit genau die Schichten zusammen,
+die eben rauchgetestet worden sind. **Dass es schneller wird, ist die Folge und
+nicht der Grund** — am meisten bei arm64, das hier emuliert läuft.
+
 **Was hier nicht bewiesen ist, vor dem Ausliefern gesagt:** dass fünf Aufträge
 auf dem Läufer schneller fertig sind als einer. Der Vorlauf je Auftrag —
 Checkout, Install, Bau — ist von hier aus nicht messbar; die Rechnung geht auf,

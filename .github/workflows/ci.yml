@@ -226,11 +226,27 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,prefix=sha-
 
+      # ADR 0153 PK6, eine Fläche weiter (Befund B67, 2026-09-05). Der Satz
+      # steht für das Client-Paket schon da: „the artifact a person downloads
+      # is the one that was verified - not a second build made for publishing".
+      # Hier galt er nicht. Das Bild wurde zweimal gebaut - einmal geladen und
+      # rauchgetestet, einmal fuer die Veroeffentlichung - und was
+      # veroeffentlicht wurde, hatte niemand angefasst.
+      #
+      # Der geteilte Schichtenspeicher macht daraus einen Bau: der
+      # Release-Schritt setzt genau die Schichten zusammen, die eben getestet
+      # worden sind. Dass es schneller wird, ist die Folge und nicht der Grund
+      # - besonders bei arm64, das hier unter QEMU laeuft.
+      #
+      # Ein eigener `scope` je Bild, damit Home und Relay einander nicht
+      # ueberschreiben.
       - name: Build local amd64 smoke-test image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/home.Dockerfile
+          cache-from: type=gha,scope=home
+          cache-to: type=gha,mode=max,scope=home
           load: true
           platforms: linux/amd64
           tags: pico-home:amd64-test
@@ -273,6 +289,8 @@ jobs:
         with:
           context: .
           file: docker/home.Dockerfile
+          cache-from: type=gha,scope=home
+          cache-to: type=gha,mode=max,scope=home
           load: true
           platforms: linux/arm64
           tags: pico-home:arm64-test
@@ -316,6 +334,8 @@ jobs:
         with:
           context: .
           file: docker/home.Dockerfile
+          cache-from: type=gha,scope=home
+          cache-to: type=gha,mode=max,scope=home
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -428,11 +448,17 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,prefix=sha-
 
+      # Dasselbe wie beim Home-Bild darueber, und aus demselben Grund
+      # (ADR 0153 PK6, Befund B67): rauchgetestet und veroeffentlicht war bis
+      # zum 2026-09-05 nicht dasselbe Bild. Eigener `scope`, damit die beiden
+      # Bilder einander nicht ueberschreiben.
       - name: Build local amd64 smoke-test image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/relay.Dockerfile
+          cache-from: type=gha,scope=relay
+          cache-to: type=gha,mode=max,scope=relay
           load: true
           platforms: linux/amd64
           tags: pico-relay:amd64-test
@@ -569,6 +595,8 @@ jobs:
         with:
           context: .
           file: docker/relay.Dockerfile
+          cache-from: type=gha,scope=relay
+          cache-to: type=gha,mode=max,scope=relay
           load: true
           platforms: linux/arm64
           tags: pico-relay:arm64-test
@@ -597,6 +625,8 @@ jobs:
         with:
           context: .
           file: docker/relay.Dockerfile
+          cache-from: type=gha,scope=relay
+          cache-to: type=gha,mode=max,scope=relay
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
