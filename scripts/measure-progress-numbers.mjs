@@ -174,16 +174,21 @@ process.stdout.write(
 );
 /**
  * **Was hier nicht geprueft wird, und warum es dasteht.** Die Testzahlen -
- * „2.922 Tests: Core 1.096, …" - brauchen einen vollen Lauf von Minuten, und
+ * „2.933 Tests: Core 1.096, …" - brauchen einen vollen Lauf von Minuten, und
  * dieses Werkzeug soll in Sekunden antworten, sonst wird es nicht benutzt. Sie
  * sind am 2026-09-04 von Hand nachgezaehlt worden, und dabei wichen drei ab:
- * Core, Companion-Core und Web, alle drei von Aenderungen desselben Tages.
+ * Core, Companion-Core und Web, alle drei von Aenderungen desselben Tages. Am
+ * 2026-09-05 noch einmal, und wieder wichen zwei ab: Spatial Recall (22 -> 32)
+ * und Companion-Core (273 -> 274) - beide von der Verdichtung auf dem Geraet.
+ * Zwei Nachzaehlungen, vier Abweichungen: von Hand gepflegte Zahlen driften,
+ * und das ist der Grund, warum die sechzehn darueber maschinell gehalten
+ * werden.
  * Wer sie nachrechnen will: `pnpm test` und die `Tests  N passed`-Zeilen je
  * Paket addieren.
  */
 process.stdout.write(
   'Die Testzahlen prueft dies nicht - sie brauchen einen vollen Lauf. '
-  + 'Zuletzt von Hand nachgezaehlt am 2026-09-04.\n',
+  + 'Zuletzt von Hand nachgezaehlt am 2026-09-05.\n',
 );
 if (unchecked > 0) {
   process.stdout.write(

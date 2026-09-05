@@ -912,6 +912,55 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B67 — Achtundfünfzig Minuten, und zwei meiner drei Vermutungen waren falsch
+(2026-09-05).** Der Nutzer brachte die Zahl mit: „Verify release gates" 58 min,
+Container-Rauchtest 19 min. Jeder Schritt der Kette einzeln mit der Wanduhr
+daneben, lokal (der Läufer ist rund 2,5× langsamer, das passt):
+
+| Block | s | Anteil |
+|---|---|---|
+| `display-zone:check` — 5 Pakete × **zwei Zonen** | **560** | 40 % |
+| `clock:check` — 17 Pakete, verschobene Uhr | 370 | 26 % |
+| `test` — 17 Pakete | 366 | 26 % |
+| `build` | 32 | 2 % |
+| `check` | 23 | 2 % |
+| 40 schnelle Tore + Electron-Rauchtest | ~63 | 4 % |
+
+**Der Kern in einem Satz:** `@pico/companion-shell` (141 s) und
+`@pico/vault-daemon` (127 s) laufen in **vier** Durchgängen — normal,
+verschobene Uhr, Kiritimati, Niue. 268 s × 4 = 1.072 s, **76 % der ganzen
+Kette**. Die Rechnung geht auf: fünf Pakete × zwei Zonen = 556 s gegen 560
+gemessene.
+
+**Was ich vermutet hatte:**
+
+- **Falsch:** `clock:check` sei der Hauptposten. Er ist der zweite. Das
+  teuerste Tor ist `display-zone:check` — und ich hatte es für ein schnelles
+  gehalten, weil es in der Kette zuletzt steht und ich es nie einzeln gestoppt
+  hatte.
+- **Falsch:** `--workspace-concurrency=1` sei der grosse Hebel. Nachgemessen:
+  mit `=4` läuft dieselbe Menge in **342 statt 366 s**, alle 2.933 Tests grün,
+  keine Kollision. Sieben Prozent. Vitest fährt die Dateien *innerhalb* eines
+  Pakets längst parallel; die CPU ist satt, bevor das zweite Paket anfängt. Der
+  Hebel ist keiner — und das wusste vorher niemand, weil an der Zeile kein
+  Grund stand.
+- **Richtig:** `check` verdoppelt `build`. In allen 17 Paketen dasselbe
+  `tsc -p tsconfig.json` über dasselbe `include`, ohne `incremental`,
+  Unterschied nur `--noEmit`.
+
+**Gepflanzt, bevor das Tor fiel.** Ein Typfehler in `canonical-bytes.ts`, und
+beide Tore antworteten wörtlich gleich —
+`error TS2322: Type 'string' is not assignable to type 'number'`, `build` mit
+Ausgang 2. Ein Tor herauszunehmen, ohne vorher zu zeigen, dass das andere
+fängt, wäre geraten gewesen. `pnpm check` bleibt als Skript für die Hand; aus
+der Kette ist es raus, und `build` fängt denselben Fehler **elf Schritte
+früher**.
+
+**Nicht angerührt:** `display-zone:check` und `clock:check` inhaltlich. Beide
+haben einen aufgeschriebenen Anlass — drei Tests, die an einem Vormittag
+umfielen, und drei, die den erwarteten Tag von Hand nachbauten. Sie sind teuer,
+weil sie echte Prozesse viermal starten; das ist ihr Wert.
+
 **B66 — Der Messer hielt acht gelungene Wiederherstellungen für Ablehnungen
 (2026-09-04).** `pnpm link:walk` zählte eine Operation als angenommen, wenn das
 Home `outcome === 'ok'` antwortete. Das Home antwortet aber auf **drei** Wegen
