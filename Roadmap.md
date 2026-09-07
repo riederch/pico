@@ -950,6 +950,21 @@ fünf Zustände wieder ausbuchstabiert (der Prüfer nennt Datei, Zeile und
 Ersatztyp), dasselbe im Renderer-Vertrag (der Grenzfall, er wird erreicht), und
 eine Liste ohne exportierten Typ — da sagt er, dass zuerst der Typ fehlt.
 
+**Der Cast war das eigentliche Loch, und beide Richtungen sind gemessen.**
+Neben der ausbuchstabierten Liste stand:
+
+```ts
+reason: `recovery_${row.status}` as Exclude<…>['reason'],
+```
+
+Der Cast ist ersatzlos weg. `row.status` ist an der Stelle bereits auf die
+vier nicht-`pending` Zustände verengt, und `recovery_${…}` ergibt daraus genau
+die vier Gründe der Vereinigung — der Compiler hält die beiden Listen selbst
+zusammen. Beides nachgestellt, mit einem sechsten Zustand `quarantined` in der
+Protokollliste: **mit** Cast baut alles durch, 0 Fehler; **ohne** ihn fällt der
+Bau mit der Zeile, die den überzähligen Grund nennt. Ein Prüfer, den der
+Compiler übernimmt, ist besser als einer, den ein Skript nachträgt.
+
 29 → 0. Voller Lauf grün: 2.935 Tests.
 
 **B69 — Ein Einzelfall-Tor stellte seit Monaten die richtige Frage, und

@@ -3485,10 +3485,12 @@ export class EventStore {
     if (row.status !== 'pending') {
       return {
         ok: false,
-        reason: `recovery_${row.status}` as Exclude<
-          PicoHomeDeviceRecoveryCompletionResult,
-          { ok: true }
-        >['reason'],
+        // Kein Cast: `row.status` ist hier auf die vier nicht-`pending`
+        // Zustaende verengt, und `recovery_${...}` ergibt daraus genau die
+        // vier Gruende der Vereinigung. Der Compiler haelt die beiden Listen
+        // zusammen, was der Cast unterband: mit ihm ging ein sechster Zustand
+        // lautlos durch, ohne ihn faellt der Bau (Befund B70, beides gemessen).
+        reason: `recovery_${row.status}`,
       };
     }
     // ADR 0110 R6. The database row alone proves nothing about one-use: it is
