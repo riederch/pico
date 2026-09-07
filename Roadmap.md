@@ -912,6 +912,50 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B79 — Drei Messungen ohne Fund, und eine Sperre, die es nicht gibt
+(2026-09-07).** Ein Eintrag ohne Fehlerbehebung, weil das Gemessene sonst
+morgen wieder gemessen wird.
+
+**Drei Fragen mit sauberem Nein.** Stapeln sich periodische Läufe? Nein — die
+synchronen können sich nicht überholen, und der Planer führt für die
+asynchronen eine `running`-Menge („already running is not started a second
+time"). Steckt schwacher Zufall in einem Schlüssel- oder Kennungspfad? Nein —
+`Math.random` steht in drei Testdateien, davon eine, die ausdrücklich erklärt,
+warum sie ihn nicht nimmt; das Produkt hat 92 ordentliche Quellen. Fehlen der
+Foundation die Trägerkanten-Grenzen (`maxHeadersCount`,
+`maxRequestsPerSocket`)? Nein — die Begründung daneben sagt „keep the **carrier
+edge** finite", und das ist die Kante zu Fremden, nicht die authentifizierte
+Fläche. Es abzuschreiben wäre Abschreiben und kein Fund.
+
+**Und eine Korrektur an mir selbst.** Ich hatte notiert, die Wurzelrotation sei
+gesperrt, weil „eine Zeremonie zwei entsperrte Wurzeln braucht und ein Vault
+eine hält". **Das ist falsch.** `#listKeyfiles` liest *jede* Datei im
+Schlüsselverzeichnis, und `#handleUnlock` wählt nach Rolle **und
+Fingerabdruck**; `#unlockedSessions` ist nach Fingerabdruck verschlüsselt. Ein
+Vault kann zwei Wurzeln halten und einzeln entsperren.
+
+Der wirkliche Stand, gemessen statt vermutet:
+
+| Schicht | Rotation |
+|---|---|
+| Protokoll | kanonische Form ✓, Vetofenster ✓ (B68) |
+| Home | Einreichung ✓, Veto ✓, Projektion ✓, Link-Tür ✓ |
+| Vault-Daemon | **nichts** — kein Bauer, keine Darstellung, keine Zeremonienfamilie, kein Nachfolger-Bootstrap |
+| Companion / Fenster | **nichts** |
+
+Und der Daemon fällt dabei **zu**, nicht auf: `sign-rendering.ts` sagt es selbst
+— *„a record nobody can render is a record nobody could have meaningfully
+approved"* —, `rotation` hat weder Bauer noch Darstellung, also kann heute
+niemand eine Rotation unterschreiben lassen. Das ist der richtige Zustand für
+eine unfertige Zeremonie.
+
+Die einzige echte Sperre ist eine Regel, kein Entwurf: `foundingBootstrap`
+verweigert sich einem Vault, der schon Schlüssel hat („a half-written vault is
+worse than none"). Der Zwilling dafür steht daneben — `deviceBootstrap` ist
+dasselbe Bootstrap minus dem Wurzelschlüssel, aus einem benannten Grund. Ein
+`rotationBootstrap`, das genau **eine** zusätzliche Wurzel anlegen darf, wäre
+die dritte Zeile derselben Tabelle und nicht eine Aufweichung der Frischeregel.
+
 **B78 — Der Rahmen hat eine Grenze abgeschaltet, die die Laufzeit mitbringt
 (2026-09-07).** Der Spiegel zu B77: was **hereinkommt**. Dieser Baum hat drei
 lauschende HTTP-Flächen, und zwei davon setzen genau dieselben drei Werte, mit
