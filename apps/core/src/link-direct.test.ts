@@ -592,11 +592,30 @@ describe('Pico Link direct intake (ADR 0107 D2)', () => {
   });
 
   it('signs a refusal from a failing operation instead of leaking the failure', async () => {
-    const { intake } = makeIntake();
+    /**
+     * Die zwei Seiten desselben Fangs (Befund B74). Nach aussen darf nichts
+     * durch - das prueft dieser Test seit jeher. Nach innen musste etwas
+     * durch, und das tat es nicht: alle 55 Operationen laufen hier zusammen,
+     * und jeder unerwartete Fehler verschwand spurlos. Seit B72 werfen die
+     * Wiederherstellung und die Wurzelrotation hier absichtlich, wenn die
+     * Datenbank nicht schreiben kann - ohne diese Meldung saehe niemand mehr,
+     * dass die Platte voll ist.
+     */
+    const reported: { operation: string; message: string }[] = [];
+    const { intake } = makeIntake({
+      reportOperationFailure: (operation, message) => {
+        reported.push({ operation, message });
+      },
+    });
 
     const handled = await intake.handle(sealedRequest(), async () => {
       throw new Error('database exploded, revealing internals');
     }, NOW);
+
+    expect(reported).toEqual([{
+      operation: 'home.authority.list',
+      message: 'database exploded, revealing internals',
+    }]);
     expect(handled.ok).toBe(true);
     if (!handled.ok) {
       return;

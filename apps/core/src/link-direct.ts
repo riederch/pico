@@ -90,6 +90,23 @@ export interface PicoLinkDirectAuthority {
    * claim cannot carry a membership when no Home exists yet.
    */
   isAuthorizedSender(principal: PicoLinkDirectPrincipal, at: string): boolean;
+  /**
+   * Was schiefging, als eine Operation warf - der einzige Weg, auf dem das
+   * jemand erfaehrt (Befund B74).
+   *
+   * Alle 55 Operationen laufen durch einen Fang, und der machte aus jedem
+   * unerwarteten Fehler `operation_failed`, ohne die Ursache irgendwohin zu
+   * geben. Das Geraet bekam die richtige Antwort, und das Home vergass die
+   * Frage. Seit B72 ist das mehr als eine Luecke im Betrieb: die
+   * Wiederherstellung und die Wurzelrotation *werfen* dort absichtlich, wenn
+   * die Datenbank nicht schreiben kann, statt es eine Sachaussage zu nennen -
+   * und ohne diese Meldung waere der Preis dafuer, dass niemand mehr sieht,
+   * dass die Platte voll ist.
+   *
+   * Optional, weil es Betrieb ist und keine Autoritaet: eine Eingangsstelle
+   * ohne Protokollierer bleibt eine gueltige Eingangsstelle.
+   */
+  reportOperationFailure?(operation: PicoLinkDirectOperation, message: string): void;
 }
 
 const preAuthorityOperations: ReadonlySet<string> = new Set<PicoLinkDirectOperation>([
@@ -321,7 +338,13 @@ export class PicoLinkDirectIntake {
         args,
         principal,
       );
-    } catch {
+    } catch (error) {
+      // Nur die Meldung, nicht der Fehler: ein Stapelabzug traegt Pfade und
+      // Werte, und diese Zeile geht in ein Protokoll (ADR 0107).
+      this.authority.reportOperationFailure?.(
+        request.operation,
+        error instanceof Error ? error.message : 'non_error_thrown',
+      );
       execution = { outcome: 'operation_failed', result: {} };
     }
 

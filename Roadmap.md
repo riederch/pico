@@ -912,6 +912,36 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B74 — Alle 55 Operationen laufen durch einen Fang, und der vergass jede
+Ursache (2026-09-07).** Nach B72 war ich verpflichtet nachzusehen, **wo der
+Wurf landet**, den ich dort absichtlich erzeugt habe — sonst hätte ich eine
+Lüge gegen einen Absturz getauscht.
+
+Er landet richtig: `PicoLinkDirectIntake.handle` fängt, was `execute` wirft,
+und antwortet dem Gerät mit `operation_failed` — nicht mit `conflicting_record`
+und nicht mit einem toten Home. Ein Test hält seit jeher fest, dass **nach
+aussen** nichts durchkommt: die Ablehnung ist signiert wie ein Ergebnis und
+sagt nichts über den Grund.
+
+**Nach innen kam aber auch nichts durch.** `} catch { execution = { outcome:
+'operation_failed' } }` — der Fehler wurde verworfen. Das Gerät bekam die
+richtige Antwort, und das Home vergass die Frage. Bei 55 Operationen ist das
+ein Trichter, in dem jeder unerwartete Fehler des ganzen Link-Wegs spurlos
+verschwindet — und seit B72 fällt genau dort hinein, dass die Datenbank nicht
+schreiben kann.
+
+Die Eingangsstelle meldet es jetzt an den Wirt (`reportOperationFailure`,
+optional, weil es Betrieb ist und keine Autorität — eine Eingangsstelle ohne
+Protokollierer bleibt gültig). Gemeldet wird die Operation und die **Meldung**,
+nicht der Fehler: ein Stapelabzug trägt Pfade und Werte, und diese Zeile geht
+in ein Protokoll. `check-link-seal.mjs` bleibt grün.
+
+Der bestehende Test hat jetzt beide Seiten: nach aussen dringt nichts, nach
+innen dringt genau eines. Gepflanzt: die Meldung wieder ausgebaut — **nur
+dieser Test fällt, 1.104 andere bleiben grün.**
+
+Voller Lauf: 2.943 Tests, Ausgang 0.
+
 **B73 — „Der Anker ist da und schweigt" las sich wie „es gab nie einen"
 (2026-09-07).** Dieselbe Frage wie B72, eine Schicht weiter: Fänge um einen
 Dateisystemzugriff. Dreissig Stück, und das Ergebnis ist zunächst ein sauberes

@@ -678,6 +678,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     // The same pair of conditions an identity session is held to in
     // `resolveAuthority`: membership admits, delegation authorizes these exact
     // device keys. A link request gets no weaker test than a session.
+    // Befund B74. Der einzige Ort, an dem eine geworfene Operation eine Spur
+    // hinterlaesst. `warn` und nicht `error`, weil das Home weiterlaeuft und
+    // dem Geraet richtig geantwortet hat - aber es steht da, denn seit B72
+    // kommt hier an, dass die Datenbank nicht schreiben konnte.
+    reportOperationFailure: (operation, message) => {
+      app.log.warn({ operation, message }, 'Pico Link operation threw and was answered as operation_failed.');
+    },
     isAuthorizedSender: (principal, at) =>
       store.hasActivePicoHomeMembership(principal.picoIdentityFingerprintHex, undefined, at)
       && store.hasActivePicoIdentityDelegation({
