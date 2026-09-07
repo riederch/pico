@@ -912,6 +912,52 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B71 — Zwölf Ablehnungen, die ein laufendes Home aussprechen kann und die
+niemand je gegangen war (2026-09-07).** Die Frage, mit der ich anfing, war eine
+andere und ihre Antwort ist ein sauberes Nein: **kein einziger** der 53
+erklärten Ablehnungsgründe ist unerreichbar. Die vier, die meine erste Messung
+nannte, waren Fehlalarme ihres eigenen Musters — drei entstehen als
+Vorlagenzeichenkette, einer über ein `return`. Ich habe jeden von Hand
+nachverfolgt, bevor ich die Null behauptet habe, und geprüft, wer nur *durch*
+die Heuristik durchrutscht: drei, und es sind genau die drei, die ich schon
+kannte.
+
+Die zweite Hälfte derselben Messung war die interessante. **Zwölf Gründe kann
+ein laufendes Home zurückgeben, und kein Test nannte sie.** Drei davon in einer
+einzigen Tür: `registerPicoIdentityReaderKey`, wo ein Schlüssel die Vollmacht
+bekommt, Reader-Custody zu öffnen — nicht Mitglied dieses Homes, keine aktive
+Delegation, und ein Schlüsselsatz, der nicht der ist, den die Delegation nennt.
+
+**Die Probe, und sie ist das Ergebnis dieses Befunds.** Ich habe die Bindung
+„der Leserschlüssel ist der, den die Delegation nennt" ausgebaut und die ganze
+Kernmenge gefahren: **1.098 Tests blieben grün, und nur der neu geschriebene
+fiel.** ADR 0083 existiert für genau diese Bindung. Sie war richtig
+implementiert und vollständig ungeprüft — was von aussen gleich aussieht.
+
+Dasselbe beim Veto der Wiederherstellung: nimmt man die Prüfung „ist sie
+überhaupt noch offen" heraus, bleiben **19 von 20** Tests der Datei grün.
+
+**Was das Gehen nebenbei zeigte, und ich habe es nicht stillschweigend
+geändert.** Der Abschlusspfad fasst unbekannte Kennung, falsche Prüfsumme und
+falsches Ziel zu *einer* Antwort zusammen und sagt warum: „no caller may turn a
+learned recovery id into a status oracle." Der Vetopfad unterscheidet drei.
+Die beiden sind nicht dieselbe Frage — der Abschluss antwortet einem
+Vor-Autoritäts-Aufrufer, das Veto einem Principal, dessen Identität das Home
+bereits bewiesen hat, und dessen eigener Fingerabdruck eingesetzt wird. ADR 0110
+sagt dazu nichts. Der Test hält deshalb fest, **was das Home heute tut**, und
+der Kommentar nennt den Unterschied als unentschieden statt als entschieden.
+
+Gegangen: 8 von 12. `refusal:check` hält den Rest: jeder erklärte Grund ist
+erzeugbar und von einem Test genannt — oder er steht in einer Liste, die sagt,
+**woran ein Gang hängt**, nicht „später". Vier stehen dort.
+
+Drei Pflanzungen: ein Grund verliert seinen Gang, ein neuer Grund wird erfunden,
+und eine bezahlte Schuld bleibt in der Liste stehen (auch das ist ein Fehler —
+eine Liste, die Bezahltes führt, glaubt niemand mehr). Die zweite zeigte die
+Grenze der Heuristik und sie steht jetzt im Kopf des Prüfers: ein erfundenes
+`rotation_impossible` teilt ein Vorlagenpräfix und fällt darum eine Regel
+später auf, mit dem zweitbesten Satz statt dem besten.
+
 **B70 — Ein Vokabular, das dem Protokoll gehört, stand 29 Mal von Hand
 ausbuchstabiert da (2026-09-07).** Der Weg dorthin ging über eine Fehlmessung.
 Ich hatte gefragt, welche Ablehnungsgründe in einem Typ stehen und nirgends

@@ -439,6 +439,69 @@ describe('ADR 0110 durable device recovery', () => {
     fixture.store.close();
   });
 
+  /**
+   * ADR 0110's veto, and the three answers it gives (Befund B71).
+   *
+   * Nothing named `recovery_not_found` or `recovery_not_pending` before this:
+   * both are refusals a running Home returns through
+   * `home.device.recovery.veto`, and no test had ever been through either.
+   *
+   * **What walking them shows, stated rather than fixed here.** The completion
+   * path one screen up collapses unknown id, wrong digest and wrong target
+   * into a single `recovery_unavailable`, and says why: "no caller may turn a
+   * learned recovery id into a status oracle." The veto path distinguishes -
+   * an id nobody knows, an id belonging to somebody else, and an id that is
+   * already resolved are three different sentences.
+   *
+   * The two are not the same question: completion answers a pre-authority
+   * caller, the veto answers a principal whose identity the Home has already
+   * proven, and it is that principal's own fingerprint that goes in. The
+   * difference is nevertheless undecided rather than decided - ADR 0110 says
+   * nothing about it - so this test pins what the Home does today instead of
+   * quietly making it agree with its neighbour.
+   */
+  it('answers an unknown, a foreign and an already resolved veto apart', () => {
+    const fixture = createFixture();
+    const submission = createRecoverySubmission(fixture, {
+      recoveryId: 'recovery_veto_answers',
+      target: createDeviceKeys(),
+    });
+    expect(fixture.store.initiatePicoHomeDeviceRecovery({
+      submission,
+      sender: recoverySender(fixture, submission),
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+
+    // An id this Home has never seen.
+    expect(fixture.store.vetoPicoHomeDeviceRecovery({
+      recoveryId: 'recovery_nobody_has',
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      vetoedAt: acceptedAt,
+    })).toEqual({ ok: false, reason: 'recovery_not_found' });
+
+    // An id this Home has, under somebody else's identity.
+    expect(fixture.store.vetoPicoHomeDeviceRecovery({
+      recoveryId: 'recovery_veto_answers',
+      picoIdentityFingerprintHex: '11'.repeat(32),
+      vetoedAt: acceptedAt,
+    })).toEqual({ ok: false, reason: 'identity_mismatch' });
+
+    // The veto itself, and then the same veto again: a recovery leaves
+    // `pending` exactly once, so the second attempt is not a second veto.
+    expect(fixture.store.vetoPicoHomeDeviceRecovery({
+      recoveryId: 'recovery_veto_answers',
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      vetoedAt: acceptedAt,
+    })).toEqual({ ok: true });
+    expect(fixture.store.vetoPicoHomeDeviceRecovery({
+      recoveryId: 'recovery_veto_answers',
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      vetoedAt: acceptedAt,
+    })).toEqual({ ok: false, reason: 'recovery_not_pending' });
+    fixture.store.close();
+  });
+
   it('rolls back every authority projection on a completion conflict and quarantines altered receipts', () => {
     const fixture = createFixture();
     const target = createDeviceKeys();
@@ -1194,6 +1257,11 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     })).toEqual({ ok: false, reason: 'recovery_anchor_unavailable' });
     expect(anchorless.reconcilePicoHomeDeviceRecoveries(sodium, acceptedAt).anchorStatus)
       .toBe('absent');
+    // Re-seeding is the repair for a *lost* anchor, so on a store that has
+    // none at all it must say so rather than report a successful seeding of
+    // nothing. Nothing had been through this refusal before (Befund B71).
+    expect(anchorless.reseedPicoHomeRecoveryAnchor())
+      .toEqual({ ok: false, seededEntries: 0, reason: 'anchor_absent' });
     anchorless.close();
   });
 

@@ -48,6 +48,59 @@ beforeAll(async () => {
 });
 
 describe('reader-key registration and freshness contract (ADR 0083)', () => {
+  /**
+   * The three refusals this door has, and nothing had been through any of
+   * them (Befund B71).
+   *
+   * `registerPicoIdentityReaderKey` is where a key that can open
+   * reader-custody material gets its standing. It says no in three places -
+   * not a member of this Home, no active delegation carrying
+   * `surface_session`, and a key record that is not the one the delegation
+   * names - and each of the three was written, typed and reachable while no
+   * test had ever seen one.
+   */
+  it('refuses a non-member, an unbacked delegation and a key the delegation does not name', () => {
+    const fixture = storeFixture();
+    try {
+      const delegation = recordReaderDelegation(fixture.store);
+      const good = {
+        sodium,
+        picoIdentityFingerprintHex: identityFingerprint,
+        deviceSigningKeyFingerprintHex: signingFingerprint,
+        delegationId: delegation.record.delegationId,
+        deviceKeyAgreementKeyRecord: agreementKeyRecord,
+        at: AT,
+      };
+
+      // An identity this Home has no membership for. The Home's own claim
+      // state is what decides it, so a stranger's own signatures cannot help.
+      expect(fixture.store.registerPicoIdentityReaderKey({
+        ...good,
+        picoIdentityFingerprintHex: '33'.repeat(32),
+      })).toEqual({ ok: false, reason: 'identity_is_not_active_member' });
+
+      // A delegation id this identity never issued.
+      expect(fixture.store.registerPicoIdentityReaderKey({
+        ...good,
+        delegationId: 'delegation_that_was_never_issued',
+      })).toEqual({ ok: false, reason: 'inactive_reader_delegation' });
+
+      // The delegation is real and active, and the key record offered is not
+      // the key it names - which is the whole point of naming it.
+      expect(fixture.store.registerPicoIdentityReaderKey({
+        ...good,
+        deviceKeyAgreementKeyRecord: signingKeyRecord,
+      })).toEqual({ ok: false, reason: 'invalid_reader_key' });
+
+      // The same call without any of those three still works, so the
+      // refusals above are the refusals and not a broken fixture.
+      expect(fixture.store.registerPicoIdentityReaderKey(good))
+        .toEqual({ ok: true, inserted: true });
+    } finally {
+      fixture.close();
+    }
+  });
+
   it('persists an exact delegation/key binding idempotently and selects it with verified freshness', async () => {
     const fixture = storeFixture();
     try {

@@ -40,6 +40,40 @@ afterEach(() => {
 });
 
 describe('ADR 0115 host-key continuity chain', () => {
+  /**
+   * A membership credential says who lives in *this* Home, and a Home that
+   * was never founded has no "this" to say it about. Nothing had been through
+   * that refusal (Befund B71): a store with no founding record is exactly what
+   * a half-built or half-restored installation is, and it must not accept a
+   * membership into a Home that does not exist yet.
+   */
+  it('refuses a membership credential at a Home that was never founded', () => {
+    const fixture = createFixture();
+    const credential = membershipCredential(fixture, {
+      credentialId: 'member_without_a_home',
+      subject: 'c'.repeat(64),
+      activatedBy: fixture.hostA,
+    });
+
+    const dir = mkdtempSync(join(tmpdir(), 'pico-host-continuity-unfounded-'));
+    tempDirs.push(dir);
+    const unfounded = new EventStore(join(dir, 'pico.sqlite'));
+    expect(unfounded.recordPicoHomeMembershipCredential({
+      sodium,
+      credential,
+      hostSigningPublicKeyHex: fixture.hostA.publicKeyHex,
+    })).toEqual({ ok: false, reason: 'no_founding_record' });
+    unfounded.close();
+
+    // The same credential at the founded Home is accepted, so the refusal
+    // above is about the founding record and not about the credential.
+    expect(fixture.store.recordPicoHomeMembershipCredential({
+      sodium,
+      credential,
+      hostSigningPublicKeyHex: fixture.hostA.publicKeyHex,
+    }).ok).toBe(true);
+  });
+
   it('accepts a proven link, moves the claim state pins and keeps history vouched', () => {
     const fixture = createFixture();
     const { store } = fixture;

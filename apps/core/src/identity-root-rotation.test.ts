@@ -201,6 +201,16 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
     // The device that authorized the rotation is not an independent objection
     // to it; treating it as one would make the window look like a safeguard
     // it is not.
+    // An id this Home does not have. Nothing had been through this refusal
+    // before (Befund B71), and it is the one that decides whether a veto for
+    // a rotation somewhere else can reach into this Home's own.
+    expect(fixture.store.vetoPicoIdentityRootRotation({
+      rotationId: 'rotation_that_is_not_here',
+      sender: fixture.devices[1]!.sender,
+      sodium,
+      vetoedAt: beforeWindow,
+    })).toEqual({ ok: false, reason: 'rotation_not_found' });
+
     expect(fixture.store.vetoPicoIdentityRootRotation({
       rotationId: 'rotation_0001',
       sender: fixture.devices[0]!.sender,
