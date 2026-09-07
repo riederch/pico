@@ -958,6 +958,28 @@ Grenze der Heuristik und sie steht jetzt im Kopf des Prüfers: ein erfundenes
 `rotation_impossible` teilt ein Vorlagenpräfix und fällt darum eine Regel
 später auf, mit dem zweitbesten Satz statt dem besten.
 
+**Die vier Schulden sind am selben Tag bezahlt worden, und drei von ihnen
+hatten kein einziges Netz.** Die Liste im Prüfer ist leer — was ein Zustand ist
+und kein Zufall, denn der Prüfer meldet es als Fehler, wenn sie eine bereits
+bezahlte Schuld weiterführt. **53 von 53.**
+
+| Gegangen | Was der Gang brauchte |
+|---|---|
+| `recovery_prepare_unavailable` | eine *gültig signierte* Vorbereitung einer fremden Wurzel — die Unterschrift ist die ganze Authentifizierung, der Lebenszyklus wird erst danach befragt |
+| `inactive_sponsor` | einen Bürgen, dessen Identität Mitglied ist und dessen Delegation es nicht gibt — der Fall, den die Mitgliedschaftsprüfung eine Zeile darüber nicht sehen kann |
+| `inactive_grant` | einen Umschlag gegen einen erloschenen Grant: „deine Vollmacht ist zu Ende" ist nicht „deine Bytes sind falsch" |
+| `completion_failed` | einen Fehlschlag, den die geschlossene Liste der vier Sperrmeldungen nicht kennt — die Person soll nicht „entsperren" lesen, wenn Entsperren nichts hilft |
+
+Vier Pflanzungen, jede in einer eigenen Datei: die Vorbereitung nimmt Fremde
+an, der Bürge wird nicht mehr geprüft, der erloschene Grant liest sich wie eine
+Fälschung, und jeder Fehlschlag heisst „Vault gesperrt". **Alle vier fallen,
+und 34 andere Tests blieben grün** — jede der vier Ablehnungen hatte also
+wirklich kein zweites Netz.
+
+Voller Lauf: 2.940 Tests, Ausgang 0. Nur der Kern hat sich bewegt (1.100 →
+1.102), die anderen sechzehn Paketzahlen unverändert — nachgesehen, nicht
+gerechnet.
+
 **B70 — Ein Vokabular, das dem Protokoll gehört, stand 29 Mal von Hand
 ausbuchstabiert da (2026-09-07).** Der Weg dorthin ging über eine Fehlmessung.
 Ich hatte gefragt, welche Ablehnungsgründe in einem Typ stehen und nirgends

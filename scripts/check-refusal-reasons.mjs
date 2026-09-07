@@ -47,17 +47,16 @@ const errors = [];
  * Gruende, die ein laufendes Produkt aussprechen kann und die noch niemand
  * gegangen ist - mit dem, was ein Gang dafuer braucht. Kein "spaeter": jeder
  * Eintrag sagt, woran es haengt.
+ *
+ * Und eine Regel dazu, die sich gegen diese Liste selbst richtet: steht ein
+ * Grund hier *und* nennt ihn ein Test, ist das ein Fehler. Eine Liste, die
+ * Bezahltes fuehrt, glaubt bald niemand mehr, und dann verdeckt sie das
+ * Unbezahlte daneben.
  */
 const notYetWalked = new Map([
-  ['completion_failed', 'apps/companion/src/recovery-controller.ts - braucht einen '
-    + 'Vault-Daemon, dessen Zeremonie fehlschlaegt, ohne dass der Vault gesperrt ist'],
-  ['inactive_grant', 'apps/core/src/event-store.ts - braucht einen Share-Umschlag '
-    + 'gegen einen Reader-Grant, der zwischen Ausstellung und Oeffnung erloschen ist'],
-  ['inactive_sponsor', 'apps/core/src/event-store.ts - braucht eine '
-    + 'Geraetelebenszyklus-Eingabe, deren Buerge zwischen Unterschrift und Annahme '
-    + 'seine Delegation verloren hat'],
-  ['recovery_prepare_unavailable', 'apps/core/src/event-store.ts - braucht eine '
-    + 'wurzelsignierte Vorbereitung fuer eine Identitaet, die dieses Home nicht kennt'],
+  // Leer, und das ist ein Zustand und kein Zufall: am 2026-09-07 standen hier
+  // vier Gruende, und alle vier sind am selben Tag gegangen worden. Was hier
+  // steht, ist eine Schuld mit einem Grund - nie ein "spaeter".
 ]);
 
 const sourceFiles = [];
@@ -173,6 +172,9 @@ if (errors.length > 0) {
 console.log(
   `Refusal-reason check passed (${declared.size} refusal reasons declared across `
   + `${sourceFiles.length} sources, every one of them producible - ${composed} only `
-  + `as a composed string; ${walked} are named by a test and `
-  + `${notYetWalked.size} are argued as not yet walked, each with what a walk needs).`,
+  + `as a composed string; ${walked} are named by a test`
+  + (notYetWalked.size === 0
+    ? ', and none is argued as unwalked).'
+    : `, and ${notYetWalked.size} are argued as not yet walked, each with what a `
+      + 'walk would need).'),
 );

@@ -39,6 +39,52 @@ afterEach(() => {
 });
 
 describe('ADR 0109 device lifecycle store', () => {
+  /**
+   * ADR 0109 D2 checks the sponsor *before* the transaction, and the receipt
+   * is then built from that historical fact. So the refusal matters twice:
+   * once because a device without a living delegation may not sponsor a
+   * lifecycle change, and once because everything downstream is constructed
+   * as if the check had happened. Nothing had ever been through it
+   * (Befund B71).
+   *
+   * The identity here is a member in good standing - it is the *delegation*
+   * that is not there, which is the case the membership check one line above
+   * cannot see.
+   */
+  it('refuses a sponsor whose identity is a member but whose delegation is not active', () => {
+    const fixture = createFoundedLifecycleFixture();
+    const target = createDeviceKeys();
+    const enrollment = createEnrollmentSubmission(fixture, {
+      transitionId: 'transition_unsponsored',
+      delegationId: 'delegation_unsponsored_target',
+      lifecycleOrder: 'seq:0000000000000002',
+      observedLifecycleOrder: 'seq:0000000000000001',
+      target,
+    });
+    expect(fixture.store.recordPicoHomeDeviceLifecycleTransition({
+      submission: enrollment,
+      sponsor: {
+        ...fixture.sponsor,
+        delegationId: 'delegation_that_was_never_issued',
+      },
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      acceptedAt: fixture.acceptedAt,
+    })).toEqual({ ok: false, reason: 'inactive_sponsor' });
+
+    // The same submission with the real sponsor is accepted, so the refusal
+    // is about the sponsor and not about the submission.
+    expect(fixture.store.recordPicoHomeDeviceLifecycleTransition({
+      submission: enrollment,
+      sponsor: fixture.sponsor,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      acceptedAt: fixture.acceptedAt,
+    }).ok).toBe(true);
+  });
+
   it('enrolls atomically, accepts an older authentic revocation, and permits last-device self-revocation', () => {
     const fixture = createFoundedLifecycleFixture();
     const target = createDeviceKeys();

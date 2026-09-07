@@ -371,6 +371,26 @@ describe('controller-signed share-envelope issuance (ADR 0084)', () => {
           at: AT,
         })).toEqual({ ok: false, reason: 'invalid_envelope' });
       }
+      /**
+       * The fifth swap is answered differently, and that is the point: an
+       * envelope whose grant is not active is refused as `inactive_grant`
+       * rather than as a forgery. Nothing had ever been through that branch
+       * (Befund B71), and the two say very different things to a caller -
+       * "your authority ended" is not "your bytes are wrong".
+       */
+      expect(fixture.store.recordPicoShareEnvelope({
+        sodium,
+        issuanceId: 'issuance_grant_gone',
+        delegationId: stored.delegationId,
+        record: {
+          ...stored.record,
+          envelope: {
+            ...stored.record.envelope,
+            grantId: 'grant_that_no_longer_stands',
+          },
+        },
+        at: AT,
+      })).toEqual({ ok: false, reason: 'inactive_grant' });
       expect(fixture.store.picoShareEnvelopes()).toHaveLength(1);
     } finally {
       fixture.close();

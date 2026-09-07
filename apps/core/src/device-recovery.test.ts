@@ -105,6 +105,55 @@ describe('ADR 0110 durable device recovery', () => {
     fixture.store.close();
   });
 
+  /**
+   * The prepare phase answers a root it can verify, about an identity this
+   * Home may know nothing about - and the two are different questions
+   * (Befund B71).
+   *
+   * The signature check comes first and is the whole authentication; the
+   * lifecycle lookup comes after, and the code says why in that order: "a
+   * random pre-authority caller therefore cannot use this phase as a
+   * membership/status oracle." So a stranger's *correctly signed* preparation
+   * gets past everything and then finds nothing, which is a different refusal
+   * from a forged one. Nothing had ever been through it.
+   */
+  it('refuses a correctly signed preparation for an identity it does not know', () => {
+    const fixture = createFixture();
+    const stranger = createSigningKey('pico_identity');
+    const target = createDeviceKeys();
+    const request = {
+      suite: picoIdentitySuite,
+      preparationId: 'preparation_from_a_stranger',
+      homeId: fixture.homeId,
+      hostSigningKeyFingerprintHex: fixture.host.fingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: 'aa'.repeat(32),
+      picoIdentityFingerprintHex: stranger.fingerprintHex,
+      targetDelegationId: 'delegation_stranger_target',
+      targetDeviceSigningKeyFingerprintHex: target.signing.fingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex: target.agreement.fingerprintHex,
+      createdAt: '2026-07-31T09:59:00.000Z',
+      expiresAt: '2026-07-31T10:04:00.000Z',
+    };
+    expect(fixture.store.preparePicoHomeDeviceRecovery({
+      preparation: {
+        request,
+        identityKeyRecord: stranger.keyRecord,
+        rootSignatureHex: stranger.sign(
+          buildPicoHomeDeviceRecoveryPrepareSignatureInput(request),
+        ),
+      },
+      sender: {
+        picoIdentityFingerprintHex: stranger.fingerprintHex,
+        deviceSigningKeyFingerprintHex: target.signing.fingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: target.agreement.fingerprintHex,
+        delegationId: request.targetDelegationId,
+      },
+      sodium,
+      acceptedAt,
+    })).toEqual({ ok: false, reason: 'recovery_prepare_unavailable' });
+    fixture.store.close();
+  });
+
   it('survives restart, enforces the clock, commits total replacement and reprojects its receipt', () => {
     const fixture = createFixture();
     const target = createDeviceKeys();

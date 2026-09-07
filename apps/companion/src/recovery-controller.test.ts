@@ -107,6 +107,30 @@ describe('ADR 0112 S3 companion recovery decisions', () => {
       reason: 'completion_window_lapsed',
     });
     expect(lapsedRequest).not.toHaveBeenCalled();
+
+    /**
+     * The third answer, and nothing had ever been through it (Befund B71).
+     * `vault_locked` is a closed list of four messages a locked Vault gives;
+     * everything else is `completion_failed`, and the difference is what the
+     * person is told to do - unlock, or try again later. A failure the list
+     * does not know must not read as "your Vault is locked", because it is
+     * the one sentence the person can act on and being wrong about it costs
+     * them the window.
+     */
+    const failing = setup();
+    const failingNotifications = recordingNotifications();
+    const failingRequest = vi.fn(async () => {
+      throw new Error('home_unreachable');
+    });
+    await expect(checkPicoCompanionRecoveryCompletion({
+      statePath: failing.statePath,
+      profile: failing.profile,
+      targetLinkClient: linkClient(failing.profile, failingRequest),
+      notifications: failingNotifications,
+      now: () => new Date('2026-08-03T10:00:01.000Z'),
+    })).resolves.toMatchObject({ status: 'blocked', reason: 'completion_failed' });
+    expect(readPicoCompanionRecoveryState(failing.statePath))
+      .toMatchObject({ status: 'pending' });
   });
 
   it('vetoes the exact alarm recovery and refuses a mismatched local target state', async () => {
