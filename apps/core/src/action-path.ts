@@ -3,7 +3,7 @@ import {
   type PicoActionRequest,
   type PicoActionRequestInput,
 } from '@pico/protocol/action';
-import type { PicoEventOriginClass } from '@pico/protocol';
+import type { ActionEventType, PicoEventOriginClass } from '@pico/protocol';
 import {
   resolvePicoApproval,
   type PicoApprovalOutcome,
@@ -94,12 +94,7 @@ export function picoEffectCapabilitiesFor(risk: string): PicoEffectCapabilities 
 }
 
 export type PicoActionFactType =
-  | 'action.requested'
-  | 'pico_rules.decision_created'
-  | 'approval.requested'
-  | 'approval.resolved'
-  | 'action_runner.action_started'
-  | 'action_runner.action_completed';
+  | ActionEventType;
 
 export type PicoActionEffect = (
   request: PicoActionRequest,

@@ -1,3 +1,4 @@
+import type { PicoObservationKind } from '@pico/protocol/observation';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -105,7 +106,7 @@ const buffered = async (databasePath: string) => {
 };
 
 /** Wie eine Messung reist: die Sprache des Puffers, ohne die Domäne. */
-const reading = (kind: 'location_fix' | 'mobility_sample', payload: unknown) =>
+const reading = (kind: PicoObservationKind, payload: unknown) =>
   ({ kind, payload: JSON.stringify(payload) });
 
 describe('ADR 0129 SR5 - was ein Gerät gemessen hat', () => {

@@ -1,4 +1,10 @@
+import type {
+  PicoHomeContinuityReasonCategory,
+  PicoReaderCustodyReaderAccessMode,
+  PicoReaderCustodyReaderGrantRevocationReasonCategory,
+} from '@pico/protocol';
 import type { PicoModelProviderState } from '@pico/protocol/model-provider-state';
+import type { PicoRulesDecisionValue } from '@pico/protocol/pico-rules';
 
 /**
  * ADR 0113 C2/B3: the complete renderer-facing contract. It contains only
@@ -2114,7 +2120,7 @@ export function parsePicoCompanionDeviceAuthority(
  * fact about it they only ever meet through a consequence.
  */
 export interface PicoCompanionHostRotationReasonLine {
-  reason: 'host_key_rotated' | 'host_migrated' | 'host_restored';
+  reason: PicoHomeContinuityReasonCategory;
   label: string;
 }
 
@@ -2208,7 +2214,7 @@ export interface PicoCompanionHomeMember {
 export interface PicoCompanionDomainReaderRow {
   readerGrantId: string;
   readerDisplay: string;
-  accessMode: 'from_version' | 'forward_only';
+  accessMode: PicoReaderCustodyReaderAccessMode;
   status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
   validUntilDisplay: string;
 }
@@ -2243,8 +2249,7 @@ export interface PicoCompanionDomainReadershipLine {
  */
 export interface PicoCompanionReaderRevocationReasonLine {
   reasonCategory:
-    'reader_removed' | 'device_retired' | 'relationship_revoked'
-    | 'security_review' | 'grant_reissued';
+    PicoReaderCustodyReaderGrantRevocationReasonCategory;
   label: string;
 }
 
@@ -3164,7 +3169,7 @@ export function picoCompanionFetchBlockedLine(blocked: string): string {
 export interface PicoCompanionUnattendedFetching {
   effectName: string;
   privacyDomain: string;
-  decision?: 'allow' | 'require_approval' | 'deny';
+  decision?: PicoRulesDecisionValue;
 }
 
 export function parsePicoCompanionUnattendedFetching(
@@ -3190,7 +3195,7 @@ export function parsePicoCompanionUnattendedFetching(
     privacyDomain: record.privacyDomain,
     ...(record.decision === undefined
       ? {}
-      : { decision: record.decision as 'allow' | 'require_approval' | 'deny' }),
+      : { decision: record.decision as PicoRulesDecisionValue }),
   });
 }
 

@@ -21,6 +21,7 @@ export { isPicoInstant, picoCanonicalInstantPattern } from './instant.js';
 import { isPicoInstant } from './instant.js';
 import type { PicoActionRisk, PicoModuleActivationView } from './module.js';
 import type { PicoApprovalOutcome } from './approval.js';
+import type { PicoLibraryPinKind } from './library-pin.js';
 import type { PicoRulesDecisionValue } from './pico-rules.js';
 import type { PicoStorageCondition } from './storage-pressure.js';
 // Die Liste steht in `./foundation-event-type.js` und wird hier nur
@@ -3026,7 +3027,7 @@ export interface PicoMemoryContentItem {
    */
   derivedFrom?: {
     supplierIdentifier: string;
-    pin: { kind: 'commit' | 'content_hash'; value: string };
+    pin: { kind: PicoLibraryPinKind; value: string };
     pinCoversContent: boolean;
   };
   createdAt: string;

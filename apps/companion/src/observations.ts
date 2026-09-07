@@ -1,4 +1,7 @@
-import { maxPicoObservationSubmission } from '@pico/protocol/observation';
+import {
+  maxPicoObservationSubmission,
+  type PicoObservationKind,
+} from '@pico/protocol/observation';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 
 /**
@@ -13,7 +16,7 @@ import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client
  * anderen, und die Domäne ist die einzige Custody, die eine Beobachtung trägt.
  */
 export interface PicoCompanionObservation {
-  kind: 'location_fix' | 'mobility_sample';
+  kind: PicoObservationKind;
   /** Die Messung selbst, als Text - genau wie der Puffer sie hält. */
   payload: string;
 }

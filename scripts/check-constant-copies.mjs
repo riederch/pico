@@ -40,6 +40,21 @@ import { fileURLToPath } from 'node:url';
  * denen eine geht, sehen aus wie eine Wahrheit an einer Stelle. Deshalb nennt
  * jeder Eintrag genau die Dateien, in denen der Name stehen soll.
  *
+ * **Die zweite Gestalt derselben Sache: eine geschlossene Liste, von Hand noch
+ * einmal ausbuchstabiert** (Befund B70). Ein Vokabular, das das Protokoll als
+ * `['a', 'b'] as const` besitzt, stand an 29 Stellen ein zweites Mal da - als
+ * literale Vereinigung `'a' | 'b'` in einem Typ. Der Zeilentyp der
+ * Wiederherstellung schrieb alle fuenf Zustaende aus, der Renderer-Vertrag
+ * fuenf Widerrufsgruende, und `picoRulesDecisions` stand zehnmal. Eine davon
+ * stand im Protokoll selbst, gegen die eigene Liste eine Datei weiter.
+ *
+ * Das ist genau die Klasse, die dieser Baum immer wieder trifft: zwei Listen,
+ * die driften. Und sie war vermeidbar, alle 29 Mal - jede Liste exportiert
+ * ihren Typ, und ein Typ wird beim Bauen geloescht. Deshalb verbietet ihn
+ * keine Grenze, auch nicht die zum Renderer, wo ein blosser Spezifizierer
+ * nicht aufloest: der gebaute `contract.js` haelt danach keinen einzigen
+ * Laufzeitimport, nachgesehen statt geglaubt.
+ *
  * **Was diese Pruefung nicht kann.** Sie liest `export const NAME = ...;` am
  * Zeilenanfang. Eine Kopie ohne `export`, unter einem anderen Namen oder in
  * einem anderen Ausdruck geht an ihr vorbei - die dritte Frischeschranke im
@@ -234,6 +249,71 @@ for (const [name, entry] of argued) {
   }
 }
 
+/**
+ * Die zweite Regel: eine geschlossene Liste steht nicht ein zweites Mal als
+ * literale Vereinigung da.
+ *
+ * Der Eintrag nennt Datei und Liste, weil ein Vokabular mit denselben zwei
+ * Woertern zweimal etwas anderes heissen kann - das waere ein Grund, und ein
+ * Grund gehoert aufgeschrieben.
+ */
+const arguedUnions = new Map([]);
+
+const closedLists = new Map();
+for (const file of sourceFiles) {
+  if (file.endsWith('.test.ts')) {
+    continue;
+  }
+  const source = readFileSync(file, 'utf8');
+  for (const match of source.matchAll(
+    /^export const ([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[([^\]]*?)\]\s*as const;/gmu,
+  )) {
+    const members = [...match[2].matchAll(/'([^']+)'/gu)].map(([, member]) => member);
+    if (members.length < 2) {
+      continue;
+    }
+    const type = new RegExp(
+      `export type (\\w+) =\\s*\\n?\\s*typeof ${match[1]}\\[number\\];`,
+      'u',
+    ).exec(source);
+    closedLists.set([...members].sort().join('|'), {
+      list: match[1],
+      file: relative(repoRoot, file),
+      type: type?.[1],
+    });
+  }
+}
+
+let unionSites = 0;
+for (const file of sourceFiles) {
+  const source = readFileSync(file, 'utf8');
+  const where = relative(repoRoot, file);
+  for (const match of source.matchAll(
+    /'[a-z0-9_.-]+'(?:\s*\|\s*'[a-z0-9_.-]+')+/gu,
+  )) {
+    const members = [...match[0].matchAll(/'([^']+)'/gu)].map(([, member]) => member);
+    const key = [...new Set(members)].sort().join('|');
+    const list = closedLists.get(key);
+    if (list === undefined || where === list.file) {
+      continue;
+    }
+    unionSites += 1;
+    if (arguedUnions.get(where)?.includes(list.list) === true) {
+      continue;
+    }
+    const line = source.slice(0, match.index).split('\n').length;
+    errors.push(
+      `${where}:${line} writes out ${list.list} by hand `
+      + `(${list.file}). `
+      + (list.type === undefined
+        ? `That list exports no type; export \`typeof ${list.list}[number]\` and `
+          + 'name it here.'
+        : `Name the type instead - \`${list.type}\`, which is erased at build `
+          + 'time and so crosses every boundary a value cannot.'),
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Constant-copies check failed:');
   for (const error of errors) {
@@ -247,5 +327,6 @@ const definitionCount = [...definitions.values()]
 console.log(
   `Constant-copies check passed (${definitionCount} exported constants across `
   + `${sourceFiles.length} files; ${copies.length} names stand more than once, `
-  + 'each argued, each agreed).',
+  + `each argued, each agreed; ${closedLists.size} closed lists, and `
+  + `${unionSites} of them written out by hand as a union).`,
 );

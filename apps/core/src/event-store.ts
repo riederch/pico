@@ -99,6 +99,7 @@ import {
   picoHomeMembershipCredentialSchema,
   picoIdentityRootRotationTiming,
   picoIdentitySuite,
+  type PicoHomeDeviceRecoveryPendingStatus,
   picoShareEnvelopeRecordSchema,
   picoShareSuite,
   payloadPostures,
@@ -160,6 +161,8 @@ function anchorFloorMs(anchor: PicoHomeRecoveryAnchor | undefined): number | nul
   const parsed = Date.parse(instant);
   return Number.isFinite(parsed) ? parsed : null;
 }
+import type { PicoRulesDecisionValue } from '@pico/protocol/pico-rules';
+import type { PicoSupplierKind } from '@pico/protocol/supplier';
 import type { SqliteBackupResult } from './sqlite-backup.js';
 import {
   verifyPicoHomeDomainReadGrant,
@@ -748,7 +751,7 @@ export interface PicoLinkMailboxRecord {
 
 export interface PicoSupplierAttachment {
   identifier: string;
-  kind: 'bridge' | 'library';
+  kind: PicoSupplierKind;
   slots: readonly string[];
   coverage: readonly string[];
   /** ADR 0137 IN5. Exactly one, and never a Pico. */
@@ -7523,7 +7526,7 @@ export class EventStore {
   public setPicoRuleDecision(input: {
     effectName: string;
     privacyDomain: string;
-    decision: 'allow' | 'require_approval' | 'deny';
+    decision: PicoRulesDecisionValue;
     decidedAt: string;
   }): void {
     this.ensureOpen();
@@ -7550,7 +7553,7 @@ export class EventStore {
   public picoRuleDecision(input: {
     effectName: string;
     privacyDomain: string;
-  }): 'allow' | 'require_approval' | 'deny' | undefined {
+  }): PicoRulesDecisionValue | undefined {
     this.ensureOpen();
     const row = this.db
       .prepare(`
@@ -7558,7 +7561,7 @@ export class EventStore {
         WHERE effect_name = ? AND privacy_domain = ?
       `)
       .get(input.effectName, input.privacyDomain) as { decision: string } | undefined;
-    return row?.decision as 'allow' | 'require_approval' | 'deny' | undefined;
+    return row?.decision as PicoRulesDecisionValue | undefined;
   }
 
   /**
@@ -7586,7 +7589,7 @@ export class EventStore {
   public picoRuleDecisions(): ReadonlyArray<{
     effectName: string;
     privacyDomain: string;
-    decision: 'allow' | 'require_approval' | 'deny';
+    decision: PicoRulesDecisionValue;
     decidedAt: string;
   }> {
     this.ensureOpen();
@@ -7603,7 +7606,7 @@ export class EventStore {
       .all() as Array<{
         effectName: string;
         privacyDomain: string;
-        decision: 'allow' | 'require_approval' | 'deny';
+        decision: PicoRulesDecisionValue;
         decidedAt: string;
       }>;
     return Object.freeze(rows.map((row) => Object.freeze(row)));
@@ -8255,7 +8258,7 @@ interface PicoHomeDeviceRecoveryRow {
   recoveryId: string;
   homeId: string;
   picoIdentityFingerprintHex: string;
-  status: 'pending' | 'superseded' | 'vetoed' | 'lapsed' | 'consumed';
+  status: PicoHomeDeviceRecoveryPendingStatus;
   targetDelegationId: string;
   targetDeviceSigningKeyFingerprintHex: string;
   targetDeviceKeyAgreementKeyFingerprintHex: string;

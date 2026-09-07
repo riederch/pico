@@ -10,6 +10,7 @@ import {
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   picoIdentitySuite,
+  type PicoReaderCustodyReaderAccessMode,
   picoMemoryContentSuite,
   picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
@@ -102,7 +103,7 @@ export interface PicoReaderCustodyReaderGrantView {
   readerDeviceSigningKeyFingerprintHex: string;
   readerKeyFingerprintHex: string;
   readerDelegationId: string;
-  accessMode: 'from_version' | 'forward_only';
+  accessMode: PicoReaderCustodyReaderAccessMode;
   firstKekVersion: number;
   envelopeKekVersions: number[];
   status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';

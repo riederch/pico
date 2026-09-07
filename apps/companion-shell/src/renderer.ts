@@ -1,3 +1,4 @@
+import type { PicoCompanionFirstRunScanSource } from './contract.js';
 import {
   parsePicoCompanionPresentation,
   picoCompanionFetchBlockedLine,
@@ -186,7 +187,7 @@ declare global {
         form: 'paper' | 'card_printer';
       }): Promise<void>;
       decideApproval(approved: boolean): Promise<void>;
-      beginFirstRun(source: 'camera' | 'typed'): Promise<void>;
+      beginFirstRun(source: PicoCompanionFirstRunScanSource): Promise<void>;
       beginFounding(): Promise<void>;
       joinFromDevice(source: string): Promise<void>;
       beginEnrolment(source: string): Promise<void>;
@@ -414,7 +415,7 @@ function renderFirstRunChoices(): void {
 
 renderFirstRunChoices();
 
-async function beginFirstRun(source: 'camera' | 'typed'): Promise<void> {
+async function beginFirstRun(source: PicoCompanionFirstRunScanSource): Promise<void> {
   scanCamera.disabled = true;
   scanTyped.disabled = true;
   try {

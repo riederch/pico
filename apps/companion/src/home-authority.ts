@@ -1,3 +1,4 @@
+import type { PicoReaderCustodyReaderAccessMode } from '@pico/protocol';
 import type {
   PicoHomeContinuityReasonCategory,
   PicoHomeMembershipLifecycleReasonCategory,
@@ -401,7 +402,7 @@ export interface PicoCompanionDomainReader {
   readerGrantId: string;
   readerIdentityKeyFingerprintHex: string;
   readerKeyFingerprintHex: string;
-  accessMode: 'from_version' | 'forward_only';
+  accessMode: PicoReaderCustodyReaderAccessMode;
   status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
   validUntil: string;
 }

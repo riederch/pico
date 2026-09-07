@@ -1,3 +1,4 @@
+import type { PicoModelProviderAllowance } from '@pico/protocol/model-provider';
 import { picoModelJobAllowanceFor } from '@pico/protocol/model-job';
 import { parsePicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { picoModelJobRefusal } from '@pico/protocol/model-job';
@@ -32,7 +33,7 @@ function job(overrides: Record<string, unknown> = {}) {
   });
 }
 
-function entry(carries: 'live_turn' | 'live_turn_and_retrieved_memory') {
+function entry(carries: PicoModelProviderAllowance) {
   return parsePicoModelProviderEntry({
     schema: 'pico.model.provider.entry.v1',
     entryId: 'a-measured-host',

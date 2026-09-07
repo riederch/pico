@@ -1,3 +1,4 @@
+import type { PicoTimeBoundEntryKind } from '@pico/protocol/time-bound-entry';
 import { memoryRetentionModes, picoHomeClaimStates } from './protocol-values.js';
 import type {
   DashboardSnapshot,
@@ -578,7 +579,7 @@ export async function createTimeBoundEntry(
   input: {
     deviceId: string;
     privacyDomain: string;
-    kind: 'appointment' | 'reminder';
+    kind: PicoTimeBoundEntryKind;
     title: string;
     dueAt: string;
   },

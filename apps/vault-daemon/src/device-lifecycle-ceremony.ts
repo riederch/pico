@@ -8,6 +8,7 @@ import {
   picoIdentitySuite,
   type PicoClockDivergence,
   type PicoClockDivergenceKind,
+  type PicoHomeDeviceActivationAction,
   type PicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceLifecycleEvidence,
   type PicoHomeDeviceLifecycleSubmission,
@@ -414,7 +415,7 @@ async function activateAndSubmit(
   const activation: PicoHomeDeviceActivationSignatureInput = {
     suite: picoIdentitySuite,
     activationId: evidence.transitionId,
-    action: evidence.action as 'enroll' | 'renew',
+    action: evidence.action as PicoHomeDeviceActivationAction,
     homeId: context.view.homeId,
     hostSigningKeyFingerprintHex: input.sponsorLinkClient.hostSigningKeyFingerprintHex,
     picoIdentityFingerprintHex: evidence.picoIdentityFingerprintHex,

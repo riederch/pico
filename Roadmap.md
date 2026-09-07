@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B70 — Ein Vokabular, das dem Protokoll gehört, stand 29 Mal von Hand
+ausbuchstabiert da (2026-09-07).** Der Weg dorthin ging über eine Fehlmessung.
+Ich hatte gefragt, welche Ablehnungsgründe in einem Typ stehen und nirgends
+erzeugt werden; vier kamen heraus, und **alle vier waren Fehlalarme meines
+Musters** — drei entstehen als Vorlagenzeichenkette (`recovery_${row.status}`),
+einer über ein `return`. Interessant war nicht die Antwort, sondern die Stelle,
+die sie verbarg:
+
+```ts
+status: 'pending' | 'superseded' | 'vetoed' | 'lapsed' | 'consumed';
+```
+
+Das ist `picoHomeDeviceRecoveryPendingStatuses`, die geschlossene Liste des
+Protokolls, ein zweites Mal geschrieben — und daneben ein `as`-Cast, der einen
+sechsten Zustand lautlos durchgelassen hätte.
+
+Die Klasse gemessen: **118 geschlossene Listen, 29 Stellen, die eine davon von
+Hand wiederholen.** `picoRulesDecisions` zehnmal, davon fünfmal in derselben
+Datei. Fünf Widerrufsgründe im Renderer-Vertrag. Sechs Ereignisarten im Kern.
+Eine stand **im Protokoll selbst**, gegen die eigene Liste eine Datei weiter.
+Keine einzige war ein Zufall: jede Zweiergruppe habe ich nachgesehen, und jede
+war dieselbe Sprache.
+
+**Alle 29 waren vermeidbar, und das ist der eigentliche Punkt.** Jede Liste
+exportiert ihren Typ. Ein Typ wird beim Bauen gelöscht — also verbietet ihn
+keine Grenze, auch nicht die zum Renderer, wo ein bloßer Spezifizierer nicht
+auflöst. Der Vertrag sagt das über seine eine Wertkopie selbst: „the one copy
+in this file that cannot be an import." Die Typkopien konnten es. Nachgesehen
+statt geglaubt: der gebaute `contract.js` hält danach **keinen einzigen**
+Laufzeitimport.
+
+Das Tor aus B69 hat die zweite Regel dazubekommen, weil es dieselbe Sache ist —
+eine Wahrheit, zweimal geschrieben; einmal als Wert, einmal als Typ. Es nennt
+im Fehlerfall den Typ, der stattdessen dastehen soll. Drei Pflanzungen: die
+fünf Zustände wieder ausbuchstabiert (der Prüfer nennt Datei, Zeile und
+Ersatztyp), dasselbe im Renderer-Vertrag (der Grenzfall, er wird erreicht), und
+eine Liste ohne exportierten Typ — da sagt er, dass zuerst der Typ fehlt.
+
+29 → 0. Voller Lauf grün: 2.935 Tests.
+
 **B69 — Ein Einzelfall-Tor stellte seit Monaten die richtige Frage, und
 niemand hatte sie je dem Baum gestellt (2026-09-07).** `check-push-lifetime.mjs`
 hielt zwei von Hand eingetragene Pfade zusammen und schrieb seinen eigenen

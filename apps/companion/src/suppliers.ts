@@ -1,4 +1,5 @@
 import type { PicoActionArgument } from '@pico/protocol/action';
+import type { PicoRulesDecisionValue } from '@pico/protocol/pico-rules';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 
 /**
@@ -199,7 +200,7 @@ export interface PicoCompanionDepotView {
 export interface PicoCompanionUnattendedFetching {
   effectName: string;
   privacyDomain: string;
-  decision?: 'allow' | 'require_approval' | 'deny';
+  decision?: PicoRulesDecisionValue;
 }
 
 export async function readPicoCompanionDepots(input: {
@@ -259,7 +260,7 @@ export async function decidePicoCompanionRule(input: {
   livingDeviceLinkClient: PicoLinkDirectClient;
   effectName: string;
   privacyDomain: string;
-  decision: 'allow' | 'require_approval' | 'deny';
+  decision: PicoRulesDecisionValue;
 }): Promise<void> {
   const answer = await input.livingDeviceLinkClient.request('home.rule.decide', {
     effectName: input.effectName,

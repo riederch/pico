@@ -1,3 +1,4 @@
+import type { PicoTimeBoundEntryKind } from '@pico/protocol/time-bound-entry';
 import type {
   PicoMemoryEncryptionState,
   PicoModuleDroppedStatement,
@@ -183,7 +184,7 @@ export interface RetentionPolicyFormValue {
 
 export interface TimeBoundEntryFormValue {
   title: string;
-  kind: 'appointment' | 'reminder';
+  kind: PicoTimeBoundEntryKind;
   privacyDomain: string;
   dueAt: string;
 }
@@ -801,7 +802,7 @@ function renderCoreSummary(container: HTMLElement, status: SystemStatus | null):
  */
 export interface TimeBoundEntryRow {
   memoryItemId: string;
-  kind: 'appointment' | 'reminder';
+  kind: PicoTimeBoundEntryKind;
   privacyDomain: string;
   dueAt: string;
   /** Set once the entry reached the person. */

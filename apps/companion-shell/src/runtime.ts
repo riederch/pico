@@ -1,3 +1,4 @@
+import type { PicoRulesDecisionValue } from '@pico/protocol/pico-rules';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -239,7 +240,7 @@ export interface PicoCompanionShellRuntime {
   decideRule(input: {
     effectName: string;
     privacyDomain: string;
-    decision: 'allow' | 'require_approval' | 'deny';
+    decision: PicoRulesDecisionValue;
   }): Promise<void>;
   forgetRule(input: { effectName: string; privacyDomain: string }): Promise<void>;
   attachDepot(pin: Record<string, unknown>): Promise<{ remote: string; commit: string }>;

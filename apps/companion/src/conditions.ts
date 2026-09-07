@@ -1,3 +1,4 @@
+import type { PicoStoragePressureState } from '@pico/protocol';
 /**
  * What is true between notifications, said in words a person can act on.
  *
@@ -77,7 +78,7 @@ export function picoCompanionConditionsFor(input: {
   online?: boolean;
   homeReachable?: boolean;
   modelReachable?: boolean;
-  storage?: 'normal' | 'reserved' | 'exhausted';
+  storage?: PicoStoragePressureState;
 }): readonly PicoCompanionCondition[] {
   const conditions: PicoCompanionCondition[] = [];
   if (input.online === false) {
