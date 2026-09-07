@@ -259,8 +259,9 @@ how long the device honours it - and a packet that died first would drop a
 push nobody ever saw.
 
 `maxPicoLinkPushLifetimeMs` is declared at both ends on purpose, since
-neither may import the other, and `check-push-lifetime.mjs` keeps the two
-honest: a Home minting pushes longer than a device will honour sends ones
+neither may import the other, and `check-constant-copies.mjs` keeps the two
+honest - it replaced `check-push-lifetime.mjs` on 2026-09-07, which asked this
+of these two files alone while nobody had asked it of the tree (Befund B69): a Home minting pushes longer than a device will honour sends ones
 that are dead on arrival while every side looks correct.
 
 ### What wiring it found

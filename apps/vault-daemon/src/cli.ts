@@ -28,6 +28,7 @@ import {
   picoHomeFoundingAcceptanceSchema,
   picoHomeSealedClaimPayloadV2Schema,
   picoHomeV2SignatureInputLabels,
+  maxPicoIdentityReaderKeyFreshnessMs,
   picoIdentitySuite,
   picoVaultPersonKeyRoles,
   type PicoHomeClaimSignatureInput,
@@ -113,8 +114,6 @@ type CliCommand = typeof cliCommands[number];
  * to a Foundation. ADR 0103 C1 starts with `claim-home`, because no domain
  * record is accepted before a Home has been founded.
  */
-/** ADR 0085's ceiling, mirrored so an over-long window fails before signing. */
-const MAX_READER_KEY_FRESHNESS_MS = 5 * 60 * 1_000;
 
 const ceremonySubcommands = [
   'claim-home',
@@ -2015,7 +2014,7 @@ async function runPublishCheckpointCeremony(input: {
   }
   if (!Number.isSafeInteger(input.freshForSeconds)
     || input.freshForSeconds < 1
-    || input.freshForSeconds * 1_000 > MAX_READER_KEY_FRESHNESS_MS) {
+    || input.freshForSeconds * 1_000 > maxPicoIdentityReaderKeyFreshnessMs) {
     throw new Error('reader_key_freshness_window_too_long');
   }
 

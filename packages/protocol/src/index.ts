@@ -888,6 +888,20 @@ export const picoIdentityReaderKeyFreshnessStatuses = [
 export type PicoIdentityReaderKeyFreshnessStatus =
   typeof picoIdentityReaderKeyFreshnessStatuses[number];
 
+/**
+ * ADR 0085 F4's five minutes: the longest window a freshness checkpoint may
+ * sign for.
+ *
+ * It stands here because it is a bound on a canonical form, and both sides of
+ * that form have to hold it - the vault refuses to sign a longer one, the Home
+ * refuses to accept one. It had been written three times (Befund B69): twice
+ * under this name in two packages that never see each other's copy, and once
+ * more inside the vault daemon's CLI under a shorter name, in a line that
+ * called itself "mirrored". Three copies of one ceiling is three chances to
+ * loosen one of them alone.
+ */
+export const maxPicoIdentityReaderKeyFreshnessMs = 5 * 60 * 1_000;
+
 // Authoritative signature-input families for ADR 0080 Gate M1. These builders
 // assemble bytes only; they do not generate move-in codes, sign, verify, persist
 // records or authorize membership transitions.
@@ -1144,6 +1158,19 @@ export const picoReaderCustodySyncRecordDigestLabel =
   'pico.mem.reader-sync-record.v1' as const;
 export const picoReaderCustodySyncEvidenceDigestLabel =
   'pico.mem.reader-sync-evidence.v1' as const;
+
+/**
+ * The two bounds of an ADR 0086 sync manifest, and they are wire facts rather
+ * than the policy of either end.
+ *
+ * `@pico/vault` builds a manifest and `@pico/sync` verifies one; each held its
+ * own copy of both values, and neither could see the other's (Befund B69). The
+ * genesis digest is the plainest case there is: a chain has to start
+ * somewhere, both ends must agree on what that start looks like, and thirty-two
+ * zero bytes written twice is a rule with two authors.
+ */
+export const maxPicoReaderCustodySyncManifestMs = 24 * 60 * 60 * 1_000;
+export const picoReaderCustodySyncGenesisDigestHex = '00'.repeat(32);
 
 export const picoReaderCustodyDomainRecordSchema =
   'pico.mem.reader-domain-record.v1' as const;

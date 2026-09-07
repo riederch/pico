@@ -23,6 +23,8 @@ import {
   buildPicoVaultKeyfileHeaderAad,
   buildPicoRecoveryCardPayload,
   isPicoInstant,
+  maxPicoIdentityReaderKeyFreshnessMs,
+  maxPicoReaderCustodySyncManifestMs,
   picoMemoryContentSuite,
   picoReaderCustodyCanonicalLabels,
   picoReaderCustodyDomainRecordSchema,
@@ -30,6 +32,7 @@ import {
   picoReaderCustodyKekRotationRecordSchema,
   picoReaderCustodyReaderGrantLifecycleRecordSchema,
   picoReaderCustodyReaderGrantRecordSchema,
+  picoReaderCustodySyncGenesisDigestHex,
   picoReaderCustodySyncBatchRecordSchema,
   picoReaderCustodySyncPayloadSchema,
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
@@ -87,11 +90,7 @@ import type {
 
 export const picoVaultKeyfileEnvelopeSchema = 'pico.vault.keyfile.encrypted.v1' as const;
 export const picoVaultPrivateKeyPayloadLabel = 'pico.vault.private-key-payload.v1' as const;
-export const MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS = 5 * 60 * 1_000;
 export const MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES = 16 * 1024 * 1024;
-export const MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS =
-  24 * 60 * 60 * 1_000;
-export const PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX = '00'.repeat(32);
 export const picoRecoveryPinProtection = {
   kdfAlgorithm: 'argon2id13',
   kdfProfile: 'moderate',
@@ -776,7 +775,7 @@ export function createPicoIdentityReaderKeyFreshnessCheckpoint(
   const signatureInput =
     buildPicoIdentityReaderKeyFreshnessSignatureInput(checkpoint);
   if (Date.parse(checkpoint.freshUntil) - Date.parse(checkpoint.checkedAt)
-      > MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS) {
+      > maxPicoIdentityReaderKeyFreshnessMs) {
     throw new Error('reader_key_freshness_window_too_long');
   }
   return {
@@ -815,7 +814,7 @@ export function createPicoReaderCustodySyncBatch(
     || !isCanonicalInstant(input.expiresAt)
     || input.createdAt >= input.expiresAt
     || Date.parse(input.expiresAt) - Date.parse(input.createdAt)
-      > MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS
+      > maxPicoReaderCustodySyncManifestMs
     || input.createdAt < domain.authorizedAt
     || input.createdAt < readerGrant.validFrom
     || input.createdAt >= readerGrant.validUntil) {
@@ -824,10 +823,10 @@ export function createPicoReaderCustodySyncBatch(
   if (!Number.isSafeInteger(input.sequence) || input.sequence < 1
     || (input.sequence === 1
       && input.previousManifestDigestHex
-        !== PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX)
+        !== picoReaderCustodySyncGenesisDigestHex)
     || (input.sequence > 1
       && input.previousManifestDigestHex
-        === PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX)) {
+        === picoReaderCustodySyncGenesisDigestHex)) {
     throw new Error('invalid_sync_predecessor');
   }
 

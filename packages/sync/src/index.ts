@@ -31,8 +31,10 @@ import {
   buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
+  maxPicoReaderCustodySyncManifestMs,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentitySuite,
+  picoReaderCustodySyncGenesisDigestHex,
   picoMemoryContentSuite,
   picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
@@ -127,9 +129,6 @@ export function updateVersionVector(vector: VersionVector, deviceId: string, lam
 // deterministic 2x expansion plus the small record envelope.
 export const MAX_PICO_SYNC_OPAQUE_PAYLOAD_BYTES = 33 * 1024 * 1024;
 export const MAX_PICO_SYNC_READ_LIMIT = 100;
-export const MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS =
-  24 * 60 * 60 * 1_000;
-export const PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX = '00'.repeat(32);
 
 export interface PicoSyncOpaquePublication {
   routeRef: string;
@@ -541,7 +540,7 @@ export class PicoReaderCustodySyncProjector {
     if (floor === undefined) {
       if (manifest.sequence !== 1
         || manifest.previousManifestDigestHex
-          !== PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX) {
+          !== picoReaderCustodySyncGenesisDigestHex) {
         return { ok: false, reason: 'sequence_gap' };
       }
     } else if (manifest.sequence < floor.sequence) {
@@ -1153,7 +1152,7 @@ PicoReaderCustodySyncProjectionRestoreSource {
         throw new Error('reader_sync_projection_archive_sequence_gap');
       }
       if (nextRecord.receipt.previousManifestDigestHex
-        !== PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX) {
+        !== picoReaderCustodySyncGenesisDigestHex) {
         throw new Error('reader_sync_projection_archive_fork');
       }
     } else if (nextRecord.receipt.sequence
@@ -2330,7 +2329,7 @@ function verifyReaderSyncPayload(
       failReaderSync('expired');
     }
     if (expiresAtMs - createdAtMs
-      > MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS) {
+      > maxPicoReaderCustodySyncManifestMs) {
       failReaderSync('invalid_payload');
     }
     if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
@@ -3299,7 +3298,7 @@ function assertReaderSyncProtectedProjectionArchive(
   }
 
   let previousManifestDigestHex =
-    PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX;
+    picoReaderCustodySyncGenesisDigestHex;
   for (const [index, candidate] of archive.records.entries()) {
     assertReaderSyncProtectedProjectionRecord(
       sodium,

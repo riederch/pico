@@ -6,12 +6,12 @@ import {
   isPicoInstant,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  maxPicoIdentityReaderKeyFreshnessMs,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentitySuite,
   type PicoIdentityReaderKeyFreshnessCheckpoint,
 } from '@pico/protocol';
 import {
-  MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS,
   type PicoIdentityReaderKeyFreshnessQuery,
   type PicoIdentityReaderKeyFreshnessResult,
   type PicoIdentityReaderKeyFreshnessSource,
@@ -62,14 +62,14 @@ implements PicoIdentityReaderKeyFreshnessSource {
   public constructor(
     private readonly sodium: IdentityVerificationSodium,
     private readonly checkpointSource: PicoIdentityReaderKeyFreshnessCheckpointSource,
-    private readonly maxFreshnessMs = MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS,
+    private readonly maxFreshnessMs = maxPicoIdentityReaderKeyFreshnessMs,
     private readonly maxFloorEntries = MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_FLOORS,
     private readonly lookupTimeoutMs =
       DEFAULT_PICO_IDENTITY_READER_KEY_FRESHNESS_LOOKUP_TIMEOUT_MS,
   ) {
     if (!Number.isSafeInteger(maxFreshnessMs)
       || maxFreshnessMs < 1
-      || maxFreshnessMs > MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS) {
+      || maxFreshnessMs > maxPicoIdentityReaderKeyFreshnessMs) {
       throw new Error('Reader-key freshness adapter maximum must be between 1 ms and 5 minutes.');
     }
     if (!Number.isSafeInteger(maxFloorEntries) || maxFloorEntries < 1) {

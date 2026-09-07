@@ -390,7 +390,7 @@ A11
 │  └─ ADR 0150  Ein Push sagt „frag mich", nie „hier ist"   (implementiert)
 │       Beweis: check-link-seal.mjs (168 Dateien; keine Mailbox-Adresse
 │               erreicht Log, Fehler oder URL) · check-push-boundary.mjs ·
-│               check-push-lifetime.mjs (beide Enden einig) ·
+│               check-constant-copies.mjs (beide Enden einig) ·
 │               check-relay-boundary.mjs (16 Dateien) — 2026-08-21 verschärft,
 │               nachdem Zeichenketten daran vorbeiliefen
 ├─ ADR 0025  Kompatibilität der Kommunikation zwischen Picos und Homes
@@ -911,6 +911,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B69 — Ein Einzelfall-Tor stellte seit Monaten die richtige Frage, und
+niemand hatte sie je dem Baum gestellt (2026-09-07).** `check-push-lifetime.mjs`
+hielt zwei von Hand eingetragene Pfade zusammen und schrieb seinen eigenen
+Grundsatz in die Kopfzeile: „One number, two places, and a check rather than a
+hope." Die Frage an den ganzen Baum gestellt: **zehn exportierte Namen werden
+zweimal definiert.** Sechs hält ein Prüfer oder ein Test. Vier hielt nichts:
+
+| Name | zweimal in | gehalten von |
+|---|---|---|
+| `MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS` | Kern / Vault | — |
+| `MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS` | Sync / Vault | — |
+| `PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX` | Sync / Vault | — |
+| `picoCompanionDeviceAuthorityWarningDays` | Companion / Schale | — |
+
+Die Frischeschranke aus ADR 0085 F4 stand sogar **dreimal**: das dritte Mal im
+CLI des Vault-Daemons unter kürzerem Namen, in einer Zeile, die sich selbst
+„mirrored" nannte. Und der Kern schrieb `5 * 60 * 1000`, das Vault
+`5 * 60 * 1_000` — dieselbe Zahl, zwei Schreibweisen. Das ist die Handschrift
+einer Kopie, nicht die einer Entscheidung.
+
+**Drei der vier mussten gar nicht doppelt sein.** Die Abhängigkeitskante für
+einen Import bestand bereits: Kern und Vault sehen beide das Protokoll, Sync
+sieht das Vault. Sie stehen jetzt einmal im Protokoll, neben den kanonischen
+Formen, deren Schranken sie sind. Die vierte ist erzwungen und bleibt:
+`contract.ts` ist rendererseitig und hält genau **einen** Import, und der ist
+typ-only — ein Wertimport zöge den Modulgraphen des Companions in den Renderer.
+
+**Das neue Tor ist die Bindung, nicht die Hoffnung auf eine.** `copies:check`
+liest beide Stellen und rechnet nach; Zahlen werden ausgewertet, damit
+`5 * 60 * 1000` und `5 * 60 * 1_000` nicht als Abweichung zählen — es geht um
+den Wert, nicht um die Schreibweise. Jeder Eintrag nennt die Dateien, in denen
+der Name stehen soll, damit auch das *Verschwinden* einer Kopie auffällt; das
+konnte der Vorgänger, und ohne die Liste wäre es verloren gegangen. 565
+Konstanten über 254 Dateien, sieben begründete Doppelungen.
+
+**Der Vorgänger ist darin aufgegangen.** Eine Regel, die zweimal implementiert
+dasteht, ist genau das, wogegen sie gerichtet ist; ADR 0150 und die Statusdatei
+nennen jetzt den Nachfolger, mit Datum.
+
+Drei Pflanzungen: eine Kopie driftet (die Schale warnt 45 Tage, der Companion
+30), eine argumentierte Stelle verschwindet (`export` weggenommen), eine neue
+unbegründete Kopie kommt dazu — die dritte ist genau die Form, die dieser
+Befund gefunden hat.
+
+**Was das Tor nicht kann, und es steht in seinem Kopf.** Es liest
+`export const NAME = ...;`. Die dritte Frischeschranke im CLI war ohne `export`
+und unter anderem Namen — die hat die *Messung* gefunden, nicht die Regel.
 
 **B68 — Der ADR sagt „erbt statt zu verdoppeln", der Code verdoppelte
 (2026-09-07).** ADR 0114 begründet das Vetofenster der Wurzelrotation nicht

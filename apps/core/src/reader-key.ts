@@ -1,11 +1,9 @@
 import type { IdentityVerificationSodium } from '@pico/identity';
-import { isPicoInstant } from '@pico/protocol';
+import { isPicoInstant, maxPicoIdentityReaderKeyFreshnessMs } from '@pico/protocol';
 import type {
   EventStore,
   PicoIdentityReaderKeyCandidate,
 } from './event-store.js';
-
-export const MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS = 5 * 60 * 1000;
 
 /**
  * The authenticated registry/sync adapter is the trust boundary for this
@@ -84,7 +82,7 @@ export class PicoIdentityReaderKeySelector {
     private readonly sodium: IdentityVerificationSodium,
     private readonly freshnessSource: PicoIdentityReaderKeyFreshnessSource
       = new UnavailablePicoIdentityReaderKeyFreshnessSource(),
-    private readonly maxFreshnessMs: number = MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS,
+    private readonly maxFreshnessMs: number = maxPicoIdentityReaderKeyFreshnessMs,
   ) {
     if (!Number.isSafeInteger(maxFreshnessMs) || maxFreshnessMs < 1) {
       throw new Error('Reader-key freshness maximum must be a positive integer.');
