@@ -912,6 +912,41 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B75 — Der Vault-Daemon hatte für jeden Grund eine Auditzeile und für das
+Unerwartete nichts (2026-09-07).** B74 hat den Trichter im Home geschlossen;
+die Frage dazu ist, ob die anderen Prozesse denselben haben. Der Daemon hat ihn
+nicht — er hat das Gegenteil: **gar keinen Fang** um seinen Versand.
+
+Ein Wurf aus einem Behandler verliess den Ereignisbehandler des Sockets, und
+Node beendet dann den Prozess. Kein `uncaughtException`-Netz gibt es im ganzen
+Baum (nachgesehen, nicht vermutet). Die Folge war dreiteilig, und nur der erste
+Teil war richtig:
+
+- Jede offene Sitzung starb mit — die **sichere** Richtung für einen Prozess,
+  der Schlüsselmaterial hält.
+- Das Audit, die einzige forensische Fläche dieses Prozesses, blieb **leer**.
+  Wer nachsieht, warum eine Zeremonie abbrach, findet einen Stapelabzug auf
+  stderr und sonst nichts.
+- Der Aufrufer bekam **keine Antwort**, sondern eine Verbindung, die abbricht.
+
+Das zeigt die Pflanzung wörtlich: ohne den Fang läuft der Test in die
+Zeitüberschreitung („Test timed out in 5000ms") und der Fehler erscheint als
+*Unhandled Error* — im Betrieb ist das der tote Daemon.
+
+Jetzt wird es unter **eigenem Namen** auditiert (`unexpected_failure`, nicht
+`protocol_error`): ein Fehler des Daemons ist keine Aussage über den Aufrufer.
+Das ist derselbe Satz wie in B72, einen Prozess weiter. Der Aufrufer bekommt
+eine Antwort, die Verbindung endet — der Daemon weiss ja nicht, in welchem
+Zustand er ist — aber der Prozess lebt, und der Test weist das nach, indem er
+danach eine zweite Verbindung bedienen lässt.
+
+Der Grund im Audit geht durch `reasonOf`, das nur snake_case durchlässt: eine
+freie Fehlermeldung mit Pfaden und Werten erreicht die Zeile nicht. Und der
+Versand steht jetzt als eigene Methode da, damit der Fang **eine** Zeile ist
+statt dreihundert verschobener.
+
+Voller Lauf: 2.944 Tests, Ausgang 0.
+
 **B74 — Alle 55 Operationen laufen durch einen Fang, und der vergass jede
 Ursache (2026-09-07).** Nach B72 war ich verpflichtet nachzusehen, **wo der
 Wurf landet**, den ich dort absichtlich erzeugt habe — sonst hätte ich eine

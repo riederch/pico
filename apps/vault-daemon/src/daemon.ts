@@ -466,6 +466,25 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
 
     this.#sweep();
 
+    // Befund B75. Alles, was kein Fall vorhergesehen hat.
+    try {
+      this.#dispatchRequest(socket, state, request, frame);
+    } catch (error) {
+      this.#unexpectedFailure(socket, request, error);
+    }
+  }
+
+  /**
+   * Die geschlossene Liste dessen, was dieser Daemon tut - als eigene Methode,
+   * damit der Fang darum eine Zeile ist und nicht dreihundert Zeilen
+   * verschoben werden mussten, um ihn hinzuschreiben.
+   */
+  #dispatchRequest(
+    socket: Socket,
+    state: ConnectionState,
+    request: PicoVaultDaemonRequest,
+    frame: Buffer,
+  ): void {
     switch (request.family) {
       case picoVaultDaemonRequestFamilies.hello: {
         if (state.helloDone) {
@@ -1935,6 +1954,35 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   #protocolViolation(socket: Socket, requestId: string, reason: string): void {
     this.#audit('protocol_error', { reason });
     this.#respondError(socket, requestId, reason);
+    socket.end();
+    socket.destroySoon();
+  }
+
+  /**
+   * Was kein Fall vorhergesehen hat - unter eigenem Namen (Befund B75).
+   *
+   * Bis hierher hatte der Daemon fuer alles einen Grund und fuer jeden Grund
+   * eine Auditzeile. Fuer das Unerwartete hatte er nichts: ein Wurf aus einem
+   * Behandler verliess den Ereignisbehandler des Sockets, und Node beendet
+   * dann den Prozess. Jede offene Sitzung war weg - das ist die sichere
+   * Richtung - aber das Audit, die einzige forensische Flaeche dieses
+   * Prozesses, blieb leer. Wer nachsieht, warum eine Zeremonie abbrach,
+   * findet einen Stapelabzug auf stderr und sonst nichts.
+   *
+   * Ein eigener Ereignisname, kein `protocol_error`: ein Fehler des Daemons
+   * ist keine Aussage ueber den Aufrufer. Das ist derselbe Satz wie in B72,
+   * einen Prozess weiter.
+   *
+   * Die Verbindung endet trotzdem, denn der Daemon weiss an dieser Stelle
+   * nicht, in welchem Zustand er ist - aber sie endet mit einer Antwort und
+   * einer Zeile statt mit einem toten Prozess.
+   */
+  #unexpectedFailure(socket: Socket, request: PicoVaultDaemonRequest, error: unknown): void {
+    this.#audit('unexpected_failure', {
+      family: request.family,
+      reason: reasonOf(error, 'unexpected_failure'),
+    });
+    this.#respondError(socket, request.requestId, 'unexpected_failure');
     socket.end();
     socket.destroySoon();
   }

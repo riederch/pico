@@ -256,6 +256,59 @@ const packagedVersion: string = JSON.parse(
 ).version;
 
 describe('Pico Vault daemon custody boundary (ADR 0097 D2)', () => {
+  /**
+   * Was kein Fall vorhergesehen hat (Befund B75).
+   *
+   * Der Daemon hatte fuer jeden Grund eine Auditzeile und fuer das Unerwartete
+   * nichts: ein Wurf aus einem Behandler verliess den Ereignisbehandler des
+   * Sockets, und Node beendet dann den Prozess. Jede Sitzung war weg - die
+   * sichere Richtung - aber die einzige forensische Flaeche dieses Prozesses
+   * blieb leer, und der Aufrufer sass an einer Verbindung, die einfach
+   * abbrach.
+   *
+   * Der Wurf wird hier ueber die Auditsenke erzeugt, weil sie die einzige
+   * Abhaengigkeit ist, die ein Test von aussen brechen kann. Die
+   * Standardsenke schreibt auf stderr und wirft nicht; eine eigene ist der
+   * Vertrag ihres Besitzers.
+   */
+  it('audits what no case foresaw, answers it and keeps running', async () => {
+    const paths = makeHome();
+    const audit: string[] = [];
+    const daemon = await startPicoVaultDaemon({
+      sodium,
+      vaultHomePath: paths.home,
+      foundationDataPath: paths.foundationDataPath,
+      foundationBackupPath: paths.foundationBackupPath,
+      auditSink: (line) => {
+        audit.push(line);
+        if (line.includes('"event":"locked"')) {
+          throw new Error('audit_sink_broke');
+        }
+      },
+    });
+    daemons.push(daemon);
+
+    const client = await openClient(daemon);
+    await client.unlock({
+      keyRole: 'pico_identity',
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      passphrase: PASSPHRASE,
+    });
+
+    await expect(client.lock()).rejects.toThrow('unexpected_failure');
+
+    // Die Zeile ist da, unter eigenem Namen: ein Fehler des Daemons ist keine
+    // Aussage ueber den Aufrufer, also kein `protocol_error`.
+    const line = audit.find((entry) => entry.includes('"event":"unexpected_failure"'));
+    expect(line).toBeDefined();
+    expect(line).toContain('"family":"pico.vault.daemon.lock.v1"');
+    expect(line).toContain('"reason":"audit_sink_broke"');
+
+    // Und der Prozess lebt: eine neue Verbindung wird bedient.
+    const second = await openClient(daemon);
+    await expect(second.status()).resolves.toBeDefined();
+  });
+
   it('starts private, refuses a second live daemon and restarts locked after close', async () => {
     const paths = makeHome();
     const { daemon } = await startAt(paths);
