@@ -250,17 +250,42 @@ export class PicoModelRuntime {
    */
   private async assertMeasuredModel(entry: PicoModelProviderEntry): Promise<void> {
     let served: unknown;
+    /**
+     * Dieselbe Frist wie die Antwort, mit null erwarteten Token (Befund B77).
+     *
+     * Die Erzeugung eine Methode weiter hat seit jeher eine Frist; diese
+     * Pruefung hatte keine - und sie laeuft *davor*. Ein Anbieter, der die
+     * Verbindung annimmt und dann schweigt, hielt damit einen Auftrag fest,
+     * bevor dessen Uhr ueberhaupt zu laufen begann. Der Zustand
+     * `provider_did_not_answer_in_time` war fuer die zweite Haelfte des Wegs
+     * erreichbar und fuer die erste nicht.
+     *
+     * Abgeleitet und nicht gewaehlt, wie die Formel es selbst verlangt: eine
+     * Frage nach den Gewichten erzeugt keine Token, also null - was uebrig
+     * bleibt, ist die vom Eintrag erklaerte Kaltladezeit und der Aufschlag
+     * darauf. Wer laenger braucht, um seine eigenen Etiketten aufzuzaehlen,
+     * antwortet nicht.
+     */
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, picoModelJobDeadlineMs(entry, 0));
     try {
-      const response = await this.call(`${entry.reach}/api/tags`, { method: 'GET' });
+      const response = await this.call(`${entry.reach}/api/tags`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
       if (!response.ok) {
         throw new Error(String(response.status));
       }
       served = await response.json();
     } catch (error) {
       throw new PicoModelDispatchError(
-        'provider_unreachable',
+        controller.signal.aborted ? 'provider_did_not_answer_in_time' : 'provider_unreachable',
         error instanceof Error ? error.message : 'failed',
       );
+    } finally {
+      clearTimeout(timer);
     }
     const models = (served as { models?: Array<{ name?: string; digest?: string }> }).models ?? [];
     const here = models.find((model) => model.name === entry.model.identifier);

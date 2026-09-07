@@ -63,12 +63,21 @@ function modelHost(options: {
   digest?: string;
   status?: number;
   hangs?: boolean;
+  /** Befund B77: der Anbieter nimmt an und schweigt schon bei der Pinpruefung. */
+  tagsHang?: boolean;
   onGenerate?: () => void;
 } = {}): { fetch: typeof globalThis.fetch; generates: number } {
   const state = { generates: 0 };
   const impl = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname;
     if (path === '/api/tags') {
+      if (options.tagsHang === true) {
+        return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new Error('aborted'));
+          });
+        });
+      }
       return new Response(JSON.stringify({
         models: [{ name: 'a-model:measured', digest: `sha256:${options.digest ?? digest}` }],
       }), { status: 200 });
@@ -233,6 +242,40 @@ describe('ADR 0118 O2 - slow is unavailable', () => {
       }),
     });
     await expect(pending).rejects.toThrow('provider_did_not_answer_in_time');
+  });
+
+  /**
+   * Die Pinpruefung ist der erste Schritt und hatte als einziger keine Frist
+   * (Befund B77).
+   *
+   * ADR 0142 PE6 fragt den Host nach den Gewichten, *bevor* etwas hinausgeht.
+   * Die Erzeugung danach hat seit jeher eine Frist; diese Frage hatte keine -
+   * ein Anbieter, der die Verbindung annimmt und dann schweigt, hielt einen
+   * Auftrag fest, bevor dessen Uhr zu laufen begann. Der Zustand war fuer die
+   * zweite Haelfte des Wegs erreichbar und fuer die erste nicht.
+   */
+  it('bounds the pin check too, not just the answer after it', async () => {
+    const host = modelHost({ tagsHang: true });
+    const runtime = new PicoModelRuntime({ fetch: host.fetch, now: () => nowMs });
+    const pending = runtime.dispatch({
+      job: job(),
+      entry: entry({
+        measurement: {
+          measuredAt: '2026-08-13T12:00:00.000Z',
+          capacity: {
+            contextTokens: 1024,
+            generationTokensPerSecond: 1_000_000,
+            promptTokensPerSecond: 1_000_000,
+            concurrentJobs: 1,
+          },
+          residency: { coldLoadMs: 1, reloadMs: 1, keepAliveMs: 300_000 },
+        },
+      }),
+    });
+    await expect(pending).rejects.toThrow('provider_did_not_answer_in_time');
+    // Und nichts ist hinausgegangen: die Pruefung steht vor der Erzeugung,
+    // also darf der schweigende Anbieter keinen Satz gesehen haben.
+    expect(host.generates).toBe(0);
   });
 });
 

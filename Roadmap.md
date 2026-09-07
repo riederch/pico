@@ -912,6 +912,52 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B77 — Das Home begrenzte die Antwort und nicht die Frage davor
+(2026-09-07).** Gemessen: dreissig ausgehende HTTP-Anfragen im Produkt, drei
+davon mit einer Frist. Und die drei sind genau **alles, was mit einem Relay
+spricht** — der Link-Client, der Relay-Client, der Betreiber-Client. Sonst
+nichts.
+
+(Zwei Anläufe. Der erste zählte nur `fetch(` und übersah den Relay-Client, weil
+der über eine eingespeiste Funktion ruft; der zweite zählte die *Anfrageform*
+`method: '…'` und übersah `model-runtime.ts`, weil dessen `signal:` sechzehn
+Zeilen entfernt steht. Beide Male habe ich die Dateien danach von Hand
+angesehen, statt die Zahl zu nehmen.)
+
+**Der Fund liegt im Modellpfad.** `PicoModelRuntime.dispatch` tut zwei Dinge
+nacheinander:
+
+1. `assertMeasuredModel` fragt den Anbieter nach seinen Gewichten — ADR 0142
+   PE6, *„before anything leaves"*. **Ohne Frist.**
+2. `send` erzeugt die Antwort. **Mit Frist**, aus dem Eintrag abgeleitet.
+
+Ein Anbieter, der die Verbindung annimmt und dann schweigt, hielt damit einen
+Auftrag fest, **bevor dessen Uhr überhaupt zu laufen begann**. Der Zustand
+`provider_did_not_answer_in_time` war für die zweite Hälfte des Wegs erreichbar
+und für die erste nicht — ein Wort für einen Fall, den man auf halbem Weg nicht
+erreichen konnte.
+
+Die Prüfung hat jetzt dieselbe Frist, **abgeleitet und nicht gewählt**, wie die
+Formel es selbst verlangt (*„Built from the entry rather than chosen"*): mit
+null erwarteten Token, denn eine Frage nach den Gewichten erzeugt keine. Übrig
+bleibt die vom Eintrag erklärte Kaltladezeit und ihr Aufschlag — wer länger
+braucht, um seine eigenen Etiketten aufzuzählen, antwortet nicht.
+
+Gepflanzt: die Frist wieder heraus. Der Test läuft in die Zeitüberschreitung —
+genau das Betriebsbild, das eine Zuteilung zeigt, die nie zurückkehrt.
+
+**Was offen bleibt und eine Entscheidung ist, keine Lücke.**
+`model-provider-measure.ts` hat **gar keine** Frist, vier Anfragen. Die Messung
+läuft absichtlich unbeaufsichtigt (*„every outcome lands in the live view and in
+the log"*), also bleibt ein Hängen dort für immer auf `state: 'running'` stehen.
+Eine Frist dafür müsste **gewählt** werden und kann nicht abgeleitet sein — die
+Messung ist ja das, was die Zahlen erzeugt, aus denen man ableiten würde. Die
+dreizehn Anfragen des Dashboards stehen in derselben Lage, mit kleinerem
+Einsatz. Beides bleibt ungeändert und steht hier, statt dass ich eine Zahl
+erfinde.
+
+Voller Lauf: 2.946 Tests, Ausgang 0.
+
 **B76 — Nach aussen schweigen ist Absicht, nach innen schweigen war keine
 (2026-09-07).** B74 und B75 hatten je einen Prozess. Diesmal habe ich die Frage
 allen vieren gestellt, und die Antwort war dreimal dieselbe.
