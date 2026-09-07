@@ -23,6 +23,7 @@ import {
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRotationSignatureInput,
+  picoHomeDeviceRecoveryTiming,
   picoTestValidityWindow,
 } from '@pico/protocol';
 import {
@@ -52,6 +53,21 @@ afterEach(() => {
 });
 
 describe('ADR 0114 T2 identity root rotation projection', () => {
+  /**
+   * ADR 0114 inherits ADR 0110's veto delay "rather than duplicating" it.
+   * The Home duplicated it anyway - a second 48 hours of its own, which the
+   * ADR's own sentence says it must not be (Befund B68).
+   *
+   * The other half of this stands in `packages/protocol/src/recovery.test.ts`
+   * and holds the protocol's two values together. This half holds the Home
+   * against the protocol, because that is where the copy was, and a test on
+   * the far side of the import would not have seen it.
+   */
+  it('takes its veto window from the recovery delay rather than naming one', () => {
+    expect(PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS)
+      .toBe(picoHomeDeviceRecoveryTiming.vetoDelayMs);
+  });
+
   it('needs a living device of the rotating identity to co-sign', () => {
     const fixture = createFixture();
     const signed = signRotation(fixture);

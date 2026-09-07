@@ -912,6 +912,39 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B68 — Der ADR sagt „erbt statt zu verdoppeln", der Code verdoppelte
+(2026-09-07).** ADR 0114 begründet das Vetofenster der Wurzelrotation nicht
+selbst. Er schreibt, die Rotation *erbe* von ADR 0110 „its device asymmetry,
+veto delay and loudness **rather than duplicating them**" — eine Bedrohung, eine
+Antwort. Der Kern hatte sie trotzdem verdoppelt:
+`PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS = 48 * 60 * 60 * 1_000`, ein zweites
+Mal geschrieben unter einem zweiten Namen, in einer Datei, die die Zeiten der
+Wiederherstellung eine Zeile weiter oben korrekt aus dem Protokoll *bezieht*.
+
+Heute stimmen die beiden Zahlen. Das ist kein Zustand, das ist ein Zufall mit
+einem Datum darauf: Wer ADR 0110 auf 72 Stunden hebt, hebt das eine und lässt
+das andere stehen — und der Satz „die Rotation erbt" wäre ab diesem Tag falsch,
+ohne dass irgendetwas rot wird.
+
+Die Rotation liest ihr Fenster jetzt aus dem Protokoll, wo es genau einmal
+steht, und zwar dort, wo der geerbte Wert steht statt neben der kanonischen
+Form der Rotation — weil er *dieser Wert ist* und kein zweiter, der zufällig
+gleich lautet. Der Grund ist derselbe, den die Wiederherstellungszeiten schon
+nennen: eine Zeremonie-Fläche auf der Personenseite muss dieselbe Schranke
+zeigen, die das Home durchsetzt, also ist es Protokollpolitik und keine
+Wirtseinstellung.
+
+**Zwei Netze, weil ein Netz die falsche Seite gehalten hätte.** Der Test im
+Protokoll hält die beiden Protokollwerte zusammen; er hätte einen Rückfall im
+Kern nicht gesehen, denn der liegt jenseits des Imports. Der zweite Test steht
+deshalb dort, wo der Fehler *war*. Beide gepflanzt: 72 Stunden im Kern
+(`expected 259200000 to be 172800000`, und fünf weitere Tests fielen als
+Folge — der neue nennt die Ursache), 24 Stunden im Protokoll
+(`expected 86400000 to be 172800000`).
+
+**Keine Zahl steht in einem der beiden Tests.** Ein Test, der 48 Stunden
+wiederholt, wäre die dritte Kopie gewesen.
+
 **B67 — Achtundfünfzig Minuten, und zwei meiner drei Vermutungen waren falsch
 (2026-09-05).** Der Nutzer brachte die Zahl mit: „Verify release gates" 58 min,
 Container-Rauchtest 19 min. Jeder Schritt der Kette einzeln mit der Wanduhr

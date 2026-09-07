@@ -97,6 +97,7 @@ import {
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
+  picoIdentityRootRotationTiming,
   picoIdentitySuite,
   picoShareEnvelopeRecordSchema,
   picoShareSuite,
@@ -363,7 +364,11 @@ export type PicoHomeDeviceRecoveryVetoResult =
       | 'recovery_anchor_unavailable';
   };
 
-export const PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS = 48 * 60 * 60 * 1_000;
+// ADR 0114 T1. Named here so the Home's callers keep their word, but the value
+// is the protocol's: the rotation inherits ADR 0110's veto delay rather than
+// setting one of its own.
+export const PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS =
+  picoIdentityRootRotationTiming.vetoDelayMs;
 
 /**
  * ADR 0114 T3. The device the successor root will hold once the rotation is

@@ -74,6 +74,24 @@ export const picoHomeDeviceRecoveryTiming = {
   completionWindowMs: 7 * 24 * 60 * 60 * 1_000,
 } as const;
 
+/**
+ * ADR 0114 T1. The root rotation's veto window, and it stands here rather than
+ * beside the rotation's canonical form because it *is* the value above.
+ *
+ * ADR 0114 says the rotation "inherits ADR 0110's device asymmetry, veto delay
+ * and loudness rather than duplicating them" - it is one threat with one
+ * answer, not two policies that happen to agree on 48 hours today. The Home
+ * wrote the number a second time (Befund B68); a truth written twice drifts,
+ * and this one would have drifted into contradicting the ADR that named it.
+ *
+ * A person-side ceremony client must bound the window it shows by the same
+ * value the Home enforces, which is why this is protocol policy rather than
+ * host configuration - the same reason the recovery timing above gives.
+ */
+export const picoIdentityRootRotationTiming = {
+  vetoDelayMs: picoHomeDeviceRecoveryTiming.vetoDelayMs,
+} as const;
+
 export interface PicoRecoveryCardPayload {
   schema: typeof picoRecoveryCardSchema;
   suite: string;

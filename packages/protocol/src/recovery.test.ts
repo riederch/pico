@@ -16,6 +16,7 @@ import {
   picoHomeDeviceRecoveryRecordSchema,
   picoHomeDeviceRecoverySubmissionSchema,
   picoHomeDeviceRecoveryTiming,
+  picoIdentityRootRotationTiming,
   picoProtocolVersion,
   picoRecoveryCardSchema,
   picoRecoveryCardScanPrefix,
@@ -85,6 +86,23 @@ describe('ADR 0110 recovery protocol forms', () => {
       vetoDelayMs: 48 * 60 * 60 * 1_000,
       completionWindowMs: 7 * 24 * 60 * 60 * 1_000,
     });
+  });
+
+  /**
+   * ADR 0114 says the root rotation "inherits ADR 0110's device asymmetry,
+   * veto delay and loudness rather than duplicating them". The Home had
+   * duplicated it: a second `48 * 60 * 60 * 1_000` under its own name
+   * (Befund B68).
+   *
+   * This is tautological against today's definition and deliberately so - it
+   * is not here to prove the current line, it is here to fail the day
+   * somebody gives the rotation a window of its own. The number is written
+   * nowhere in it: a test that repeated 48 hours would be the third copy.
+   */
+  it('gives the root rotation the recovery veto delay rather than one of its own', () => {
+    expect(picoIdentityRootRotationTiming.vetoDelayMs)
+      .toBe(picoHomeDeviceRecoveryTiming.vetoDelayMs);
+    expect(Object.keys(picoIdentityRootRotationTiming)).toEqual(['vetoDelayMs']);
   });
 
   it('refuses a card whose text is not valid UTF-8', () => {
