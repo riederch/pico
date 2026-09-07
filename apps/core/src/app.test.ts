@@ -260,6 +260,44 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
+  /**
+   * Die groesste Flaeche des Produkts begrenzt das Empfangen einer Anfrage
+   * (Befund B78).
+   *
+   * Dieselbe Frage ist in diesem Baum zweimal entschieden - der Link-Eingang
+   * und das Relay setzen genau diese drei Werte, mit derselben Begruendung.
+   * Die einundsechzig Routen der Foundation hatten sie nicht, und der Grund
+   * ist eine Vorgabe: Node begrenzt das Empfangen von sich aus auf fuenf
+   * Minuten, Fastify setzt `requestTimeout` auf 0. Wer den Rahmen nimmt,
+   * verliert den Schutz der Laufzeit, ohne dass etwas fehlt.
+   *
+   * **Was dieser Test ist und was nicht.** Er liest die Werte am *laufenden*
+   * Server, nicht im Quelltext - er faellt also, wenn die Option verschwindet
+   * oder Fastify sie nicht mehr durchreicht. Er schickt keine halbe Anfrage:
+   * ein echter Gang muesste zehn Sekunden warten, in jedem CI-Lauf, und was
+   * er zusaetzlich bewiese, ist Nodes Vertrag und nicht unserer. Das steht
+   * hier, damit niemand mehr hineinliest, als dasteht.
+   */
+  it('bounds how long it will spend receiving a request', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    expect(app.server.requestTimeout).toBe(10_000);
+    expect(app.server.headersTimeout).toBe(5_000);
+    expect(app.server.keepAliveTimeout).toBe(5_000);
+
+    // Der andere Wert bleibt aus: `connectionTimeout` misst Stille auf dem
+    // Socket, und Stille ist genau das, was ein Behandler erzeugt, waehrend er
+    // arbeitet.
+    expect(app.server.timeout).toBe(0);
+
+    await app.close();
+  });
+
   it('sends baseline security headers on every response and serves the stylesheet', async () => {
     const app = await buildApp({
       host: '127.0.0.1',

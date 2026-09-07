@@ -319,6 +319,30 @@ const MAX_EVENT_LIMIT = 500;
 const MAX_TEXT_LENGTH = 8_000;
 const MAX_PAYLOAD_BYTES = 32 * 1024;
 const REQUEST_BODY_LIMIT_BYTES = MAX_PAYLOAD_BYTES + (8 * 1024);
+
+/**
+ * Wie lange diese Flaeche auf eine Anfrage wartet, die schon begonnen hat
+ * (Befund B78).
+ *
+ * Dieselbe Frage ist in diesem Baum zweimal entschieden: der Link-Eingang und
+ * das Relay setzen beide genau diese drei Werte, mit derselben Begruendung -
+ * „abuse guardrails, not authentication". Die groesste Flaeche des Produkts,
+ * einundsechzig Routen, hatte sie nicht.
+ *
+ * Der Grund ist die Vorgabe des Rahmens: Node begrenzt das Empfangen einer
+ * Anfrage von sich aus auf fuenf Minuten, und Fastify setzt `requestTimeout`
+ * auf 0. Wer den Rahmen nimmt, verliert den Schutz, den die Laufzeit mitbringt
+ * - und merkt es nicht, weil nichts fehlt, sondern etwas abgeschaltet wurde.
+ *
+ * `requestTimeout` begrenzt das *Empfangen*, nicht die Laufzeit eines
+ * Behandlers: eine Route, die lange rechnet, wird davon nicht abgeschnitten.
+ * `connectionTimeout` waere das andere und steht deshalb bewusst nicht hier -
+ * es misst Stille auf dem Socket, und Stille ist genau das, was ein Behandler
+ * erzeugt, waehrend er arbeitet.
+ */
+const PICO_FOUNDATION_REQUEST_TIMEOUT_MS = 10_000;
+const PICO_FOUNDATION_HEADERS_TIMEOUT_MS = 5_000;
+const PICO_FOUNDATION_KEEP_ALIVE_TIMEOUT_MS = 5_000;
 const MAX_INCOMING_LAMPORT = 1_000_000_000;
 const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 const RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
@@ -599,7 +623,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       },
     },
     bodyLimit: REQUEST_BODY_LIMIT_BYTES,
+    requestTimeout: PICO_FOUNDATION_REQUEST_TIMEOUT_MS,
+    keepAliveTimeout: PICO_FOUNDATION_KEEP_ALIVE_TIMEOUT_MS,
   });
+  // Node kennt diesen dritten Wert, Fastify reicht ihn nicht durch.
+  app.server.headersTimeout = PICO_FOUNDATION_HEADERS_TIMEOUT_MS;
   await app.register(websocket);
 
   /**

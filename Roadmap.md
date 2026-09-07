@@ -912,6 +912,43 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B78 — Der Rahmen hat eine Grenze abgeschaltet, die die Laufzeit mitbringt
+(2026-09-07).** Der Spiegel zu B77: was **hereinkommt**. Dieser Baum hat drei
+lauschende HTTP-Flächen, und zwei davon setzen genau dieselben drei Werte, mit
+derselben Begründung im Kommentar — *„abuse guardrails, not authentication"*:
+
+| Fläche | Empfangsfrist | Kopfzeilen | Keep-Alive |
+|---|---|---|---|
+| Link-Eingang | 10 s | 5 s | 5 s |
+| Relay | 10 s | 5 s | 5 s |
+| **Foundation, 61 Routen** | **keine** | 60 s (Node) | 72 s (Fastify) |
+
+**Und es fehlte nicht, es war abgeschaltet.** Node begrenzt das Empfangen einer
+Anfrage von sich aus auf fünf Minuten; Fastify setzt `requestTimeout` auf `0`.
+Wer den Rahmen nimmt, verliert eine Grenze, die die Laufzeit mitbringt — und
+merkt es nicht, weil nichts *fehlt*, sondern etwas *entfernt* wurde. Die
+Pflanzung sagt es wörtlich: `expected +0 to be 10000`.
+
+Ein Aufrufer, der eine Anfrage beginnt und den Rumpf beliebig langsam
+nachschiebt, hielt eine Verbindung und einen Anfragekontext unbegrenzt fest.
+Die Mengengrenze aus ADR 0119 Q4 hilft dagegen nicht: sie zählt *fertige*
+Anfragen, und diese wird nie fertig.
+
+`requestTimeout` begrenzt das **Empfangen**, nicht die Laufzeit eines
+Behandlers — eine Route, die lange rechnet, wird davon nicht abgeschnitten.
+Deshalb steht `connectionTimeout` bewusst **nicht** dabei: das misst Stille auf
+dem Socket, und Stille ist genau das, was ein Behandler erzeugt, während er
+arbeitet. Der Test hält auch das fest (`timeout` bleibt 0), damit die
+Auslassung eine Entscheidung bleibt und kein Vergessen.
+
+**Was der Test ist und was nicht,** und es steht in ihm: er liest die Werte am
+*laufenden* Server, nicht im Quelltext — er fällt also, wenn die Option
+verschwindet oder Fastify sie nicht mehr durchreicht. Er schickt keine halbe
+Anfrage: ein echter Gang müsste zehn Sekunden warten, in jedem CI-Lauf, und was
+er zusätzlich bewiese, ist Nodes Vertrag und nicht unserer.
+
+Voller Lauf: 2.947 Tests, Ausgang 0.
+
 **B77 — Das Home begrenzte die Antwort und nicht die Frage davor
 (2026-09-07).** Gemessen: dreissig ausgehende HTTP-Anfragen im Produkt, drei
 davon mit einer Frist. Und die drei sind genau **alles, was mit einem Relay
