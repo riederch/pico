@@ -161,7 +161,11 @@ Character Design v3.2.1; product code may not draw or recolor one.
   identity fingerprint mandatory for verifying the host continuity chain.
   The additive `pico.recovery.card.v2` inserts exactly that fingerprint after
   Home id and otherwise preserves the v1 fields and semantics. Its
-  authoritative vector is `docs/protocol/fixtures/home-device-recovery/card-v2.json`.
+  authoritative vector is the card node of
+  `docs/protocol/fixtures/home-device-recovery/suite.json`. It stood here as a
+  separate `card-v2.json` until 2026-09-07, which contradicted the sentence
+  fifteen lines above that says the vector moved - one decision, two answers,
+  and the later one pointed at a file that is gone.
   New companion issuance uses v2. A v1 card may still restore the root, but a
   product may create a trusted profile from it only when the person supplies
   the acceptor pin through a separately verified path; the fresh-Vault daemon

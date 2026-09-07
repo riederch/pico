@@ -15,7 +15,7 @@ ADR 0016 allows platform keystores, libsodium primitives and age-style backup pr
 The real deployment surfaces this design must fit:
 
 - **Home Assistant add-on:** the only persistent volume is `/data`; the database defaults to `/data/pico.sqlite`, SQLite backups to `/data/backups`. Home Assistant add-on backups capture the add-on's `/data` directory — so anything stored under `/data` lands in the same backup artifact as the database **unless the add-on explicitly excludes it** via the Supervisor's backup-exclude mechanism.
-- **Bare Node process:** database path from `PICO_DATABASE_PATH` (default `apps/core/data/pico.sqlite`), backup directory from `PICO_BACKUP_DIRECTORY` (default `<db-dir>/backups`). The user owns whatever additional backup tooling copies these paths.
+- **Bare Node process:** database path from `PICO_DATABASE_PATH` (default: `data/pico.sqlite` unter `apps/core`, zur Laufzeit angelegt), backup directory from `PICO_BACKUP_DIRECTORY` (default `<db-dir>/backups`). The user owns whatever additional backup tooling copies these paths.
 - **No platform keystore is reliably available** in the add-on container: no OS keyring, no assumed TPM. The design must work with plain files first and allow stronger anchors later.
 
 ## Decision

@@ -115,7 +115,7 @@ C3."* It broke a `release:verify` run on 2026-08-18 with 231.7 MB, and two
 runs of the same binary minutes apart gave 232.2 and 222.7 MB - the budget
 straddled, which is the worst place for a limit to sit.
 
-`scripts/tray-memory-budget.mjs` decides it now. Under the root-owned setuid
+`apps/companion-shell/scripts/tray-memory-budget.mjs` decides it now. Under the root-owned setuid
 probe the 225 MB PSS limit is strict and unchanged; in any other mode the
 number is printed with the mode, the documented ~17.5 MB difference and the
 environment variable that brings the strict check back. **Nothing is

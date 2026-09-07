@@ -273,38 +273,6 @@ const topLevelDirectories = new Set(
     .filter((entry) => entry.isDirectory() && !notPartOfTheTree(entry.name))
     .map((entry) => entry.name),
 );
-let matrixPathsChecked = 0;
-matrix.split('\n').forEach((line, index) => {
-  if (!line.startsWith('|')) {
-    return;
-  }
-  for (const [, token] of line.matchAll(/`([^`\s]+)`/gu)) {
-    const named = token.replace(/[.,;:)]+$/u, '');
-    if (!named.includes('/')
-      || named.includes('*')
-      || !topLevelDirectories.has(named.split('/')[0])
-      || !/\.[a-z0-9]{1,5}$/iu.test(named)) {
-      continue;
-    }
-    matrixPathsChecked += 1;
-    if (existsSync(join(repoRoot, named))) {
-      continue;
-    }
-    errors.push(
-      `${matrixPath}:${index + 1}: names \`${named}\`, and there is no such file. This `
-      + 'matrix is read as the current state, so a path in it is a pointer somebody '
-      + 'follows rather than a record of where something was. Name where the file is '
-      + 'now, or say in the row that it is gone.',
-    );
-  }
-});
-if (matrixPathsChecked === 0) {
-  errors.push(
-    `${matrixPath}: no path under a root directory was checked, so this direction passed `
-    + 'over nothing. Either the matrix stopped naming evidence or the reading of it broke.',
-  );
-}
-
 // --- Second indexes over the ADRs --------------------------------------------
 
 /**
@@ -349,6 +317,62 @@ for (const entry of readdirSync(repoRoot, { withFileTypes: true })) {
   } else if (entry.name.endsWith('.md')) {
     markdownFiles.push(entry.name);
   }
+}
+
+/**
+ * **Und die Regel gilt fuer jedes Markdown, nicht nur fuer die Matrix**
+ * (2026-09-07, Befund B80).
+ *
+ * Sie stand hier fuer eine Datei und war die ganze Zeit die richtige Frage an
+ * alle. Ueber die 246 verfolgten Markdown-Dateien gestellt, fand sie neun tote
+ * Zeiger - zwei umbenannte Pruefer, zwei Skripte, die im Paket statt in
+ * `scripts/` liegen, eine Datei, die in `Roadmap.md` aufgegangen ist, ein
+ * Modulpfad unter `packages/` statt `modules/`, einen Vektor, den ADR 0110
+ * fuenfzehn Zeilen weiter oben selbst als umgezogen beschreibt, und einen
+ * Pruefer, den dieselbe Sitzung am selben Tag entfernt hatte, ohne
+ * `progress.md` nachzuziehen.
+ *
+ * Nach dem Berichtigen: **null**, und weiterhin ohne Ausnahmeliste - der Test,
+ * den der Absatz darueber an eine so billige Regel stellt. Der eine Kandidat
+ * fuer eine Ausnahme war ein *Laufzeit*pfad (die Datenbank, die ein Home
+ * anlegt), und der ist als Laufzeitpfad geschrieben worden statt ausgenommen.
+ */
+let matrixPathsChecked = 0;
+for (const file of markdownFiles) {
+  const isMatrix = file === matrixPath;
+  readFileSync(join(repoRoot, file), 'utf8').split('\n').forEach((line, index) => {
+    if (isMatrix && !line.startsWith('|')) {
+      return;
+    }
+    for (const [, token] of line.matchAll(/`([^`\s]+)`/gu)) {
+      const named = token.replace(/[.,;:)]+$/u, '');
+      if (!named.includes('/')
+        || named.includes('*')
+        || !topLevelDirectories.has(named.split('/')[0])
+        || !/\.[a-z0-9]{1,5}$/iu.test(named)) {
+        continue;
+      }
+      matrixPathsChecked += 1;
+      if (existsSync(join(repoRoot, named))) {
+        continue;
+      }
+      errors.push(
+        `${file}:${index + 1}: names \`${named}\`, and there is no such file. A `
+        + 'document is read as the current state, so a path in it is a pointer '
+        + 'somebody follows rather than a record of where something was. Name where '
+        + 'the file is now, or say in the line that it is gone.',
+      );
+    }
+  });
+}
+
+// Ein Tor ueber nichts sagt "sauber" und meint "ich habe nicht nachgesehen".
+if (matrixPathsChecked === 0) {
+  errors.push(
+    'no path under a root directory was checked in any document, so this direction '
+    + 'passed over nothing. Either the documents stopped naming evidence or the '
+    + 'reading of them broke.',
+  );
 }
 
 for (const file of markdownFiles) {

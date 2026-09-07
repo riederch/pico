@@ -912,6 +912,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B80 — Eine Regel stand für eine Datei und war die ganze Zeit die richtige
+Frage an alle (2026-09-07).** `check-docs-structure.mjs` prüft seit Wochen, ob
+die Statusmatrix Pfade nennt, die es gibt — mit einer Regel, die der Prüfer
+selbst als billig und ausnahmefrei lobt: *„a token that begins with a directory
+this repository actually has at its root, carries a file extension and no
+glob."* 880 Pfade, und sie fand damals zwei.
+
+Dieselbe Frage an die **246** verfolgten Markdown-Dateien gestellt: **neun tote
+Zeiger.**
+
+| Wo | Was |
+|---|---|
+| `Roadmap.md` ×2 | ein Modul unter `packages/` statt `modules/`; ein Prüfer, der `check-capability-reach.mjs` heisst |
+| ADR 0149 | derselbe umbenannte Prüfer |
+| ADR 0113, ADR 0130 | zwei Skripte, die im Paket liegen und nicht in `scripts/` |
+| ADR 0131 | eine Datei, die in `Roadmap.md` aufgegangen ist |
+| ADR 0110 | ein Vektor, den derselbe ADR fünfzehn Zeilen weiter oben **selbst als umgezogen beschreibt** — eine Entscheidung, zwei Antworten |
+| `progress.md` | `check-push-lifetime.mjs` — **von dieser Sitzung am selben Tag entfernt** (B69), ADR und Statusdatei nachgezogen, `progress.md` vergessen |
+
+Der letzte ist der, der die Regel verdient hat: ich habe an dem Tag drei
+Stellen nachgezogen und eine übersehen, und nichts hätte es gemerkt.
+
+**Nach dem Berichtigen: null — und weiterhin ohne Ausnahmeliste**, was der
+Absatz über der Regel selbst als ihren Test benennt. Der einzige Kandidat für
+eine Ausnahme war kein Repopfad, sondern ein *Laufzeit*pfad (die Datenbank, die
+ein Home anlegt); er ist als Laufzeitpfad geschrieben worden statt ausgenommen.
+1203 geprüfte Pfade statt 880.
+
+Zwei Pflanzungen: ein Tippfehler in einem Zeiger, und der alte falsche Pfad im
+ADR wieder eingesetzt. Beide werden mit Datei, Zeile und Namen genannt.
+
 **B79 — Drei Messungen ohne Fund, und eine Sperre, die es nicht gibt
 (2026-09-07).** Ein Eintrag ohne Fehlerbehebung, weil das Gemessene sonst
 morgen wieder gemessen wird.
@@ -3799,7 +3830,7 @@ ihren Text (0128) und halten fest, was entschieden wurde, ein dort genannter
 Pfad darf also Geschichte sein. In der Matrix ist ein Pfad dagegen ein Zeiger,
 dem jemand folgen soll. Zwei zeigten ins Leere.
 
-Einer davon ist der interessante: `packages/module-spatial-recall/src/ports.ts`
+Einer davon ist der interessante: `modules/spatial-recall/src/ports.ts`
 gibt es nicht, der Port liegt unter `modules/`. Das war der einzige Zeiger auf
 **B4**s zurückgestellte Arbeit — ADR 0129s deklarierter und leerer SR5-Port,
 der auf eine Sensor-Laufzeit wartet. Die Vertagung war begründet und datiert;
@@ -3866,7 +3897,7 @@ ebenso; `setPicoSupplierReach` machte beide Vorgaben zum einzigen erreichbaren
 Zustand, im ADR, dessen Titel ihre Existenz ist; `put()` ließ die
 Präsenz-Registry auf jedem echten Home leer; `appendPicoObservations` ist eine
 begründete Vertagung. Fünfmal durch Zufall oder durch `store:check`. Jetzt hält
-`scripts/check-companion-reach.mjs` die Klasse: eine Fähigkeit, die nichts
+`scripts/check-capability-reach.mjs` die Klasse: eine Fähigkeit, die nichts
 nennt, oder eine Begründung an ihrer Stelle — und eine Begründung, die ihren
 Gegenstand überlebt, fällt ebenfalls durch.
 

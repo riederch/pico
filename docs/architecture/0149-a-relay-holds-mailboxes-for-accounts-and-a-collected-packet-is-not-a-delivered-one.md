@@ -35,7 +35,7 @@ So the honest state is: the device half waits on the operator, and the reason
 it waits is now written where a reader meets it rather than inferred from a
 loop nobody starts.
 
-Held from now on by `scripts/check-companion-reach.mjs`, which refuses a
+Held from now on by `scripts/check-capability-reach.mjs`, which refuses a
 companion capability that nothing names and takes an argument in its place.
 The four modules are argued there, and an argument that outlives its module
 fails the check.

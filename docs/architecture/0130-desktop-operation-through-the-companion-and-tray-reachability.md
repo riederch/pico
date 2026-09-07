@@ -331,7 +331,7 @@ Status note, 2026-08-18: **E1 is closed, and the tray is now measured rather
 than assumed.**
 
 Three doors, each proven against the packaged `.deb` in
-`scripts/verify-linux-package.mjs`:
+`apps/companion-shell/scripts/verify-linux-package.mjs`:
 
 - the **desktop entry**, followed through rather than compared. The entry names
   a launcher script - ADR 0123 Z3 drops the core-dump limits there before

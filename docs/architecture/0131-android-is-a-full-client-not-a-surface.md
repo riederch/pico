@@ -1818,7 +1818,7 @@ local-first product's most security-critical moment.
   the client names an unreachable Home rather than presenting it as a quiet
   one, and no product surface or document claims away-from-home function.
   Decided 2026-08-09 together with the sequencing in `Roadmap.md` (which
-  absorbed `docs/development/roadmap-to-first-client.md` on 2026-08-21).
+  absorbed `Roadmap.md` on 2026-08-21).
 
   **The client half was missing, and not only on Android.** The alarm
   carrier's own comment said read failures "are counted and visible"; they
