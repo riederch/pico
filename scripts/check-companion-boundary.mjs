@@ -58,6 +58,37 @@ for (const rendererFile of ['contract.ts', 'renderer.ts']) {
   }
 }
 
+/**
+ * Die Grenze aus ADR 0113 C2 hinterlaesst eine Spur, bevor sie wirft
+ * (Befund B76).
+ *
+ * `assertRendererSender` antwortete bis zum 2026-09-07 nur dem Absender - im
+ * Ernstfall also dem, der die Grenze umgehen wollte. Electron lehnt den
+ * Aufruf ab und der Hauptprozess laeuft weiter; niemand sonst erfuhr, dass es
+ * versucht wurde. Dieselbe Frage ist am selben Tag im Home, im Vault-Daemon
+ * und im Relay gestellt worden, und die Antwort war dreimal dieselbe: nach
+ * aussen schweigen ist Absicht, nach innen schweigen war keine.
+ *
+ * **Was diese Regel nicht kann.** `main.ts` wird von keinem Test ausgefuehrt -
+ * die Schale hat Prozess-Tests fuer das Fenster, aber keinen, der einen
+ * fremden Absender erzeugt. Diese Pruefung haelt deshalb fest, dass die Zeile
+ * *dasteht*, nicht dass sie laeuft. Das ist weniger, als ein Gang waere, und
+ * es steht hier, statt dass jemand es fuer einen Gang haelt.
+ */
+const mainSource = readFileSync(join(shellRoot, 'src', 'main.ts'), 'utf8');
+const senderGuard = /function assertRendererSender\([\s\S]*?\n\}/u.exec(mainSource)?.[0] ?? '';
+if (!/process\.stderr\.write\(/.test(senderGuard)) {
+  errors.push(
+    'apps/companion-shell assertRendererSender must leave a trace before it throws: '
+    + 'a refused sender is told, and nobody else is.',
+  );
+}
+if (/senderFrame\?\.url\}|\$\{[^}]*url/u.test(senderGuard)) {
+  errors.push(
+    'apps/companion-shell assertRendererSender must not put the sender URL in that trace.',
+  );
+}
+
 const preload = readFileSync(join(shellRoot, 'src', 'preload.cts'), 'utf8');
 if (!preload.includes("contextBridge.exposeInMainWorld('picoCompanion'")) {
   errors.push('apps/companion-shell preload must expose the named picoCompanion bridge.');

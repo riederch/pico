@@ -116,9 +116,26 @@ export async function startPicoRelayServer(
   });
 
   const server = createServer((request, response) => {
-    void handle(request, response).catch(() => {
-      // Nothing about the failure travels: a relay that explained itself would
-      // be answering questions about somebody else's mailbox.
+    void handle(request, response).catch((error: unknown) => {
+      /**
+       * Nach aussen schweigen, nach innen sprechen (Befund B76).
+       *
+       * Das Schweigen nach aussen ist die Absicht und bleibt: ein Relay, das
+       * sich erklaerte, beantwortete Fragen ueber die Mailbox eines anderen.
+       * Das Schweigen nach innen war keine - der Betreiber hatte fuer jeden
+       * 500er nichts in der Hand, obwohl dieses Relay einen Protokollweg hat
+       * und ihn zwei Zeilen weiter oben schon benutzt.
+       *
+       * Nur eine snake_case-Meldung wird durchgereicht. Eine freie
+       * Fehlermeldung traegt Pfade, Adressen und Werte, und genau das ist
+       * hier das Verbotene: `check-link-seal.mjs` haelt fest, dass keine
+       * Mailbox-Adresse ein Log erreicht.
+       */
+      const message = error instanceof Error ? error.message : '';
+      options.log?.({
+        event: 'relay_request_failed',
+        reason: /^[a-z0-9_]+$/u.test(message) ? message : 'unnamed_failure',
+      });
       send(response, { status: 500, body: { error: 'relay_failed' } });
     });
   });

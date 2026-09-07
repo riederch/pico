@@ -912,6 +912,41 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B76 — Nach aussen schweigen ist Absicht, nach innen schweigen war keine
+(2026-09-07).** B74 und B75 hatten je einen Prozess. Diesmal habe ich die Frage
+allen vieren gestellt, und die Antwort war dreimal dieselbe.
+
+| Prozess | nach aussen | nach innen |
+|---|---|---|
+| Home (B74) | `operation_failed`, signiert, ohne Grund — **richtig** | nichts |
+| Vault-Daemon (B75) | Verbindung brach ab | nichts, Prozess tot |
+| **Relay** | `{"error":"relay_failed"}` — **richtig, mit Begründung im Code** | nichts |
+| **Companion-Schale** | Electron lehnt den Aufruf ab — **richtig** | nichts |
+
+Beim Relay steht der Grund für das äussere Schweigen seit jeher als Kommentar
+am Fang: *„a relay that explained itself would be answering questions about
+somebody else's mailbox."* Das ist richtig und bleibt. Das innere Schweigen ist
+daneben mitgelaufen — und das Relay **besitzt** einen Protokollweg, den es zwei
+Zeilen weiter oben schon benutzt. Ein Betreiber hatte für jeden 500er nichts in
+der Hand.
+
+Zwei Pflanzungen: die Meldung wieder ausbauen, und die freie Fehlermeldung
+ungefiltert durchreichen. Die zweite ist die wichtigere — sie hätte
+`ENOENT: … /home/somebody/relay.sqlite` ins Protokoll geschrieben. Nur
+snake_case kommt durch, alles andere wird `unnamed_failure`.
+
+**Die Schale ist der Fall, in dem ich weniger geliefert habe, und sage es.**
+`assertRendererSender` — die Grenze aus ADR 0113 C2 — antwortete nur dem
+Absender, im Ernstfall also dem, der sie umgehen wollte. Sie hinterlässt jetzt
+eine Zeile, ohne Adresse. Aber `main.ts` wird von **keinem** Test ausgeführt,
+und einen fremden Absender zu erzeugen bräuchte ein zweites Fenster in einem
+echten Electron. Die Regel steht deshalb im Grenzprüfer, der die Datei ohnehin
+liest, und hält fest, dass die Zeile **dasteht** — nicht, dass sie läuft. Das
+ist weniger als ein Gang, und es steht so im Prüfer, damit es niemand für einen
+hält. Zwei Pflanzungen dagegen: Zeile weg, und Adresse in der Zeile.
+
+Voller Lauf: 2.945 Tests, Ausgang 0.
+
 **B75 — Der Vault-Daemon hatte für jeden Grund eine Auditzeile und für das
 Unerwartete nichts (2026-09-07).** B74 hat den Trichter im Home geschlossen;
 die Frage dazu ist, ob die anderen Prozesse denselben haben. Der Daemon hat ihn

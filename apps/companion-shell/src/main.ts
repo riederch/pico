@@ -2589,6 +2589,20 @@ async function presentRecoveryCardRetry(): Promise<void> {
 
 function assertRendererSender(event: IpcMainEvent | IpcMainInvokeEvent): void {
   if (event.senderFrame?.url !== rendererUrl || event.sender !== window?.webContents) {
+    /**
+     * Nach aussen schweigen, nach innen sprechen (Befund B76).
+     *
+     * Diese Zeile ist die Grenze aus ADR 0113 C2, und sie hat bis hier nur
+     * dem Absender geantwortet - also im Ernstfall dem, der sie umgehen
+     * wollte. Electron lehnt den Aufruf ab und der Hauptprozess laeuft weiter;
+     * niemand sonst erfaehrt, dass es versucht wurde.
+     *
+     * Weder Bild noch Adresse: der Umstand genuegt, und eine URL im
+     * Protokoll ist genau das, was hier nicht hingehoert.
+     */
+    process.stderr.write(
+      'Pico companion: refused an IPC call from a sender that is not the app window.\n',
+    );
     throw new Error('untrusted_companion_ipc_sender');
   }
 }

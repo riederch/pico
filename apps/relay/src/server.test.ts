@@ -84,6 +84,65 @@ const packet = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('ADR 0149 - the relay surface', () => {
+  /**
+   * Nach aussen schweigen, nach innen sprechen (Befund B76).
+   *
+   * Das Schweigen nach aussen ist die Absicht und steht seit jeher als
+   * Kommentar an dem Fang: ein Relay, das sich erklaerte, beantwortete Fragen
+   * ueber die Mailbox eines anderen. Das Schweigen nach innen war keine
+   * Absicht - der Betreiber hatte fuer jeden 500er nichts in der Hand,
+   * obwohl dieses Relay einen Protokollweg besitzt und ihn beim vollen
+   * Ratenregister schon benutzt.
+   */
+  it('tells its operator what failed while telling the caller nothing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-relay-failure-'));
+    tempDirs.push(dir);
+    const store = new PicoRelayStore(join(dir, 'relay.sqlite'), operator);
+    stores.push(store);
+    store.createAccount({
+      credential: account,
+      mailboxQuota: 4,
+      maxCapacity: 1_000,
+      at: '2026-01-01T00:00:00.000Z',
+    });
+
+    const lines: Record<string, unknown>[] = [];
+    const server = await startPicoRelayServer({
+      store,
+      host: '127.0.0.1',
+      port: 0,
+      log: (line) => { lines.push(line); },
+    });
+    servers.push(server);
+    const base = `http://${server.host}:${server.port}`;
+
+    // Die erste Speicherberuehrung jeder Anfrage, also faellt alles darueber.
+    (store as unknown as Record<string, unknown>).isActiveAccount = () => {
+      throw new Error('relay_store_broke');
+    };
+
+    const response = await post(base, '/relay/register', {}, account);
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'relay_failed' });
+    expect(JSON.stringify(response.body)).not.toContain('store_broke');
+
+    expect(lines).toContainEqual({
+      event: 'relay_request_failed',
+      reason: 'relay_store_broke',
+    });
+
+    // Eine freie Meldung traegt Pfade und Werte - sie wird nicht durchgereicht.
+    lines.length = 0;
+    (store as unknown as Record<string, unknown>).isActiveAccount = () => {
+      throw new Error('ENOENT: no such file or directory, open /home/somebody/relay.sqlite');
+    };
+    expect((await post(base, '/relay/register', {}, account)).status).toBe(500);
+    expect(lines).toContainEqual({
+      event: 'relay_request_failed',
+      reason: 'unnamed_failure',
+    });
+  });
+
   it('carries a packet from registration to acknowledgement', async () => {
     const { base } = await startRelay();
 
