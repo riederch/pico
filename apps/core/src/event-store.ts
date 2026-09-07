@@ -2416,8 +2416,11 @@ export class EventStore {
             completionExpiresAt,
           );
       })();
-    } catch {
-      return { ok: false, reason: 'conflicting_record' };
+    } catch (error) {
+      if (isPicoUniqueConstraintViolation(error)) {
+        return { ok: false, reason: 'conflicting_record' };
+      }
+      throw error;
     }
 
     return {
@@ -2709,8 +2712,11 @@ export class EventStore {
             successorFirstDevice: params.successorFirstDevice,
           }),
         );
-    } catch {
-      return { ok: false, reason: 'conflicting_record' };
+    } catch (error) {
+      if (isPicoUniqueConstraintViolation(error)) {
+        return { ok: false, reason: 'conflicting_record' };
+      }
+      throw error;
     }
 
     return {
@@ -4164,7 +4170,7 @@ export class EventStore {
       if (error instanceof PicoHomeDeviceLifecycleCommitError) {
         return { ok: false, reason: error.reason };
       }
-      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      if (isPicoUniqueConstraintViolation(error)) {
         return { ok: false, reason: 'conflicting_record' };
       }
       throw error;
@@ -8274,6 +8280,29 @@ interface PicoHomeDeviceRecoveryRow {
   resolvedAt: string | null;
   supersededByRecoveryId: string | null;
   recoveryRecordJson: string | null;
+}
+
+/**
+ * Ist dieser Fehler eine Sachaussage oder ein Unfall?
+ *
+ * Eine Eindeutigkeitsverletzung ist eine Antwort an die Person: jemand war
+ * schneller, oder dieselbe Kennung wurde zweimal benutzt. Eine volle Platte,
+ * eine gesperrte Datenbank, ein E/A-Fehler, eine Tabelle, die eine misslungene
+ * Wanderung nicht hinterlassen hat - das sind keine Antworten, und wer sie als
+ * `conflicting_record` ausgibt, sagt der Person etwas ueber ihre Lage, was in
+ * Wahrheit etwas ueber das Geraet ist (Befund B72).
+ *
+ * Der Geraetelebenszyklus unterschied das schon; die Wiederherstellung und die
+ * Wurzelrotation nicht, und beides sind Pfade, die eine Person genau dann
+ * betritt, wenn sie nichts anderes mehr hat. Die Unterscheidung steht deshalb
+ * einmal hier statt dreimal verschieden.
+ *
+ * SQLite meldet auch eine verletzte Primaerschluessel-Bedingung als
+ * "UNIQUE constraint failed", weshalb die eine Zeichenkette beide Faelle deckt.
+ */
+function isPicoUniqueConstraintViolation(error: unknown): boolean {
+  return error instanceof Error
+    && error.message.includes('UNIQUE constraint failed');
 }
 
 class PicoHomeDeviceLifecycleCommitError extends Error {

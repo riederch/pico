@@ -68,6 +68,33 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
       .toBe(picoHomeDeviceRecoveryTiming.vetoDelayMs);
   });
 
+  /**
+   * Der Zwilling zum Wiederherstellungsfall (Befund B72). Die Rotation ist der
+   * andere Pfad, den eine Person betritt, wenn etwas Grundsätzliches schief
+   * ist, und auch sie nannte jeden Schreibfehler der Datenbank
+   * `conflicting_record` - also „jemand war schneller", wo in Wahrheit das
+   * Gerät nicht mehr schreiben kann.
+   */
+  it('throws instead of calling a broken database a conflicting record', () => {
+    const fixture = createFixture();
+    const signed = signRotation(fixture);
+
+    const surgery = new Database(fixture.databasePath);
+    surgery.exec(`
+      CREATE TRIGGER pico_test_rotation_disk_full
+      BEFORE INSERT ON pico_identity_root_rotation
+      BEGIN SELECT RAISE(ABORT, 'database or disk is full'); END
+    `);
+    surgery.close();
+
+    expect(() => fixture.store.submitPicoIdentityRootRotation({
+      ...signed,
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    })).toThrow(/database or disk is full/u);
+  });
+
   it('needs a living device of the rotating identity to co-sign', () => {
     const fixture = createFixture();
     const signed = signRotation(fixture);

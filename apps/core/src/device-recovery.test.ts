@@ -154,6 +154,49 @@ describe('ADR 0110 durable device recovery', () => {
     fixture.store.close();
   });
 
+  /**
+   * Eine volle Platte ist keine Antwort an die Person (Befund B72).
+   *
+   * `conflicting_record` heisst in ADR 0110s Sprache: jemand war schneller,
+   * oder dieselbe Kennung wurde zweimal benutzt. Das ist etwas ueber die Lage
+   * der Person. Ein Schreibfehler der Datenbank ist etwas ueber das Geraet,
+   * und wer ihn als `conflicting_record` ausgibt, schickt jemanden, der gerade
+   * kein Geraet mehr hat, in die falsche Richtung - warten statt nachsehen.
+   *
+   * Der Geraetelebenszyklus unterschied das schon und warf alles weiter, was
+   * keine Eindeutigkeitsverletzung ist; die Wiederherstellung tat es nicht.
+   * Hier fehlt die Tabelle, was genau kein Konflikt ist.
+   */
+  it('throws instead of calling a broken database a conflicting record', () => {
+    const fixture = createFixture();
+    const submission = createRecoverySubmission(fixture, {
+      recoveryId: 'recovery_no_table',
+      target: createDeviceKeys(),
+    });
+    const sender = recoverySender(fixture, submission);
+
+    // Der Fehler muss *im* Schreibblock entstehen und nicht davor: ein
+    // Auslöser auf INSERT lässt jedes Lesen unberührt und bricht genau die
+    // Transaktion ab, um die es geht. Ein erster Anlauf liess statt dessen
+    // die Tabelle verschwinden - da warf schon das Lesen, und der Test wäre
+    // grün gewesen, ohne den Fang je erreicht zu haben.
+    const surgery = new Database(fixture.databasePath);
+    surgery.exec(`
+      CREATE TRIGGER pico_test_disk_full
+      BEFORE INSERT ON pico_home_device_recovery
+      BEGIN SELECT RAISE(ABORT, 'database or disk is full'); END
+    `);
+    surgery.close();
+
+    expect(() => fixture.store.initiatePicoHomeDeviceRecovery({
+      submission,
+      sender,
+      sodium,
+      acceptedAt,
+    })).toThrow(/database or disk is full/u);
+    fixture.store.close();
+  });
+
   it('survives restart, enforces the clock, commits total replacement and reprojects its receipt', () => {
     const fixture = createFixture();
     const target = createDeviceKeys();

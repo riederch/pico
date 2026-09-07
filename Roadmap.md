@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B72 — Eine volle Platte sagte der Person „jemand war schneller"
+(2026-09-07).** Die Messung fragte nach `catch`-Blöcken, die den Fehler
+verwerfen: 337 `try`/`catch` im Produkt, 180 verwerfen ihn, 40 davon geben eine
+feste Ablehnung zurück. (Der erste Anlauf zählte 2006-Zeilen-Blöcke — er lief an
+`try { … } finally { … }` vorbei in den nächsten Fang. Korrigiert, bevor eine
+Zahl dastand.)
+
+Enger gefasst — Fänge um ein Datenbankschreiben — bleiben elf, und drei davon
+antworten `conflicting_record`. Der Vergleich der drei ist der Befund:
+
+| Stelle | was sie mit dem Fehler tut |
+|---|---|
+| Gerätelebenszyklus | sieht hinein, `conflicting_record` **nur** bei `UNIQUE constraint failed`, wirft alles andere weiter |
+| Wiederherstellung (ADR 0110) | `} catch {` — **jeder** Fehler wird zum Konflikt |
+| Wurzelrotation (ADR 0114) | `} catch {` — dasselbe |
+
+`conflicting_record` heisst in ADR 0110s Sprache: *jemand war schneller, oder
+dieselbe Kennung wurde zweimal benutzt.* Das ist eine Aussage über die **Lage
+der Person**. Eine volle Platte, eine gesperrte Datenbank, ein E/A-Fehler, eine
+Tabelle, die eine misslungene Wanderung nicht hinterlassen hat — das sind
+Aussagen über das **Gerät**. Und die beiden Pfade, die es verwechselten, sind
+genau die, die jemand betritt, der **kein Gerät mehr hat**: Er liest „warten",
+wo „nachsehen" richtig wäre, und niemand alarmiert etwas, weil eine Ablehnung
+eine ordentliche Antwort ist.
+
+Kein neues Verhalten erfunden: der Lebenszyklus wirft heute schon. Die
+Unterscheidung steht jetzt **einmal** als `isPicoUniqueConstraintViolation` und
+wird von allen dreien gelesen — statt dreimal verschieden, wovon zwei sie
+verloren hatten. (SQLite meldet auch eine verletzte Primärschlüssel-Bedingung
+als „UNIQUE constraint failed", weshalb die eine Zeichenkette beide Fälle
+deckt.)
+
+**Mein erster Test war grün aus dem falschen Grund, und die Pflanzung hat es
+gezeigt.** Ich hatte die Tabelle gelöscht — da wirft schon das *Lesen*, weit vor
+dem Fang, und der alte Code bestand die Prüfung mühelos. Mit einem Auslöser auf
+`INSERT` entsteht der Fehler genau in der Transaktion: dann fällt die Pflanzung
+an beiden Stellen mit „expected [Function] to throw an error".
+
+Voller Lauf: 2.942 Tests, Ausgang 0.
+
 **B71 — Zwölf Ablehnungen, die ein laufendes Home aussprechen kann und die
 niemand je gegangen war (2026-09-07).** Die Frage, mit der ich anfing, war eine
 andere und ihre Antwort ist ein sauberes Nein: **kein einziger** der 53
