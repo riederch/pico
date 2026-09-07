@@ -188,18 +188,18 @@ process.stdout.write(
  * und das ist der Grund, warum die sechzehn darueber maschinell gehalten
  * werden.
  *
- * Am 2026-09-07 sind zwei der siebzehn Paketzahlen nachgezaehlt worden, und
- * zwar genau die beiden, die an dem Tag ein Netz dazubekamen: Core 1.096 ->
- * 1.097 und Protocol 619 -> 620 (Befund B68). Die anderen fuenfzehn stehen
- * unveraendert vom 2026-09-05 - das ist keine Nachzaehlung des ganzen Laufs
- * und wird hier deshalb nicht als eine ausgegeben.
+ * Am 2026-09-07 wurden zuerst zwei Zahlen fortgeschrieben - Core 1.096 ->
+ * 1.097 und Protocol 619 -> 620, die beiden Pakete, die an dem Tag ein Netz
+ * dazubekamen (Befund B68). Danach lief die ganze Menge einmal durch, und
+ * alle siebzehn Paketzahlen stimmten: 2.935 in der Summe, keine Abweichung.
+ * Die erste Nachzaehlung ohne eine - und der Grund ist kein Verdienst,
+ * sondern dass die geaenderten Zahlen am selben Tag mitgezogen wurden.
  * Wer sie nachrechnen will: `pnpm test` und die `Tests  N passed`-Zeilen je
  * Paket addieren.
  */
 process.stdout.write(
   'Die Testzahlen prueft dies nicht - sie brauchen einen vollen Lauf. '
-  + 'Vollstaendig von Hand nachgezaehlt zuletzt am 2026-09-05; am 2026-09-07 '
-  + 'nur Core und Protocol, die beiden geaenderten.\n',
+  + 'Vollstaendig von Hand nachgezaehlt zuletzt am 2026-09-07, 17 von 17 ohne Abweichung.\n',
 );
 if (unchecked > 0) {
   process.stdout.write(
