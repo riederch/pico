@@ -619,7 +619,25 @@ function readAnchorDocument(anchorPath: string): PicoHomeRecoveryAnchorDocument 
   let raw: string;
   try {
     raw = readFileSync(anchorPath, 'utf8');
-  } catch {
+  } catch (error) {
+    /**
+     * Nur "es gibt noch keinen Anker" ist ein leerer Anker (Befund B73).
+     *
+     * Alles andere - eine Rechteverweigerung, ein E/A-Fehler, ein Verzeichnis
+     * da, wo eine Datei hingehoert, zu viele offene Dateien - faellt unter den
+     * Satz, den der naechste Block schon schreibt: "unreadable" darf nie zu
+     * "nichts wurde je verbraucht" werden. Das galt bisher nur fuer den
+     * Inhalt und nicht fuer das Lesen selbst, und die beiden Faelle sind
+     * derselbe: ein Anker, der da ist und schweigt, ist kein Anker, der nie
+     * da war.
+     *
+     * Die Folge war nicht nur eine falsche Auskunft. Ein leer gelesener Anker
+     * ist ein Anker, den `reseedPicoHomeRecoveryAnchor` neu saeen darf - und
+     * das Saeen schreibt die Datei, die eben nur voruebergehend unlesbar war.
+     */
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error('unreadable_recovery_anchor');
+    }
     return {
       schema: picoHomeRecoveryAnchorSchema,
       homeId: null,

@@ -912,6 +912,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B73 — „Der Anker ist da und schweigt" las sich wie „es gab nie einen"
+(2026-09-07).** Dieselbe Frage wie B72, eine Schicht weiter: Fänge um einen
+Dateisystemzugriff. Dreissig Stück, und das Ergebnis ist zunächst ein sauberes
+**Nein** — keiner von ihnen gibt einen Datei-Fehler als Sachaussage an eine
+Person aus. Die Klasse wiederholt sich dort nicht.
+
+Einer fiel trotzdem auf, weil er im Wiederherstellungsanker steht — dem Stück,
+auf dem ADR 0110 R6 ruht. `readAnchorDocument` liest die Datei; schlägt das
+fehl, gibt es einen **leeren Anker** zurück. Zwei Blöcke tiefer, beim
+Zerlegen des Inhalts, steht der Satz, den die Datei selbst über sich schreibt:
+
+> „Unreadable" must never collapse into „nothing was ever consumed".
+
+Genau das tat der Block darüber. Er konnte **ENOENT** („es gibt noch keinen
+Anker", der richtige Fall eines frischen Homes) nicht von **EACCES**, **EIO**,
+**EISDIR** oder **EMFILE** unterscheiden — von einem Anker also, der da ist und
+nur gerade nicht antwortet.
+
+**Die Folge ist nicht nur eine falsche Auskunft.** Ein leer gelesener Anker
+gilt als leer, und einen leeren Anker darf `reseedPicoHomeRecoveryAnchor` neu
+säen — das Säen schreibt die Datei, die eben nur vorübergehend unlesbar war.
+Ein durchgehender Lesefehler hätte den echten Anker durch einen aus der
+Datenbank abgeleiteten ersetzt.
+
+Der bestehende Test dazu deckte **fehlerhaften Inhalt** ab, nicht ein
+fehlgeschlagenes Lesen. Der neue nimmt ein Verzeichnis statt einer Datei
+(EISDIR) statt `chmod 000` — denn ein Test, der als root leise grün wird,
+prüft nichts. Gepflanzt: die Unterscheidung wieder ausgebaut. **Nur der neue
+Test fällt, 1.104 andere bleiben grün.**
+
+Voller Lauf: 2.943 Tests, Ausgang 0.
+
 **B72 — Eine volle Platte sagte der Person „jemand war schneller"
 (2026-09-07).** Die Messung fragte nach `catch`-Blöcken, die den Fehler
 verwerfen: 337 `try`/`catch` im Produkt, 180 verwerfen ihn, 40 davon geben eine

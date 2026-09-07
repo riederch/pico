@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -1698,6 +1698,28 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     writeFileSync(fixture.anchorPath, '{"schema":"pico.home.recovery-anchor.v1"');
     expect(() => reopenAnchor(fixture.anchorPath))
       .toThrow('unreadable_recovery_anchor');
+  });
+
+  it('refuses an anchor that is there and cannot be read, rather than reading it as none', () => {
+    const fixture = createFixture();
+    fixture.store.close();
+    rmSync(fixture.anchorPath, { force: true });
+
+    /**
+     * Ein Verzeichnis statt einer Datei, weil das unabhaengig von Rechten
+     * fehlschlaegt - `chmod 000` sagt einem Prozess mit genug Rechten nichts,
+     * und ein Test, der als root leise gruen wird, prueft nichts (Befund B73).
+     * EISDIR ist derselbe Fall wie EACCES oder EIO: der Anker ist da und
+     * schweigt.
+     */
+    mkdirSync(fixture.anchorPath, { recursive: true });
+    expect(() => reopenAnchor(fixture.anchorPath))
+      .toThrow('unreadable_recovery_anchor');
+
+    // Und der Fall, der wirklich ein leerer Anker ist, bleibt einer: kein
+    // Anker da, frisches Home, kein Aufheulen.
+    rmSync(fixture.anchorPath, { recursive: true, force: true });
+    expect(() => reopenAnchor(fixture.anchorPath)).not.toThrow();
   });
 
   it('reports a failed flush instead of claiming a durability it did not get', () => {
