@@ -912,6 +912,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B95 — Vierundvierzig Entscheidungen gelten als umgesetzt und nennen keinen
+Beweis (2026-09-08).** Die Roadmap stellt vier Fragen, und die vierte lautet:
+*„Welche Tests beweisen das gewünschte Verhalten?"* Die Statusmatrix ist die
+Stelle, an der sie beantwortet wird.
+
+Gemessen: **123** Zeilen sind als umgesetzt oder teilweise umgesetzt markiert.
+**79** nennen unter ihren Belegen einen Test oder einen Prüfer. **44** nennen
+nur Quelldateien.
+
+Darunter ADR 0083, dessen Belege `reader-key.ts` und `reader-key-freshness.ts`
+aufführen — und `reader-key.test.ts` existiert, ich bin sie in B71 selbst
+gegangen. Der Beweis ist da; die Zeile zeigt nicht auf ihn.
+
+**Und die naheliegende Behebung wäre falsch.** 41 der 44 haben einen
+gleichnamigen Geschwistertest im Baum, also liesse sich die Spalte mechanisch
+füllen. Ein Geschwistertest beweist aber **die Datei, nicht die Entscheidung**:
+`event-store.test.ts` neben ADR 0014 zu schreiben, hiesse behaupten, diese
+Tests prüften *jene* Entscheidung. Die Matrix sähe danach bewiesen aus und wäre
+es weniger als vorher — genau die leere Behauptung, gegen die dieser Baum sonst
+antritt.
+
+Zweite Quelle geprüft, damit es kein Raten sein muss: nennen die ADRs selbst
+ihre Tests? **Null von 44.** Es gibt nichts abzuschreiben.
+
+Damit ist es eine **Entscheidung und keine Aufgabe**, und sie gehört dem
+Nutzer. Meine Empfehlung: nicht mechanisch füllen, sondern eine Zeile beim
+nächsten Mal mitnehmen, wenn sie ohnehin angefasst wird — der einzige Weg, der
+nie eine ungeprüfte Verbindung behauptet. Die Alternative wäre, es als
+Konvention hinzuschreiben und die 44 in einem Zug zu beurteilen; das kostet
+einen Nachmittag und bringt eine Matrix, in der die vierte Frage überall
+beantwortet ist.
+
+Die Liste steht hier, damit niemand sie zweimal misst:
+
+> 0001 0005 0007 0009 0014 0024 0026 0027 0028 0029 0030 0031 0034 0038 0039
+> 0067 0068 0069 0070 0072 0073 0074 0075 0076 0077 0078 0079 0080 0081 0082
+> 0083 0084 0085 0086 0087 0105 0106 0121 0123 0125 0129 0133 0134 0141
+
 **B94 — `no-store` hing an 126 Aufrufen statt an einer Vorgabe
 (2026-09-08).** Die Foundation antwortet mit den Erinnerungen einer Person, und
 dass keine davon in einem Zwischenspeicher landet, hing daran, dass **jeder**
