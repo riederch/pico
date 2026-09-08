@@ -194,12 +194,19 @@ process.stdout.write(
  * alle siebzehn Paketzahlen stimmten: 2.935 in der Summe, keine Abweichung.
  * Die erste Nachzaehlung ohne eine - und der Grund ist kein Verdienst,
  * sondern dass die geaenderten Zahlen am selben Tag mitgezogen wurden.
+ *
+ * Am 2026-09-08 dasselbe, und wieder ohne Abweichung: 2.948 in der Summe,
+ * siebzehn von siebzehn. Was sich bewegt hat, sind die Pakete, die an dem Tag
+ * ein Netz dazubekamen - Core, Relay, Vault-Daemon -, und sie sind mit ihrer
+ * Aenderung mitgezogen worden statt am Ende nachgetragen. Das ist die ganze
+ * Kunst an von Hand gepflegten Zahlen, und sie ist geringer, als der Aufwand
+ * vermuten laesst, den ihr Driften kostet.
  * Wer sie nachrechnen will: `pnpm test` und die `Tests  N passed`-Zeilen je
  * Paket addieren.
  */
 process.stdout.write(
   'Die Testzahlen prueft dies nicht - sie brauchen einen vollen Lauf. '
-  + 'Vollstaendig von Hand nachgezaehlt zuletzt am 2026-09-07, 17 von 17 ohne Abweichung.\n',
+  + 'Vollstaendig von Hand nachgezaehlt zuletzt am 2026-09-08, 17 von 17 ohne Abweichung.\n',
 );
 if (unchecked > 0) {
   process.stdout.write(
