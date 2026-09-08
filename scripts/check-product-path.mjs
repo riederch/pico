@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,6 +59,41 @@ const productFacingDocuments = [
   'pico_relay/README.md',
   'pico_relay/DOCS.md',
   'pico_relay/CHANGELOG.md',
+  /**
+   * Das mitgelieferte Depot (Befund B85). Grenzfall, und deshalb in der
+   * *geprueften* Liste: ein Depot haengt eine Person an, also darf das
+   * Dokument sie nicht durch die CLI schicken. Es nennt sie heute nullmal,
+   * kostet also nichts und spricht, falls sich das aendert.
+   */
+  'bridges/README.md',
+];
+
+/**
+ * Was **nicht** geprueft wird, als Daten statt als Prosa (Befund B85).
+ *
+ * Der Absatz oben ruehmt sich zu Recht: „enumerated rather than globbed so
+ * every exemption is visible here instead of being an accident of a pattern".
+ * Er zaehlte die Auslassungen dann in einem Kommentar auf - und zwei fehlten
+ * darin, `CONTRIBUTING.md` und `Roadmap.md`. Eine Auslassung, die in keiner
+ * der beiden Listen steht, ist genau der Zufall, den der Satz ausschliessen
+ * will.
+ *
+ * Die gepruefte Liste bleibt aufgezaehlt; hinzu kommt nur die Frage, ob jedes
+ * verfolgte Markdown in einer der beiden Listen vorkommt.
+ */
+const notProductFacing = [
+  { prefix: 'docs/architecture/', why: 'Aufzeichnungen; einen Datensatz umzuschreiben macht ihn weniger wahr (ADR 0128)' },
+  { prefix: 'docs/development/', why: 'Runbook und Briefs, das Zuhause des Werkzeugs' },
+  { prefix: 'docs/release/', why: 'Verfahren fuer Betreuer, nicht fuer eine Person, die Pico benutzt' },
+  { prefix: 'docs/protocol/', why: 'Draht-Vertraege; sie weisen niemanden an' },
+  { prefix: 'docs/design-system/', why: 'ein importiertes Paket' },
+  { prefix: 'AGENTS.md', why: 'wendet sich an Agenten' },
+  { prefix: '.agent-context.md', why: 'Uebergabe zwischen Sitzungen' },
+  { prefix: 'TODO.md', why: 'Betreuernotizen' },
+  { prefix: 'progress.md', why: 'muss sagen duerfen, welche Zeremonien noch die CLI brauchen - genau dafuer ist es da' },
+  { prefix: 'Roadmap.md', why: 'Reihenfolge und Befunde fuer Betreuer, aus demselben Grund wie `progress.md`' },
+  { prefix: 'CONTRIBUTING.md', why: 'wendet sich an Mitwirkende, und die benutzen die CLI' },
+  { prefix: 'tools/', why: 'Werkzeuge fuer die Entwicklung - eine Sonde, zwei Modellierhilfen; niemand benutzt Pico damit' },
 ];
 
 const cli = 'pico-vault';
@@ -113,6 +149,26 @@ export function scanProductPath(text) {
 }
 
 const errors = [];
+
+const trackedMarkdown = execSync('git ls-files "*.md"', { cwd: repoRoot, encoding: 'utf8' })
+  .split('\n')
+  .filter((line) => line !== '');
+for (const file of trackedMarkdown) {
+  if (productFacingDocuments.includes(file)) {
+    continue;
+  }
+  if (notProductFacing.some((entry) => file.startsWith(entry.prefix))) {
+    continue;
+  }
+  errors.push(
+    `${file}: is tracked and is neither checked as product-facing nor named as `
+    + 'deliberately absent. This check enumerates instead of globbing so every '
+    + 'exemption is visible; one in neither list is the accident that would defeat.',
+  );
+}
+if (trackedMarkdown.length === 0) {
+  errors.push('no tracked markdown was found, so the completeness question passed over nothing.');
+}
 
 for (const path of productFacingDocuments) {
   let text;

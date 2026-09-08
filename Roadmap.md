@@ -912,6 +912,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B85 — Ein Prüfer rühmte sich, jede Auslassung sichtbar zu machen, und zwei
+waren unsichtbar (2026-09-08).** Fünfter in der B81-Naht.
+`check-product-path.mjs` hält zwölf produktnahe Dokumente daraufhin, dass sie
+niemanden durch die CLI schicken (ADR 0105, ADR 0130 E6), und begründet seine
+Bauart mit einem Satz, dem ich zustimme:
+
+> *„Enumerated rather than globbed so every exemption is visible here instead of
+> being an accident of a pattern."*
+
+Er zählte die Auslassungen dann **in einem Kommentar** auf: Architektur-ADRs,
+Entwicklungs- und Release-Verzeichnisse, das Protokoll, das Designsystem,
+`AGENTS.md`, `.agent-context.md`, `TODO.md`, `progress.md`. Gründlich — und
+zwei fehlten darin: `CONTRIBUTING.md` und `Roadmap.md`. Genau der Zufall, den
+der Satz ausschliessen will.
+
+Die Vollständigkeit ist jetzt eine **Regel** statt einer Sorgfalt: jedes
+verfolgte Markdown steht in einer der beiden Listen, sonst fällt der Prüfer.
+Die geprüfte Liste bleibt aufgezählt — geglobbt wird nichts.
+
+Die Regel fand beim ersten Lauf fünf weitere: vier unter `tools/` (eine Sonde,
+zwei Modellierhilfen — niemand benutzt Pico damit) und `bridges/README.md`. Das
+letzte ist ein Grenzfall und deshalb in die **geprüfte** Liste gegangen: ein
+Depot hängt eine Person an, also darf das Dokument sie nicht durch die CLI
+schicken. Es nennt sie heute nullmal, kostet also nichts und spricht, falls
+sich das ändert. 13 geprüfte Dokumente.
+
+**Meine erste Pflanzung griff nicht**, und der Grund gehört dazu: ein neues
+Dokument wird erst geprüft, wenn es verfolgt ist — `git ls-files` sieht nichts
+anderes. Für einen Repositoriumsprüfer ist das richtig, und die Pflanzung
+musste es abbilden statt es zu umgehen. Mit `git add` fällt er sofort und nennt
+die Datei.
+
 **B84 — Wer ohne ICU läuft, entscheidet das Telefon und nicht eine Liste
 (2026-09-08).** Vierter Prüfer in der B81-Naht, und diesmal war die Liste
 **richtig** — und trotzdem falsch aufgeschrieben.
