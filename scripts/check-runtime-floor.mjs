@@ -39,14 +39,33 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 
 /** Where the embedded runtime actually loads code from. */
-const roots = [
-  'packages/protocol/src',
-  'packages/vault/src',
-  'packages/identity/src',
-  'packages/sync/src',
-  'apps/companion/src',
-  'apps/vault-daemon/src',
-];
+/**
+ * Wer ohne ICU laeuft, entscheidet das Telefon - nicht diese Liste
+ * (Befund B84).
+ *
+ * Bis zum 2026-09-08 standen hier sechs Pfade von Hand, und dieselben sechs
+ * stehen in `tools/android-runtime-probe/run-suites-on-device.sh`, das
+ * bestimmt, welche Mengen tatsaechlich auf dem Geraet gefahren werden. Zwei
+ * Listen ueber eine Sache, und sie stimmten ueberein, weil jemand aufgepasst
+ * hat. Wer dem Telefon eine siebte Menge gibt, haette hier weiter sechs
+ * gelesen - und der Satz „the shell-free core runs where there is no ICU"
+ * waere ab dann eine Aussage ueber sechs Siebtel.
+ *
+ * Gelesen wird jetzt das Skript. Es ist die richtige Quelle und nicht nur die
+ * bequeme: was dort steht, wird gestartet; was hier stuende, waere eine
+ * Meinung darueber.
+ */
+const suiteScript = 'tools/android-runtime-probe/run-suites-on-device.sh';
+const roots = [...readFileSync(join(repoRoot, suiteScript), 'utf8')
+  .matchAll(/^run_suite\s+([a-z-]+\/[a-z-]+)/gmu)]
+  .map(([, workspace]) => `${workspace}/src`);
+if (roots.length === 0) {
+  console.error(
+    `Runtime floor check failed: ${suiteScript} names no suite, so this check would `
+    + 'have read nothing and said the product carries no ICU dependency.',
+  );
+  process.exit(1);
+}
 
 const forbidden = [
   {

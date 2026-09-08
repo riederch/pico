@@ -912,6 +912,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B84 — Wer ohne ICU läuft, entscheidet das Telefon und nicht eine Liste
+(2026-09-08).** Vierter Prüfer in der B81-Naht, und diesmal war die Liste
+**richtig** — und trotzdem falsch aufgeschrieben.
+
+`check-runtime-floor.mjs` führte sechs Pfade von Hand: Protokoll, Vault,
+Identity, Sync, Companion, Vault-Daemon. Genau dieselben sechs stehen in
+`tools/android-runtime-probe/run-suites-on-device.sh` als `run_suite`-Zeilen —
+also in dem Skript, das bestimmt, welche Mengen **tatsächlich auf dem Gerät
+gefahren werden**. Zwei Listen über eine Sache, und sie stimmten überein, weil
+jemand aufgepasst hat.
+
+Der Satz des Prüfers ist *„the shell-free core runs where there is no ICU"*.
+Wer dem Telefon eine siebte Menge gibt, bekäme ab diesem Tag eine Aussage über
+sechs Siebtel — ohne dass etwas rot wird. Genau die Klasse aus B69, nur
+zwischen einem Prüfer und einem Shell-Skript statt zwischen zwei Quelldateien.
+
+Gelesen wird jetzt das Skript. Es ist die **richtige** Quelle und nicht bloss
+die bequeme: was dort steht, wird gestartet; was im Prüfer stünde, wäre eine
+Meinung darüber.
+
+Drei Pflanzungen, und die erste ist die eigentliche Probe: eine siebte Menge
+ins Skript — der Prüfer liest daraufhin **7 Wurzeln und 127 Dateien** statt
+6 und 109, also ein Paket, das er vorher übersehen hätte. Zweitens ein
+ICU-abhängiger Decoder in einem eingebetteten Paket: Datei und Zeile. Drittens
+ein Skript, das keine Menge mehr nennt — der Prüfer weigert sich, statt über
+nichts „kein ICU" zu sagen.
+
+**Vier Prüfer in dieser Naht, vier verschiedene Antworten.** B81: der Umfang
+war falsch. B82: der Umfang war richtig und brauchte einen Auslöser für den
+Tag, an dem er es nicht mehr ist. B83: der Umfang war begründet und die Liste
+passte nicht zur Begründung. B84: die Liste passte und stand am falschen Ort.
+
 **B83 — Der Umfang war begründet, die Liste passte nicht zur Begründung
 (2026-09-08).** Dritter Prüfer in der B81-Naht. `check-time-authority.mjs`
 sagt: ADR 0120 N4, *„time authority never comes from the network"*, und liest
