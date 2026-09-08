@@ -25,6 +25,24 @@ const correctnessRoots = [
   join(repoRoot, 'packages', 'protocol', 'src'),
   join(repoRoot, 'packages', 'identity', 'src'),
   join(repoRoot, 'packages', 'vault', 'src'),
+  /**
+   * ADR 0090s Leserverwahrungs-Sync, seit 2026-09-08 (Befund B83).
+   *
+   * Die Liste darueber war sechs Wurzeln lang und dieses Paket fehlte, obwohl
+   * es zwei Zeitentscheidungen trifft, die nichts mit Anzeigen zu tun haben:
+   * ein Manifestfenster, das laenger ist als erlaubt, wird als
+   * `invalid_payload` abgelehnt, und eine Uhr, die zurueckspringt, wirft
+   * `reader_sync_access_session_clock_rollback`. Das zweite ist woertlich das,
+   * wovon ADR 0120 N4 handelt.
+   *
+   * Der Umfang dieser Pruefung ist begruendet und nicht beliebig - „something
+   * that merely informs belongs outside these directories" -, und genau
+   * deshalb muss die Liste zu ihrer eigenen Definition passen. Geprueft, was
+   * draussen bleibt: die Schale rahmt ein Intervall und wartet im Rauchtest,
+   * das Relay verwirft abgelaufene Pakete. Verwerfen ist kein Bevollmaechtigen,
+   * und der ADR sagt es so - „may never authorize".
+   */
+  join(repoRoot, 'packages', 'sync', 'src'),
 ];
 
 const networkTimeModulePattern =

@@ -912,6 +912,41 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B83 — Der Umfang war begründet, die Liste passte nicht zur Begründung
+(2026-09-08).** Dritter Prüfer in der B81-Naht. `check-time-authority.mjs`
+sagt: ADR 0120 N4, *„time authority never comes from the network"*, und liest
+sechs Wurzeln — mit einem **guten** Grund für die Auswahl, der im Kopf steht:
+*„Something that merely informs belongs outside these directories."*
+
+Also war die Frage nicht „liest er alles?", sondern **„stimmt die Liste mit
+ihrer eigenen Definition?"**. Gemessen, wer draussen eine Zeit*entscheidung*
+trifft:
+
+| Ausserhalb | Zeitvergleiche | Urteil |
+|---|---|---|
+| `packages/sync` | **22** | zwei echte Entscheidungen — **fehlte** |
+| `apps/relay` | 2 | verwirft abgelaufene Pakete |
+| `apps/companion-shell` | 2 | Intervallrahmen, Rauchtestfrist |
+| link-relay-client, appearance, gesture | 0 | — |
+
+`packages/sync` lehnt ein zu langes Manifestfenster als `invalid_payload` ab
+**und** wirft `reader_sync_access_session_clock_rollback`, wenn die Uhr
+zurückspringt. Das zweite ist wörtlich das, wovon der ADR handelt — und der
+Prüfer las die Datei nicht.
+
+Relay und Schale bleiben draussen, und der ADR liefert das Wort dafür: eine
+abgelaufene Nachricht zu **verwerfen** ist kein **Bevollmächtigen**, und
+*„network time may be displayed or compared; it may never authorize."*
+
+**Und wieder wäre die Ausweitung fast Dekoration geworden.** Meine erste
+Pflanzung — eine Variable namens `ntpClient` — ging durch, und ich hielt das
+kurz für dieselbe Blindstelle wie in B81. Sie war es nicht: dieser Prüfer sucht
+Paketnamen und echte Zeitdienst-Adressen, nicht Bezeichner. Die Pflanzung war
+falsch, nicht der Prüfer. Mit `worldtimeapi.org` fällt er sofort und nennt die
+Datei.
+
+182 Quellen über sieben Wurzeln.
+
 **B82 — Eine eingetragene Vertagung, die nicht merkt, wann sie endet
 (2026-09-08).** Die B81-Naht weiter: `check-push-boundary.mjs` sagt „a push
 reaches no surface that reaches a person" — eine Aussage über Erreichbarkeit —
