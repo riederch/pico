@@ -912,6 +912,36 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B98 — Die Reihenfolge zählt, und niemand hielt sie (2026-09-08).** B97 hat
+die *Geschichte* der Wanderungsliste gesichert. Die Liste von **heute** hat zwei
+weitere Eigenschaften, und `listPendingMigrations` zeigt, warum sie zählen: es
+filtert die Liste **in ihrer Reihenfolge** und sortiert nicht nach Kennung.
+
+- Eine Kennung, die zweimal vorkommt, steht zweimal in derselben Auswahl — die
+  wird einmal berechnet und dann abgearbeitet —, also liefe sie **zweimal**,
+  und aufgezeichnet würde sie **einmal**.
+- Eine Nummer, die später steht als eine höhere, läuft später als sie. Die
+  Nummerierung wäre dann eine Aussage über eine Ordnung, die es nicht gibt, und
+  wer eine Wanderung auf das Schema der vorigen baut, baut auf eine, die noch
+  nicht lief.
+
+Gemessen, bevor die Regeln kamen: 25 Wanderungen, Kennungen eindeutig,
+aufsteigend, ohne Lücke, jede mit `requiresBackup`. Wieder der gute Zustand ohne
+Netz.
+
+**Und meine erste Eindeutigkeitsregel konnte gar nicht auslösen.** Sie las die
+Kennungen aus einer `Map` — und eine `Map` schluckt die Wiederholung, bevor
+irgendeine Regel sie sieht. Die Pflanzung hat es gezeigt, nicht das Nachdenken:
+doppelte Kennung eingesetzt, Prüfer grün. Die Reihenfolge wird jetzt getrennt
+geführt, mit Wiederholungen, und dann fällt er zweimal — einmal für die
+Doppelung, einmal, weil eine Nummer nicht nach ihrer Vorgängerin steht.
+
+Zwei Pflanzungen: die letzte Wanderung vor die vorletzte geschoben, und eine
+Kennung verdoppelt. Beide werden namentlich genannt.
+
+**Das ist heute die dritte Pflanzung, die eine Regel als leer entlarvt hat.**
+Eine Regel, die man nur liest, sieht immer richtig aus.
+
 **B97 — Eine Wanderung, die ausgeliefert wurde, konnte sich unbemerkt ändern
 (2026-09-08).** Eine Wanderung läuft **einmal je Installation**, und
 `schema_migration` merkt sich nur ihre Kennung. Wer den Rumpf einer bereits
