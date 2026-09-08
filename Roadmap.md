@@ -912,6 +912,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B96 — Kein Geheimnis erreicht ein Protokoll, und nichts hielt das
+(2026-09-08).** `check-link-seal.mjs` hält seit Wochen Mailboxadressen aus
+Protokollen heraus. Für das, wofür dieses Produkt überhaupt gebaut ist — eine
+Passphrase, ein Klartext, ein privater Schlüssel — gab es nichts.
+
+Zuerst gemessen: **drei** Treffer, alle falsch. Ein *angehefteter* Depot-Stand
+(`attachment.pin.remote` — „pin" heisst in diesem Baum auch „angeheftet") und
+zwei Meldungen über Längengrenzen, die das Wort `passphrase` im Text tragen und
+nicht den Wert. **Heute kein Leck.**
+
+Die zweite Familie ist deshalb in **dieselbe** Datei gegangen und nicht in eine
+neue. Das Teure hier ist die Maschinerie — Zeichenketten ausblenden, den ganzen
+Aufruf statt der Zeile lesen, den Namen als Wort prüfen —, und zweimal
+geschrieben würde sie zweimal driften. Ausgerechnet dieser Prüfer hat in B81
+gelernt, was das kostet.
+
+**Und beim ersten Lauf der neuen Familie fiel ein Fehlalarm an, der mein
+eigener war.** Der Filter behält `${…}`-Inhalte, und sein Muster endet an der
+**ersten** schliessenden Klammer — `write(\`${JSON.stringify({ a })}\`)`
+verliert dadurch ein `)`. Die Klammerzählung ging nicht auf, die Spanne lief
+vierzig Zeilen weiter und traf dort einen Namen, der mit dem Aufruf nichts zu
+tun hatte.
+
+Gezählt wird jetzt auf einer Fassung **ohne** Zeichenketteninhalt, gelesen auf
+einer **mit** den Interpolationen. Zwei Sichten derselben Zeile, und kein
+Luxus: die eine muss Klammern richtig zählen, die andere `${inbound}` sehen.
+
+Der Fehler steckte seit B81 in der Spannenlesung und war mit der Adressfamilie
+allein unsichtbar — eine breitere Frage hat ihn gezeigt. Beide Familien
+gepflanzt: eine Passphrase in einer Home-Protokollzeile, eine Mailbox in einer
+Relay-Zeile. Beide werden mit Datei, Zeile und Grund genannt.
+
 **B95 — Vierundvierzig Entscheidungen gelten als umgesetzt und nennen keinen
 Beweis (2026-09-08).** Die Roadmap stellt vier Fragen, und die vierte lautet:
 *„Welche Tests beweisen das gewünschte Verhalten?"* Die Statusmatrix ist die

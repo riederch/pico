@@ -33,17 +33,59 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
 
-/** Identifiers that hold, or are named as if they hold, a delivery address. */
-const addressBearingNames = [
-  'homeInbound',
-  'deviceInbound',
-  'inbound',
-  'outbound',
-  'mailbox',
-  'picoLinkInboundAddressFor',
-  'picoLinkOutboundAddressFor',
-  'formatPicoLinkPacketAddress',
+/**
+ * Zwei Wertefamilien, eine Maschinerie (Befund B96).
+ *
+ * Die Adressfamilie stand hier zuerst. Die zweite kam am 2026-09-08 dazu, und
+ * sie ist nicht dieselbe Sache - sie ist dieselbe *Frage*: welcher Wert darf
+ * den Prozess in einer Protokollzeile nicht verlassen? Eine Mailboxadresse ist
+ * eine Faehigkeit (ADR 0148 EX4), eine Passphrase und ein Klartext sind das,
+ * wofuer dieses Produkt ueberhaupt gebaut ist.
+ *
+ * Zusammen und nicht in zwei Dateien, weil das Teure hier die Maschinerie ist:
+ * Zeichenketten ausblenden, den ganzen Aufruf lesen statt der Zeile, den Namen
+ * als Wort statt als Zeichenkette pruefen. Zweimal geschrieben wuerde sie
+ * zweimal driften - und ausgerechnet dieser Pruefer hat in B81 gelernt, was
+ * das kostet.
+ *
+ * **Gemessen, bevor die zweite Familie dazukam:** drei Treffer, alle falsch -
+ * ein *angehefteter* Depot-Stand (`attachment.pin.remote`) und zwei Meldungen
+ * ueber Laengengrenzen, die das Wort `passphrase` im Text tragen und nicht den
+ * Wert. Kein Geheimnis erreicht heute ein Protokoll.
+ */
+const valueFamilies = [
+  {
+    what: 'a relay mailbox address',
+    why: 'it travels inside the ADR 0107 seal and nowhere else',
+    names: [
+      'homeInbound',
+      'deviceInbound',
+      'inbound',
+      'outbound',
+      'mailbox',
+      'picoLinkInboundAddressFor',
+      'picoLinkOutboundAddressFor',
+      'formatPicoLinkPacketAddress',
+    ],
+  },
+  {
+    what: 'a secret a person gave or a plaintext this product holds',
+    why: 'a log is read by whoever holds the file, and this is the one thing '
+      + 'the product exists to keep',
+    names: [
+      'passphrase',
+      'plaintext',
+      'decrypted',
+      'memoryContent',
+      'seedMaterial',
+      'privateKey',
+      'cardPin',
+    ],
+  },
 ];
+
+/** Identifiers that hold, or are named as if they hold, a delivery address. */
+const addressBearingNames = valueFamilies[0].names;
 
 /**
  * Sinks an address must not reach. Each is a place the value leaves the
@@ -158,9 +200,25 @@ for (const directory of searched) {
         let seenOpen = false;
         let span = '';
         for (let cursor = index; cursor < lines.length && cursor < index + 40; cursor += 1) {
-          const here = withoutStringContents(lines[cursor]);
-          span += `${here}\n`;
-          for (const character of here) {
+          span += `${withoutStringContents(lines[cursor])}\n`;
+          /**
+           * Gezaehlt wird auf einer Fassung *ohne* Zeichenketteninhalt, gelesen
+           * auf einer *mit* den Interpolationen (Befund B96).
+           *
+           * Zwei Sichten derselben Zeile, und das ist kein Luxus: der Filter
+           * oben behaelt `${...}` und sein Muster endet an der ersten
+           * schliessenden Klammer, also verliert
+           * `write(\`${JSON.stringify({ a })}\`)` ein `)`. Die Klammerzaehlung
+           * ging nicht auf, die Spanne lief vierzig Zeilen weiter und traf
+           * dort einen Namen, der mit dem Aufruf nichts zu tun hatte - ein
+           * Fehlalarm im Vault-Daemon, gefunden beim ersten Lauf der zweiten
+           * Wertefamilie.
+           */
+          const counted = lines[cursor]
+            .replace(/'[^']*'/gu, "''")
+            .replace(/"[^"]*"/gu, '""')
+            .replace(/`[^`]*`/gu, '``');
+          for (const character of counted) {
             if (character === '(') {
               depth += 1;
               seenOpen = true;
@@ -192,14 +250,15 @@ for (const directory of searched) {
          * bleiben Treffer, `mailboxesEnded` und `mailboxQuota` nicht mehr.
          * Keine Ausnahmeliste - die Unterscheidung liegt im Namen selbst.
          */
-        if (!addressBearingNames.some(
+        const family = valueFamilies.find((candidate) => candidate.names.some(
           (name) => new RegExp(`\\b${name}(?![a-z])`, 'u').test(span),
-        )) {
+        ));
+        if (family === undefined) {
           continue;
         }
         errors.push(
-          `${relative(repoRoot, file)}:${index + 1}: a relay mailbox address must not reach ${sink.why} `
-          + '(ADR 0148 EX4); it travels inside the ADR 0107 seal and nowhere else.',
+          `${relative(repoRoot, file)}:${index + 1}: ${family.what} must not reach `
+          + `${sink.why} - ${family.why}.`,
         );
       }
     }
@@ -246,5 +305,5 @@ if (errors.length > 0) {
 console.log(
   `Pico Link seal check passed (${scannedFiles} files across `
   + `${scannedPerDirectory.size} named directories, each of which answered; `
-  + 'no mailbox address reaches a log, an error or a URL).',
+  + 'neither a mailbox address nor a secret a person gave reaches a log, an error or a URL).',
 );
