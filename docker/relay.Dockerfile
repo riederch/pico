@@ -61,6 +61,13 @@ ENV PICO_RELAY_OPERATOR_PORT=3202
 
 VOLUME ["/data"]
 
+# **No USER either, for the same reason the Home image gives** (Befund B90).
+# A host mounts /data at runtime, and running as the image's non-root `node`
+# user makes that mounted directory unwritable for SQLite on some
+# installations. So this image stays root-based until startup can prepare
+# /data ownership and drop privileges itself - the same condition, written
+# here rather than inherited silently from the file next door.
+#
 # **No HEALTHCHECK instruction here, and that is a finding rather than an
 # omission.** One was written, and building this file twice showed what it is
 # worth: with `--format docker` the check lands in the image config, and with

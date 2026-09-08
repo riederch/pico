@@ -75,6 +75,38 @@ for (const entry of readdirSync(dockerDir)) {
       );
     }
   }
+
+  /**
+   * Wer als root laeuft, sagt warum (Befund B90).
+   *
+   * Beide Bilder laufen als root, weil `node:22-bookworm-slim` keinen anderen
+   * Benutzer setzt. Das Home begruendete das ausfuehrlich - ein gemountetes
+   * `/data` waere fuer den `node`-Benutzer auf manchen Installationen nicht
+   * beschreibbar -, das Relay sagte dazu nichts und erbte denselben Zustand
+   * stillschweigend.
+   *
+   * Die Regel verlangt keinen `USER`: sie verlangt, dass die Entscheidung im
+   * Bild steht. Ein drittes Bild, das morgen dazukommt, erbt sie dann nicht
+   * mehr aus Versehen - und wer die Vertagung beendet, nimmt einfach den
+   * Absatz heraus und setzt `USER`.
+   */
+  const dockerfile = readFileSync(path, 'utf8');
+  const setsUser = /^USER\s+\S+/mu.test(dockerfile);
+  // Nach der Sache gefragt, nicht nach dem Wort: eine Begruendung nennt
+  // `root` und sagt, wer statt dessen liefe oder was aufgegeben wuerde.
+  const saysWhy = dockerfile
+    .split('\n')
+    .filter((line) => line.trimStart().startsWith('#'))
+    .some((line) => /root/iu.test(line))
+    && /privileg|user/iu.test(dockerfile);
+  if (!setsUser && !saysWhy) {
+    errors.push(
+      `${relative(repoRoot, path)}: sets no \`USER\` and says nothing about it. The `
+      + 'base image runs as root, so an image without either is one nobody decided '
+      + 'about. Set a user, or write down why this one stays root and what would '
+      + 'end that.',
+    );
+  }
 }
 
 // --- Package manager: pinned with an integrity hash -------------------------

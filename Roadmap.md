@@ -912,6 +912,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B90 — Zwei Bilder laufen als root, eines sagt warum (2026-09-08).** Weiter im
+Ablauf: `node:22-bookworm-slim` setzt keinen Benutzer, also laufen beide
+ausgelieferten Container als root. Bevor das ein Fund wird, die Frage aus B83:
+ist es entschieden?
+
+Beim **Home** ja, und ausführlich — ein Host mountet `/data` zur Laufzeit, Home
+Assistant tut es, und als `node`-Benutzer wäre das Verzeichnis auf manchen
+Installationen für SQLite nicht beschreibbar. Das Bild bleibt root-basiert
+*„until startup can safely prepare /data ownership and drop privileges"*: eine
+Vertagung mit einer Bedingung, an der man sie enden sieht.
+
+Beim **Relay** nicht. Dieselbe Lage — `VOLUME ["/data"]`, dieselbe Datenbank
+auf einem gemounteten Verzeichnis —, aber kein Wort dazu. Und das in einer
+Datei, die sogar die **Abwesenheit** einer `HEALTHCHECK` über zwanzig Zeilen
+begründet, samt zweier `podman inspect`-Ausgaben. Der Zustand war geerbt, nicht
+entschieden.
+
+Jetzt steht der Grund auch dort, und `check-workflow-pinning.mjs` — das die
+beiden Dateien ohnehin liest — verlangt von jedem Bild eines von beidem: einen
+`USER` oder einen Satz darüber. **Nicht, dass es einen `USER` gibt**: dass die
+Entscheidung im Bild steht. Ein drittes Bild erbt sie dann nicht mehr aus
+Versehen, und wer die Vertagung beendet, nimmt den Absatz heraus und setzt
+`USER`.
+
+**Meine erste Regel war zu wörtlich** und meldete das Home als schuldig: sie
+suchte die Anweisung `USER`, und das Home schreibt „non-root node **user**"
+klein. Nach der Sache gefragt statt nach dem Wort — ein Kommentar, der `root`
+nennt, und eine Datei, die von Benutzer oder Privilegien spricht — passt sie zu
+beiden. Zwei Pflanzungen: jeder Datei die Begründung genommen, beide werden
+namentlich genannt.
+
 **B89 — Abbrechen ist richtig, aber nicht überall (2026-09-08).** Nach B88
 dieselbe Ecke: der Ablauf hatte **keine** Nebenläufigkeitsregel, also fahren
 zwei Pushes hintereinander beide voll durch — auf einem Zweig mit vielen
