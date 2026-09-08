@@ -912,6 +912,43 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B81 — Ein Prüfer, der genau die zwei Prozesse nicht las, um die es geht
+(2026-09-08).** Nach B80 dieselbe Frage an die Prüfer selbst: welcher stellt
+seine Frage enger, als sie trägt? `check-link-seal.mjs` sagt „no mailbox
+address reaches a log, an error or a URL" — eine Aussage über das Produkt — und
+las **vier** Verzeichnisse: Kern, Companion, Schale, Protokoll. Nicht dabei:
+**das Relay**, ausgerechnet die Stelle, an der Mailboxadressen zu Hause sind,
+und der Vault-Daemon.
+
+**Und das trifft mich selbst.** Am Vortag habe ich dem Relay eine
+Protokollzeile eingebaut (B76) und geschrieben, `check-link-seal.mjs` bleibe
+grün. Das war wahr und bedeutungslos: der Prüfer hat die Datei nie gelesen.
+
+Drei Blindstellen, jede einzeln nachgestellt, weil die erste Behebung die
+zweite sichtbar machte:
+
+1. **Der Umfang.** Vier Verzeichnisse statt acht. Behoben — und inhaltlich
+   sofort sauber, 213 Dateien.
+2. **Die Form der Senke.** Das Muster kannte `log.info(`, die Form einer
+   Fastify-Instanz. Das Relay schreibt `options.log?.({…})`, der Daemon
+   `this.#audit({…})` — 46, 10, 7, 6 und 1 Vorkommen von fünf Formen, **keine
+   davon eine Senke für diesen Prüfer.** Eine gepflanzte Mailbox im
+   Relay-Protokoll ging weiterhin durch.
+3. **Die Zeilenweise.** Auch mit dem neuen Muster ging sie durch. Der Prüfer
+   las *eine Zeile*, und Relay wie Daemon schreiben jeden Protokollaufruf als
+   mehrzeiliges Objektliteral. Dort war er kein Boden, sondern ein Zufall:
+   dieselbe Mailbox *in derselben Zeile* wie der Aufruf fiel sofort. Gelesen
+   wird jetzt von der Senke bis zu der Klammer, die sie schliesst.
+
+**Der erste Lauf über den ganzen Aufruf meldete prompt einen Fehlalarm** —
+`revoked.mailboxesEnded`, eine Zahl. Der Name wurde als Zeichenkette gesucht.
+Jetzt als Wort, camelCase-bewusst: dem Namen darf kein *Kleinbuchstabe* folgen,
+also bleiben `address.mailbox` und `mailboxAddress` Treffer und
+`mailboxesEnded` wie `mailboxQuota` nicht. Keine Ausnahmeliste — die
+Unterscheidung liegt im Namen selbst.
+
+Beide ursprünglichen Pflanzungen beissen jetzt, in Relay und Daemon.
+
 **B80 — Eine Regel stand für eine Datei und war die ganze Zeit die richtige
 Frage an alle (2026-09-07).** `check-docs-structure.mjs` prüft seit Wochen, ob
 die Statusmatrix Pfade nennt, die es gibt — mit einer Regel, die der Prüfer

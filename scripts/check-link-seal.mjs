@@ -55,6 +55,23 @@ const forbiddenSinks = [
   { pattern: /\bprocess\s*\.\s*(?:stdout|stderr)\s*\.\s*write\s*\(/, why: 'stdout or stderr' },
   { pattern: /\bnew\s+Error\s*\(/, why: 'an error message' },
   { pattern: /\bthrow\s+new\s+/, why: 'a thrown message' },
+  /**
+   * Ein Protokollierer, der als Funktion hereingereicht wird (Befund B81).
+   *
+   * Die Zeile darueber liest `log.info(` - die Form, die eine Fastify-Instanz
+   * hat. Das Relay schreibt `options.log?.({...})`, der Vault-Daemon
+   * `this.#audit({...})`, der Kern an einer Stelle `this.log(...)`. Keine
+   * davon war eine Senke fuer diesen Pruefer, und das Relay ist ausgerechnet
+   * die Stelle, an der Mailboxadressen zu Hause sind.
+   *
+   * Der Bezeichner muss auf `log`, `logger`, `audit` oder `auditSink` enden
+   * und als Funktion gerufen werden; `catalog(` oder `dialog(` faellt nicht
+   * darunter, weil dem Namen ein Wortzeichen vorausginge.
+   */
+  {
+    pattern: /(?:^|[^A-Za-z0-9_$])#?(?:log|logger|audit|auditSink)\s*(?:\?\.)?\s*\(/,
+    why: 'a logger handed in as a function',
+  },
 ];
 
 /**
@@ -105,6 +122,10 @@ const searched = [
   join(repoRoot, 'apps', 'companion', 'src'),
   join(repoRoot, 'apps', 'companion-shell', 'src'),
   join(repoRoot, 'packages', 'protocol', 'src'),
+  join(repoRoot, 'apps', 'relay', 'src'),
+  join(repoRoot, 'apps', 'vault-daemon', 'src'),
+  join(repoRoot, 'packages', 'link-relay-client', 'src'),
+  join(repoRoot, 'packages', 'sync', 'src'),
 ];
 
 let scannedFiles = 0;
@@ -115,25 +136,71 @@ for (const directory of searched) {
     scannedPerDirectory.set(directory, scannedPerDirectory.get(directory) + 1);
     const lines = readFileSync(file, 'utf8').split('\n');
     for (const [index, line] of lines.entries()) {
-      // String contents are stripped first, and that correction is the useful
-      // part of this check. Written naively it fired on
-      // `throw new Error('pico_link_inbound_shared_between_peers')` - an error
-      // *code* that happens to contain the word, carrying no address at all.
-      // A check whose failures are mostly wrong teaches people to skip it.
-      // Template interpolations survive the strip, because `${inbound}` is
-      // exactly the leak this looks for.
-      const code = withoutStringContents(line);
-      const mentionsAddress = addressBearingNames.some((name) => code.includes(name));
-      if (!mentionsAddress) {
-        continue;
-      }
       for (const sink of forbiddenSinks) {
-        if (sink.pattern.test(line)) {
-          errors.push(
-            `${relative(repoRoot, file)}:${index + 1}: a relay mailbox address must not reach ${sink.why} `
-            + '(ADR 0148 EX4); it travels inside the ADR 0107 seal and nowhere else.',
-          );
+        if (!sink.pattern.test(line)) {
+          continue;
         }
+        /**
+         * Der ganze Aufruf, nicht die Zeile (Befund B81).
+         *
+         * Diese Pruefung las eine Zeile und fand eine Adresse nur, wenn sie
+         * *neben* der Senke stand. Das Relay und der Vault-Daemon schreiben
+         * aber jeden Protokollaufruf als mehrzeiliges Objektliteral - dort
+         * war sie kein Boden, sondern ein Zufall. Nachgestellt: eine Mailbox
+         * in einer Relay-Protokollzeile ging durch, dieselbe Mailbox in
+         * *derselben* Zeile wie der Aufruf fiel.
+         *
+         * Gelesen wird jetzt von der Senke bis zu der Klammer, die sie
+         * schliesst, mit einer Obergrenze - ein Aufruf, der laenger ist als
+         * vierzig Zeilen, ist kein Aufruf mehr, sondern eine Datei.
+         */
+        let depth = 0;
+        let seenOpen = false;
+        let span = '';
+        for (let cursor = index; cursor < lines.length && cursor < index + 40; cursor += 1) {
+          const here = withoutStringContents(lines[cursor]);
+          span += `${here}\n`;
+          for (const character of here) {
+            if (character === '(') {
+              depth += 1;
+              seenOpen = true;
+            } else if (character === ')') {
+              depth -= 1;
+            }
+          }
+          if (seenOpen && depth <= 0) {
+            break;
+          }
+        }
+        // String contents are stripped first, and that correction is the useful
+        // part of this check. Written naively it fired on
+        // `throw new Error('pico_link_inbound_shared_between_peers')` - an error
+        // *code* that happens to contain the word, carrying no address at all.
+        // A check whose failures are mostly wrong teaches people to skip it.
+        // Template interpolations survive the strip, because `${inbound}` is
+        // exactly the leak this looks for.
+        /**
+         * Der Name als Wort, nicht als Zeichenkette (Befund B81).
+         *
+         * `span.includes('mailbox')` traf auf `revoked.mailboxesEnded` - eine
+         * *Zahl*, kein Adressat. Der Pruefer las den ganzen Aufruf zum ersten
+         * Mal und meldete sofort einen Fehlalarm, was der schnellste Weg ist,
+         * eine Pruefung unglaubwuerdig zu machen.
+         *
+         * Die Regel ist camelCase-bewusst statt zaehlend: dem Namen darf kein
+         * *Kleinbuchstabe* folgen. `address.mailbox,` und `mailboxAddress`
+         * bleiben Treffer, `mailboxesEnded` und `mailboxQuota` nicht mehr.
+         * Keine Ausnahmeliste - die Unterscheidung liegt im Namen selbst.
+         */
+        if (!addressBearingNames.some(
+          (name) => new RegExp(`\\b${name}(?![a-z])`, 'u').test(span),
+        )) {
+          continue;
+        }
+        errors.push(
+          `${relative(repoRoot, file)}:${index + 1}: a relay mailbox address must not reach ${sink.why} `
+          + '(ADR 0148 EX4); it travels inside the ADR 0107 seal and nowhere else.',
+        );
       }
     }
   }
