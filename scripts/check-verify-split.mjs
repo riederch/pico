@@ -80,6 +80,28 @@ if (started.length === 0) {
 }
 
 /**
+ * Jeder Auftrag sagt, wann er zu lange gebraucht hat (Befund B88).
+ *
+ * Ohne `timeout-minutes` gilt GitHubs Vorgabe von sechs Stunden, und ein
+ * haengender Auftrag laeuft einen Nachmittag lang. Am 2026-09-08 hatte kein
+ * einziger der fuenf eine Frist - in genau dem Ablauf, der die Fristen
+ * ausfuehrt, die B77 und B78 ins Produkt gezogen haben.
+ *
+ * Die Regel steht hier, weil dieser Pruefer die Auftragsliste ohnehin liest:
+ * ein sechster Auftrag waere sonst wieder unbegrenzt, und niemand haette es
+ * gemerkt, bis eine Rechnung kommt.
+ */
+for (const job of jobs) {
+  if (!/(?:^|\n)\s{4}timeout-minutes:\s*\d+/u.test(job.lines.join('\n'))) {
+    errors.push(
+      `${workflowPath}: job \`${job.name}\` declares no \`timeout-minutes\`, so it `
+      + 'inherits six hours. A job that hangs should end in an hour that somebody '
+      + 'notices, not in one that shows up on a bill.',
+    );
+  }
+}
+
+/**
  * **Was der Läufer ausserhalb der Kette starten darf, mit Grund.**
  *
  * Beide standen schon da, bevor dieses Tor sie las - es hat sie beim ersten

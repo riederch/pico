@@ -912,6 +912,26 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B88 — Der Ablauf, der die Fristen ausführt, hatte selbst keine
+(2026-09-08).** B77 hat dem Home eine Frist für ausgehende Anfragen gegeben,
+B78 eine für hereinkommende. Dieselbe Frage an den Arbeitsablauf, der beides
+ausführt: **kein einziger der fünf Aufträge trägt `timeout-minutes`.** Ohne die
+Zeile gilt GitHubs Vorgabe von sechs Stunden — ein hängender Auftrag läuft
+einen Nachmittag lang, und bemerkt wird er an der Rechnung.
+
+Neunzig Minuten für jeden, und die Zahl ist eine **Decke, kein Ziel**: der
+längste je gemessene Auftrag brauchte 58 Minuten (Befund B67), und eine Frist
+muss weit genug darüber liegen, um nur einen Stillstand zu fangen und nie einen
+langsamen Tag. Eine zu enge Frist macht die Kette launisch, und eine launische
+Kette wird übersprungen — das wäre schlimmer als sechs Stunden.
+
+Eine Decke statt fünf, weil sie dann **eine** Begründung braucht statt fünf.
+
+Und die Regel, weil ein sechster Auftrag sonst morgen wieder unbegrenzt wäre:
+`split:check` liest die Auftragsliste ohnehin und verlangt jetzt von jedem eine
+Frist. Zwei Pflanzungen — einem bestehenden Auftrag die Zeile genommen, und
+einen sechsten ohne sie hinzugefügt. Beide werden namentlich genannt.
+
 **B87 — Das Audit-Tor prüft `--prod`, und was das auslässt, hatte niemand
 gemessen (2026-09-08).** Der Audit läuft neben der Kette und ist grün: keine
 bekannten Schwachstellen in den Produktionsabhängigkeiten. Eine Stufe weiter

@@ -19,6 +19,19 @@ permissions:
 jobs:
   verify:
     name: Verify release gates
+    # Befund B88. Eine Decke, kein Ziel.
+    #
+    # Ohne diese Zeile gilt GitHubs Vorgabe von sechs Stunden, und ein
+    # haengender Auftrag laeuft einen Nachmittag lang. Das ist dieselbe Luecke,
+    # die B77 und B78 im Produkt geschlossen haben - ausgerechnet in dem
+    # Ablauf, der jene Fristen ausfuehrt.
+    #
+    # Neunzig Minuten, weil der laengste je gemessene Auftrag 58 Minuten
+    # brauchte (Befund B67) und die Zahl weit genug darueber liegen muss, um
+    # nur einen Stillstand zu fangen und nie einen langsamen Tag. Sie ist
+    # bewusst grosszuegig: eine zu enge Frist macht die Kette launisch, und
+    # eine launische Kette wird uebersprungen.
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,6 +131,7 @@ jobs:
   # kennt den Unterschied.
   suites:
     name: ${{ matrix.name }}
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -158,6 +172,7 @@ jobs:
 
   home_image:
     name: Build and smoke-test the Pico Home container
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     needs: [verify, suites]
     # ADR 0122 Y1. These live on the one job that publishes, rather than on
@@ -400,6 +415,7 @@ jobs:
 
   relay_image:
     name: Build and smoke-test the Pico Relay container
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     needs: [verify, suites]
     # ADR 0153. A second published image, so a second set of the permissions
@@ -663,6 +679,7 @@ jobs:
 
   client_package:
     name: Publish the Pico Client package
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     needs: [verify, suites]
     # Only on a tag. `main` builds the package and verifies it on every push;
