@@ -912,6 +912,32 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B82 — Eine eingetragene Vertagung, die nicht merkt, wann sie endet
+(2026-09-08).** Die B81-Naht weiter: `check-push-boundary.mjs` sagt „a push
+reaches no surface that reaches a person" — eine Aussage über Erreichbarkeit —
+und liest **eine** von Hand eingetragene Datei.
+
+Nachgemessen, ob der Weg wirklich eine Datei lang ist: `receivePicoCompanionPush`
+hat ausserhalb seines eigenen Tests **keinen Aufrufer**, und der Sweep, der ihn
+erreichen würde, nimmt sein `handlePush` als hereingereichte Funktion, die im
+Produkt niemand liefert. **Ein ausgeliefertes Gerät verwirft heute jeden Push.**
+
+Das ist **kein versteckter Fehler** — `check-capability-reach.mjs` trägt es
+namentlich und begründet: *„downstream of a sweep that nothing starts."* Damit
+ist auch der Ein-Datei-Umfang des Push-Prüfers heute richtig. Der Baum weiss,
+was er nicht getan hat.
+
+Was fehlte, ist der Tag danach. Wer `handlePush` das erste Mal im Produkt
+liefert, verlängert den Push-Weg um seine Datei — und die Liste bliebe eine
+Datei lang, während ihr Satz weiter über das ganze Produkt spräche. Genau die
+Klasse, die B81 zutage gefördert hat, nur in der Zukunft statt in der
+Vergangenheit.
+
+Die Prüfung fällt jetzt an dem Tag und verlangt den neuen Namen. Der Auslöser
+ist nicht geraten: es ist exakt die Stelle, die den Weg verlängert. Sie fragt
+241 Quellen, ob eine davon ihn verlängert. Gepflanzt: eine Produktdatei liefert
+`handlePush` — der Prüfer nennt sie mit Pfad und sagt, was zu tun ist.
+
 **B81 — Ein Prüfer, der genau die zwei Prozesse nicht las, um die es geht
 (2026-09-08).** Nach B80 dieselbe Frage an die Prüfer selbst: welcher stellt
 seine Frage enger, als sie trägt? `check-link-seal.mjs` sagt „no mailbox

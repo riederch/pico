@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +27,28 @@ const errors = [];
 const pushPath = [
   'apps/companion/src/link-push-gate.ts',
 ];
+
+/**
+ * Die Liste oben ist eine Datei lang, **weil der Weg heute eine Datei lang
+ * ist** (Befund B82).
+ *
+ * `receivePicoCompanionPush` hat ausserhalb seines eigenen Tests keinen
+ * Aufrufer, und der Sweep, der ihn erreichen wuerde, nimmt sein `handlePush`
+ * als hereingereichte Funktion, die im Produkt niemand liefert - ein
+ * ausgeliefertes Geraet verwirft heute jeden Push. Das ist eingetragen und
+ * begruendet (`check-capability-reach.mjs`: „downstream of a sweep that
+ * nothing starts"), also kein Fehler.
+ *
+ * Es ist aber eine Vertagung, und diese Pruefung merkte nicht, wann sie
+ * endet. Wer `handlePush` das erste Mal im Produkt liefert, verlaengert den
+ * Push-Weg um seine Datei - und die Liste oben bliebe eine Datei lang, waehrend
+ * ihr Satz weiter „a push reaches no surface that reaches a person" hiesse.
+ *
+ * Also faellt die Pruefung an dem Tag, an dem es passiert, und verlangt den
+ * neuen Namen. Der Ausloeser ist nicht geraten: es ist genau die Stelle, die
+ * den Weg verlaengert.
+ */
+const wiringSite = 'handlePush';
 
 /** Modules that end in somebody's attention. */
 const forbiddenImports = [
@@ -98,6 +120,44 @@ for (const path of pushPath) {
   }
 }
 
+/**
+ * Liefert irgendetwas ausserhalb eines Tests `handlePush`? Dann ist der Weg
+ * laenger als die Liste.
+ */
+const companionSources = [];
+const collectCompanionSources = (directory) => {
+  for (const entry of readdirSync(join(repoRoot, directory), { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === 'dist') {
+      continue;
+    }
+    const here = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      collectCompanionSources(here);
+    } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+      companionSources.push(here);
+    }
+  }
+};
+for (const root of ['apps', 'packages']) {
+  collectCompanionSources(root);
+}
+
+const wiredIn = companionSources.filter((path) => {
+  if (path === 'apps/companion/src/link-relay-sweep.ts' || pushPath.includes(path)) {
+    return false;
+  }
+  return new RegExp(`\\b${wiringSite}\\s*:`, 'u').test(
+    codeOnly(readFileSync(join(repoRoot, path), 'utf8')),
+  );
+});
+for (const path of wiredIn) {
+  errors.push(
+    `${path}: supplies \`${wiringSite}\`, so the push path is no longer the one file `
+    + 'this check names (ADR 0150 PU4). Add it to `pushPath` - the surfaces a push may '
+    + 'not reach are the same, and now there is a second file that could reach them.',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Push boundary check failed:');
   for (const error of errors) {
@@ -107,5 +167,7 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Push boundary check passed (${scanned} files; a push reaches no surface that reaches a person).`,
+  `Push boundary check passed (${scanned} files on the push path and `
+  + `${companionSources.length} sources asked whether they extend it; `
+  + 'a push reaches no surface that reaches a person).',
 );
