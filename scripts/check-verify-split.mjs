@@ -28,6 +28,23 @@ import { flattenPicoVerifyChain, picoVerifyStepName } from './verify-chain.mjs';
  * werden: keiner fehlt, keiner doppelt, und keiner steht im Läufer, den die
  * Kette nicht kennt.
  */
+/**
+ * **Wer hier einen Schritt hinzufuegt, zieht die Zahl in `progress.md` mit.**
+ *
+ * Diese Pruefung druckt die Kettenlaenge in ihrer Erfolgszeile, und
+ * `progress.md` behauptet sie in einem Satz. Am 2026-09-08 ist die Zahl
+ * zweimal an einem Tag stehen geblieben - `45` bei `secrets:check`, `46` bei
+ * `migration:check` -, und beide Male hat `progress:walk` es gefunden und nicht
+ * der Mensch.
+ *
+ * Ein Tor daraus wird es nicht: `measure-progress-numbers.mjs` sagt im eigenen
+ * Kopf, warum es ein Werkzeug bleibt - es liest Prosa, und ein Muster ueber
+ * Prosa greift irgendwann daneben. Ein Tor, das das zweimal tut, wird
+ * ueberlesen, und das waere teurer als eine Zahl, die einen Tag hinterherhinkt.
+ *
+ * Also steht der Satz hier, an der Stelle, an der man die Kette verlaengert:
+ * die Zahl gehoert in dieselbe Aenderung, nicht ans Ende.
+ */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
 const workflowPath = join(repoRoot, '.github', 'workflows', 'ci.yml');
