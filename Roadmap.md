@@ -912,6 +912,35 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B93 — Kein Schlüsselmaterial im Baum, und nichts, das es hielt
+(2026-09-08).** Der Befund ist zuerst ein sauberes Nein: keine verfolgte
+Schlüsseldatei, kein PEM-Block, kein Token. Dann die Frage aus B82, B90 und
+B92 — was hält das? Nichts.
+
+Bei dieser Klasse wiegt das schwerer als bei den anderen: **ein Schlüssel, der
+einmal in der Geschichte steht, ist auch nach dem Löschen dort.** Das ist der
+eine Fehler, den ein Prüfer vor dem Commit fangen muss statt danach.
+
+**Der Prüfer ist absichtlich eng, und die Zahlen sagen warum.** Ein Scanner
+nach „sieht aus wie ein Geheimnis" fand in diesem Baum erst **329** Treffer,
+alle falsch, und nach dem Schärfen **94**, wieder alle falsch — lange
+camelCase-Bezeichner und die Testvektoren des Designsystems. Eine Prüfung,
+deren Fehlschläge meistens falsch sind, bringt Leute dazu, Prüfungen zu
+überspringen.
+
+Also genau zwei Fragen, die keine Meinung brauchen: trägt eine verfolgte Datei
+einen Namen, den nur Schlüsselmaterial trägt? Und steht in einer verfolgten
+Textdatei ein PEM-Block mit privatem Schlüssel? 1.458 Pfade benannt, 1.390
+gelesen.
+
+Was es **nicht** fängt, steht im Kopf des Prüfers, damit niemand mehr
+hineinliest: ein Zugangstoken als gewöhnliche Zeichenkette, ein Schlüssel in
+einer Datei ohne verräterischen Namen — und alles Ungefolgte, denn dafür sind
+`.gitignore` und `.dockerignore` zuständig (B91).
+
+Zwei Pflanzungen, beide über `git add`, weil `git ls-files` nur Verfolgtes
+sieht: ein PEM-Block in einer Notizdatei, und eine Datei namens `deploy.key`.
+
 **B92 — Zwanzig Felder, mit denen ein Add-on aus seinem Container tritt, und
 keines gehalten (2026-09-08).** Die beiden Home-Assistant-Add-ons zuerst
 gelesen statt geprüft, und sie sind **vorbildlich**: kein `map`, kein
