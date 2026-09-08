@@ -24,6 +24,21 @@ import { fileURLToPath } from 'node:url';
  * der taeglich faellt. Der Unterschied ist von aussen nicht zu sehen, und
  * deshalb muss ihn etwas nachrechnen.
  *
+ * **Warum das hier nicht auf geworfene Meldungen ausgeweitet wird**, gemessen
+ * am 2026-09-08, damit es niemand ein zweites Mal misst. Das Produkt wirft 907
+ * `Error`s mit einem snake_case-Namen, und 464 davon nennt kein Test. Das sieht
+ * aus wie dieselbe Frage und ist eine andere: ein Grund in einer
+ * `reason:`-Vereinigung ist ein **Versprechen an einen Aufrufer** - eine
+ * Antwort, die eine Tuer geben kann -, ein `throw` ist meist eine
+ * **Zusicherung an sich selbst**, die mit gueltiger Eingabe gar nicht
+ * erreichbar ist. Ein Tor darueber verlangte 464 Tests fuer Zustaende, die es
+ * nicht geben soll, und wuerde deshalb umgangen statt befolgt.
+ *
+ * Die geworfenen Meldungen, die *Produktverhalten* sind, liegen ohnehin unter
+ * einem Test - nachgesehen an der, die eine Person wirklich trifft: ein Home,
+ * das sich weigert, auf `0.0.0.0` zu binden, solange niemand den Zugangsmodus
+ * entschieden hat (`config.test.ts`).
+ *
  * **Was die zusammengesetzte Form kostet.** `recovery_${row.status}` erzeugt
  * vier Gruende, ohne einen davon hinzuschreiben; die Pruefung erkennt das an
  * seinem Praefix. Damit gilt *jeder* Grund, der mit `rotation_` anfaengt, als
