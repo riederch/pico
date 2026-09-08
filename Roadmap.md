@@ -912,6 +912,29 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B99 — Sechs Fragen, sechsmal Nein, und das ist das Ergebnis
+(2026-09-08).** Nach B97 und B98 ist die Fundrate auf null gefallen, und das
+gehört aufgeschrieben, sonst misst die nächste Sitzung dieselben Flächen noch
+einmal.
+
+| Frage | Antwort |
+|---|---|
+| Ist der Beanspruchungscode des Relays eng gefasst? | **Ja.** 32 Zufallsbytes, nur der Abdruck bleibt, einmalig verbraucht, zeitkonstant verglichen, nur im Speicher, je Prozess neu — und begründet, warum er kopiert statt importiert ist |
+| Ist seine Einmaligkeit gegangen? | **Ja**, gegen einen echten Prozess: *„A code that still worked would be a second key to the relay sitting in a log file"* |
+| Wird die Betreibertür begrenzt? | **Ja.** Zwei Eimer, vor allem anderen belastet, damit ein Hämmern an der Tür nicht das Budget des Betreibers verbraucht (ADR 0154 RO9) |
+| Wie kurz lebt der Echtzeit-Ticket in der URL? | **30 Sekunden, einmalig** — und der Eintrag wird *vor* der Ablaufprüfung gelöscht, ein abgelaufener lässt sich also nicht nachspielen; höchstens 128 gleichzeitig, nur der Abdruck gespeichert |
+| Legt das Dashboard etwas im Browser ab? | **Nein.** Kein `localStorage`, kein `sessionStorage`, kein Cookie, kein IndexedDB — die Sitzung lebt nur im Speicher |
+| Werden die drei Zusagen des README gegen echte Prozesse gegangen? | **Ja, alle drei.** „was ein Modell sehen darf" → *misst eine Maschine, fragt sie und nimmt beides wieder zurück*; „welches Material hier sein darf" → *hängt ein Depot an, entscheidet sein Hinausgreifen und hängt es wieder ab*; „welches Gerät was darf" → `device-lifecycle-real-process` |
+
+Sechs Nein hintereinander sind kein leerer Tag. Sie sind die Aussage, dass
+diese Flächen reif sind — und sie sind teurer zu bekommen als ein Fund, weil
+jede erst geprüft werden musste, ob sie nicht doch ein Ja ist.
+
+**Was daraus folgt:** die Naht „ein guter Zustand ohne Netz", die B82, B90,
+B92, B93, B96, B97 und B98 getragen hat, ist an diesen Flächen abgearbeitet.
+Wer weitersucht, sollte woanders anfangen — die fünf offenen Entscheidungen
+stehen in `.agent-context.md`.
+
 **B98 — Die Reihenfolge zählt, und niemand hielt sie (2026-09-08).** B97 hat
 die *Geschichte* der Wanderungsliste gesichert. Die Liste von **heute** hat zwei
 weitere Eigenschaften, und `listPendingMigrations` zeigt, warum sie zählen: es
