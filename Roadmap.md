@@ -912,6 +912,43 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B97 — Eine Wanderung, die ausgeliefert wurde, konnte sich unbemerkt ändern
+(2026-09-08).** Eine Wanderung läuft **einmal je Installation**, und
+`schema_migration` merkt sich nur ihre Kennung. Wer den Rumpf einer bereits
+ausgelieferten Wanderung ändert, ändert damit an einer Installation, die sie
+gefahren ist, **gar nichts** — die Kennung steht dort, also läuft sie nie
+wieder. Der Code erwartet ab dann ein Schema, das dieses Home nie bekommen hat,
+und niemand erfährt es, bis eine Abfrage über eine Spalte stolpert, die es nur
+auf neuen Installationen gibt.
+
+`schema_migration_audit` hält `migration_ids_json` — *welche* liefen, nicht
+*was* sie taten. Im Produkt fängt das also nichts.
+
+**Die Quelle ist abgeleitet und nicht gepflegt.** Kein Hash-Verzeichnis, das
+jemand nachführen müsste: was ausgeliefert wurde, steht im letzten
+Versionsschild. `git show v0.2.1:apps/core/src/migrations.ts` ist die Wahrheit
+darüber; eine gepflegte Liste wäre die zweite Fassung davon, und die driftet
+(B69). Heute: 24 ausgeliefert, 25 im Baum, jede der 24 Wort für Wort dieselbe.
+
+Der Rumpf wird über **Klammern** abgegrenzt und nicht bis zur nächsten Kennung
+— sonst meldete eine dazwischengeschobene Wanderung ihre Nachbarn als geändert,
+also einen Fehlalarm über genau die Bewegung, die erlaubt ist. Dritte Pflanzung
+prüft das: eine neu eingefügte wird **nicht** gemeldet.
+
+**Und das Leerlauftor hat mein neues Tor sofort abgewiesen** — es überspringt
+sich über einem leeren Baum, und *„a skip nobody looks past is not an audit"*.
+Es hatte recht, und die Begründung wäre falsch gewesen, wenn ich sie nur
+hingeschrieben hätte: **ein Auscheckvorgang bringt per Vorgabe keine Schilder
+mit**, der Prüfer wäre also auf dem Läufer aus demselben Grund gesprungen — dort,
+wo er am meisten zählt. Beide Auscheckschritte holen sie jetzt (`fetch-tags`),
+und erst dann durfte der Übersprung in die begründete Liste.
+
+Drei Pflanzungen: Rumpf geändert, Wanderung verschwunden, neue eingefügt. Die
+ersten beiden werden benannt, die dritte richtig verschwiegen. Zwei davon
+griffen im ersten Anlauf **nicht** — meine Anker trafen den Wortlaut nicht, und
+der Prüfer meldete grün über einer unveränderten Datei. Dieselbe Falle wie in
+B89: eine Pflanzung, die man nicht nachsieht, ist keine.
+
 **B96 — Kein Geheimnis erreicht ein Protokoll, und nichts hielt das
 (2026-09-08).** `check-link-seal.mjs` hält seit Wochen Mailboxadressen aus
 Protokollen heraus. Für das, wofür dieses Produkt überhaupt gebaut ist — eine

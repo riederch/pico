@@ -84,6 +84,19 @@ const forceTheWorkingPath = new Map([
       + '`package.json`. Über einem Baum ohne diese Datei gibt es nichts zu halten, und '
       + 'genau das muss er sagen statt zu bestehen.',
   }],
+  ['check-migration-immutability.mjs', {
+    unforceable: true,
+    why: 'Befund B97. Seine Quelle ist die Geschichte dieses Repositoriums: er holt die '
+      + 'ausgelieferten Wanderungen mit `git show <tag>:…` und haelt sie gegen die von '
+      + 'heute. Der gespiegelte Baum hat kein `.git` und kann keines bekommen, ohne dass '
+      + 'dieses Audit ein Repositorium mit einem Schild baut - also eine zweite Wahrheit '
+      + 'darueber, was ausgeliefert wurde. **Und weil ein Sprung, den niemand sieht, keiner '
+      + 'ist:** der Auscheckschritt in `ci.yml` holt seit demselben Tag die Schilder mit '
+      + '(`fetch-tags: true`), sonst spraenge er auf dem Laeufer aus demselben Grund - dort, '
+      + 'wo er am meisten zaehlt. Was er ueber einem leeren Baum taete, zeigen die drei '
+      + 'Pflanzungen neben ihm: geaenderter Rumpf, verschwundene Wanderung, und eine neu '
+      + 'eingefuegte, die er richtig *nicht* meldet.',
+  }],
   ['check-release-monotonic.mjs', {
     unforceable: true,
     why: 'ADR 0122. Seine Arbeit *ist* eine Registry-Abfrage: er liest die veröffentlichten '
