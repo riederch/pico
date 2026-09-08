@@ -646,6 +646,25 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   app.addHook('onSend', async (_request, reply, payload) => {
     reply.header('content-security-policy', "default-src 'self'; frame-ancestors 'self'");
     reply.header('x-content-type-options', 'nosniff');
+    /**
+     * `no-store` als Vorgabe statt als Gewohnheit (Befund B94).
+     *
+     * Diese Fläche antwortet mit den Erinnerungen einer Person, und dass keine
+     * davon in einem Zwischenspeicher landet, hing an 126 Aufrufen von
+     * `sendNoStore` - also daran, dass jeder Weg an *jeder* Stelle daran
+     * gedacht hat. Gemessen: sechzehn Antworten setzen ihn nicht, und alle
+     * sechzehn sind Fehler oder ein 204 - also heute kein Leck. Aber die
+     * Eigenschaft gilt durch Aufmerksamkeit und nicht durch Bauart, und die
+     * siebzehnte Antwort waere die, die Daten traegt.
+     *
+     * **Gesetzt und nicht ueberschrieben.** Wer bewusst einen anderen Wert
+     * angibt - eine Datei des Dashboards etwa, die zwischengespeichert werden
+     * darf -, behaelt ihn. Das hier ist eine Vorgabe fuer alles, was keine
+     * Meinung dazu hat, und die sichere Richtung ist, nichts aufzuheben.
+     */
+    if (!reply.hasHeader('cache-control')) {
+      reply.header('cache-control', 'no-store');
+    }
     return payload;
   });
 

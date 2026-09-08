@@ -912,6 +912,33 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B94 — `no-store` hing an 126 Aufrufen statt an einer Vorgabe
+(2026-09-08).** Die Foundation antwortet mit den Erinnerungen einer Person, und
+dass keine davon in einem Zwischenspeicher landet, hing daran, dass **jeder**
+Weg an jeder Stelle `sendNoStore` benutzt — 126 Aufrufe. Der globale Hook
+setzte CSP und `nosniff`, aber kein `cache-control`.
+
+Gemessen: **sechzehn** Antworten setzten ihn nicht. Alle sechzehn sind Fehler
+oder ein 204 — also **heute kein Leck**. Aber die Eigenschaft galt durch
+Aufmerksamkeit und nicht durch Bauart, und die siebzehnte wäre die mit Daten
+gewesen.
+
+Jetzt eine Vorgabe im Hook — **gesetzt und nicht überschrieben**: wer bewusst
+einen anderen Wert angibt, behält ihn.
+
+**Und diese Schutzbedingung wäre beinahe unbewiesen geblieben.** Die
+bedingungslose Fassung liess alle 1.107 Kerntests grün: nichts im Baum setzt
+heute einen abweichenden Wert. Also hat sie einen eigenen Gang bekommen — zwei
+Routen im Test, eine mit `max-age=60` und eine ohne Meinung. Gepflanzt: ohne
+die Vorgabe fehlt der Kopf, ohne die Bedingung wird `max-age=60` überschrieben.
+
+**Ein roter Lauf, der keiner war.** Der erste volle Durchgang danach fiel mit
+`timeout:core_start` in einer Prozessprobe. Allein gefahren: 7 von 7 grün, und
+der nächste volle Lauf 2.948 Tests mit Ausgang 0. Die Last kam von mir —
+podman-Bau und Testläufe nebeneinander. Die Wartezeit ist **nicht** verlängert
+worden: ein Knopf gegen ein Problem, das nur diese Werkbank hatte, macht
+künftige echte Hänger dreissig Sekunden später sichtbar.
+
 **B93 — Kein Schlüsselmaterial im Baum, und nichts, das es hielt
 (2026-09-08).** Der Befund ist zuerst ein sauberes Nein: keine verfolgte
 Schlüsseldatei, kein PEM-Block, kein Token. Dann die Frage aus B82, B90 und

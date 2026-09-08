@@ -298,6 +298,32 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
+  /**
+   * Die Vorgabe hebt nichts auf, was eine Route selbst gesagt hat
+   * (Befund B94).
+   *
+   * Die bedingungslose Fassung liess alle 1.107 Tests gruen - die
+   * Schutzbedingung war also da und unbewiesen. Hier bekommt sie einen
+   * Gegenstand: eine Route, die einen eigenen Wert setzt, behaelt ihn, und
+   * eine daneben ohne Meinung bekommt `no-store`.
+   */
+  it('leaves a cache-control a route chose alone', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+    app.get('/test-cacheable', async (_request, reply) => await reply.header('cache-control', 'max-age=60').send({ ok: true }));
+    app.get('/test-silent', async (_request, reply) => await reply.send({ ok: true }));
+
+    expect((await app.inject({ method: 'GET', url: '/test-cacheable' }))
+      .headers['cache-control']).toBe('max-age=60');
+    expect((await app.inject({ method: 'GET', url: '/test-silent' }))
+      .headers['cache-control']).toBe('no-store');
+    await app.close();
+  });
+
   it('sends baseline security headers on every response and serves the stylesheet', async () => {
     const app = await buildApp({
       host: '127.0.0.1',
@@ -312,6 +338,20 @@ describe('Pico Home Core app', () => {
     // style or script; its styles are a real asset.
     expect(dashboard.body).not.toContain('<style>');
     expect(dashboard.body).toContain('href="./styles.css"');
+
+    /**
+     * `no-store` als Vorgabe, und die sechzehn Antworten, die ihn nie selbst
+     * setzten (Befund B94).
+     *
+     * Dass keine Erinnerung in einem Zwischenspeicher landet, hing an 126
+     * Aufrufen von `sendNoStore` - also an Aufmerksamkeit an jeder einzelnen
+     * Stelle. Sechzehn Antworten setzten ihn nicht; alle sechzehn waren Fehler
+     * oder ein 204, also kein Leck, aber die siebzehnte waere die mit Daten
+     * gewesen.
+     */
+    expect(dashboard.headers['cache-control']).toBe('no-store');
+    const notClassified = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
+    expect(notClassified.headers['cache-control']).toBe('no-store');
 
     const styles = await app.inject({ method: 'GET', url: '/styles.css' });
     expect(styles.statusCode).toBe(200);
