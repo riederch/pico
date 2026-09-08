@@ -10,6 +10,23 @@ on:
     branches:
       - main
 
+# Befund B89. Ein ueberholter Lauf wird abgebrochen - aber nur der, den
+# abzubrechen nichts kostet.
+#
+# Ohne diesen Block fahren zwei Pushes hintereinander beide voll durch, was auf
+# einem Zweig mit vielen kleinen Commits die teuerste Art ist, dieselbe Frage
+# zweimal zu stellen.
+#
+# `cancel-in-progress` ist deshalb **an eine Bedingung gebunden und nicht auf
+# `true` gesetzt**: dieser Ablauf veroeffentlicht. Ein abgebrochener Lauf auf
+# `main` oder auf einem Tag hiesse, dass ein Commit nie geprueft wurde und eine
+# Veroeffentlichung auf halbem Weg endete - und beides ist schlimmer als
+# verbrannte Minuten. Bei einem Pull Request zaehlt nur der neueste Stand, und
+# der aeltere Lauf beantwortet eine Frage, die niemand mehr stellt.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # ADR 0122 Y1. A tag is movable, so every one of these is pinned to the commit
 # it resolved to, with the human-readable version kept as a comment. The commit
 # is what determines the build; the tag only says what someone called it.

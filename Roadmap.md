@@ -912,6 +912,30 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B89 — Abbrechen ist richtig, aber nicht überall (2026-09-08).** Nach B88
+dieselbe Ecke: der Ablauf hatte **keine** Nebenläufigkeitsregel, also fahren
+zwei Pushes hintereinander beide voll durch — auf einem Zweig mit vielen
+kleinen Commits die teuerste Art, dieselbe Frage zweimal zu stellen.
+
+Die bequeme Fassung wäre `cancel-in-progress: true` gewesen, und sie wäre
+falsch. **Dieser Ablauf veröffentlicht.** Ein abgebrochener Lauf auf `main`
+oder auf einem Tag hiesse: ein Commit wurde nie geprüft, und eine
+Veröffentlichung endete auf halbem Weg. Beides ist schlimmer als verbrannte
+Minuten. Bei einem Pull Request zählt nur der neueste Stand, und der ältere
+Lauf beantwortet eine Frage, die niemand mehr stellt.
+
+Also an das Ereignis gebunden statt an ein `true`.
+
+Und die Regel schützt genau diese Unterscheidung: `split:check` verlangt, dass
+`cancel-in-progress` **dasteht** und **nicht `true`** ist — wer es
+vereinfacht, nimmt die Unterscheidung heraus, ohne dass etwas rot wird.
+
+**Meine erste Pflanzung griff nicht, und ich habe es beinahe übersehen.** Die
+Shell hatte `${{ … }}` zerlegt, die Datei blieb unverändert, und der Prüfer
+meldete grün — was wie ein bestandener Test aussieht und keiner war. Erst der
+Blick auf die Zeile zeigte es. Nochmal ohne Shell-Ersetzung gesetzt: dann fällt
+er und nennt den Grund.
+
 **B88 — Der Ablauf, der die Fristen ausführt, hatte selbst keine
 (2026-09-08).** B77 hat dem Home eine Frist für ausgehende Anfragen gegeben,
 B78 eine für hereinkommende. Dieselbe Frage an den Arbeitsablauf, der beides

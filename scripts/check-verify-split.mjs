@@ -91,6 +91,33 @@ if (started.length === 0) {
  * ein sechster Auftrag waere sonst wieder unbegrenzt, und niemand haette es
  * gemerkt, bis eine Rechnung kommt.
  */
+/**
+ * Ein Lauf, der veroeffentlicht, wird nicht abgebrochen (Befund B89).
+ *
+ * `cancel-in-progress: true` waere die bequeme Fassung und die falsche: dieser
+ * Ablauf baut Bilder und ein Paket. Ein abgebrochener Lauf auf `main` oder auf
+ * einem Tag hiesse, dass ein Commit nie geprueft wurde und eine
+ * Veroeffentlichung auf halbem Weg endete. Bei einem Pull Request zaehlt nur
+ * der neueste Stand, und dort ist Abbrechen richtig.
+ *
+ * Die Regel prueft deshalb nicht, *ob* abgebrochen wird, sondern dass es an
+ * eine Bedingung gebunden bleibt - wer sie auf `true` vereinfacht, nimmt die
+ * Unterscheidung heraus, ohne dass etwas rot wird.
+ */
+const cancelLine = /\n\s*cancel-in-progress:\s*([^\n#]+)/u.exec(workflow);
+if (cancelLine === null) {
+  errors.push(
+    `${workflowPath}: declares no \`cancel-in-progress\`, so two pushes in a row `
+    + 'each run to the end. Say what should happen, with a condition.',
+  );
+} else if (cancelLine[1].trim() === 'true') {
+  errors.push(
+    `${workflowPath}: cancels every superseded run, publishing ones included. A run `
+    + 'on `main` or a tag that is cancelled leaves a commit unverified and a '
+    + 'publication half done; bind it to the event instead.',
+  );
+}
+
 for (const job of jobs) {
   if (!/(?:^|\n)\s{4}timeout-minutes:\s*\d+/u.test(job.lines.join('\n'))) {
     errors.push(
