@@ -912,6 +912,30 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B92 — Zwanzig Felder, mit denen ein Add-on aus seinem Container tritt, und
+keines gehalten (2026-09-08).** Die beiden Home-Assistant-Add-ons zuerst
+gelesen statt geprüft, und sie sind **vorbildlich**: kein `map`, kein
+`privileged`, kein `host_network`, keine Supervisor-API. Das Home veröffentlicht
+einen Port mit `null`-Vorgabe und läuft über Ingress; das Relay einen — *„the
+only port that may be forwarded from a router"* — und einen zweiten, der
+zusätzlich eine Option verlangt. Der Gesundheitsport steht bewusst in keiner
+Liste.
+
+Nur hält das nichts. `check-addon-config.mjs` sagt im eigenen Kopf, was es
+prüft: den Vertrag zwischen `options` und `schema`, *„not the whole add-on
+config"*. Die Felder, mit denen ein Add-on den Container verlässt, standen
+ausserhalb — der gute Zustand ohne Netz, dieselbe Lage wie in B82 und B90.
+
+Die Regel **verbietet sie nicht.** Sie verlangt, dass die Entscheidung in
+derselben Datei steht: wer `map` braucht, schreibt hin wofür; wer `privileged`
+schreibt, muss es begründen, und wer das liest, sieht sofort, worüber zu reden
+ist. Ein Verbot wäre eine Politik, die ich nicht zu setzen habe; ein
+geschriebener Grund ist das, was ein Prüfer leisten kann.
+
+Zwanzig Felder werden beobachtet, null sind in Gebrauch. Zwei Pflanzungen:
+`privileged` ohne ein Wort — abgelehnt und benannt; `map` mit einem Satz —
+angenommen und mitgezählt, die Zahl steigt auf eins.
+
 **B91 — 294 MB Bauzusammenhang, davon 268 MB, die in keinem Bild vorkommen
 (2026-09-08).** Der erste Satz von `.dockerignore` sagt es selbst: *„Docker
 does not read .gitignore."* Genau deshalb müssen die beiden Listen von Hand

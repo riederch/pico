@@ -29,10 +29,51 @@ const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const configPaths = ['pico_home/config.yaml', 'pico_relay/config.yaml'];
 const errors = [];
 
+/**
+ * Was ein Add-on vom Wirt verlangen kann, ohne dass jemand hinsieht
+ * (Befund B92).
+ *
+ * Der Absatz oben sagt, was diese Datei prueft: den Vertrag zwischen `options`
+ * und `schema`, „not the whole add-on config". Die Felder, mit denen ein
+ * Add-on aus seinem Container heraustritt, standen damit ausserhalb - und sie
+ * sind heute alle abwesend, was der gute Zustand ohne Netz ist.
+ *
+ * Ein Produkt, dessen ganze These „Ihre Daten bleiben bei Ihnen" ist, sollte
+ * keines davon stillschweigend gewinnen. Die Regel verbietet sie nicht: sie
+ * verlangt, dass die Entscheidung in derselben Datei steht. Wer `map` braucht,
+ * schreibt hin wofuer; wer `privileged` schreibt, muss es begruenden, und wer
+ * das liest, sieht sofort, worueber zu reden ist.
+ */
+const hostReach = [
+  'privileged', 'full_access', 'host_network', 'host_pid', 'host_ipc', 'host_dbus',
+  'docker_api', 'kernel_modules', 'devices', 'udev', 'usb', 'gpio', 'uart', 'video',
+  'audio', 'map', 'auth_api', 'hassio_api', 'homeassistant_api', 'hassio_role',
+];
+let hostReachAsked = 0;
+
 for (const configPath of configPaths) {
   const config = readFileSync(join(repoRoot, configPath), 'utf8');
   const options = readTopLevelMapping(config, 'options');
   const schema = readTopLevelMapping(config, 'schema');
+
+  const comments = config
+    .split('\n')
+    .filter((line) => line.trimStart().startsWith('#'))
+    .join('\n');
+  for (const field of hostReach) {
+    if (!new RegExp(`^${field}:`, 'mu').test(config)) {
+      continue;
+    }
+    hostReachAsked += 1;
+    if (!new RegExp(`\\b${field}\\b`, 'u').test(comments)) {
+      errors.push(
+        `${configPath}: asks the Supervisor for \`${field}\` and says nothing about `
+        + 'it. A field that takes an add-on out of its own container is a decision, '
+        + 'and a decision nobody wrote down is one nobody made. Say what it is for, '
+        + 'in this file, where the next reader meets it.',
+      );
+    }
+  }
 
   if (options === undefined) {
     errors.push(`${configPath}: missing an \`options\` mapping.`);
@@ -163,7 +204,11 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Home Assistant add-on config check passed for ${configPaths.length} add-ons.`);
+console.log(
+  `Home Assistant add-on config check passed for ${configPaths.length} add-ons; `
+  + `${hostReach.length} fields that would take one out of its container are `
+  + `watched, ${hostReachAsked} in use, each with a reason in its own file.`,
+);
 
 /**
  * Reads a flat top-level `key:` block. The add-on options and schema are both
