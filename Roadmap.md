@@ -912,6 +912,36 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B86 — Die Naht zu Ende gefragt, und die Frage war zuletzt an mich
+(2026-09-08).** Nach fünf Funden (B81–B85) habe ich aufgehört zu raten und
+alle **43** Prüfer mechanisch gefragt: wer trägt eine harte Liste von
+Paketwurzeln, die schmaler ist als der Baum?
+
+Die Messung meldete sieben. **Sie war falsch.** Sie las Pfade wie
+`join(repoRoot, 'apps', 'core', 'src', 'migrations.ts')` als Wurzel, obwohl das
+eine begründete Einzeldatei-Ausnahme ist. Nachgesehen statt geglaubt:
+
+- `check-wire-labels.mjs` läuft über `['apps', 'modules', 'packages']` — den
+  ganzen Baum. Ich hatte schon 13 Etikettenvorkommen „ausserhalb" gezählt und
+  war einen Schritt davon entfernt, daraus einen Fund zu machen. Es gibt kein
+  Ausserhalb.
+- `check-authority-resources.mjs` und `check-store-ceilings.mjs` lesen
+  **benannte Dateien**, nicht Wurzeln: die Tür des Homes, die Stores. Das ist
+  ihr Gegenstand, kein Umfang.
+- `check-companion-boundary.mjs` und `check-browser-modules.mjs` sind per
+  Definition eng — eine Grenze und zwei Browsereinstiege.
+- `check-fingerprint-display.mjs` hat diese Lektion **selbst schon gelernt**:
+  am 2026-08-20 von zwei Wurzeln auf `apps`+`packages`+`modules`+`tools`
+  geweitet, nachdem eine vierte Schreibweise im Vault-Daemon sass, den er nicht
+  las. Derselbe Befund, zwei Wochen früher.
+
+Bleiben genau zwei mit einer zu schmalen harten Liste — `check-link-seal.mjs`
+und `check-time-authority.mjs` —, und beide sind in B81 und B83 geweitet
+worden. **Die Naht ist zu.**
+
+Der Wert dieses Eintrags ist der letzte Absatz: wer sie wieder aufmacht, findet
+hier, dass sie gefragt wurde, womit, und dass die naive Messung zu viel meldet.
+
 **B85 — Ein Prüfer rühmte sich, jede Auslassung sichtbar zu machen, und zwei
 waren unsichtbar (2026-09-08).** Fünfter in der B81-Naht.
 `check-product-path.mjs` hält zwölf produktnahe Dokumente daraufhin, dass sie
