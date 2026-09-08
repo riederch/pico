@@ -940,7 +940,12 @@ einer **mit** den Interpolationen. Zwei Sichten derselben Zeile, und kein
 Luxus: die eine muss Klammern richtig zählen, die andere `${inbound}` sehen.
 
 Der Fehler steckte seit B81 in der Spannenlesung und war mit der Adressfamilie
-allein unsichtbar — eine breitere Frage hat ihn gezeigt. Beide Familien
+allein unsichtbar — eine breitere Frage hat ihn gezeigt. Die Geschwister sind
+danach gefragt worden und haben die Form nicht: `check-instant-rules.mjs` und
+`check-fingerprint-display.mjs` lesen den ganzen Dateiinhalt und suchen nach
+*Ausdrücken* — einer Zerteilung, einer Interpolation —, nicht nach einem Wert
+*in* einem Aufruf. Wer eine Senke mit einem Wert paart, ist unter den 43
+Prüfern allein dieser. Beide Familien
 gepflanzt: eine Passphrase in einer Home-Protokollzeile, eine Mailbox in einer
 Relay-Zeile. Beide werden mit Datei, Zeile und Grund genannt.
 
