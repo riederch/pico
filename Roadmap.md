@@ -912,6 +912,47 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B87 — Das Audit-Tor prüft `--prod`, und was das auslässt, hatte niemand
+gemessen (2026-09-08).** Der Audit läuft neben der Kette und ist grün: keine
+bekannten Schwachstellen in den Produktionsabhängigkeiten. Eine Stufe weiter
+gefragt — ohne `--prod` — waren es **vierzehn**: vier mittlere, neun hohe, eine
+kritische. Alle im Werkzeug, mit dem gebaut und getestet wird.
+
+ADR 0122 nennt den Umfang („failing on known-vulnerable **production**
+dependencies"), **begründet ihn aber nicht**. Die eine ausdrückliche Ausnahme
+des ADR — Installskripte bleiben an, weil native Module sie brauchen — steht
+mit Grund im Text; diese nicht. Und der ADR handelt von der Maschine, die baut
+und signiert. Das ist dieselbe Maschine.
+
+**Neun sind weg, mit derselben Kur wie B63.** `brace-expansion`, `nanoid`,
+`postcss` und `esbuild` innerhalb der Bereiche neu aufgelöst, die der Baum
+ohnehin erklärt — kein Bereich geändert, kein Paket angehoben. 2.947 Tests
+weiterhin grün.
+
+**Die fünf, die bleiben, brauchen alle einen laufenden Entwicklungsserver** —
+und das ist nachgesehen, nicht angenommen:
+
+| Verbleibend | Erreichbar? |
+|---|---|
+| Vitest-UI liest beliebige Dateien (kritisch) | `@vitest/ui` ist **nicht installiert** |
+| Vite `server.fs.deny` unter Windows (hoch) | Entwicklungsserver, Windows |
+| esbuild nimmt Anfragen von Webseiten (mittel) | Entwicklungsserver |
+| Vite Pfaddurchquerung in optimierten Deps (mittel) | Entwicklungsserver |
+| launch-editor gibt NTLM preis (mittel) | Fehleroverlay des Servers |
+
+Kein `vite dev`, kein `--ui`, nirgends im Baum. Gefahren wird `vitest run` und
+`tsc`.
+
+`vitest` steht bereits auf der höchsten stabilen Fassung, die `^2.0.0` zulässt
+— die fünf wären nur über eine **Bereichsänderung** zu haben. Ob das Tor
+Entwicklungsabhängigkeiten überhaupt umfassen soll, ist damit eine
+Entscheidung und keine Aufgabe: heute fiele es, und es bräuchte entweder den
+Sprung auf vitest 3 oder eine Ausnahmeliste.
+
+Der Stand steht mit Datum in ADR 0122, neben der Zeile über `fast-uri@3.1.5` —
+aus demselben Grund, den diese Zeile selbst nennt: **eine Fassung, die als
+Behebung genannt wird, ist eine Tatsache über einen Tag.**
+
 **B86 — Die Naht zu Ende gefragt, und die Frage war zuletzt an mich
 (2026-09-08).** Nach fünf Funden (B81–B85) habe ich aufgehört zu raten und
 alle **43** Prüfer mechanisch gefragt: wer trägt eine harte Liste von

@@ -216,6 +216,26 @@ so loudly.
   fixed by re-resolving to `find-my-way@9.7.0` and `fast-uri@3.1.5`, not
   by lowering the threshold.
 
+  **The scope is `--prod`, and what that leaves out was measured on
+  2026-09-08** (finding B87). Fourteen advisories sat in the development
+  toolchain - four moderate, nine high, one critical - and this gate is silent
+  about them by construction. Nine went away the way B63's did: re-resolving
+  `brace-expansion`, `nanoid`, `postcss` and `esbuild` inside the ranges the
+  tree already declares, no range changed, 2.947 tests still green.
+
+  The five that remain need a range change (`vitest` is already at the highest
+  stable version `^2.0.0` admits), and every one of them requires **a running
+  dev server**: a Vitest UI that is not installed, a Vite `server.fs.deny`
+  bypass on Windows, an esbuild dev-server request, a Vite optimized-deps
+  traversal, an editor-launch disclosure through the error overlay. Nothing in
+  this repository starts one - `vitest run`, `tsc`, no `vite dev`, no `--ui`.
+
+  That is a fact about a day, exactly like the version above it. Whether the
+  gate should cover development dependencies at all is not settled here: it
+  would fail today and would need either an upgrade past the declared ranges or
+  an exemption list, and this ADR is about the machine that builds and signs,
+  which is the machine those packages run on.
+
   **`fast-uri@3.1.5` is what the audit failed on the next time** (2026-09-04,
   finding B63): eight high advisories, six of them that same package, whose
   fixed range moved to `>=3.1.6`. The remedy was the same one and stays the
