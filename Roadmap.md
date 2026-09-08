@@ -925,9 +925,12 @@ does not read .gitignore."* Genau deshalb müssen die beiden Listen von Hand
 
 Der Kontext misst danach **26,6 MB** statt 294.
 
-**Und das ist gebaut, nicht behauptet.** `podman` ist auf dieser Maschine: das
-Home-Bild mit dem verkleinerten Kontext gebaut (Ausgang 0), gestartet,
-`/health` mit **HTTP 200** beantwortet. Der erste Startversuch scheiterte, und
+**Und das ist gebaut, nicht behauptet — beide Bilder.** `podman` ist auf dieser
+Maschine: Home *und* Relay mit dem verkleinerten Kontext gebaut (je Ausgang 0),
+gestartet, `/health` je mit **HTTP 200** beantwortet; das Relay schrieb dabei
+seinen einmaligen Beanspruchungscode ins Log, wie ADR 0154 RO1 es vorsieht.
+Zuerst hatte ich nur das Home geprüft und die Aussage auf ein Bild von zweien
+gestützt — das zweite ist nachgeholt. Der erste Startversuch scheiterte, und
 zwar richtig — das Home weigert sich, auf `0.0.0.0` zu binden, solange niemand
 den Zugangsmodus entschieden hat. Das ist die Verweigerung und nicht mein
 Kontext; mit `direct-token` lief es.
