@@ -912,6 +912,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B91 — 294 MB Bauzusammenhang, davon 268 MB, die in keinem Bild vorkommen
+(2026-09-08).** Der erste Satz von `.dockerignore` sagt es selbst: *„Docker
+does not read .gitignore."* Genau deshalb müssen die beiden Listen von Hand
+übereinstimmen — und sie taten es nicht.
+
+| | |
+|---|---|
+| **`apps/companion-shell/out`** | 268 MB gepacktes Electron, hochgeladen in **jedem der sechs Bauschritte**, in keinem der beiden Bilder vorkommend |
+| **zwei Recovery-Card-PDFs** | im Wurzelverzeichnis, von `.gitignore` beim Namen gekannt — eine gedruckte Karte trägt Wurzelmaterial, also genau die Klasse, für die diese Datei geschrieben wurde |
+| `.claude/settings.local.json`, `.pico-stage`, Python-Artefakte, fremde Sperrdateien | kein Leck, aber nichts, was ein Bild braucht |
+
+Der Kontext misst danach **26,6 MB** statt 294.
+
+**Und das ist gebaut, nicht behauptet.** `podman` ist auf dieser Maschine: das
+Home-Bild mit dem verkleinerten Kontext gebaut (Ausgang 0), gestartet,
+`/health` mit **HTTP 200** beantwortet. Der erste Startversuch scheiterte, und
+zwar richtig — das Home weigert sich, auf `0.0.0.0` zu binden, solange niemand
+den Zugangsmodus entschieden hat. Das ist die Verweigerung und nicht mein
+Kontext; mit `direct-token` lief es.
+
+Die Regel vergleicht jetzt die beiden Listen: was `.gitignore` ausschliesst und
+`.dockerignore` nicht, muss mit einem Grund dastehen. Drei stehen dort — eine
+Ausnahme *von* einer Ausnahme, eine Glob-Klasse in eckigen Klammern, die
+`.dockerignore` nicht kennt, und eine Datei, die nur anders geschrieben ist.
+**Keine Mustersprache nachgebaut**, nur Namen verglichen: ein Name, der in
+einer Datei steht und in der anderen fehlt, ist die Frage.
+
+Zwei Pflanzungen: das gepackte Electron wieder hereingelassen, und `.gitignore`
+einen neuen Ausschluss gegeben, den Docker nicht kennt. Beide werden namentlich
+genannt.
+
 **B90 — Zwei Bilder laufen als root, eines sagt warum (2026-09-08).** Weiter im
 Ablauf: `node:22-bookworm-slim` setzt keinen Benutzer, also laufen beide
 ausgelieferten Container als root. Bevor das ein Fund wird, die Frage aus B83:

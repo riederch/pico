@@ -3,6 +3,29 @@
 # SQLite database and, by default, the Pico Home host identity keys.
 apps/core/data
 
+# Befund B91. Dieselbe Datei, dieselbe Gefahr, zwei Klassen spaeter gefunden.
+#
+# Eine gedruckte Recovery Card traegt Wurzelmaterial - mehr als das
+# Datenverzeichnis oben -, und wer eine erzeugt hat, hat sie im
+# Wurzelverzeichnis liegen. `.gitignore` kennt beide Namen, und der erste Satz
+# dieser Datei sagt, warum das nicht genuegt.
+/pico-recovery-card-option1-card-printer.pdf
+/pico-recovery-card-option2-paper-printable.pdf
+.claude/settings.local.json
+.pico-stage
+
+# Gepacktes Electron: 268 MB, die in jedem der sechs Bauschritte hochgeladen
+# wurden und in keinem der beiden Bilder vorkommen.
+apps/companion-shell/out
+**/out
+
+# Fremde Sperrdateien und Python-Artefakte aus den Werkzeugen: kein Leck, aber
+# nichts, was ein Bild braucht.
+package-lock.json
+yarn.lock
+__pycache__
+**/__pycache__
+
 # Installed and built locally; the image installs and builds from the lockfile.
 node_modules
 **/node_modules

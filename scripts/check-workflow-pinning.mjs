@@ -109,6 +109,66 @@ for (const entry of readdirSync(dockerDir)) {
   }
 }
 
+/**
+ * Was git nicht will, will ein Bauzusammenhang auch nicht (Befund B91).
+ *
+ * Der erste Satz von `.dockerignore` sagt es selbst: „Docker does not read
+ * .gitignore." Genau deshalb muessen die beiden Dateien von Hand
+ * uebereinstimmen - und am 2026-09-08 taten sie es nicht. Der
+ * Bauzusammenhang mass **294 MB**, davon 268 MB gepacktes Electron unter
+ * `apps/companion-shell/out`, hochgeladen in jedem der sechs Bauschritte und
+ * in keinem der beiden Bilder vorkommend. Dazu zwei Recovery-Card-PDFs im
+ * Wurzelverzeichnis, die `.gitignore` beim Namen kennt: eine gedruckte Karte
+ * traegt Wurzelmaterial, also genau die Klasse, fuer die diese Datei
+ * geschrieben wurde. Danach 26,6 MB, und das Home-Bild gebaut, gestartet und
+ * an `/health` mit 200 geantwortet.
+ *
+ * Die Regel vergleicht die beiden Listen. Was in `.gitignore` steht und nicht
+ * in `.dockerignore`, muss hier mit einem Grund stehen - keine Mustersprache
+ * nachgebaut, nur Namen verglichen, denn ein Name, der in einer Datei steht
+ * und in der anderen fehlt, ist die Frage.
+ */
+const dockerignoreExempt = new Map([
+  ['!.env.example', 'eine Ausnahme *von* einer Ausnahme; sie schliesst nichts aus'],
+  ['*.py[cod]', 'Glob-Klassen in eckigen Klammern kennt `.dockerignore` nicht; '
+    + '`__pycache__` deckt dieselben Dateien'],
+  ['/.claude/settings.local.json', 'als `.claude/settings.local.json` ohne fuehrenden '
+    + 'Schraegstrich eingetragen - dieselbe Datei, andere Schreibweise'],
+]);
+{
+  const gitignore = readFileSync(join(repoRoot, '.gitignore'), 'utf8');
+  const dockerignore = readFileSync(join(repoRoot, '.dockerignore'), 'utf8');
+  const dockerNames = new Set(dockerignore
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .map((line) => line.replace(/^\*\*\//u, '').replace(/\/$/u, '')));
+  let compared = 0;
+  for (const raw of gitignore.split('\n')) {
+    const line = raw.trim();
+    if (line === '' || line.startsWith('#')) {
+      continue;
+    }
+    compared += 1;
+    const name = line.replace(/^\*\*\//u, '').replace(/\/$/u, '');
+    if (dockerNames.has(name) || dockerNames.has(name.replace(/^\//u, ''))) {
+      continue;
+    }
+    if (dockerignoreExempt.has(line)) {
+      continue;
+    }
+    errors.push(
+      `.dockerignore: \`${line}\` is excluded from git and not from the build `
+      + 'context. Docker does not read .gitignore, so a name in one file and not '
+      + 'the other is either bulk nobody meant to upload or a secret nobody meant '
+      + 'to send. Exclude it, or say here why it belongs in the context.',
+    );
+  }
+  if (compared === 0) {
+    errors.push('.gitignore excluded nothing, so the build-context comparison passed over nothing.');
+  }
+}
+
 // --- Package manager: pinned with an integrity hash -------------------------
 
 const packageJson = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
