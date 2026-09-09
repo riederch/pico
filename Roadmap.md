@@ -912,6 +912,87 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B103 — Elf Namen versprachen ein Aussehen, und der leiseste war der lauteste
+(2026-09-09).** B102 hat gefragt, wo die Bedienelemente herkommen. Dieselbe
+Frage eine Drehung weiter: **die Namen, die sie tragen — hält die jemand?**
+
+Gemessen: das Begleiterfenster trug **elf Klassennamen, die in keinem Stilblatt
+vorkamen**; das Dashboard null von 43.
+
+**Der schlimmste hiess `quiet`.** Er sass auf den Knöpfen, die eine
+Zugangsberechtigung verwerfen (*„Forget this relay on this device"*), ein Gerät
+vergessen und die Vollmacht eines Geräts beenden. Weil ihn keine Regel kannte,
+bekamen genau diese Knöpfe das Aussehen eines `button` **ohne** Klasse — und
+das ist hier gefüllt, fett und in der Primärfarbe. **Die leisen Knöpfe waren
+die lautesten im Fenster.**
+
+**Gegangen statt behauptet.** Beide Zustände gegen eine echte Maschine (die
+gebauten Zeichner, das echte Stilblatt, ein echter Browser, `getComputedStyle`):
+
+| | vorher | nachher |
+|---|---|---|
+| Geräte-Zeile: Rahmen | `0px`, `none` | `1px solid` |
+| Innenabstand | `0px` | `12px` |
+| Anordnung | `list-item` | `grid` |
+| verschachtelte Liste | `circle`, 40 px eingerückt | `none`, `0px` |
+| „Forget this device …": Hintergrund | `rgb(44, 207, 255)` | `rgb(17, 42, 62)` |
+| ein Knopf ganz ohne Klasse | `rgb(44, 207, 255)` | `rgb(44, 207, 255)` |
+
+Die dritte und die letzte Zeile sind dieselbe Farbe: der Knopf, der das
+Vergessen auslöst, war **Byte für Byte** so laut wie der Knopf, der das
+Gewöhnliche tut. Und die verschachtelten Listen zeigten Aufzählungspunkte —
+Kreise, vierzig Pixel eingerückt, mitten in einer Karte, in einem Stilblatt,
+das sie überall sonst abschaltet.
+
+Derselbe Lauf ist auch die Wanderung zu **B102**: `inputIsInsideLabel` von
+`false` auf `true`, und **`clickingLabelFocusesField` von `false` auf `true`**.
+Die Verbindung, die B102 hergestellt hat, ist damit nicht argumentiert, sondern
+in einer Maschine gedrückt worden.
+
+**Warum das niemandem auffiel.** Ein Element mit einem unbekannten
+Klassennamen verschwindet nicht und meldet nichts. **Es erscheint — als das,
+was der Browser vorgibt.** Ein Tippfehler in einem Klassennamen ist deshalb der
+stillste Fehler, den eine Fläche haben kann: alles ist da, nur anders, und wer
+die Seite nicht neben der Absicht sieht, merkt es nie.
+
+**Die Heilung war fast überall, die Vokabel zu benutzen, die es schon gibt.**
+Das Stilblatt argumentiert bei `.views` selbst, warum: *ein Klassenname wäre
+eine zweite Vokabel für dieselbe Sache.* Also `quiet` → `secondary` (das gibt
+es, und es wird sechs Zeilen weiter benutzt), `supplier-line`/`relay-line`/
+`device-line` → `provider-line`, `relay-accounts`/`device-offers` →
+`provider-list`, `relay-account`/`device-offer` → `provider-line`. Die Art
+steht ohnehin schon im `dataset`, wo sie hingehört. Zwei Namen blieben ohne
+Vorbild und haben eine Regel bekommen (`device-authority` und seine
+Gründe-Zeile), und einer ist umbenannt worden: `.device-code-text` heisst jetzt
+`.machine-string`, weil ein Relais-Zugangsschlüssel dasselbe ist — eine lange
+Maschinenzeichenkette, die eine Person liest und kopiert. Die **Kennung**
+`device-code-text` bleibt, wo sie steht: die liest der Zeichner, und sie
+benennt das Element, nicht sein Aussehen.
+
+**Was hält es:** `pnpm style:check` (Kettenschritt 46, Kette jetzt **49**).
+Jeder Name, den eine Fläche trägt, hat eine Regel. Alles abgeleitet: die
+Flächen aus `operated-surfaces.mjs`, die Stilblätter aus der Seite selbst
+(`<link>` und `<style>`), die Zeichner aus der Anwendungswurzel — der nächsten
+Elternschaft mit einer `package.json`.
+
+**Die Gegenrichtung prüft er nicht**, und das steht in seinem Kopf: eine Regel
+ohne Träger ist toter Stil, ein anderer Mangel mit anderen Fehlalarmen
+(Zustandsklassen, Medienabfragen, fremde Blätter). Hier steht die Richtung, in
+der eine *Absicht* verloren geht.
+
+**`operated-surfaces.mjs` ist neu**, und es ist die Lehre aus B96 einen Schritt
+weiter: zwei Prüfer stellen jetzt Fragen über dieselben zwei Flächen und über
+dieselben zwei, die niemand bedient. Zweimal geschrieben driftet die Menge —
+der eine bekäme eine dritte Ausnahme, der andere nicht, und danach messen sie
+Verschiedenes und melden beide grün. Einmal abgeleitet, zweimal gelesen.
+
+Drei Pflanzungen: `quiet` zurückgesetzt, ein Tippfehler in einen Klassennamen
+der **anderen** Fläche gesetzt, und den Begriff „Zeichner" leerlaufen lassen.
+Alle drei sprechen — die ersten beiden mit Name, Träger und Folge.
+
+**Was nicht geprüft ist:** ob das Ergebnis *gut* aussieht. Der Prüfer sagt, dass
+jede Absicht ankommt, nicht dass sie richtig war. Das braucht Augen.
+
 **B102 — Das sechzehnte Feld gab es schon, und es war das eine ohne Namen
 (2026-09-09).** B100 hat gemessen, dass jedes Bedienelement der beiden Flächen
 beschriftet ist, und in den Kopf des Prüfers geschrieben: *„ein sechzehntes

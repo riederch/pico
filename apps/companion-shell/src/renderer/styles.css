@@ -225,7 +225,17 @@ button:disabled { opacity: .55; cursor: wait; }
   margin-top: 0.75rem;
 }
 
-.device-code-text {
+/*
+  Befund B103. Ein Name fuer eine Erscheinung.
+
+  Hiess `.device-code-text`, solange nur ein Geraetecode so aussah. Der
+  Zugangsschluessel eines Relays ist dasselbe: eine lange Maschinenzeichenkette,
+  die eine Person liest und kopiert. Ein zweiter Name dafuer waere das, was der
+  Kommentar bei `.views` weiter oben ablehnt - eine zweite Vokabel fuer
+  dieselbe Sache. Die Kennung `device-code-text` bleibt, wo sie steht: die
+  liest der Zeichner, und sie benennt das Element, nicht sein Aussehen.
+*/
+.machine-string {
   font-family: var(--pico-font-family-mono, monospace);
   font-size: 0.7rem;
   line-height: 1.35;
@@ -233,4 +243,25 @@ button:disabled { opacity: .55; cursor: wait; }
   user-select: all;
   opacity: 0.75;
   margin-top: 0.5rem;
+}
+
+/*
+  Befund B103. Der Block, in dem eine Vollmacht eines Geraets verhandelt wird,
+  und die Zeile mit den Gruenden, sie zu beenden.
+
+  Beide standen im Zeichner mit Namen, die es hier nicht gab, also lagen ihre
+  Kinder ohne Abstand aufeinander. Sie ordnen wie die Zeile, in der sie sitzen
+  - untereinander mit demselben kleinen Abstand, die Gruende nebeneinander,
+  weil es Auswahlmoeglichkeiten sind und keine Liste.
+*/
+.device-authority {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.device-authority-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
 }

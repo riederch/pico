@@ -730,7 +730,7 @@ readerCustodyRead.addEventListener('click', () => {
     readerCustodyList.replaceChildren();
     for (const note of read) {
       const item = document.createElement('li');
-      item.className = 'supplier-line';
+      item.className = 'provider-line';
       const line = document.createElement('p');
       line.className = 'detail';
       line.textContent = note.text;

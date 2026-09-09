@@ -1,7 +1,11 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+  picoOperatedSurfaces,
+  picoRepoRoot,
+  picoUnoperatedSurfaces,
+} from './operated-surfaces.mjs';
 
 /**
  * Jedes Bedienelement, das eine Person vor sich hat, sagt was es ist.
@@ -26,10 +30,11 @@ import { fileURLToPath } from 'node:url';
  * Bedienelement, eine Kennung, eine Beschriftung, die auf sie zeigt - oder ein
  * `aria-label`, wenn keine sichtbare Beschriftung hingehoert.
  *
- * **Die Flaechen sind abgeleitet und nicht gelistet.** Jede verfolgte
- * HTML-Datei ausser den beiden, die niemand bedient: eine Demo des
- * Designsystems und eine Vorlage eines Werkzeugs, beide hier mit Grund
- * genannt statt stillschweigend uebersprungen.
+ * **Die Flaechen sind abgeleitet und nicht gelistet**, und die Ableitung
+ * wohnt seit Befund B103 in `operated-surfaces.mjs`, weil ein zweiter Pruefer
+ * dieselbe Menge braucht: jede verfolgte HTML-Datei ausser den beiden, die
+ * niemand bedient, beide dort mit Grund genannt statt stillschweigend
+ * uebersprungen.
  *
  * **Und dort, wo die Bedienelemente wirklich herkommen** (Befund B102). Der
  * Kopf oben sagte, ein sechzehntes Feld ohne Beschriftung falle niemandem
@@ -50,32 +55,20 @@ import { fileURLToPath } from 'node:url';
  * ihn weiter weg setzt, bekommt einen Fehlalarm. Das ist die richtige
  * Richtung zu irren: laut statt still.
  */
-const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
+const repoRoot = picoRepoRoot;
 const errors = [];
-
-const notOperated = new Map([
-  ['docs/design-system/08_Starter_Kit/demo.html',
-    'eine Demo des importierten Designsystems - sie zeigt Bausteine und nimmt keine Entscheidung entgegen'],
-  ['tools/character-modeling/demo-viewer/viewer-template.html',
-    'eine Vorlage eines Entwicklungswerkzeugs; niemand benutzt Pico damit'],
-]);
 
 const controlPattern = /<(input|select|textarea)\b[^>]*>/giu;
 const labelForPattern = /<label[^>]*\bfor="([^"]+)"/giu;
 const buttonPattern = /<button\b([^>]*)>([\s\S]*?)<\/button>/giu;
 
-const tracked = execSync('git ls-files "*.html"', { cwd: repoRoot, encoding: 'utf8' })
-  .split('\n')
-  .filter((line) => line !== '' && !line.includes('node_modules'));
+const tracked = picoOperatedSurfaces();
 
 let surfaces = 0;
 let controls = 0;
 let buttons = 0;
 let buttonsSeen = 0;
 for (const path of tracked) {
-  if (notOperated.has(path)) {
-    continue;
-  }
   surfaces += 1;
   const html = readFileSync(join(repoRoot, path), 'utf8');
   /**
@@ -239,7 +232,7 @@ if (errors.length > 0) {
 console.log(
   `Form-label check passed (${surfaces} operated surfaces, ${controls} controls, `
   + `each with a label that points at it, and ${buttonsSeen} buttons that each say `
-  + `what they are; ${notOperated.size} pages named as not operated; `
+  + `what they are; ${picoUnoperatedSurfaces.size} pages named as not operated; `
   + `${codeControls} further controls built in ${drawingSources} renderers `
   + `(${codeButtons} of them buttons), each named where it is built).`,
 );

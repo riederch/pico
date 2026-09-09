@@ -318,7 +318,7 @@ export function renderPicoCompanionRelays(
 
   for (const line of picoCompanionRelayLines(relays)) {
     const item = root.document.createElement('li');
-    item.className = 'relay-line';
+    item.className = 'provider-line';
     item.dataset.baseUrl = line.baseUrl;
 
     const headline = root.document.createElement('p');
@@ -335,10 +335,10 @@ export function renderPicoCompanionRelays(
     create.addEventListener('click', () => act({ action: 'create', baseUrl: line.baseUrl }));
 
     const accounts = root.document.createElement('ul');
-    accounts.className = 'relay-accounts';
+    accounts.className = 'provider-list';
     for (const account of line.accounts) {
       const accountItem = root.document.createElement('li');
-      accountItem.className = 'relay-account';
+      accountItem.className = 'provider-line';
       accountItem.dataset.accountRef = account.accountRef;
 
       const accountHeadline = root.document.createElement('p');
@@ -366,7 +366,7 @@ export function renderPicoCompanionRelays(
 
     const forget = root.document.createElement('button');
     forget.type = 'button';
-    forget.className = 'quiet';
+    forget.className = 'secondary';
     // Said as what it costs. ADR 0154 RO8: this drops the only copy of the
     // credential, and the way back in is a file on the relay's disk.
     forget.textContent = 'Forget this relay on this device';
@@ -401,7 +401,7 @@ export function renderPicoCompanionRelayAccountIssued(
   detail.textContent = issued.detail;
 
   const value = root.document.createElement('code');
-  value.className = 'relay-access-key';
+  value.className = 'machine-string';
   value.textContent = issued.credential;
 
   root.block.append(headline, detail, value);
@@ -463,7 +463,7 @@ export function renderPicoCompanionDevices(
 
   for (const line of picoCompanionDeviceLines(devices)) {
     const item = root.document.createElement('li');
-    item.className = 'device-line';
+    item.className = 'provider-line';
     item.dataset.presenceId = line.presenceId;
 
     const headline = root.document.createElement('p');
@@ -475,10 +475,10 @@ export function renderPicoCompanionDevices(
     detail.textContent = line.detail;
 
     const offers = root.document.createElement('ul');
-    offers.className = 'device-offers';
+    offers.className = 'provider-list';
     for (const offer of line.offers) {
       const offerItem = root.document.createElement('li');
-      offerItem.className = 'device-offer';
+      offerItem.className = 'provider-line';
       offerItem.dataset.affordance = offer.affordance;
       offerItem.dataset.withheld = String(offer.withheld);
 
@@ -514,7 +514,7 @@ export function renderPicoCompanionDevices(
 
     const forget = root.document.createElement('button');
     forget.type = 'button';
-    forget.className = 'quiet';
+    forget.className = 'secondary';
     forget.textContent = line.forgetLabel;
     forget.addEventListener('click', () => act({ action: 'forget', presenceId: line.presenceId }));
 
@@ -534,7 +534,7 @@ export function renderPicoCompanionDevices(
    */
   for (const line of unplaced.values()) {
     const item = root.document.createElement('li');
-    item.className = 'device-line';
+    item.className = 'provider-line';
     item.dataset.presenceId = line.presenceId;
 
     const headline = root.document.createElement('p');
@@ -648,7 +648,7 @@ function deviceAuthorityBlock(
 
   const end = document.createElement('button');
   end.type = 'button';
-  end.className = 'quiet';
+  end.className = 'secondary';
   end.dataset.endAuthority = line.delegationId;
   end.textContent = line.endLabel;
   end.addEventListener('click', () => {
@@ -794,7 +794,7 @@ export function renderPicoCompanionHomeMembers(
 
       const endButton = root.document.createElement('button');
       endButton.type = 'button';
-      endButton.className = 'quiet';
+      endButton.className = 'secondary';
       endButton.dataset.endMembership = line.credentialId;
       endButton.textContent = line.endLabel;
       endButton.addEventListener('click', () => {
@@ -833,7 +833,7 @@ export function renderPicoCompanionSuppliers(
   for (const [index, line] of picoCompanionSupplierLines(suppliers).entries()) {
     const supplier = suppliers[index]!;
     const item = root.document.createElement('li');
-    item.className = 'supplier-line';
+    item.className = 'provider-line';
     item.dataset.identifier = line.identifier;
 
     const headline = root.document.createElement('p');
@@ -941,7 +941,7 @@ export function renderPicoCompanionDepots(
     const standing = parsePicoCompanionUnattendedFetching(value);
     const line = picoCompanionUnattendedFetchingLine(standing);
     const item = root.document.createElement('li');
-    item.className = 'supplier-line';
+    item.className = 'provider-line';
 
     const detail = root.document.createElement('p');
     detail.className = 'detail';
@@ -963,7 +963,7 @@ export function renderPicoCompanionDepots(
   for (const [index, line] of picoCompanionDepotLines(depots).entries()) {
     const depot = depots[index]!;
     const item = root.document.createElement('li');
-    item.className = 'supplier-line';
+    item.className = 'provider-line';
     item.dataset.remote = depot.remote;
 
     const headline = root.document.createElement('p');
@@ -1059,7 +1059,7 @@ export function renderPicoCompanionModuleConsent(
 
   for (const line of picoCompanionModuleConsentLines(awaiting)) {
     const item = root.document.createElement('li');
-    item.className = 'supplier-line';
+    item.className = 'provider-line';
     item.dataset.module = line.identifier;
 
     const headline = root.document.createElement('p');
@@ -1104,7 +1104,7 @@ export function renderPicoCompanionPendingApprovals(
 
   for (const line of picoCompanionApprovalLines(waiting)) {
     const item = root.document.createElement('li');
-    item.className = 'supplier-line';
+    item.className = 'provider-line';
     item.dataset.requestedEventId = line.requestedEventId;
 
     const headline = root.document.createElement('p');
@@ -1157,7 +1157,7 @@ export function renderPicoCompanionDeclaredSuppliers(
 
   for (const line of picoCompanionDeclaredSupplierLines(declared)) {
     const item = root.document.createElement('li');
-    item.className = 'supplier-line';
+    item.className = 'provider-line';
     item.dataset.identifier = line.identifier;
 
     const headline = root.document.createElement('p');
@@ -1225,7 +1225,7 @@ export function renderPicoCompanionMeasurements(
 
   for (const line of picoCompanionMeasurementLines(measurements)) {
     const item = root.document.createElement('li');
-    item.className = 'supplier-line';
+    item.className = 'provider-line';
     item.dataset.entryId = line.entryId;
 
     const headline = root.document.createElement('p');
