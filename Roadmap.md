@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B116 — Den Läufer nachgestellt: 49 Prüfer, fünf Unterschiede, vier davon
+harmlos (2026-09-09).** Nach B115 die Frage, die sich aufdrängt: **welches Tor
+fragt sonst noch den Arbeitsplatz?** Nicht überlegt, sondern nachgestellt — ein
+frischer Klon von `a2bcc1a` im Scratchpad, kein `dist`, kein `out`, kein
+`node_modules`, und darin jeder Prüfer einzeln; danach dieselben hier.
+
+| Prüfer | Unterschied | Urteil |
+|---|---|---|
+| `check-display-zones` | fällt ohne `node_modules` | er fährt Testmengen; gehört zu `verify:passes` |
+| `check-migration-immutability` | „skipped" ohne Tag | mein Klon war flach; CI holt Tags |
+| `check-modules`, `check-suppliers` | `ERR_MODULE_NOT_FOUND` | sie laufen in der Kette **nach** `pnpm build` |
+| `check-vacuous-gates` | **453 gegen 444 Verzeichnisse** | **echt** |
+
+Der fünfte spiegelt die Gestalt des Baums, damit jeder Prüfer über einer leeren
+Kopie nichts findet — und er las dafür das *Arbeitsverzeichnis*. Darin steht,
+was gerade offen ist: `.idea/shelf/Uncommitted_changes_before_Update_…`,
+`.codex`, `.agents`, `__pycache__`, `.pico-stage`. Neun Verzeichnisse, die auf
+einem Läufer fehlen.
+
+**Folgen hatte es keine** — und das ist der Grund, es trotzdem zu ändern. Die
+Zahl in der Schlussmeldung war nicht reproduzierbar, und der Gegenstand des
+Audits hing daran, welcher Editor hier lief. *Ein Audit, das die eigene
+Werkbank spiegelt, prüft die Werkbank mit.* `dist` und `out` standen längst in
+der Überspringliste; das war die halbe Antwort. Die ganze ist `git ls-files`.
+
+**Dass sich kein Urteil ändert, ist gemessen und nicht angenommen:** beide
+Fassungen mit einer Zeile pro Prüfer instrumentiert und die Listen verglichen —
+48 Zeilen, kein Unterschied. Ich hatte aus zwei abgeschnittenen Meldungen
+zuerst gelesen, ein Prüfer sei umgekippt; er war es nicht.
+
+**Und derselbe Fehler wie in B114, zwei Stunden später.** Die neue Konstante
+stand neben ihrer Funktion, gerufen wird die von oberster Ebene weiter oben:
+`ReferenceError: Cannot access 'trackedDirectories' before initialization`.
+Zweimal an einem Tag heisst, dass „die Zeile weiter nach oben" die falsche
+Absicherung ist. Sie wird jetzt **in** der Funktion geholt: was eine Funktion
+braucht, besorgt sie sich selbst, und dann ist ihre Stellung egal.
+
+**Was daraus folgt.** Vier der fünf Unterschiede waren Ordnung — ein Prüfer,
+der nach dem Bauen läuft, darf Gebautes brauchen. Der Wert des Versuchs liegt
+darin, dass diese vier jetzt *benannt* sind: die nächste Sitzung, die einen
+Unterschied zwischen hier und dem Läufer sieht, muss nicht wieder von vorn
+anfangen.
+
 **B115 — Vierzehnmal grün aus einem Grund, der nicht im Baum steht
 (2026-09-09).** CI hat gemeldet, was hier den ganzen Tag durchlief:
 

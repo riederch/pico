@@ -1,5 +1,5 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -119,7 +119,7 @@ let skipsArgued = 0;
 let directoriesMirrored = 0;
 
 try {
-  mirrorDirectories(repoRoot, workspace);
+  mirrorDirectories(workspace);
   cpSync(scriptsDir, join(workspace, 'scripts'), { recursive: true });
 
   for (const entry of readdirSync(scriptsDir).sort()) {
@@ -230,25 +230,54 @@ console.log(
   + 'apart - and none reported success over nothing).',
 );
 
-/** The shape of the tree without any of its contents. */
-function mirrorDirectories(source, target) {
-  for (const entry of readdirSync(source)) {
-    if (skipped.has(entry)) {
+/**
+ * The shape of the tree without any of its contents - **die Gestalt, die das
+ * Repository kennt** (Befund B116).
+ *
+ * Gelesen wurde bis hierher das Arbeitsverzeichnis, und darin steht, was
+ * jemand gerade offen hat: `.idea/shelf/Uncommitted_changes_before_Update_…`,
+ * `.codex`, `.agents`, `__pycache__`. Neun Verzeichnisse, die auf einem
+ * Laeufer fehlen - gemessen gegen einen frischen Klon: 453 hier, 444 dort.
+ *
+ * Folgen hatte es keine, und das ist der Grund, es trotzdem zu aendern: die
+ * Zahl in der Schlussmeldung war nicht reproduzierbar, und der Gegenstand
+ * dieses Audits - die Gestalt, ueber der jeder Pruefer nichts finden soll -
+ * hing daran, welcher Editor hier lief. Ein Audit, das die eigene Werkbank
+ * spiegelt, prueft die Werkbank mit.
+ *
+ * `dist`, `out` und ihre Geschwister standen laengst in `skipped`; das war die
+ * halbe Antwort. Die ganze ist, die Verzeichnisse aus `git ls-files` zu
+ * nehmen.
+ */
+/**
+ * Berechnet *in* der Funktion, nicht daneben.
+ *
+ * Eine `const` neben einer Funktion, die von oberster Ebene aus vor ihrer
+ * eigenen Zeile gerufen wird, ist ein `ReferenceError` - und genau der ist mir
+ * an diesem Tag zweimal passiert, hier und in
+ * `verify-linux-package.mjs` (Befund B114). Zweimal derselbe Fehler heisst,
+ * dass die Stellung der Zeile die falsche Absicherung ist: was eine Funktion
+ * braucht, holt sie sich selbst.
+ */
+function trackedDirectories() {
+  const directories = new Set();
+  for (const path of execSync('git ls-files', { cwd: repoRoot, encoding: 'utf8' })
+    .split('\n')
+    .filter((line) => line !== '')) {
+    const parts = path.split('/');
+    for (let depth = 1; depth < parts.length; depth += 1) {
+      directories.add(parts.slice(0, depth).join('/'));
+    }
+  }
+  return [...directories].sort();
+}
+
+function mirrorDirectories(target) {
+  for (const directory of trackedDirectories()) {
+    if (directory.split('/').some((part) => skipped.has(part))) {
       continue;
     }
-    const path = join(source, entry);
-    let stats;
-    try {
-      stats = statSync(path);
-    } catch {
-      continue;
-    }
-    if (!stats.isDirectory()) {
-      continue;
-    }
-    const mirrored = join(target, relative(source, path));
-    mkdirSync(mirrored, { recursive: true });
+    mkdirSync(join(target, directory), { recursive: true });
     directoriesMirrored += 1;
-    mirrorDirectories(path, mirrored);
   }
 }
