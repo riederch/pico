@@ -207,7 +207,8 @@ Dafuer werden Linux amd64, `dpkg-deb`, `fakeroot` und entweder eine laufende
 Display-Session oder `xvfb-run` benoetigt. Der root-eigene CI-Modus benoetigt
 ausserdem passwortloses `sudo` fuer die begrenzte Extraktion und Rueckgabe des
 exakten temporaeren Verzeichnisses. Der Probe schreibt seinen letzten
-Messbericht nach `apps/companion-shell/out/tray-memory-linux-amd64.json`; PSS
+Messbericht als `tray-memory-linux-amd64.json` unter `apps/companion-shell/out`,
+wo er vor dem ersten Lauf nicht liegt; PSS
 und die Summe aus `Private_Dirty` plus `Private_Hugetlb` sind die v2-Gates.
 Summiertes RSS, `Private_Clean` und die gesamte private residente Summe bleiben
 informativ, weil Shared Pages im RSS mehrfach und Clean Pages je nach aktueller

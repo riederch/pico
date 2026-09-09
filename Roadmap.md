@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B115 — Vierzehnmal grün aus einem Grund, der nicht im Baum steht
+(2026-09-09).** CI hat gemeldet, was hier den ganzen Tag durchlief:
+
+```
+docs/development/agent-runbook.md:210: names
+apps/companion-shell/out/tray-memory-linux-amd64.json, and there is no such file.
+```
+
+Die Datei liegt hier — geschrieben um 15:02 vom Freigabelauf. Sie ist
+**`.gitignore` Zeile 14**. Also fragte `docs:check` „liegt hier etwas" und nicht
+„gehört das dem Repository", und war auf dieser Maschine grün, weil ein
+früherer Lauf etwas hinterlassen hatte.
+
+**Der Kopf dieses Prüfers rühmt sich, keine Ausnahmeliste zu haben** — zu
+Recht. Nur war die Regel dafür maschinenabhängig, und das ist die teurere
+Schwäche: eine Ausnahmeliste steht im Baum und ist nachlesbar, ein
+Bauartefakt nicht.
+
+Gefragt wird jetzt `git ls-files`. Gemessen, was das kostet: von **1.253**
+genannten Pfaden sind genau **zwei** dem Repository unbekannt — der Messbericht
+oben und die lokale `settings.local.json`. Beide sind **umformuliert statt
+ausgenommen**, denselben Weg, den derselbe Absatz schon für den Laufzeitpfad
+gegangen ist: Verzeichnis und Datei getrennt genannt, damit die Zeile als das
+gelesen wird, was sie ist — eine Ankündigung, keine Wegbeschreibung.
+
+**Die CI-Bedingung lokal nachgestellt**, statt sie zu erschliessen: `out/`
+beiseitegeschoben, alter Prüfer, alte Zeile — dieselbe Meldung, Wort für Wort.
+(Die Anführungszeichen um den Pfad oben sind aus dem Zitat genommen: die neue
+Regel liest jeden Pfad in Backticks, auch einen in einem Codeblock, und sie
+hatte recht — dieser Eintrag hat sie beim ersten Kettenlauf selbst
+ausgelöst.)
+Danach neuer Prüfer, neue Zeile, immer noch kein Bauartefakt: grün.
+
+Zwei weitere Pflanzungen: ein Pfad, den es nie gab, und einer, **der hier liegt
+und dem Repository nicht gehört** — der zweite ist der eigentliche Griff, denn
+genau den hat die alte Regel durchgelassen.
+
+**Was daraus folgt.** Ein Tor, das den Arbeitsplatz fragt statt den Baum, ist
+kein Tor, sondern ein Zufall. Die vierzehn grünen Läufe von heute waren nicht
+falsch — sie haben nur eine andere Frage beantwortet als die, die sie zu
+stellen glaubten. Und die einzige Stelle, an der das auffiel, war ein Läufer mit
+leerem Arbeitsverzeichnis.
+
 **B114 — Der letzte Kettenschritt riss, und die naheliegende Reparatur half
 nicht (2026-09-09).** `verify:gates` fiel im **letzten** Schritt:
 
@@ -1981,7 +2024,7 @@ does not read .gitignore."* Genau deshalb müssen die beiden Listen von Hand
 |---|---|
 | **`apps/companion-shell/out`** | 268 MB gepacktes Electron, hochgeladen in **jedem der sechs Bauschritte**, in keinem der beiden Bilder vorkommend |
 | **zwei Recovery-Card-PDFs** | im Wurzelverzeichnis, von `.gitignore` beim Namen gekannt — eine gedruckte Karte trägt Wurzelmaterial, also genau die Klasse, für die diese Datei geschrieben wurde |
-| `.claude/settings.local.json`, `.pico-stage`, Python-Artefakte, fremde Sperrdateien | kein Leck, aber nichts, was ein Bild braucht |
+| die lokale `settings.local.json` unter `.claude`, `.pico-stage`, Python-Artefakte, fremde Sperrdateien | kein Leck, aber nichts, was ein Bild braucht |
 
 Der Kontext misst danach **26,6 MB** statt 294.
 

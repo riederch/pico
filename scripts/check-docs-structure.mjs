@@ -336,7 +336,26 @@ for (const entry of readdirSync(repoRoot, { withFileTypes: true })) {
  * den der Absatz darueber an eine so billige Regel stellt. Der eine Kandidat
  * fuer eine Ausnahme war ein *Laufzeit*pfad (die Datenbank, die ein Home
  * anlegt), und der ist als Laufzeitpfad geschrieben worden statt ausgenommen.
+ *
+ * **Und dann war die Regel selbst maschinenabhaengig** (Befund B115). Sie
+ * fragte `existsSync`, also *"liegt hier etwas"* statt *"gehoert das dem
+ * Repository"*. Auf dieser Maschine liegt nach jedem Freigabelauf ein
+ * Messbericht unter `apps/companion-shell/out`, und der Runbook nennt ihn -
+ * also war dieses Tor hier vierzehnmal an einem Tag gruen und auf dem Laeufer
+ * rot, aus einem Grund, der im Baum nicht steht.
+ *
+ * Gefragt wird jetzt `git ls-files`. Ein Pfad, den das Repository nicht
+ * kennt, ist kein Zeiger auf eine Datei, sondern eine Ankuendigung - und die
+ * gehoert als solche geschrieben. Zwei standen so im Baum, beide sind
+ * umformuliert statt ausgenommen: derselbe Weg, den der Absatz darueber schon
+ * fuer den Laufzeitpfad gegangen ist. Von 1.253 genannten Pfaden waren es
+ * genau diese zwei.
  */
+const trackedFiles = new Set(
+  execSync('git ls-files', { cwd: repoRoot, encoding: 'utf8' })
+    .split('\n')
+    .filter((line) => line !== ''),
+);
 let matrixPathsChecked = 0;
 for (const file of markdownFiles) {
   const isMatrix = file === matrixPath;
@@ -353,14 +372,16 @@ for (const file of markdownFiles) {
         continue;
       }
       matrixPathsChecked += 1;
-      if (existsSync(join(repoRoot, named))) {
+      if (trackedFiles.has(named)) {
         continue;
       }
       errors.push(
-        `${file}:${index + 1}: names \`${named}\`, and there is no such file. A `
-        + 'document is read as the current state, so a path in it is a pointer '
+        `${file}:${index + 1}: names \`${named}\`, and the repository has no such file. `
+        + 'A document is read as the current state, so a path in it is a pointer '
         + 'somebody follows rather than a record of where something was. Name where '
-        + 'the file is now, or say in the line that it is gone.',
+        + 'the file is now, say in the line that it is gone, or - if it is written by '
+        + 'a build rather than kept here - name the directory and the file separately, '
+        + 'so the line reads as the announcement it is.',
       );
     }
   });
