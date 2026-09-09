@@ -192,6 +192,22 @@ describe('ADR 0147 RY6 - a tag without a correlator, an expiry without a clock',
     expect(isPicoLinkExpiryOnBucket(picoLinkExpiryBucketFor(justPast))).toBe(true);
   });
 
+  /**
+   * Befund B112. Der Ablauf wurde hier mit Breitenmuster plus `Date.parse`
+   * geprueft, und `Date.parse` rollt einen unmoeglichen Tag weiter, statt zu
+   * scheitern: `2026-02-30T00:00:00.000Z` wurde angenommen und mit *dieser*
+   * Zeichenkette gespeichert, waehrend sein wirklicher Zeitpunkt der 2. Maerz
+   * ist. Die Ablaufvergleiche des Relays sind Zeichenkettenvergleiche, also
+   * sagt der Speicher etwas anderes als die Uhr.
+   */
+  it('refuses a day that does not exist, however well it is shaped', () => {
+    const nearby = Date.parse('2026-02-28T00:00:00.000Z');
+    for (const bad of ['2026-02-30T00:00:00.000Z', '2026-02-29T00:00:00.000Z']) {
+      expect(() => parsePicoLinkPacket(packet({ expiresAt: bad }), nearby))
+        .toThrow('invalid_pico_link_expiry');
+    }
+  });
+
   it('refuses an expiry that is not an instant at all', () => {
     for (const bad of ['tomorrow', '2026-08-12', '2026-08-12T12:00:00Z', 42]) {
       expect(() => parsePicoLinkPacket(packet({ expiresAt: bad }), nowMs))

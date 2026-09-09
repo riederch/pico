@@ -912,6 +912,59 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B112 — Der 30. Februar war ein gültiger Ablauf (2026-09-09).** Der
+Zeitpunktprüfer hat seine eigene Lücke seit dem 2026-08-21 im Kopf stehen:
+
+> *„Eine zehnte, als Breite plus `Date.parse` geschrieben, käme durch — und
+> wäre auf dieselbe Weise falsch."*
+
+**Genau zwei standen so im Baum.** Gegangen statt vermutet, gegen den gebauten
+Paketleser:
+
+```
+2026-02-30T00:00:00.000Z: isPicoInstant=false  aufRaster=true
+  ANGENOMMEN -> gespeichert als 2026-02-30T00:00:00.000Z
+                | echter Zeitpunkt 2026-03-02T00:00:00.000Z
+```
+
+`parsePicoLinkPacket` nahm einen Tag an, **den es nicht gibt** — und speicherte
+ihn als diese Zeichenkette, während sein wirklicher Zeitpunkt zwei Tage später
+liegt. Die Ablaufvergleiche des Relays sind Zeichenkettenvergleiche, also sagt
+der Speicher etwas anderes als die Uhr. Und ein unmöglicher Tag ist obendrein
+genau der **einmalige Wert**, den das Raster aus ADR 0147 aus einem Ablauf
+herausnimmt, damit ein Ablauf kein Fingerabdruck wird.
+
+Dasselbe in `device-recovery-ceremony.ts` für `validFrom`/`validUntil` einer
+Vollmacht.
+
+**Warum der Prüfer sie nicht sah.** Seine Regel keyt auf `toISOString() === x`
+— die *Rundlauf*-Form, aus der sie 2026-08-20 herausgelöst wurde. Die zweite
+Gestalt ist ein Breitenmuster; das ist keine andere Schreibweise derselben
+Sache, sondern die andere Hälfte. `instant.ts` sagt es selbst: *„The shape
+check alone would still admit impossible dates."*
+
+**Gefunden über einen Umweg, der sich gelohnt hat.** Erst gemessen, wie oft ein
+regulärer Ausdruck in mehr als einer Datei steht: **13 von 46**. Die
+mechanische Lesart — „gleiches Literal, also dieselbe Regel" — wäre falsch
+gewesen: 48 Stellen schreiben ein exportiertes Muster von Hand, und **44 davon
+sind Formgleichheit ohne Begriffsgleichheit** (`/^[0-9a-f]{64}$/` ist ein
+Fingerabdruck, ein Schlüsselabdruck und ein Commit). Vier waren echte Kopien
+derselben Aussage, drei davon der kanonische Zeitpunkt.
+
+**Ein Literal ist keine Regel.** Deshalb prüft die neue Regel *einen* Begriff
+und nicht die Form: wer die kanonische Breite hinschreibt, statt
+`isPicoInstant` zu fragen, schreibt die Regel ein zweites Mal.
+
+In `packages/identity` stand die Breite **neben** `isPicoInstant` — nicht
+falsch, aber zwei Zeilen, die dasselbe sagen. Befund B52 hat sie dort
+hinzugefügt, als die Rundlaufhälfte allein stand; jetzt trägt die eine Antwort
+beide Hälften, und die Breite geht wieder heraus.
+
+Drei Pflanzungen: die zweite Fassung im Paketleser wiederhergestellt, die
+Ausnahme für `instant.ts` entfernt (dann fällt es selbst), und ein
+Regressionstest für den 30. und 29. Februar 2026 — zwei Tage, die es nicht
+gibt.
+
 **B111 — Dieselbe Tür, dieselbe Stille (2026-09-09).** B110 hat die
 Postfachtür des Relays repariert. Die Betreibertür daneben antwortet auf einen
 inneren Fehler mit `500 {"error":"operator_request_failed"}` — nach aussen

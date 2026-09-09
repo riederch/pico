@@ -3,6 +3,7 @@ import {
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  isPicoInstant,
   picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeDeviceRecoveryClaimDigestHex,
   picoHomeDeviceRecoveryEvidenceDigestHex,
@@ -33,8 +34,6 @@ const lifecycleOrderPattern = /^seq:([0-9]{16})$/u;
 const asciiIdPattern = /^[A-Za-z0-9._:/+-]{1,1024}$/u;
 const fingerprintPattern = /^[0-9a-f]{64}$/u;
 const signaturePattern = /^[0-9a-f]{128}$/u;
-const canonicalInstantPattern =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 const defaultRecoveryScopes: readonly PicoIdentityDelegationScope[] = [
   'surface_session',
@@ -190,8 +189,8 @@ export async function initiatePicoHomeDeviceRecovery(
   const validFromMs = Date.parse(validFrom);
   const validUntilMs = Date.parse(input.validUntil);
   if (
-    !canonicalInstantPattern.test(validFrom)
-    || !canonicalInstantPattern.test(input.validUntil)
+    !isPicoInstant(validFrom)
+    || !isPicoInstant(input.validUntil)
     || !Number.isFinite(validFromMs)
     || !Number.isFinite(validUntilMs)
     || validFromMs > now.getTime()
@@ -523,9 +522,9 @@ function parsePendingRecovery(
     || !fingerprintPattern.test(
       pending.targetDeviceKeyAgreementKeyFingerprintHex,
     )
-    || !canonicalInstantPattern.test(pending.acceptedAt)
-    || !canonicalInstantPattern.test(pending.effectiveAt)
-    || !canonicalInstantPattern.test(pending.completionExpiresAt)
+    || !isPicoInstant(pending.acceptedAt)
+    || !isPicoInstant(pending.effectiveAt)
+    || !isPicoInstant(pending.completionExpiresAt)
     || !Number.isFinite(acceptedAt)
     || effectiveAt - acceptedAt !== picoHomeDeviceRecoveryTiming.vetoDelayMs
     || completionExpiresAt - effectiveAt

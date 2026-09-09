@@ -1022,14 +1022,13 @@ function assertFingerprint(value: string): void {
  * instant and would report an expired delegation as active.
  */
 function assertInstant(value: string, reason: string): void {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
-    throw new Error(reason);
-  }
-
-  // Befund B52. Hier stand nur die Rundlaufhaelfte: sie weist unmoegliche
-  // Daten ab (`new Date` rollt `2026-02-30` auf den 2. Maerz), laesst aber die
-  // erweiterte Jahresform durch - und die sortiert als Zeichenkette vor jedem
-  // gewoehnlichen Jahr, wo eine Lebenslauf-Abfrage sie vergleicht.
+  /**
+   * Befund B52 hat die Rundlaufhaelfte allein verworfen und die Breite daneben
+   * gestellt; Befund B112 nimmt die Breite wieder heraus, weil `isPicoInstant`
+   * beide Haelften traegt. Zwei Zeilen, die dasselbe sagen, sind eine Zeile zu
+   * viel - und die eine, die bleibt, ist die, die das Produkt sonst ueberall
+   * fragt.
+   */
   if (!isPicoInstant(value)) {
     throw new Error(reason);
   }

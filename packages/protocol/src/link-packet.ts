@@ -28,6 +28,8 @@
  * - `payload` - what, sealed.
  */
 
+import { isPicoInstant } from './instant.js';
+
 export const picoLinkPacketSchema = 'pico.link.packet.v1' as const;
 
 /**
@@ -137,7 +139,6 @@ export interface PicoLinkPacket {
 }
 
 const base64Pattern = /^[A-Za-z0-9+/]+={0,2}$/u;
-const instantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 /**
  * ADR 0147 RY3. Splits an address into the mailbox and the operator that holds
@@ -239,9 +240,18 @@ export function parsePicoLinkPacket(value: unknown, nowMs?: number): PicoLinkPac
     throw new Error('invalid_pico_link_packet_tag');
   }
 
-  if (typeof record.expiresAt !== 'string'
-    || !instantPattern.test(record.expiresAt)
-    || Number.isNaN(Date.parse(record.expiresAt))) {
+  /**
+   * Befund B112: die eine Antwort statt einer zweiten Fassung.
+   *
+   * Hier stand Breitenmuster plus `Date.parse`, und das ist genau die Paarung,
+   * die `instant.ts` in ihrem eigenen Kopf als unzureichend benennt: `Date.parse`
+   * rollt `2026-02-30` auf den 2. Maerz, statt zu scheitern. Gegangen und nicht
+   * vermutet - ein Paket mit `expiresAt: '2026-02-30T00:00:00.000Z'` wurde
+   * angenommen und mit dieser Zeichenkette gespeichert, waehrend sein
+   * wirklicher Zeitpunkt zwei Tage spaeter lag, und die Ablaufvergleiche des
+   * Relays sind Zeichenkettenvergleiche.
+   */
+  if (!isPicoInstant(record.expiresAt)) {
     throw new Error('invalid_pico_link_expiry');
   }
   if (!isPicoLinkExpiryOnBucket(record.expiresAt)) {

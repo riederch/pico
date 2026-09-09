@@ -119,6 +119,29 @@ const owners = new Set([
 const handWrittenInstantRule = /toISOString\(\)\s*(?:===|!==)\s*[\w.[\]]+/g;
 
 /**
+ * Die zweite Gestalt, und dieser Kopf hat sie selbst angekuendigt (Befund
+ * B112).
+ *
+ * Ueber der Regel oben steht seit dem 2026-08-21: *"Eine zehnte, als Breite
+ * plus `Date.parse` geschrieben, kaeme durch - und waere auf dieselbe Weise
+ * falsch."* Genau zwei standen so im Baum: `link-packet.ts` prueft den Ablauf
+ * eines Pakets und `device-recovery-ceremony.ts` die Grenzen einer Vollmacht.
+ *
+ * Gegangen statt vermutet: ein Paket mit `expiresAt: '2026-02-30T00:00:00.000Z'`
+ * wurde angenommen und mit dieser Zeichenkette gespeichert, waehrend sein
+ * wirklicher Zeitpunkt zwei Tage spaeter lag. Die Ablaufvergleiche des Relays
+ * sind Zeichenkettenvergleiche, also sagt der Speicher etwas anderes als die
+ * Uhr - und ein unmoeglicher Tag ist ausserdem genau der einmalige Wert, den
+ * das Raster aus ADR 0147 aus einem Ablauf herausnimmt.
+ *
+ * Erkannt wird das Muster selbst: wer die kanonische Breite hinschreibt, statt
+ * `isPicoInstant` zu fragen, schreibt die Regel ein zweites Mal - ob mit
+ * `Date.parse` daneben oder ohne.
+ */
+const handWrittenInstantShape =
+  /\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}T\\d\{2\}:\\d\{2\}:\\d\{2\}\\\.\\d\{3\}Z\$\//g;
+
+/**
  * An instant-shaped field, named the way this tree names them.
  *
  * `validFrom` is listed and `From` is not, because `derivedFrom` is a supplier
@@ -189,6 +212,14 @@ for (const file of sourceFiles(...scanRoots.map((root) => join(repoRoot, root)))
     scannedPerRoot.set(root, scannedPerRoot.get(root) + 1);
   }
   const content = readFileSync(file, 'utf8');
+
+  for (const _ of content.matchAll(handWrittenInstantShape)) {
+    errors.push(`${path}: writes the canonical instant's fixed width by hand. `
+      + '`isPicoInstant` in `@pico/protocol/instant` carries both halves - the width and the '
+      + 'exact calendar - and the width alone admits a day that does not exist: `Date.parse` '
+      + 'rolls `2026-02-30` forward to March 2 rather than failing, so the value is stored as '
+      + 'a string that disagrees with the instant it names.');
+  }
 
   for (const _ of content.matchAll(handWrittenInstantRule)) {
     errors.push(`${path}: decides what a canonical instant is with a rule of its own. `
