@@ -1,9 +1,10 @@
-import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import {
   picoOperatedSurfaces,
   picoRepoRoot,
+  picoSurfaceRenderers,
+  picoTrackedPaths,
   picoUnoperatedSurfaces,
 } from './operated-surfaces.mjs';
 
@@ -44,23 +45,7 @@ import {
  * pruefte diese Frage sie nicht.
  */
 const errors = [];
-const tracked = new Set(
-  execSync('git ls-files', { cwd: picoRepoRoot, encoding: 'utf8' })
-    .split('\n')
-    .filter((line) => line !== ''),
-);
-
-/** Die naechste Elternschaft mit einer `package.json` - die Anwendungswurzel. */
-function appRootOf(path) {
-  let directory = dirname(path);
-  while (directory !== '.' && directory !== '') {
-    if (existsSync(join(picoRepoRoot, directory, 'package.json'))) {
-      return directory;
-    }
-    directory = dirname(directory);
-  }
-  return null;
-}
+const tracked = picoTrackedPaths();
 
 const classSelector = /\.(-?[_a-zA-Z][\w-]*)/gu;
 const attributePattern = /\bclass="([^"]*)"/gu;
@@ -102,12 +87,7 @@ for (const surface of picoOperatedSurfaces()) {
   }
   defined += known.size;
 
-  /** Wer auf diese Flaeche zeichnet: die verfolgten `.ts` derselben Wurzel. */
-  const root = appRootOf(surface);
-  const sources = [...tracked].filter((path) => root !== null
-    && path.startsWith(`${root}/`)
-    && path.endsWith('.ts')
-    && !path.endsWith('.d.ts'));
+  const sources = picoSurfaceRenderers(surface, tracked);
 
   const wearers = new Map();
   const wear = (name, where) => {

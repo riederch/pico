@@ -912,6 +912,62 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B104 — Das Fenster antwortet auf jeden Druck, und ein Screenreader hört
+nichts davon (2026-09-09).** ADR 0118 O4 verlangt: *was eine Person drückt,
+antwortet immer.* Das Fenster hält das — **sichtbar**. Elf seiner dreizehn
+Antwortfächer standen ausserhalb jedes lebendigen Bereichs. Die Antwort wurde
+also **hingeschrieben und nie gesagt**.
+
+| Fläche | Antwortfächer | in einem lebendigen Bereich |
+|---|---|---|
+| Dashboard | 11 | **11** |
+| Begleiterfenster | 13 | **2** |
+
+**Es ist keine unbekannte Regel.** Dasselbe Produkt macht es auf der anderen
+Fläche vollständig richtig: jedes Antwortfach des Dashboards trägt
+`role="status" aria-live="polite"`. Dieselbe Wahrheit, an zwei Orten
+geschrieben, ist an einem abgefallen — und nichts hat es bemerkt, weil ein
+fehlender lebendiger Bereich **nichts kaputt macht. Er macht still.**
+
+Was ein Mensch ohne Blick auf die Seite nicht hörte: *„Removed, and its files
+are off this machine."*, *„That was not accepted."*, *„Measuring. That takes
+several minutes …"* — sechzehn Sätze allein im Depot-Fach.
+
+**Der Prüfer und die drei verworfenen Unterscheidungen.** Was ein Antwortfach
+*ist*, musste abgeleitet werden statt geraten, und drei Anläufe sind vorher
+gemessen und verworfen worden, weil jeder an einer der beiden Flächen falsch
+lag:
+
+| Unterscheidung | Woran sie scheiterte |
+|---|---|
+| die Kennung endet auf `-status` | das Dashboard hat drei davon, die einen Wert zeigen statt einer Antwort |
+| Prosa statt Zahl geschrieben | blind, sobald eine Hilfsfunktion schreibt — das halbe Dashboard |
+| steht in einem Druck-Zuhörer | blind gegen das Ansichtsobjekt des Dashboards, das den Druck nur weiterreicht |
+
+Was trägt, sind **drei Merkmale zusammen**, die beide Flächen selbst tragen:
+die Kennung endet auf `-status`, das Element ist in der HTML-Datei **leer** (es
+hält keinen Inhalt, es wartet auf eine Nachricht), und ein Zeichner schreibt
+Text hinein. Damit fallen die drei Wert-Anzeigen des Dashboards von selbst
+heraus, ohne eine einzige begründete Ausnahme.
+
+**Vererbung zählt mit.** `aria-live` erbt, also fragt der Prüfer die ganze
+Vorfahrenkette; sonst meldete er die vier Fächer des obersten Statusblocks als
+stumm, die in einem `aria-live="assertive"` sitzen. Dass das keine Zierde ist,
+ist gegangen: dasselbe Element, selbst stumm, fällt durch — und besteht, sobald
+sein `<section>` lebendig wird.
+
+**Was nicht geprüft wird:** ob `polite` oder `assertive` richtig ist und ob der
+Satz gut ist. Das sind Urteile. Hier steht, dass eine Antwort überhaupt eine
+Chance hat, anzukommen.
+
+`pnpm answer:check`, Kettenschritt 47, Kette jetzt **50**, 140 ms. Vier
+Pflanzungen: ein Fach im Fenster wieder stumm, eines auf dem **Dashboard**, die
+Vererbungsprobe und der Leerlaufwächter.
+
+**`operated-surfaces.mjs` trägt jetzt drei Prüfer** — die Flächen, die zwei
+unbedienten mit Grund, und seit heute auch die Ableitung, wer auf eine Fläche
+zeichnet.
+
 **B103 — Elf Namen versprachen ein Aussehen, und der leiseste war der lauteste
 (2026-09-09).** B102 hat gefragt, wo die Bedienelemente herkommen. Dieselbe
 Frage eine Drehung weiter: **die Namen, die sie tragen — hält die jemand?**

@@ -58,7 +58,7 @@
     <section id="pending-actions" class="providers" hidden>
       <h2>Waiting for you</h2>
       <ul id="pending-action-list" class="provider-list"></ul>
-      <p id="pending-action-status" class="detail"></p>
+      <p id="pending-action-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <!--
       ADR 0116 W1. The requesting side, where a person asks their own Home
@@ -139,7 +139,7 @@
       <label id="measure-proof-label" for="measure-proof"></label>
       <input id="measure-proof" type="checkbox">
       <button id="measure-submit" type="button">Measure it</button>
-      <p id="measure-status" class="detail"></p>
+      <p id="measure-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <section id="model-providers" class="providers" hidden>
       <h2>What computes for you</h2>
@@ -159,12 +159,12 @@
     <section id="declared-suppliers" class="providers" hidden>
       <h2>Waiting for a place in your memory</h2>
       <ul id="declared-supplier-list" class="provider-list"></ul>
-      <p id="declared-supplier-status" class="detail"></p>
+      <p id="declared-supplier-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <section id="suppliers" class="providers" hidden>
       <h2>What Pico may fetch</h2>
       <ul id="supplier-list" class="provider-list"></ul>
-      <p id="supplier-status" class="detail"></p>
+      <p id="supplier-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <!--
       ADR 0143 DP1. Material pinned at a commit, and the same two fetch
@@ -184,7 +184,7 @@
     <section id="module-consent" class="providers" hidden>
       <h2>What the parts of Pico may do</h2>
       <ul id="module-consent-list" class="provider-list"></ul>
-      <p id="module-consent-status" class="detail"></p>
+      <p id="module-consent-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <!--
       ADR 0086 mit ADR 0130 E5. Ein Raum, den nur diese Person und die Leute
@@ -218,7 +218,7 @@
       -->
       <button id="reader-custody-rotate" type="button">Change the lock on this space</button>
       <ul id="reader-custody-list" class="provider-list"></ul>
-      <p id="reader-custody-status" class="detail"></p>
+      <p id="reader-custody-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <section id="depot-attach" class="form-card">
       <h2>Give Pico material</h2>
@@ -228,7 +228,7 @@
       <input id="depot-commit" maxlength="64" autocomplete="off">
       <button id="depot-attach-submit" type="button">This material may be here</button>
       <button id="depot-fetch-now" type="button">Fetch now</button>
-      <p id="depot-status" class="detail"></p>
+      <p id="depot-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <!--
       ADR 0126 P2/P6. The person's own devices, and what each may be used for.
@@ -263,7 +263,7 @@
         <p id="home-rotate-warning" class="detail"></p>
         <div id="home-rotate-reasons" class="actions"></div>
       </div>
-      <p id="home-status" class="detail"></p>
+      <p id="home-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <section id="devices" class="providers" hidden>
       <h2>Your devices</h2>
@@ -294,7 +294,7 @@
         </div>
       </div>
       <ul id="device-list" class="provider-list"></ul>
-      <p id="device-status" class="detail"></p>
+      <p id="device-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <!--
       ADR 0154. A different hat: here the person runs a machine other people's
@@ -306,7 +306,7 @@
       <h2>Relays you run</h2>
       <ul id="relay-list" class="provider-list"></ul>
       <p id="relay-issued" class="form-card" hidden></p>
-      <p id="relay-status" class="detail"></p>
+      <p id="relay-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     <section id="relay-claim" class="form-card">
       <h2>Take over a relay</h2>
@@ -321,7 +321,7 @@
       <label for="relay-code">The code from its log</label>
       <input id="relay-code" maxlength="256" autocomplete="off">
       <button id="relay-claim-submit" type="button">Take over this relay</button>
-      <p id="relay-claim-status" class="detail"></p>
+      <p id="relay-claim-status" class="detail" role="status" aria-live="polite"></p>
     </section>
     </div>
     <section id="recovery-card-form" class="form-card" hidden>

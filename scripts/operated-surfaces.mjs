@@ -1,16 +1,18 @@
 import { execSync } from 'node:child_process';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
  * Welche Seiten eine Person wirklich bedient - einmal abgeleitet, zweimal
  * gelesen.
  *
- * Zwei Pruefer stellen Fragen ueber dieselben Flaechen: ob jedes Bedienelement
- * sagt, was es ist (`check-form-labels.mjs`), und ob jeder Name, den eine
- * Flaeche traegt, eine Regel hat (`check-style-names.mjs`). Beide brauchen
- * dieselbe Menge, und beide brauchen dieselbe Begruendung, warum zwei Seiten
- * nicht dazugehoeren. Zweimal geschrieben driftet sie: der eine Pruefer
+ * Drei Pruefer stellen Fragen ueber dieselben Flaechen: ob jedes Bedienelement
+ * sagt, was es ist (`check-form-labels.mjs`), ob jeder Name, den eine Flaeche
+ * traegt, eine Regel hat (`check-style-names.mjs`), und ob eine Antwort auch
+ * den erreicht, der sie nicht sieht (`check-answer-reach.mjs`). Alle drei
+ * brauchen dieselbe Menge, und alle drei brauchen dieselbe Begruendung, warum
+ * zwei Seiten nicht dazugehoeren. Zweimal geschrieben driftet sie: der eine Pruefer
  * bekommt eine dritte Ausnahme, der andere nicht, und danach messen sie
  * verschiedene Dinge und melden beide gruen.
  *
@@ -33,4 +35,37 @@ export function picoOperatedSurfaces() {
     .split('\n')
     .filter((line) => line !== '' && !line.includes('node_modules'))
     .filter((line) => !picoUnoperatedSurfaces.has(line));
+}
+
+/**
+ * Wer auf eine Flaeche zeichnet: die verfolgten `.ts` unter derselben
+ * Anwendungswurzel - der naechsten Elternschaft mit einer `package.json`.
+ * Abgeleitet und nicht gelistet, damit eine neue Datei im selben Verzeichnis
+ * von selbst mitgeprueft wird.
+ */
+export function picoSurfaceRenderers(surface, tracked) {
+  let directory = dirname(surface);
+  let root = null;
+  while (directory !== '.' && directory !== '') {
+    if (existsSync(join(picoRepoRoot, directory, 'package.json'))) {
+      root = directory;
+      break;
+    }
+    directory = dirname(directory);
+  }
+  if (root === null) {
+    return [];
+  }
+  return [...tracked].filter((path) => path.startsWith(`${root}/`)
+    && path.endsWith('.ts')
+    && !path.endsWith('.d.ts'));
+}
+
+/** Jeder verfolgte Pfad, einmal gelesen. */
+export function picoTrackedPaths() {
+  return new Set(
+    execSync('git ls-files', { cwd: picoRepoRoot, encoding: 'utf8' })
+      .split('\n')
+      .filter((line) => line !== ''),
+  );
 }
