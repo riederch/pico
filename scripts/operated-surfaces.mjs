@@ -69,3 +69,31 @@ export function picoTrackedPaths() {
       .filter((line) => line !== ''),
   );
 }
+
+/**
+ * Welcher Name im Zeichner welche Kennung der Seite haelt.
+ *
+ * `const depotStatus = requireElement('depot-status')` und
+ * `contentReadForm: requireElement(document, 'content-read-form', ...)` sind
+ * dieselbe Aussage in zwei Schreibweisen, weil die beiden Flaechen
+ * verschieden gebaut sind - das Fenster holt seine Elemente einzeln, das
+ * Dashboard sammelt sie in einem Objekt. Beide Formen stehen hier einmal,
+ * damit nicht jeder Pruefer sie neu erraet und einer davon eine Flaeche
+ * uebersieht.
+ */
+export function picoElementNames(sources) {
+  const names = new Map();
+  for (const source of sources) {
+    for (const [, variable, id] of source.matchAll(
+      /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*requireElement\((?:document,\s*)?'([^']+)'/gu,
+    )) {
+      names.set(variable, id);
+    }
+    for (const [, variable, id] of source.matchAll(
+      /([A-Za-z_$][\w$]*)\s*:\s*requireElement\((?:document,\s*)?'([^']+)'/gu,
+    )) {
+      names.set(variable, id);
+    }
+  }
+  return names;
+}

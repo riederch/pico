@@ -912,6 +912,58 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B105 — Drei Eigenschaften, dreimal schon wahr, und eine Pflanzung, die nicht
+feuerte (2026-09-09).** Nach B104 drei Nachbarfragen an dieselben Flächen. Alle
+drei waren beim Messen sauber:
+
+| Frage | Befund |
+|---|---|
+| Sagt jeder Knopf, was ein Druck tut? | **81 von 81** tragen ein `type` |
+| Fängt jedes Formular sein eigenes Absenden? | **10 von 10**, alle mit `preventDefault` |
+| Ist ein Feld, dessen Name ein Geheimnis ansagt, ein Passwortfeld? | **5 von 5** |
+
+Warum die drei zählen, je in einem Satz:
+
+- Ein `<button>` ohne `type` ist `submit`. Steht er in einem Formular, sendet
+  ein Druck auf „Vergessen" das Formular ab, **statt zu vergessen** — ein
+  Fehler, den man nicht sieht, sondern erlebt. Und der Baum hat solche Knöpfe:
+  `recall-grant` steht in `recall-form`.
+- Ohne Absende-Zuhörer lädt die Eingabetaste in einem Textfeld die Seite neu.
+  Im Begleiterfenster heisst das: **der Zeichner fängt von vorn an, mitten in
+  einer Entscheidung.**
+- Ein Geheimnisfeld ohne `type="password"` steht im Klartext auf dem Schirm und
+  in dem, was der Browser wiederherstellt.
+
+**Und dann feuerte eine Pflanzung nicht.** Dem `submit`-Zuhörer von
+`shred-form` sein `preventDefault` genommen — der Prüfer meldete **grün**. Die
+Regel las den Zuhörer über ein Fenster von 400 Zeichen, und darin lag das
+`preventDefault` des *nächsten* Zuhörers.
+
+Das ist die Klasse von B96 noch einmal: **eine Spanne, die nicht dort endet, wo
+ihr Gegenstand endet, entlastet den Nachbarn.** Die Spanne endet jetzt an ihrer
+eigenen Klammer, gezählt auf einer Fassung, in der Zeichenketten und Kommentare
+in *einem* Durchgang ausgeblendet sind — getrennte Ersetzungen verrutschen an
+genau zwei Stellen, einem Apostroph in einem Kommentar und einem `//` in einer
+Zeichenkette. Dieselbe Pflanzung spricht danach mit Formular und Folge.
+
+Wäre die Pflanzung nicht gesetzt worden, stünde hier eine Regel, die nie etwas
+finden kann, und darüber die Zeile „10 von 10". **Eine Pflanzung, die man nicht
+nachsieht, ist keine** — und eine, die schweigt, ist der einzige Grund, warum
+diese Regel heute etwas hält.
+
+`scripts/source-spans.mjs` ist neu und trägt beides mit Grund. **Warum
+`check-link-seal.mjs` seinen eigenen Filter behält**, steht darin: der braucht
+das Gegenteil — er *erhält* den Inhalt von `${...}`, weil er darin nach Namen
+sucht. Zwei Anforderungen, nicht dieselbe Wahrheit zweimal.
+
+Kein neuer Kettenschritt: die drei Regeln stehen in `labels:check`, weil es
+dieselben Flächen, dieselben Bedienelemente und dieselbe Ableitung sind. Der
+Prüfer kostet jetzt 240 ms statt 150.
+
+Sechs Pflanzungen: ein Knopf ohne `type` im HTML, einer im Code, ein Formular
+ohne Zuhörer, ein Zuhörer ohne `preventDefault` (der, der schwieg), ein
+Geheimnisfeld im Klartext und der Leerlaufwächter.
+
 **B104 — Das Fenster antwortet auf jeden Druck, und ein Screenreader hört
 nichts davon (2026-09-09).** ADR 0118 O4 verlangt: *was eine Person drückt,
 antwortet immer.* Das Fenster hält das — **sichtbar**. Elf seiner dreizehn

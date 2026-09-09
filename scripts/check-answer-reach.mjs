@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  picoElementNames,
   picoOperatedSurfaces,
   picoRepoRoot,
   picoSurfaceRenderers,
@@ -106,22 +107,9 @@ for (const surface of picoOperatedSurfaces()) {
   }
   surfaces += 1;
 
-  /** Welche Kennung hinter welchem Namen im Zeichner steht. */
-  const named = new Map();
   const written = new Set();
   const read = sources.map((path) => readFileSync(join(picoRepoRoot, path), 'utf8'));
-  for (const source of read) {
-    for (const [, variable, id] of source.matchAll(
-      /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*requireElement\((?:document,\s*)?'([^']+)'/gu,
-    )) {
-      named.set(variable, id);
-    }
-    for (const [, variable, id] of source.matchAll(
-      /([A-Za-z_$][\w$]*)\s*:\s*requireElement\((?:document,\s*)?'([^']+)'/gu,
-    )) {
-      named.set(variable, id);
-    }
-  }
+  const named = picoElementNames(read);
   for (const source of read) {
     for (const [, variable] of source.matchAll(
       /(?:\b|\.)([A-Za-z_$][\w$]*)\s*\.\s*textContent\s*=/gu,

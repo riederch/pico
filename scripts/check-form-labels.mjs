@@ -2,10 +2,14 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  picoElementNames,
   picoOperatedSurfaces,
   picoRepoRoot,
+  picoSurfaceRenderers,
+  picoTrackedPaths,
   picoUnoperatedSurfaces,
 } from './operated-surfaces.mjs';
+import { blankStringsAndComments, callSpan } from './source-spans.mjs';
 
 /**
  * Jedes Bedienelement, das eine Person vor sich hat, sagt was es ist.
@@ -54,6 +58,35 @@ import {
  * damit nicht der Name des uebernaechsten Knopfes den vorigen entlastet. Wer
  * ihn weiter weg setzt, bekommt einen Fehlalarm. Das ist die richtige
  * Richtung zu irren: laut statt still.
+ *
+ * **Drei weitere Eigenschaften, die dieser Baum schon hat** (Befund B105).
+ * Alle drei waren beim Messen sauber, und keine hielt etwas:
+ *
+ * 1. **Jeder Knopf sagt, was ein Druck tut.** Ein `<button>` ohne `type` ist
+ *    `submit`. Steht er in einem Formular, sendet ein Druck auf "Vergessen"
+ *    das Formular ab statt zu vergessen - ein Fehler, den man nicht sieht,
+ *    sondern erlebt. 81 Knoepfe, 81 mit `type`.
+ * 2. **Jedes Formular faengt sein eigenes Absenden.** Ohne Zuhoerer laedt die
+ *    Eingabetaste in einem Textfeld die Seite neu; im Begleiterfenster heisst
+ *    das, der Zeichner faengt von vorn an, mitten in einer Entscheidung. Zehn
+ *    Formulare, zehn Zuhoerer, zehn `preventDefault`.
+ * 3. **Ein Feld, dessen Name ein Geheimnis ansagt, ist ein Passwortfeld.**
+ *    Sonst steht es im Klartext auf dem Schirm und im Wiederherstellen des
+ *    Browsers. Fuenf solche Felder, fuenf `type="password"`.
+ *
+ * Der dritte Punkt geht ueber den Namen, und Befund B104 hat gezeigt, dass
+ * ein Name allein eine schlechte Unterscheidung sein kann. Hier traegt er:
+ * das Muster ist eng gefasst (`passphrase`, `password`, `secret`, `token`,
+ * `credential`, `pin`), es trifft heute genau fuenf Felder, und keines der
+ * anderen 32 heisst versehentlich so.
+ *
+ * **Eine Pflanzung hat hier nicht gefeuert**, und das ist der Teil, der zaehlt.
+ * Der Zuhoerer eines Formulars wurde ueber ein Fenster von 400 Zeichen
+ * gelesen; darin lag das `preventDefault` des *naechsten* Zuhoerers. Dem
+ * echten seines genommen - und der Pruefer meldete gruen. Die Spanne endet
+ * jetzt an ihrer eigenen Klammer (`source-spans.mjs`), und dieselbe Pflanzung
+ * spricht. Dieselbe Klasse wie B96: eine Spanne, die nicht dort endet, wo ihr
+ * Gegenstand endet, entlastet den Nachbarn.
  */
 const repoRoot = picoRepoRoot;
 const errors = [];
@@ -68,6 +101,9 @@ let surfaces = 0;
 let controls = 0;
 let buttons = 0;
 let buttonsSeen = 0;
+let typedButtons = 0;
+let secretFields = 0;
+let forms = 0;
 for (const path of tracked) {
   surfaces += 1;
   const html = readFileSync(join(repoRoot, path), 'utf8');
@@ -90,6 +126,35 @@ for (const path of tracked) {
     errors.push(
       `${path}: the page has no non-empty \`<title>\`. It is the first thing said `
       + 'about a window and the only thing a tab shows.',
+    );
+  }
+
+  /** Befund B105, Regel 1: ein Knopf ohne `type` ist `submit`. */
+  for (const [element] of html.matchAll(/<button\b[^>]*>/giu)) {
+    typedButtons += 1;
+    if (/\btype="[^"]+"/u.test(element)) {
+      continue;
+    }
+    errors.push(
+      `${path}: ${element.slice(0, 60).replace(/\s+/gu, ' ')} does not say its \`type\`, `
+      + 'so it is a submit button. Inside a form, pressing it sends the form instead of '
+      + 'doing what it says.',
+    );
+  }
+
+  /** Befund B105, Regel 3: ein Feld, dessen Name ein Geheimnis ansagt. */
+  for (const [element] of html.matchAll(/<input\b[^>]*>/giu)) {
+    const id = /\bid="([^"]+)"/u.exec(element)?.[1] ?? '';
+    if (!/passphrase|password|secret|token|credential|\bpin\b/iu.test(id)) {
+      continue;
+    }
+    secretFields += 1;
+    if (/\btype="password"/u.test(element)) {
+      continue;
+    }
+    errors.push(
+      `${path}: the field \`${id}\` names a secret and is not \`type="password"\`. It `
+      + 'then stands in clear text on the screen and in whatever the browser restores.',
     );
   }
   for (const [element, attributes, inner] of html.matchAll(buttonPattern)) {
@@ -202,6 +267,16 @@ for (const path of renderers) {
     ).test(span));
     const joined = new RegExp(`\\b${site.name}\\s*\\.\\s*id\\s*=`, 'u').test(span)
       && /\.\s*htmlFor\s*=/u.test(span);
+    if (site.tag === 'button') {
+      typedButtons += 1;
+      if (!new RegExp(`\\b${site.name}\\s*\\.\\s*type\\s*=`, 'u').test(span)) {
+        errors.push(
+          `${path}:${site.line}: the button built as \`${site.name}\` never says its `
+          + '`type`, so it is a submit button. Appended into a form, a press sends the '
+          + 'form instead of doing what the button says.',
+        );
+      }
+    }
     if (named || nested || joined) {
       continue;
     }
@@ -213,10 +288,80 @@ for (const path of renderers) {
   }
 }
 
-if (surfaces === 0 || controls === 0 || drawingSources === 0 || codeControls === 0) {
+/**
+ * Befund B105, Regel 2: jedes Formular faengt sein eigenes Absenden.
+ *
+ * Ohne Zuhoerer laedt die Eingabetaste in einem Textfeld die Seite neu, und im
+ * Begleiterfenster faengt der Zeichner damit von vorn an - mitten in einer
+ * Entscheidung. `preventDefault` gehoert dazu: ein Zuhoerer, der es nicht ruft,
+ * verhindert das Neuladen nicht.
+ */
+const trackedPaths = picoTrackedPaths();
+for (const surface of picoOperatedSurfaces()) {
+  const html = readFileSync(join(repoRoot, surface), 'utf8');
+  const read = picoSurfaceRenderers(surface, trackedPaths)
+    .filter((each) => !each.includes('.test.'))
+    .map((each) => readFileSync(join(repoRoot, each), 'utf8'));
+  if (read.length === 0) {
+    continue;
+  }
+  const named = picoElementNames(read);
+  const variableOf = new Map([...named].map(([variable, id]) => [id, variable]));
+  for (const [, id] of html.matchAll(/<form\b[^>]*\bid="([^"]+)"/gu)) {
+    forms += 1;
+    const variable = variableOf.get(id);
+    /**
+     * Der Rumpf des Zuhoerers, an seiner eigenen Klammer beendet.
+     *
+     * Vorher stand hier ein Fenster von 400 Zeichen, und das las in den
+     * *naechsten* Zuhoerer hinein: die Pflanzung - diesem hier sein
+     * `preventDefault` genommen - fiel nicht auf, weil das des Nachbarn im
+     * Fenster lag. Siehe `source-spans.mjs`.
+     */
+    let listener = null;
+    if (variable !== undefined) {
+      for (const source of read) {
+        const flat = blankStringsAndComments(source);
+        for (const found of flat.matchAll(
+          new RegExp(`\\b${variable}\\s*\\.\\s*addEventListener\\(`, 'gu'),
+        )) {
+          // Der Ereignisname ist ausgeblendet: im Original nachsehen.
+          if (!/addEventListener\(\s*'submit'/u
+            .test(source.slice(found.index, found.index + 60))) {
+            continue;
+          }
+          const span = callSpan(flat, found.index);
+          listener = span === null ? '' : source.slice(span[0], span[1]);
+          break;
+        }
+        if (listener !== null) {
+          break;
+        }
+      }
+    }
+    if (listener === null) {
+      errors.push(
+        `${surface}: the form \`${id}\` has no \`submit\` listener. Enter in one of its `
+        + 'text fields then reloads the page, and the window starts over in the middle '
+        + 'of a decision.',
+      );
+      continue;
+    }
+    if (!listener.includes('preventDefault')) {
+      errors.push(
+        `${surface}: the \`submit\` listener of \`${id}\` never calls `
+        + '`preventDefault()`, so the page reloads anyway.',
+      );
+    }
+  }
+}
+
+if (surfaces === 0 || controls === 0 || drawingSources === 0 || codeControls === 0
+  || typedButtons === 0 || secretFields === 0 || forms === 0) {
   console.error(
-    'Form-label check failed: no operated surface, no control in one, or no control '
-    + 'built in code was read, so this check passed over nothing.',
+    'Form-label check failed: no operated surface, no control in one, no control built '
+    + 'in code, no typed button, no secret field or no form was read, so this check '
+    + 'passed over nothing.',
   );
   process.exit(1);
 }
@@ -234,5 +379,8 @@ console.log(
   + `each with a label that points at it, and ${buttonsSeen} buttons that each say `
   + `what they are; ${picoUnoperatedSurfaces.size} pages named as not operated; `
   + `${codeControls} further controls built in ${drawingSources} renderers `
-  + `(${codeButtons} of them buttons), each named where it is built).`,
+  + `(${codeButtons} of them buttons), each named where it is built; `
+  + `${typedButtons} buttons that each say what a press does, ${forms} forms that each `
+  + `catch their own submit, and ${secretFields} fields named after a secret, each one `
+  + 'a password field).',
 );
