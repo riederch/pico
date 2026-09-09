@@ -32,6 +32,17 @@ import {
   readPicoCompanionDoors,
 } from './reachability.mjs';
 
+/**
+ * Wie lange ein Dienst, der schon geht, noch schreiben darf - siehe
+ * `removeDirectoryWhileSomethingMayStillWrite` weiter unten.
+ *
+ * Steht hier oben und nicht dort, weil `const` nicht hochgezogen wird: der
+ * erste Aufruf kommt aus `verifyDebianLifecycle`, und das laeuft in Zeile 106,
+ * lange bevor die Zeile neben der Funktion ausgewertet waere. Genau daran ist
+ * der erste Anlauf dieser Reparatur gerissen (Befund B114).
+ */
+const temporaryRootRemovalDeadlineMs = 10_000;
+
 const temporaryRoots = new Set();
 const rootOwnedTemporaryRoots = new Set();
 process.once('exit', cleanupTemporaryRoots);
@@ -772,9 +783,59 @@ function makeTemporaryRootOwned(root) {
   `Root-owned package extraction directory is not secured: ${root}`);
 }
 
+/**
+ * Ein Verzeichnis entfernen, in das noch jemand schreibt (Befund B114).
+ *
+ * **Der Anlass ist ein Riss im letzten Kettenschritt** (2026-09-09):
+ * `ENOTEMPTY: directory not empty, rmdir '/tmp/pico-companion-nohost-...'`.
+ * Die Ursache steht dreissig Zeilen ueber der Probe in dieser Datei: ein
+ * privater Bus aktiviert `xdg-desktop-portal` bei Bedarf, und der aktivierte
+ * Dienst *ueberlebt den Begleiter*. Sein `XDG_CACHE_HOME` zeigt in genau
+ * dieses Verzeichnis - `rmSync` loescht die Kinder, der Dienst legt eines
+ * nach, und `rmdir` scheitert.
+ *
+ * **Warum nicht aufzaehlen und beenden:** welche Dienste ein Bus aktiviert,
+ * entscheidet der Bus. "Bei Bedarf" heisst, dass diese Menge uns nicht
+ * gehoert.
+ *
+ * **Und warum nicht `maxRetries`**, obwohl Node es genau fuer `ENOTEMPTY`
+ * anbietet: es wiederholt die *fehlgeschlagene Operation*, also das `rmdir`
+ * auf einem Verzeichnis, dessen neue Kinder der Gang nie wieder ansieht.
+ * Nachgestellt gegen einen fremden Prozess, der weiterschreibt:
+ *
+ * | | Schreiber 0,5 s | Schreiber 3 s |
+ * |---|---|---|
+ * | einmal | `ENOTEMPTY` nach 0,12 s | `ENOTEMPTY` nach 0,12 s |
+ * | `maxRetries: 6` | `ENOTEMPTY` nach 2,2 s | `ENOTEMPTY` nach 2,2 s |
+ * | ganzer Gang wiederholt | **entfernt nach 0,72 s** | **entfernt nach 3,3 s** |
+ *
+ * Nodes Wiederholung half in keinem Fall. Wiederholt wird deshalb der *ganze*
+ * Gang, bis er durchgeht oder zehn Sekunden um sind - danach faellt es weiter,
+ * denn ein Verzeichnis, in das nach zehn Sekunden noch geschrieben wird, ist
+ * eine Auskunft und kein Aufraeumproblem.
+ */
+function sleepMs(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function removeDirectoryWhileSomethingMayStillWrite(root) {
+  const deadline = Date.now() + temporaryRootRemovalDeadlineMs;
+  for (;;) {
+    try {
+      rmSync(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (Date.now() >= deadline) {
+        throw error;
+      }
+      sleepMs(100);
+    }
+  }
+}
+
 function removeTemporaryRoot(root) {
   reclaimTemporaryRoot(root);
-  rmSync(root, { recursive: true, force: true });
+  removeDirectoryWhileSomethingMayStillWrite(root);
   temporaryRoots.delete(root);
 }
 
@@ -782,7 +843,7 @@ function cleanupTemporaryRoots() {
   for (const root of temporaryRoots) {
     try {
       reclaimTemporaryRoot(root, false);
-      rmSync(root, { recursive: true, force: true });
+      removeDirectoryWhileSomethingMayStillWrite(root);
     } catch {
       // A failed best-effort exit cleanup is confined to an exact mkdtemp root.
     }

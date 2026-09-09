@@ -147,8 +147,24 @@ const handWrittenInstantShape =
  * `validFrom` is listed and `From` is not, because `derivedFrom` is a supplier
  * and matched on the first run - the useful kind of false positive, caught by
  * measuring before writing rather than by a person reading a failure later.
+ *
+ * **Die genannte Luecke, nachgemessen** (Befund B113). Der Kopf oben sagt seit
+ * dem 2026-08-21: *"Eine Frist, die `when`, `deadline` oder `expiry` heisst,
+ * ist allen dreien unsichtbar."* Gemessen: vierzehn zeitklingende
+ * Zeichenkettenfelder stehen ausserhalb der drei Namen, und **sechs davon sind
+ * wirklich Zeitpunkte** - `freshUntil`, `sinceIso`, `wallTime`,
+ * `delegationValidUntil`, `delegationValidFrom`,
+ * `firstDeviceDelegationValidUntil`. Keiner von ihnen wird heute roh gezeigt,
+ * auf einen UTC-Tag geschnitten oder mit einer eigenen Regel beurteilt - die
+ * Luecke ist leer.
+ *
+ * Sie bleibt es nicht von selbst, also faellt sie zu. `instantSlice` nebenan
+ * kannte `Until` schon; diese hier nicht. Jetzt beide, dazu `Iso` - und
+ * `Until` nur am Wortende, damit `validUntilDisplay` (ein Satz, kein
+ * Zeitpunkt) draussen bleibt.
  */
-const instantInterpolation = /\$\{([^{}]*\b(?:\w+At|validUntil|validFrom)\b[^{}]*)\}/g;
+const instantInterpolation =
+  /\$\{([^{}]*\b(?:\w+At|\w*[Vv]alid(?:Until|From)|\w+Until|\w+Iso)\b[^{}]*)\}/g;
 const instantSlice =
   /(\w*(?:At|Until))\s*(?:\}\s*)?\.(?:slice|substring|substr)\s*\(0,\s*10\)/g;
 /**

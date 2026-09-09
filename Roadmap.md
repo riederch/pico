@@ -912,6 +912,113 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B114 — Der letzte Kettenschritt riss, und die naheliegende Reparatur half
+nicht (2026-09-09).** `verify:gates` fiel im **letzten** Schritt:
+
+```
+Error: ENOTEMPTY: directory not empty, rmdir '/tmp/pico-companion-nohost-…'
+  at removeTemporaryRoot (verify-linux-package.mjs:777)
+```
+
+Die Ursache steht dreissig Zeilen über der Probe **in derselben Datei**: ein
+privater Bus aktiviert `xdg-desktop-portal` bei Bedarf, und der aktivierte
+Dienst *überlebt den Begleiter*. Sein `XDG_CACHE_HOME` zeigt in genau dieses
+Verzeichnis — `rmSync` löscht die Kinder, der Dienst legt eines nach, `rmdir`
+scheitert. Ein Rennen im letzten Schritt der Freigabekette.
+
+**Erst gemessen, ob es sporadisch ist**, statt zu reparieren, was man einmal
+gesehen hat: derselbe Schritt lief unmittelbar danach allein mit Ausgang 0
+durch. Sporadisch heisst hier: es kippt eine Freigabe an dem Tag, an dem es
+kippt.
+
+**Und dann half die naheliegende Reparatur nicht.** Node bietet `maxRetries`
+ausdrücklich für `ENOTEMPTY` an. Nachgestellt gegen einen fremden Prozess, der
+weiterschreibt:
+
+| | Schreiber 0,5 s | Schreiber 3 s |
+|---|---|---|
+| einmal (wie bisher) | `ENOTEMPTY` nach 0,12 s | `ENOTEMPTY` nach 0,12 s |
+| `maxRetries: 6, retryDelay: 100` | `ENOTEMPTY` nach **2,2 s** | `ENOTEMPTY` nach 2,2 s |
+| ganzer Gang wiederholt | **entfernt nach 0,72 s** | **entfernt nach 3,3 s** |
+
+`maxRetries` wiederholt die *fehlgeschlagene Operation* — das `rmdir` auf einem
+Verzeichnis, dessen neue Kinder der Gang nie wieder ansieht. Es half in **keinem**
+Fall, und es hätte zwei Sekunden gekostet, um dann doch zu fallen. Nebenbei
+gemessen: Nodes Rückzug ist linear, `maxRetries: 20` sind **21 Sekunden**, nicht
+zwei — der erste Kommentar, den ich dazu geschrieben hatte, behauptete zwei.
+
+Wiederholt wird jetzt der **ganze Gang**, bis er durchgeht oder zehn Sekunden um
+sind. Danach fällt es weiter: ein Verzeichnis, in das nach zehn Sekunden noch
+geschrieben wird, ist eine Auskunft und kein Aufräumproblem.
+
+Die eingebaute Funktion selbst gegangen, nicht nur das Muster daneben:
+
+| Schreiber | wie vorher | mit der Funktion aus dem Baum |
+|---|---|---|
+| 0,5 s | `ENOTEMPTY` nach 127 ms | **entfernt nach 795 ms** |
+| 3 s | `ENOTEMPTY` nach 106 ms | **entfernt nach 3238 ms** |
+
+**Und dann riss die Kette ein zweites Mal, an der Reparatur selbst.** Die
+Frist stand als `const` neben ihrer Funktion, und `const` wird nicht
+hochgezogen: der erste Aufruf kommt aus `verifyDebianLifecycle`, das in Zeile
+106 läuft — lange bevor Zeile 810 ausgewertet wäre.
+
+```
+ReferenceError: Cannot access 'temporaryRootRemovalDeadlineMs' before initialization
+```
+
+Die herausgelöste Wanderung hat das nicht gesehen, weil ich die Konstante
+**mit** der Funktion herausgelöst hatte: ein Ausschnitt, der seinen Kontext
+mitbringt, prüft nicht den Kontext. Die Frist steht jetzt oben bei den anderen
+Konstanten, mit dem Grund daneben.
+
+**Was daraus folgt.** Zweierlei, und das zweite ist unangenehmer. Erstens: eine
+Bibliotheksoption, die genau den Fehlernamen nennt, den man hat, ist die
+überzeugendste falsche Fährte, die es gibt — sie stand in der Dokumentation,
+sie nannte `ENOTEMPTY`, und sie tat nichts. Zweitens: **eine Wanderung an einem
+herausgelösten Stück ist keine Wanderung am Baum.** Sie hat die Semantik
+bewiesen und die Einbettung nicht, und die Einbettung war der zweite Fehler.
+
+**B113 — Die zweite genannte Lücke, und diesmal war sie leer (2026-09-09).**
+B112 kam aus einer Lücke, die der Zeitpunktprüfer selbst aufgeschrieben hatte.
+Derselbe Kopf nennt eine **zweite**:
+
+> *„Drei seiner fünf Regeln greifen über einen **Namen**: ein zeitförmiges Feld
+> endet auf `At`, oder heisst `validUntil`, oder `validFrom`. Eine Frist, die
+> `when`, `deadline` oder `expiry` heisst, ist allen dreien unsichtbar."*
+
+Gemessen: **vierzehn** zeitklingende Zeichenkettenfelder stehen ausserhalb der
+drei Namen, und **sechs davon sind wirklich Zeitpunkte** — `freshUntil`,
+`sinceIso`, `wallTime`, `delegationValidUntil`, `delegationValidFrom`,
+`firstDeviceDelegationValidUntil`. Die anderen acht sind Fehltreffer meiner
+Suche (`derivedFromSupplier` ist ein Lieferant, `renewFromOtherDeviceLabel` ein
+Satz).
+
+**Und keiner der sechs wird roh gezeigt, auf einen UTC-Tag geschnitten oder mit
+einer eigenen Regel beurteilt.** Die Lücke ist leer — anders als bei B112, wo
+zwei darin lagen.
+
+Ein leerer Befund, und trotzdem nicht nichts: die Lücke bleibt nicht von selbst
+leer. `instantSlice` kannte `Until` bereits, die Interpolationsregel daneben
+nicht — dieselbe Frage, zwei Regeln, eine davon enger. Jetzt beide, dazu `Iso`,
+und `Until` nur am Wortende, damit `validUntilDisplay` (ein fertiger Satz,
+kein Zeitpunkt) draussen bleibt.
+
+Gemessen statt behauptet, dass die Weitung etwas ändert — dieselbe Pflanzung,
+zwei Leser:
+
+> **alter Prüfer:** `Instant rules check passed …` — Ausgang 0
+> **neuer Prüfer:** `puts \`freshUntil\` into a string raw`
+
+Zwei Pflanzungen, `freshUntil` und `sinceIso`, beide in einem Satz für eine
+Person.
+
+**Was daraus folgt.** Zwei Lücken an einem Tag, beide vom Prüfer selbst
+benannt, eine voll und eine leer. Das Verhältnis ist die eigentliche Auskunft:
+**eine aufgeschriebene Lücke ist eine Wette, und die Hälfte davon gewinnt.** Wer
+sie aufschreibt, hat die Arbeit schon zur Hälfte getan — nachsehen ist der Rest,
+und niemand hatte es getan.
+
 **B112 — Der 30. Februar war ein gültiger Ablauf (2026-09-09).** Der
 Zeitpunktprüfer hat seine eigene Lücke seit dem 2026-08-21 im Kopf stehen:
 
