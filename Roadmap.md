@@ -912,6 +912,74 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B108 — Zweitausendsiebenhundert Tests behaupten etwas, und mein eigener
+Leser log über vier Dateien (2026-09-09).** B107 hat gefragt, welche *Regel*
+einen Gegenstand hat. Dieselbe Frage an die Tests: **ein `it`, das seinen
+Gegenstand aufruft und nichts behauptet, ist grün, solange nichts wirft** — und
+grün ist genau das, was niemand nachliest.
+
+Vier Eigenschaften gemessen, alle vier schon wahr:
+
+| Frage | Befund |
+|---|---|
+| Behauptet jeder Test etwas? | **2.796 von 2.796** |
+| Hat jede Behauptung einen Matcher? | **8.848 von 8.848** |
+| Steht ein `.only`, `.skip` oder `.todo` im Baum? | **keines** |
+| Gibt es eine Testdatei ohne Test? | **keine** |
+
+Das dritte ist das schärfste: **ein einziges `it.only` schaltet alle übrigen
+Tests derselben Datei ab**, und der Lauf meldet weiter grün — ein grüner Lauf,
+der fast nichts gefahren hat.
+
+**Zwei falsche Messungen davor, beide vor dem Schreiben gefunden.** Der erste
+Anlauf meldete 57 stumme Tests: er kannte `expectAppearanceError(...)` nicht
+und las bei `it.each(table)(name, fn)` nur den *ersten* Aufruf der Kette. Der
+zweite meldete neun — alle neun waren `pattern.test(x)`, denn ein `\b` vor
+`test` steht auch hinter einem Punkt. Die Helfer sind jetzt abgeleitet: eine
+Funktion, in deren **eigenem** Rumpf `expect(` steht, Rumpf bis zur
+schliessenden Klammer und nicht bis zu einer Zeilenzahl.
+
+**Und dann log mein eigener Leser.** `source-spans.mjs`, gestern in B105
+geschrieben und seither von B106 und B108 benutzt, kannte keine regulären
+Ausdrücke:
+
+```
+/<section id="admin-section"[^>]*\shidden/
+```
+
+Zwei Anführungszeichen — für den Ausblender beginnt hier eine Zeichenkette, die
+bis irgendwohin läuft. Gefunden mit einer Frage, die nichts kostet: **gehen
+nach dem Ausblenden die Klammern noch auf?** Vier von 511 Dateien gingen nicht
+auf. Nach der Reparatur alle 599.
+
+Was das versteckt hatte, ist gemessen und nicht geschätzt:
+
+| | vor der Reparatur | danach |
+|---|---|---|
+| Testfälle | 2.788 | **2.796** |
+| Behauptungen | 8.822 | **8.848** |
+
+Acht Testfälle und sechsundzwanzig Behauptungen waren für den Leser nicht da.
+`labels:check` und `label:check` melden unverändert — dort lag keine dieser
+vier Dateien.
+
+**Die Frage ist jetzt eine Regel:** der Prüfer prüft zuerst sich selbst und
+verlangt von jeder der 511 Quellen, dass ihre Klammern nach dem Ausblenden
+aufgehen. Ein Ausblender, der etwas falsch liest, macht *jede* Spanne in dieser
+Datei unzuverlässig — still, denn ein zu langer Rumpf enthält eher mehr
+Behauptungen und nicht weniger.
+
+`pnpm tests:check`, Kettenschritt 48, Kette jetzt **51**, 730 ms — das teuerste
+der neuen Tore, und es liest 511 Dateien.
+
+Sechs Pflanzungen: ein Test ohne Behauptung, ein `it.only`, ein `expect` ohne
+Matcher, eine Testdatei ohne Test, der wieder kaputtgemachte Ausblender und der
+Leerlaufwächter.
+
+**Was daraus folgt.** Ein Werkzeug, das andere Prüfer schärfer macht, ist selbst
+ein Prüfer und braucht dieselbe Behandlung. Die Klammerprobe hat drei Zeilen
+gekostet und hätte den Fehler am Tag seiner Entstehung gefunden.
+
 **B107 — Eine Regel, die seit ihrem ersten Tag nichts gelesen hat
 (2026-09-09).** B105 und B106 haben Spannen repariert. Die Frage dahinter ist
 grösser: **welche Regel hat überhaupt einen Gegenstand?** Der Leerlaufprüfer

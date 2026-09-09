@@ -49,6 +49,51 @@ export function blankStringsAndComments(source) {
       i = end + 2;
       continue;
     }
+    /**
+     * Ein regulaerer Ausdruck ist keine Division (Befund B108). `/<section
+     * id="admin-section"[^>]*\\shidden/` traegt zwei Anfuehrungszeichen; ohne
+     * diesen Zweig beginnt hier eine Zeichenkette, die bis irgendwohin laeuft,
+     * und die Klammern der ganzen Datei gehen nicht mehr auf. Vier von 511
+     * Dateien waren so - gefunden, indem nach dem Ausblenden nachgezaehlt
+     * wurde, ob die Klammern noch aufgehen.
+     *
+     * Ob ein `/` teilt oder einen Ausdruck beginnt, entscheidet das letzte
+     * Zeichen davor: nach einem Wert wird geteilt, nach einem Operator, einer
+     * offenen Klammer oder einem Schluesselwort beginnt ein Ausdruck.
+     */
+    if (character === '/') {
+      let back = i - 1;
+      while (back >= 0 && /\s/u.test(source[back])) {
+        back -= 1;
+      }
+      const previous = back < 0 ? '' : source[back];
+      const word = /[\w$)\]]/u.test(previous)
+        && !/\b(?:return|typeof|case|in|of|delete|void|instanceof|do|else|yield|await)$/u
+          .test(source.slice(Math.max(0, back - 10), back + 1));
+      if (!word) {
+        let end = i + 1;
+        let inClass = false;
+        while (end < source.length && source[end] !== '\n') {
+          if (source[end] === '\\') {
+            end += 2;
+            continue;
+          }
+          if (source[end] === '[') {
+            inClass = true;
+          } else if (source[end] === ']') {
+            inClass = false;
+          } else if (source[end] === '/' && !inClass) {
+            break;
+          }
+          end += 1;
+        }
+        if (end < source.length && source[end] === '/') {
+          blank(i + 1, end);
+          i = end + 1;
+          continue;
+        }
+      }
+    }
     if (character === "'" || character === '"' || character === '`') {
       let end = i + 1;
       while (end < source.length) {
@@ -85,6 +130,29 @@ export function callSpan(flat, at) {
       }
       depth += 1;
     } else if (flat[i] === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        return [start, i + 1];
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Von `at` bis zur schliessenden Klammer des ersten `{` danach - der Rumpf
+ * einer Funktion. `flat` muss die ausgeblendete Fassung sein.
+ */
+export function braceSpan(flat, at) {
+  let depth = 0;
+  let start = -1;
+  for (let i = at; i < flat.length; i += 1) {
+    if (flat[i] === '{') {
+      if (depth === 0) {
+        start = i;
+      }
+      depth += 1;
+    } else if (flat[i] === '}') {
       depth -= 1;
       if (depth === 0) {
         return [start, i + 1];
