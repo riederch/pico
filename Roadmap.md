@@ -912,6 +912,123 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B107 — Eine Regel, die seit ihrem ersten Tag nichts gelesen hat
+(2026-09-09).** B105 und B106 haben Spannen repariert. Die Frage dahinter ist
+grösser: **welche Regel hat überhaupt einen Gegenstand?** Der Leerlaufprüfer
+beantwortet das je *Skript* — 47 Prüfer verweigern über einem leeren Baum. Er
+sagt nichts über die einzelne **Regel** darin.
+
+Also die Zahlen aus allen 47 Tormeldungen eines Laufs gesiebt. Fünf Nullen,
+vier davon gut („0 unauflösbare Ausdrücke", „0 von Hand ausbuchstabierte
+Vereinigungen"). Die fünfte:
+
+> `0 present-tense absence claims and 0 nothing-is-built claims, each still true`
+
+**Vier solche Behauptungen stehen im Baum**, und die Regel traf keine. Sie
+liest seit ihrem ersten Tag nichts. Drei Gründe, jeder für sich genug:
+
+| | |
+|---|---|
+| **Sie las nur die Matrix** | Drei der vier stehen in ADRs — und dort ist die Gefahr dieselbe |
+| **„has no *product* caller" traf sie nicht** | Ein Wort dazwischen, und die Behauptung ist unsichtbar |
+| **Sie nahm den falschen Namen** | Das Muster beginnt an der *frühesten* passenden Stelle, griff also das erste Backtick im Satz: aus „… ist in `shippedModuleManifests` registriert … und `recordPicoConnectorObservations` hat keinen Aufrufer" wurde eine Behauptung über `shippedModuleManifests` |
+
+Gemessen statt behauptet — ein Produktaufrufer für
+`startPicoCompanionLinkRelaySweep` gepflanzt, dessen ADR 0149 sagt, es gebe
+keinen:
+
+> **alter Prüfer:** `… 0 present-tense absence claims …` — Ausgang 0
+> **neuer Prüfer:** `docs/architecture/0149-…: says
+> \`startPicoCompanionLinkRelaySweep\` has no caller, and the tree calls it`
+
+Die Regel liest jetzt **246 verfolgte Dokumente**, findet den Satz zuerst und
+sucht den Namen **rückwärts**, und sie erlaubt ein Wort dazwischen. Vier
+Behauptungen, alle vier noch wahr:
+`recordPicoConnectorObservations` (zweimal), `SupplierCredentialCrypto`,
+`startPicoCompanionLinkRelaySweep`.
+
+**Die Schlussmeldung sagt jetzt den Korpus mit.** Eine Null über 246 Dokumenten
+ist eine Aussage; eine Null über keinem ist keine — und genau so las sich die
+alte Zeile, als wäre nichts zu finden gewesen.
+
+**Was daraus folgt, und es ist der grössere Teil.** `vacuity:check` prüft
+Prüfer, nicht Regeln. Eine Regel kann in einem Prüfer sitzen, der über einem
+leeren Baum sauber verweigert, und trotzdem über dem *echten* Baum nichts
+sehen. Die Zahlen der Tormeldungen sind der billigste Zugang dazu: **jede Null
+in einer Erfolgsmeldung ist entweder ein Befund oder ein leerer Gegenstand,
+und die beiden sehen gleich aus.** Vier waren Befunde, eine war leer.
+
+Zwei Pflanzungen: der Aufrufer für eine wahre Behauptung (einmal gegen den
+alten, einmal gegen den neuen Leser) und der Korpus selbst leergelaufen.
+
+**B106 — Zehn Signierstellen sah niemand, und eine elfte hätte sich das
+Etikett des Nachbarn geliehen (2026-09-09).** B105 hat eine Spanne repariert,
+die zu lang war. Die nächste Frage lag auf der Hand: **wo noch?** Der
+Signaturprüfer las über ein Fenster von achthundert Zeichen — und ADR 0106 ist
+keine Kosmetik, das Etikett wählt den Bauer, der die Bytes macht.
+
+**Erstens: das Fenster borgt.** Ein `.sign(` ohne eigenes `label:` nimmt das
+des *nächsten* Aufrufs. Gemessen statt behauptet — ein etikettloser `.sign(`
+direkt über einem etikettierten in `packages/vault/src/index.ts`, dann der
+**alte** Prüfer über denselben Baum:
+
+> `Signature-label check passed (23 signing calls name a protocol label
+> constant …)` — Ausgang 0.
+
+Dreiundzwanzig statt zweiundzwanzig, und die dreiundzwanzigste war ein Aufruf,
+der überhaupt kein Etikett nennt. Der Kopf des Prüfers argumentierte die *eine*
+Hälfte der Gefahr — ein Etikett zu weit weg fiele heraus — und schwieg zur
+anderen. Die Spanne endet jetzt an ihrer eigenen Klammer.
+
+**Zweitens: zehn Signierstellen standen nie zur Debatte.** Die beiden
+Gerätezeremonien unterschreiben durch einen Weiterleiter:
+
+```ts
+async function signWithExactKey(client, input) {
+  const signed = await client.sign(input);   // <- der Prüfer sieht nur das
+```
+
+Das Etikett nennen die **fünf Aufrufer je Datei**, und für die galt ADR 0106
+bis heute ungehalten. Alle zehn nennen eine Konstante — aber ein Literal dort
+wäre nie aufgefallen, und **das ist genau der Fehler, den B36 an anderer Stelle
+gefunden hat**: `grantPicoCompanionDomainRead` gab als Familiennamen einen Satz
+weiter, und der Daemon lehnte bei jedem Druck ab, seit es den Knopf gibt.
+Gepflanzt: ein Literal an der Aktivierungsstelle — der Prüfer nennt es jetzt.
+
+Die Ableitung ist mechanisch und nicht gelistet: `.sign(X)` mit einem blossen
+Bezeichner als einzigem Argument macht die umschliessende Funktion zum
+Weiterleiter, und ihre Aufrufer mit `label:` sind Signierstellen.
+
+**Drittens: fünf `.sign(` tragen gar kein Etikett** und wurden schweigend
+übersprungen. Schweigend heisst: nie angesehen. Jetzt stehen sie einzeln, mit
+Grund und mit Anzahl:
+
+| Stelle | Warum sie kein Etikett trägt |
+|---|---|
+| `apps/core/src/link-push-send.ts` | unterschreibt fertige Bytes aus `buildPicoLinkPushSignatureInput` — eine kanonische Form, keine Familie mit Feldern |
+| `apps/vault-daemon/src/cli.ts` | der allgemeine `sign`-Befehl: das Etikett kommt aus einem Schalter, und der Daemon lehnt einen unbekannten Namen ab |
+| `apps/vault-daemon/src/daemon.ts` | die Grundfunktion eine Ebene unter den Familien — die Bytes sind schon gebaut |
+| `device-lifecycle-ceremony.ts` | der Weiterleiter selbst; seine fünf Aufrufer werden geprüft |
+| `device-recovery-ceremony.ts` | derselbe Weiterleiter, fünf eigene Aufrufer |
+
+Erscheint eine sechste, schlägt das fehl, statt still zu wachsen — und eine
+Begründung für etwas, das verschwunden ist, ebenfalls.
+
+**Die Zahl bewegt sich: 25 → 35 Signierstellen** (29 vollständig beurteilte,
+sechs, deren Bewilligung an der Schlüsselrolle hängt). Kein neuer
+Kettenschritt; `label:check` gab es schon.
+
+Fünf Pflanzungen: ein Literal an einer Weiterleiter-Stelle, die Borgprobe
+(einmal gegen den alten und einmal gegen den neuen Leser), eine entfernte
+Begründung, eine Begründung für etwas, das es nicht gibt, und der
+Leerlaufwächter der Weiterleiter.
+
+**Was daraus folgt.** B105 war kein Einzelfall. Ein Prüfer, der über ein
+Fenster fester Länge liest, hat **zwei** Fehlerrichtungen, und die laute wird
+gern aufgeschrieben, während die stille — der Nachbar entlastet — dort steht,
+wo niemand hinsieht. Von den sechs Fenstern im Baum sind jetzt zwei durch
+Klammerzählung ersetzt; die übrigen vier sind angesehen und tragen.
+
 **B105 — Drei Eigenschaften, dreimal schon wahr, und eine Pflanzung, die nicht
 feuerte (2026-09-09).** Nach B104 drei Nachbarfragen an dieselben Flächen. Alle
 drei waren beim Messen sauber:

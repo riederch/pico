@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -420,7 +420,31 @@ for (const file of markdownFiles) {
  * repository's notes are mostly about defects that were closed. "*has* no
  * caller" is a claim about now, and now is checkable.
  */
-const absenceClaim = /`([A-Za-z][A-Za-z0-9_]*)`[^.|]{0,140}?\b(?:has|have) no caller\b/gu;
+/**
+ * **Diese Regel hat seit ihrem ersten Tag nichts gelesen** (Befund B107).
+ *
+ * Sie stand hier, meldete „0 present-tense absence claims, each still true"
+ * und traf keine einzige - waehrend vier solche Behauptungen im Baum standen.
+ * Drei Gruende, jeder fuer sich genug:
+ *
+ * 1. **Sie las nur die Matrix.** Drei der vier stehen in ADRs, und dort ist
+ *    die Gefahr dieselbe: Prosa ueber Code bewegt sich nicht, wenn der Code
+ *    sich bewegt.
+ * 2. **„has no *product* caller" traf sie nicht.** Ein Wort dazwischen, und
+ *    die Behauptung war unsichtbar - dieselbe Aussage in anderer Kleidung.
+ * 3. **Sie nahm den falschen Namen.** Das Muster beginnt bei der *fruehesten*
+ *    passenden Stelle, also griff es das erste Backtick im Satz statt des
+ *    naechsten vor der Aussage: aus „`@pico/module-home-assistant` ... ist in
+ *    `shippedModuleManifests` registriert ... und `recordPicoConnectorObservations`
+ *    hat keinen Aufrufer" wurde eine Behauptung ueber `shippedModuleManifests`.
+ *    Jetzt wird der Satz gefunden und der Name rueckwaerts gesucht.
+ *
+ * Die Null war kein sauberer Befund, sondern ein leerer. Deshalb sagt die
+ * Schlussmeldung jetzt, ueber wie viele Dokumente gesucht wurde: eine Null
+ * ueber 249 Dokumenten ist eine Aussage, eine Null ueber keinem ist keine.
+ */
+const absencePhrase = /\b(?:has|have) no (?:[a-z]+ )?callers?\b/gu;
+const claimedSymbol = /`([A-Za-z][A-Za-z0-9_]*)`([^.|`]*)$/u;
 const treeSources = [];
 const collectSources = (directory) => {
   for (const entry of readdirSync(join(repoRoot, directory), { withFileTypes: true })) {
@@ -441,7 +465,29 @@ for (const directory of ['apps', 'packages', 'modules']) {
 }
 
 let claimsChecked = 0;
-for (const [, symbol] of matrix.matchAll(absenceClaim)) {
+let claimDocuments = 0;
+const claims = [];
+for (const path of execSync('git ls-files "*.md"', { cwd: repoRoot, encoding: 'utf8' })
+  .split('\n').filter((line) => line !== '')) {
+  claimDocuments += 1;
+  const document = readFileSync(join(repoRoot, path), 'utf8');
+  for (const phrase of document.matchAll(absencePhrase)) {
+    const before = document.slice(Math.max(0, phrase.index - 140), phrase.index);
+    const named = claimedSymbol.exec(before);
+    if (named === null) {
+      continue;
+    }
+    claims.push([path, named[1]]);
+  }
+}
+if (claimDocuments === 0) {
+  errors.push(
+    'scripts/check-docs-structure.mjs read no tracked document at all, so its absence claims '
+    + 'were compared against nothing. A null over no corpus is not a finding.',
+  );
+}
+
+for (const [path, symbol] of claims) {
   claimsChecked += 1;
   const called = new RegExp(`\\.?\\b${symbol}\\s*\\(`, 'gu');
   // Its own declaration is not a call, so a single occurrence in one file is
@@ -452,7 +498,7 @@ for (const [, symbol] of matrix.matchAll(absenceClaim)) {
     .test(treeSources.join('\n'));
   if (occurrences > (declared ? 1 : 0)) {
     errors.push(
-      `${matrixPath}: says \`${symbol}\` has no caller, and the tree calls it. A status note is `
+      `${path}: says \`${symbol}\` has no caller, and the tree calls it. A status note is `
       + 'prose about code and does not move when the code does - which is how three of these went '
       + 'stale in one afternoon. Past tense ("had no caller") is history and is not checked.',
     );
@@ -527,5 +573,6 @@ console.log(
   + `${rowed.size} with a row and ${withoutRow.size} deliberately without one, `
   + `${matrixPathsChecked} named files under a root directory, each real; `
   + `${claimsChecked} present-tense absence claims and `
-  + `${statusClaimsChecked} nothing-is-built claims, each still true).`,
+  + `${statusClaimsChecked} nothing-is-built claims, each still true, read across `
+  + `${claimDocuments} tracked documents).`,
 );
