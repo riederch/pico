@@ -1168,6 +1168,21 @@ export function renderPicoCompanionDeclaredSuppliers(
     detail.className = 'detail';
     detail.textContent = line.detail;
 
+    /**
+     * Finding B102. The field sits *inside* its label, and that is the point.
+     *
+     * Until today the label and the field were siblings with nothing between
+     * them: the text was visible beside the box and connected to it by
+     * nothing. Clicking it did not focus the field, and a screen reader read
+     * the one control on this line as having no name - the exact defect
+     * `check-form-labels.mjs` forbids in the window's HTML, on the one control
+     * that is not in the window's HTML.
+     *
+     * Nested rather than joined by `id` and `for`, because this is a loop: an
+     * id would have to be manufactured per line and kept unique, and two lines
+     * sharing one would put the label back on the wrong field. Containment
+     * cannot come apart.
+     */
     const label = root.document.createElement('label');
     label.textContent = line.domainLabel;
 
@@ -1175,6 +1190,7 @@ export function renderPicoCompanionDeclaredSuppliers(
     domain.type = 'text';
     domain.maxLength = 64;
     domain.autocomplete = 'off';
+    label.append(domain);
 
     const attach = root.document.createElement('button');
     attach.type = 'button';
@@ -1184,7 +1200,7 @@ export function renderPicoCompanionDeclaredSuppliers(
       privacyDomain: domain.value.trim(),
     }));
 
-    item.append(headline, detail, label, domain, attach);
+    item.append(headline, detail, label, attach);
     root.list.append(item);
   }
 }

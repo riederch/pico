@@ -824,7 +824,17 @@ describe('ADR 0143 DP3 - the supplier a depot brought, in front of the person', 
     // Said as what it will do with the space, not as what it is: "library" is
     // Pico's word for a shape, and the person is deciding about their memory.
     expect(String(line.children[1]?.textContent)).toContain('your memory');
-    const input = line.children.find((child) => child.tag === 'input')!;
+    /**
+     * Finding B102 - the field is looked up *through* its label, because that
+     * is the property worth holding. A shallow `find` on the line passed
+     * while the label and the field were unconnected siblings, which is how
+     * the one control on this line came to have no name.
+     */
+    const label = line.children.find((child) => child.tag === 'label')!;
+    expect(String(label.textContent)).not.toBe('');
+    const input = (label.children as Array<Record<string, unknown>>)
+      .find((child) => child.tag === 'input')!;
+    expect(line.children.some((child) => child.tag === 'input')).toBe(false);
     const button = line.children.find((child) => child.tag === 'button')!;
     // Never "enable" or "allow": ADR 0138 CO3 keeps whether Pico may go out
     // for it a separate answer, and this line must not look like that one.

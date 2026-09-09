@@ -30,6 +30,25 @@ import { fileURLToPath } from 'node:url';
  * HTML-Datei ausser den beiden, die niemand bedient: eine Demo des
  * Designsystems und eine Vorlage eines Werkzeugs, beide hier mit Grund
  * genannt statt stillschweigend uebersprungen.
+ *
+ * **Und dort, wo die Bedienelemente wirklich herkommen** (Befund B102). Der
+ * Kopf oben sagte, ein sechzehntes Feld ohne Beschriftung falle niemandem
+ * auf. Das sechzehnte Feld gab es schon: fast die Haelfte aller Knoepfe und
+ * das einzige freie Eingabefeld des Fensters entstehen nicht in der
+ * HTML-Datei, sondern zur Laufzeit im TypeScript daneben - und genau dort war
+ * die Beschriftung nicht verbunden. Ein Pruefer, der nur die Datei liest,
+ * liest die kleinere Haelfte.
+ *
+ * Der zweite Teil liest deshalb jede verfolgte `.ts`, die ein Bedienelement
+ * erzeugt. Auch diese Menge ist abgeleitet und nicht gelistet: es sind genau
+ * die drei Zeichner, kein Test darunter, keine Ausnahme noetig.
+ *
+ * **Wie weit er schaut, und was das kostet.** Der Name eines erzeugten
+ * Elements wird im selben Abschnitt gesetzt - hoechstens 25 Zeilen ab der
+ * Erzeugung, und nicht ueber die naechste Erzeugung desselben Namens hinaus,
+ * damit nicht der Name des uebernaechsten Knopfes den vorigen entlastet. Wer
+ * ihn weiter weg setzt, bekommt einen Fehlalarm. Das ist die richtige
+ * Richtung zu irren: laut statt still.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
@@ -125,10 +144,86 @@ for (const path of tracked) {
   }
 }
 
-if (surfaces === 0 || controls === 0) {
+/**
+ * Zweiter Teil: dieselbe Frage, wo die Bedienelemente entstehen.
+ *
+ * Ein Element ist benannt, wenn es (a) selbst einen Namen bekommt -
+ * `textContent`, `ariaLabel`, `title`, `setAttribute('aria-label')` -, (b) in
+ * eine Beschriftung mit Text gehaengt wird, oder (c) eine Kennung bekommt,
+ * auf die ein `htmlFor` zeigt. Drei Arten, dasselbe zu erreichen; keine davon
+ * ist besser als die andere, und alle drei stehen hier, damit niemand die
+ * Regel fuer eine Vorschrift zur Bauweise haelt.
+ */
+const creationPattern =
+  /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:[\w.]+\.)?document\.createElement\(\s*'(button|input|select|textarea|label)'\s*\)/gu;
+
+const renderers = execSync('git ls-files "apps/**/*.ts" "packages/**/*.ts" "tools/**/*.ts"', {
+  cwd: repoRoot,
+  encoding: 'utf8',
+}).split('\n').filter((line) => line !== '');
+
+let drawingSources = 0;
+let codeControls = 0;
+let codeButtons = 0;
+for (const path of renderers) {
+  const source = readFileSync(join(repoRoot, path), 'utf8');
+  const sites = [...source.matchAll(creationPattern)].map((match) => ({
+    name: match[1],
+    tag: match[2],
+    index: match.index,
+    line: source.slice(0, match.index).split('\n').length,
+  }));
+  if (sites.length === 0) {
+    continue;
+  }
+  drawingSources += 1;
+  const lines = source.split('\n');
+  const spanOf = (site) => {
+    const next = sites.find((other) => other.index > site.index && other.name === site.name);
+    const end = Math.min(site.line + 25, next === undefined ? lines.length : next.line - 1);
+    return lines.slice(site.line - 1, end).join('\n');
+  };
+  const withText = new Set(
+    sites
+      .filter((site) => site.tag === 'label')
+      .filter((site) => new RegExp(`\\b${site.name}\\s*\\.\\s*textContent\\s*=`, 'u').test(spanOf(site)))
+      .map((site) => site.name),
+  );
+  for (const site of sites) {
+    if (site.tag === 'label') {
+      continue;
+    }
+    codeControls += 1;
+    if (site.tag === 'button') {
+      codeButtons += 1;
+    }
+    const span = spanOf(site);
+    const named = new RegExp(
+      `\\b${site.name}\\s*\\.\\s*(?:textContent|ariaLabel|title)\\s*=`
+      + `|\\b${site.name}\\s*\\.\\s*setAttribute\\(\\s*'aria-label'`,
+      'u',
+    ).test(span);
+    const nested = [...withText].some((label) => new RegExp(
+      `\\b${label}\\s*\\.\\s*append\\([^)]*\\b${site.name}\\b`,
+      'u',
+    ).test(span));
+    const joined = new RegExp(`\\b${site.name}\\s*\\.\\s*id\\s*=`, 'u').test(span)
+      && /\.\s*htmlFor\s*=/u.test(span);
+    if (named || nested || joined) {
+      continue;
+    }
+    errors.push(
+      `${path}:${site.line}: the <${site.tag}> built as \`${site.name}\` never gets a name - `
+      + 'no text, no `aria-label`, and not inside a label. A control a person operates '
+      + 'in the window is read as nothing, and the text beside it does not focus it.',
+    );
+  }
+}
+
+if (surfaces === 0 || controls === 0 || drawingSources === 0 || codeControls === 0) {
   console.error(
-    'Form-label check failed: no operated surface or no control was read, so this '
-    + 'check passed over nothing.',
+    'Form-label check failed: no operated surface, no control in one, or no control '
+    + 'built in code was read, so this check passed over nothing.',
   );
   process.exit(1);
 }
@@ -144,5 +239,7 @@ if (errors.length > 0) {
 console.log(
   `Form-label check passed (${surfaces} operated surfaces, ${controls} controls, `
   + `each with a label that points at it, and ${buttonsSeen} buttons that each say `
-  + `what they are; ${notOperated.size} pages named as not operated).`,
+  + `what they are; ${notOperated.size} pages named as not operated; `
+  + `${codeControls} further controls built in ${drawingSources} renderers `
+  + `(${codeButtons} of them buttons), each named where it is built).`,
 );

@@ -912,6 +912,79 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B102 — Das sechzehnte Feld gab es schon, und es war das eine ohne Namen
+(2026-09-09).** B100 hat gemessen, dass jedes Bedienelement der beiden Flächen
+beschriftet ist, und in den Kopf des Prüfers geschrieben: *„ein sechzehntes
+Feld ohne `<label>` fällt niemandem auf."* Der Satz war richtiger als gedacht.
+Das sechzehnte Feld gab es an dem Tag schon — es stand nur nicht in der Datei,
+die der Prüfer liest.
+
+Gemessen, wo die Bedienelemente wirklich herkommen:
+
+| Wo | Knöpfe | Freie Eingabefelder |
+|---|---|---|
+| In den HTML-Dateien, die B100/B101 lesen | 42 | 42 Bedienelemente, alle beschriftet |
+| Zur Laufzeit im TypeScript daneben | **39** | **1** |
+
+Fast die Hälfte aller Knöpfe des Produkts entsteht in drei Zeichnern, nicht in
+einer Datei. Alle 39 bekommen ihren Text an Ort und Stelle. **Das eine freie
+Eingabefeld nicht.**
+
+**Der Fund.** In `renderPicoCompanionDeclaredSuppliers` — der Zeile, auf der
+eine Person benennt, wohin das Material eines fremden Lieferanten gehört —
+standen Beschriftung und Feld als **Geschwister** nebeneinander, ohne `for`,
+ohne `id`, ohne `aria-label`:
+
+```ts
+const label = root.document.createElement('label');
+label.textContent = line.domainLabel;
+
+const domain = root.document.createElement('input');
+…
+item.append(headline, detail, label, domain, attach);
+```
+
+Der Text war **sichtbar** neben dem Kasten und mit ihm durch **nichts**
+verbunden. Ein Klick auf ihn setzte den Fokus nicht, und ein Screenreader las
+das einzige Eingabefeld dieser Zeile als namenlos — genau der Mangel, den
+`check-form-labels.mjs` im HTML des Fensters verbietet, an dem einen
+Bedienelement, das nicht im HTML des Fensters steht.
+
+**Verschachtelt statt verbunden.** Das Feld sitzt jetzt *in* seiner
+Beschriftung. Nicht über `id` und `for`, weil dies eine **Schleife** ist: eine
+Kennung müsste je Zeile hergestellt und eindeutig gehalten werden, und zwei
+Zeilen mit derselben hängten die Beschriftung ans falsche Feld — dieselbe
+Klasse Fehler, die auf den statischen Flächen null Mal vorkommt und die man
+sich nicht als erste eigene Quelle hereinholt. Enthalten sein kann nicht
+auseinandergehen.
+
+**Der Test sucht das Feld jetzt durch seine Beschriftung.** Vorher fand er es
+flach auf der Zeile — und lief grün, während beide unverbunden nebeneinander
+standen. Ein Test, der die Verbindung nicht sucht, hält sie auch nicht.
+
+**Die Regel steht im selben Prüfer**, wie in B101: dieselbe Frage, anderer
+Fundort. Sie liest jede verfolgte `.ts`, die ein Bedienelement erzeugt — auch
+das ist abgeleitet und nicht gelistet, und es sind genau die drei Zeichner,
+kein Test darunter, keine Ausnahme nötig. Benannt ist ein Element, das (a)
+selbst einen Namen bekommt, (b) in eine Beschriftung mit Text gehängt wird
+oder (c) eine Kennung bekommt, auf die ein `htmlFor` zeigt; drei gleichwertige
+Arten, damit die Regel keine Vorschrift zur Bauweise wird.
+
+**Wie weit der Prüfer schaut**, und es steht in seinem Kopf: höchstens 25
+Zeilen ab der Erzeugung und nicht über die nächste Erzeugung desselben Namens
+hinaus — sonst entlastete der Text des übernächsten Knopfes den vorigen. Wer
+den Namen weiter weg setzt, bekommt einen Fehlalarm. Das ist die richtige
+Richtung zu irren: laut statt still.
+
+Drei Pflanzungen: die Verschachtelung wieder aufgehoben (der echte Mangel
+kehrt zurück und wird mit Datei, Zeile und Folge benannt), einem Knopf im
+zweiten Zeichner der Text genommen, und die Menge der Zeichner leerlaufen
+lassen — der Wächter spricht.
+
+**Was daraus folgt.** Eine Regel gilt dort, wo der Prüfer hinsieht, und die
+Gegenstände wohnen nicht immer da. Vor jeder nächsten Flächenfrage gehört die
+Frage davor: *wo entstehen die Dinger eigentlich?*
+
 **B101 — Drei weitere Fragen derselben Art, dreimal schon beantwortet
 (2026-09-09).** Nach B100 die naheliegenden Nachbarn: **sagen die Knöpfe, was
 sie sind? Sagt die Seite ihre Sprache? Hat sie einen Titel?**
