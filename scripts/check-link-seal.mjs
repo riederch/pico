@@ -273,6 +273,73 @@ for (const directory of searched) {
 }
 
 /**
+ * **Die dritte Frage: was eine Antwort ueber einen Fehler sagt** (Befund
+ * B110).
+ *
+ * Eine Antwort, die `error.message` weitergibt, gibt weiter, was *irgendeine*
+ * Schicht gesagt hat. Gegangen gegen einen laufenden Relaisserver: eine
+ * Speicherberuehrung innerhalb des Antwortpfads warf, und der anonyme Anrufer
+ * bekam `400 {"error":"ENOENT: no such file or directory, open
+ * /home/somebody/relay.sqlite"}` - den absoluten Pfad der Datenbank, drei
+ * Zeilen unter dem Satz *"Refusal names travel; nothing else does"*. Die
+ * Protokollzeile daneben filterte dieselbe Gestalt schon; dieselbe Wahrheit
+ * war einmal geschrieben und einmal nicht.
+ *
+ * **Die Regel verlangt keine bestimmte Bauart**, nur dass die Stelle sagt, wie
+ * sie begrenzt ist: entweder ein benannter Filter (`picoRelayRefusalName`)
+ * oder ein `instanceof` auf eine Fehlerklasse, die das Produkt selbst
+ * geschrieben hat. Beides ist eine Aussage; `error.message` allein ist keine.
+ */
+const responseSink = /(?:^|[^A-Za-z0-9_$.])(?:send|end)\s*\(|\.\s*send\s*\(/gu;
+let outwardMessages = 0;
+for (const directory of searched) {
+  for (const file of listSourceFiles(directory)) {
+    const source = readFileSync(file, 'utf8');
+    const flat = blankStringsAndComments(source, relative(repoRoot, file));
+    for (const match of flat.matchAll(responseSink)) {
+      const bounds = callSpan(flat, match.index);
+      if (bounds === null) {
+        continue;
+      }
+      const body = source.slice(bounds[0], bounds[1]);
+      /**
+       * Gegenstand ist jede Antwort, die etwas *aus* einem Fehler weitergibt -
+       * auch die reparierten. Zaehlte nur, was noch `error.message` schreibt,
+       * schrumpfte die Menge mit jeder Reparatur, und die letzte Reparatur
+       * liesse den Waechter zuschlagen.
+       */
+      if (!/\berror\b/u.test(body)
+        || !/\.message\b|String\(\s*\(?\s*error|picoRelayRefusalName\s*\(/u.test(body)) {
+        continue;
+      }
+      outwardMessages += 1;
+      /**
+       * `instanceof Error` ist keine Aussage - jeder Fehler ist einer. Verlangt
+       * ist eine Klasse, die dieses Produkt selbst geschrieben hat; die
+       * Pflanzung `error instanceof Error ? error.message : 'x'` ging genau
+       * deshalb beim ersten Anlauf durch.
+       */
+      if (/picoRelayRefusalName\s*\(|\binstanceof\s+[A-Z][\w$]*(?<!\bError)\b/u.test(body)) {
+        continue;
+      }
+      errors.push(
+        `${relative(repoRoot, file)}:${source.slice(0, match.index).split('\n').length}: this `
+        + 'response passes an error message outward without saying how it is bounded. Whatever '
+        + 'any layer said then travels - a library sentence, a value, a path on this machine. '
+        + 'Filter it to a refusal name, or ask `instanceof` for a class this product wrote.',
+      );
+    }
+  }
+}
+
+if (outwardMessages === 0) {
+  errors.push(
+    'scripts/check-link-seal.mjs found no response that carries an error message, so its '
+    + 'third question was asked of nothing.',
+  );
+}
+
+/**
  * The other half: an address must not become a URL component. A mailbox in a
  * path or a query string is one in a proxy log, a browser history and a
  * referer header, none of which anybody chose.
@@ -321,5 +388,6 @@ console.log(
   + `${scannedPerDirectory.size} named directories, each of which answered; `
   + `${sinkCalls} matches of a sink pattern - a call that could carry a value outside; a line that is two kinds of sink counts twice - each read to its own closing `
   + 'bracket; neither a mailbox address nor a secret a person gave reaches a log, an error '
-  + 'or a URL).',
+  + `or a URL; ${outwardMessages} responses carry an error message outward, each of them `
+  + 'bounded by a named filter or an error class this product wrote).',
 );

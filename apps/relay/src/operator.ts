@@ -15,6 +15,7 @@ import {
   picoRelayOperatorRequestsPerMinute,
   picoRelayUnauthenticatedRequestsPerMinute,
 } from './rate-limit.js';
+import { picoRelayRefusalName } from './refusal-name.js';
 import type { PicoRelayStore } from './store.js';
 
 /**
@@ -129,7 +130,7 @@ export async function startPicoRelayOperatorListener(options: {
     try {
       body = await readBody(request);
     } catch (error) {
-      send(response, 400, { error: String((error as Error).message) });
+      send(response, 400, { error: picoRelayRefusalName(error, 'invalid_request') });
       return;
     }
 
@@ -156,7 +157,7 @@ export async function startPicoRelayOperatorListener(options: {
         try {
           parsed = parsePicoRelayAccountCreateRequest(body);
         } catch (error) {
-          send(response, 400, { error: String((error as Error).message) });
+          send(response, 400, { error: picoRelayRefusalName(error, 'invalid_request') });
           return;
         }
         // ADR 0154 RO3. The relay generates it; nobody presents one. A caller
@@ -180,7 +181,7 @@ export async function startPicoRelayOperatorListener(options: {
         try {
           parsed = parsePicoRelayAccountRevokeRequest(body);
         } catch (error) {
-          send(response, 400, { error: String((error as Error).message) });
+          send(response, 400, { error: picoRelayRefusalName(error, 'invalid_request') });
           return;
         }
         const revoked = options.store.revokeAccount({
@@ -226,7 +227,7 @@ export async function startPicoRelayOperatorListener(options: {
     try {
       parsed = parsePicoRelayClaimRequest(body);
     } catch (error) {
-      send(response, 400, { error: String((error as Error).message) });
+      send(response, 400, { error: picoRelayRefusalName(error, 'invalid_request') });
       return;
     }
     if (!options.claimCode.consume(parsed.claimCode)) {

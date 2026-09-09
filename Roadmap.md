@@ -912,6 +912,67 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B110 — „Refusal names travel; nothing else does" — und der Anrufer bekam den
+Pfad der Datenbank (2026-09-09).** Ein Satz stand als Kommentar über dem Code,
+und der Code hielt ihn nicht. **Gegangen gegen einen laufenden Relaisserver**,
+nicht gelesen und vermutet:
+
+```
+400 {"error":"ENOENT: no such file or directory, open /home/somebody/relay.sqlite"}
+```
+
+Der absolute Pfad der Relaisdatenbank, an **jeden, der anklopft** — die
+Postfachtür braucht kein Konto. Drei Zeilen über dem Fang steht der Satz, der
+das ausschliesst.
+
+**Warum es niemand sah.** Der äussere Fang — der für alles, was *vor* dem
+Antwortpfad bricht — filtert längst: `reason: /^[a-z0-9_]+$/.test(message) ?
+message : 'unnamed_failure'`, und ein Test hält das fest. Der innere Fang
+umschliesst `answer(...)`, also **jede Speicherberührung der Route**, und gab
+weiter, was kam. Dieselbe Wahrheit, einmal geschrieben und einmal nicht — die
+Naht, die diese Sitzung seit B96 verfolgt.
+
+Der bestehende Test zielte auf `isActiveAccount`, und das steht **vor** dem
+inneren Fang; deshalb sah er 500 und ein sauberes `relay_failed`. Eine Zeile
+tiefer, `mailboxFor` innerhalb von `answer`, und die Antwort war eine andere.
+
+**Ein Prädikat, an allen Türen.** `picoRelayRefusalName(error, fallback)` gibt
+die Meldung nur weiter, wenn sie ein Name ist — `mailbox_unknown`,
+`pico_link_packet_carries_no:body` — und sonst den Rückfallnamen. Der Zusatz
+hinter dem Doppelpunkt nennt ein Feld der Anfrage des Anrufers, also eine
+Tatsache, die er schon hat. Benutzt an sechs Stellen: die Postfachtür (Protokoll
+**und** Antwort) und die vier der Betreibertür. Alle 85 Relaistests bleiben
+grün, also lässt das Prädikat jede Ablehnung durch, die das Produkt wirklich
+gibt.
+
+**Das Home hatte dieselbe Stelle zweimal**, und dort ist die Antwort eine
+andere: die acht Sätze in `operator-store.ts` sind *für eine Person
+geschrieben* („Operator passphrase must be at least 12 characters."). Sie
+heissen jetzt `OperatorRequestError`, und die zwei Routen geben nur diese
+Klasse weiter. Was eine Bibliothek sagt, ein `TypeError`, ein SQLite-Fehler —
+alles andere wird zu *„That was not accepted."* `/api/auth/operator` erreicht
+man mit einem Bootstrap-Code und ohne Sitzung.
+
+**Die Regel steht im Siegelprüfer**, weil es dieselbe Frage ist wie seine
+beiden anderen: was verlässt diesen Prozess? Sieben Antworten geben etwas aus
+einem Fehler weiter, jede davon begrenzt — durch einen benannten Filter oder
+durch eine Fehlerklasse, die dieses Produkt selbst geschrieben hat.
+
+**`instanceof Error` zählt nicht**, und das hat eine Pflanzung gelehrt: der
+erste Anlauf der Regel nahm `error instanceof Error ? error.message : 'x'` an.
+Jeder Fehler ist ein `Error`; das ist keine Aussage, sondern eine Formalität.
+
+Vier Pflanzungen: der Filter am Relais entfernt (fällt jetzt), das `instanceof`
+im Home entfernt, `instanceof Error` als Feigenblatt, und der Leerlaufwächter.
+Dazu ein Regressionstest, der die Wanderung selbst ist — er fällt ohne den
+Filter mit `expected { Object (error) } to deeply equal { error:
+'invalid_request' }`.
+
+**Was daraus folgt.** Ein Kommentar, der eine Eigenschaft behauptet, ist die
+Stelle, an der man sie messen sollte — nicht der Beweis, dass sie gilt. B107 hat
+das für Prosa über Code gezeigt; hier stand die Prosa **direkt darüber** und
+war trotzdem falsch.
+
 **B109 — Die Probe stand in einem Prüfer, und vier benutzten den Leser
 (2026-09-09).** B108 hat einen Fehler im gemeinsamen Spannenleser gefunden und
 die Klammerprobe als Regel dagegen gesetzt — **in `tests:check`**. Drei andere

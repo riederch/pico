@@ -14,6 +14,7 @@ import {
   picoLinkRelayAccountHeader,
   picoLinkRelayRoutes,
 } from '@pico/protocol/link-relay-surface';
+import { picoRelayRefusalName } from './refusal-name.js';
 import {
   PicoRelayRateLimit,
   PicoRelayRateLimitRegistry,
@@ -131,10 +132,9 @@ export async function startPicoRelayServer(
        * hier das Verbotene: `check-link-seal.mjs` haelt fest, dass keine
        * Mailbox-Adresse ein Log erreicht.
        */
-      const message = error instanceof Error ? error.message : '';
       options.log?.({
         event: 'relay_request_failed',
-        reason: /^[a-z0-9_]+$/u.test(message) ? message : 'unnamed_failure',
+        reason: picoRelayRefusalName(error, 'unnamed_failure'),
       });
       send(response, { status: 500, body: { error: 'relay_failed' } });
     });
@@ -203,11 +203,20 @@ export async function startPicoRelayServer(
     try {
       send(response, await answer(route!, request, body));
     } catch (error) {
-      // Refusal names travel; nothing else does. Every one of them is a fact
-      // about the caller's own request.
+      /**
+       * Refusal names travel; nothing else does. Every one of them is a fact
+       * about the caller's own request.
+       *
+       * **Der Satz stand hier, und der Code hielt ihn nicht** (Befund B110).
+       * Dieser Fang faengt auch, was der Speicher wirft, und gab dessen
+       * Meldung weiter - gegangen gegen einen laufenden Server: `400
+       * {"error":"ENOENT: no such file or directory, open
+       * /home/somebody/relay.sqlite"}` an einen anonymen Anrufer. Die
+       * Protokollzeile daneben filterte dieselbe Gestalt schon.
+       */
       send(response, {
         status: 400,
-        body: { error: error instanceof Error ? error.message : 'invalid_request' },
+        body: { error: picoRelayRefusalName(error, 'invalid_request') },
       });
     }
   }

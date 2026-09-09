@@ -58,6 +58,26 @@ interface OperatorRow {
   home_binding_json: string | null;
 }
 
+/**
+ * A refusal this store means for the person in front of the dashboard.
+ *
+ * **Written for finding B110.** Both credential routes answered `400 {"error":
+ * error.message}`, which is right for these eight sentences - they exist to
+ * tell an operator what to do differently - and wrong for everything else. An
+ * argon2 failure, a SQLite error or a `TypeError` would have had its message
+ * sent to whoever called `/api/auth/operator`, and that route is reached with
+ * a bootstrap code rather than a session.
+ *
+ * The class is the difference between "a sentence chosen for a person" and
+ * "whatever a library said", and it is the one thing a `catch` can ask.
+ */
+export class OperatorRequestError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = 'OperatorRequestError';
+  }
+}
+
 export class OperatorOverloadedError extends Error {
   public constructor() {
     super('Too many credential verifications in flight.');
@@ -112,7 +132,7 @@ export class OperatorStore {
       .run(OPERATOR_ROW_ID, verifier, now, now, serializeHomeBinding(homeBinding));
 
     if (result.changes === 0) {
-      throw new Error('Foundation operator already exists.');
+      throw new OperatorRequestError('Foundation operator already exists.');
     }
 
     return {
@@ -131,10 +151,10 @@ export class OperatorStore {
     assertOperatorHomeBinding(homeBinding);
     const current = this.get();
     if (current === undefined) {
-      throw new Error('Foundation operator does not exist.');
+      throw new OperatorRequestError('Foundation operator does not exist.');
     }
     if (current.homeBinding !== undefined && !sameHomeBinding(current.homeBinding, homeBinding)) {
-      throw new Error('Foundation operator is bound to a different Pico Home founding.');
+      throw new OperatorRequestError('Foundation operator is bound to a different Pico Home founding.');
     }
     if (current.homeBinding === undefined) {
       const now = new Date().toISOString();
@@ -320,12 +340,12 @@ function parseHomeBinding(serialized: string | null): OperatorHomeBinding | unde
   try {
     parsed = JSON.parse(serialized);
   } catch {
-    throw new Error('Foundation operator Home binding is malformed.');
+    throw new OperatorRequestError('Foundation operator Home binding is malformed.');
   }
 
   assertOperatorHomeBinding(parsed);
   if (parsed === undefined) {
-    throw new Error('Foundation operator Home binding is malformed.');
+    throw new OperatorRequestError('Foundation operator Home binding is malformed.');
   }
   return cloneHomeBinding(parsed);
 }
@@ -339,7 +359,7 @@ function assertOperatorHomeBinding(homeBinding: unknown): asserts homeBinding is
     || !isAsciiToken(homeBinding.homeId)
     || !isAsciiToken(homeBinding.foundingId)
     || !isFingerprint(homeBinding.hostSigningKeyFingerprintHex)) {
-    throw new Error('Foundation operator Home binding is invalid.');
+    throw new OperatorRequestError('Foundation operator Home binding is invalid.');
   }
 }
 
@@ -376,10 +396,10 @@ function isPlausiblePassphrase(passphrase: unknown): passphrase is string {
 
 function assertPassphraseShape(passphrase: unknown): asserts passphrase is string {
   if (typeof passphrase !== 'string' || passphrase.length < MIN_PASSPHRASE_LENGTH) {
-    throw new Error(`Operator passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters.`);
+    throw new OperatorRequestError(`Operator passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters.`);
   }
 
   if (passphrase.length > MAX_PASSPHRASE_LENGTH) {
-    throw new Error(`Operator passphrase must be at most ${MAX_PASSPHRASE_LENGTH} characters.`);
+    throw new OperatorRequestError(`Operator passphrase must be at most ${MAX_PASSPHRASE_LENGTH} characters.`);
   }
 }

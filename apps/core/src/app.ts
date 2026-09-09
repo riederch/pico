@@ -263,6 +263,7 @@ import { RetentionSweeper } from './retention-sweep.js';
 import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute, type AccessClass } from './access-classes.js';
 import {
   OperatorOverloadedError,
+  OperatorRequestError,
   type OperatorHomeBinding,
   type OperatorStore,
 } from './operator-store.js';
@@ -7313,7 +7314,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         return reply.code(503).send({ error: 'Too many credential operations in flight.' });
       }
 
-      return reply.code(400).send({ error: (error as Error).message });
+      /**
+       * Befund B110: nur ein Satz, der fuer eine Person geschrieben wurde.
+       *
+       * Vorher ging hier `error.message` hinaus, welcher auch immer - eine
+       * Bibliotheksmeldung oder ein `TypeError` an einen Anrufer, der diese
+       * Route mit einem Bootstrap-Code und ohne Sitzung erreicht.
+       */
+      return reply.code(400).send({
+        error: error instanceof OperatorRequestError
+          ? error.message
+          : 'That was not accepted.',
+      });
     }
 
     appendServerEvent('auth.operator_bootstrapped', {});
@@ -7439,7 +7451,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         return reply.code(503).send({ error: 'Too many credential operations in flight.' });
       }
 
-      return reply.code(400).send({ error: (error as Error).message });
+      // Befund B110, wie oben: der kuratierte Satz oder gar keiner.
+      return reply.code(400).send({
+        error: error instanceof OperatorRequestError
+          ? error.message
+          : 'That was not accepted.',
+      });
     }
 
     if (!changed) {

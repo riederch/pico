@@ -131,6 +131,24 @@ describe('ADR 0149 - the relay surface', () => {
       reason: 'relay_store_broke',
     });
 
+    /**
+     * Befund B110: dieselbe freie Meldung, aber aus einer Speicherberuehrung
+     * *innerhalb* von `answer` - der Fang dort gab sie bis heute weiter.
+     *
+     * Gegangen und nicht argumentiert: der Anrufer bekam `400 {"error":"ENOENT:
+     * no such file or directory, open /home/somebody/relay.sqlite"}`, also den
+     * absoluten Pfad der Datenbank, drei Zeilen unter dem Satz "Refusal names
+     * travel; nothing else does".
+     */
+    (store as unknown as Record<string, unknown>).mailboxFor = () => {
+      throw new Error('ENOENT: no such file or directory, open /home/somebody/relay.sqlite');
+    };
+    const insideAnswer = await post(base, picoLinkRelayRoutes.deliver, packet());
+    expect(insideAnswer.status).toBe(400);
+    expect(insideAnswer.body).toEqual({ error: 'invalid_request' });
+    expect(JSON.stringify(insideAnswer.body)).not.toContain('/home/');
+    expect(JSON.stringify(insideAnswer.body)).not.toContain('relay.sqlite');
+
     // Eine freie Meldung traegt Pfade und Werte - sie wird nicht durchgereicht.
     lines.length = 0;
     (store as unknown as Record<string, unknown>).isActiveAccount = () => {
