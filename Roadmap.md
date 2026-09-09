@@ -912,6 +912,40 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B100 — Jedes Bedienelement sagt, was es ist, und nichts hielt das
+(2026-09-09).** B99 riet, woanders anzufangen. Also eine Frage, die dieser Baum
+noch nie mechanisch gestellt hat: **ist das, was eine Person vor sich hat,
+ohne Maus und ohne Augen benutzbar?**
+
+Der Befund ist wieder ein Ja — und diesmal ein ungewöhnlich sauberes. Das
+Fenster führt 15 Bedienelemente und **15** verbundene Beschriftungen, das
+Dashboard 27 und **27**. Kein einziges Feld ohne. Dazu drei `aria-live`-Bereiche
+und zwei `role="status"`; alle 28 Knöpfe und 14 Eingaben sind von sich aus
+tastaturerreichbar.
+
+Gehalten hat es nichts. `check-companion-boundary.mjs` zählt, dass die 114
+Elemente, die das Fenster verlangt, **da** sind — nicht, dass sie beschriftet
+sind. Ein sechzehntes Feld fiele niemandem auf.
+
+**Warum das kein Schönheitsfehler ist.** Ein Eingabefeld ohne verbundene
+Beschriftung ist für einen Screenreader namenlos, und der Klick auf den Text
+daneben setzt den Fokus nicht. Ein Produkt, dessen These „ein Begleiter für
+eine Person" lautet, kann sich das an genau den zwei Stellen nicht leisten, an
+denen die Person etwas entscheidet.
+
+**Was der Prüfer nicht prüft**, und es steht in seinem Kopf: ob die Beschriftung
+*gut* ist, ob die Reihenfolge stimmt, ob Kontrast und Fokusrahmen reichen. Das
+sind Urteile. Dies ist die Syntax darunter — ein Element, eine Kennung, eine
+Beschriftung, die auf sie zeigt, oder ein `aria-label`, wo keine sichtbare
+hingehört.
+
+Die Flächen sind abgeleitet: jede verfolgte HTML-Datei ausser den zwei, die
+niemand bedient — eine Demo des importierten Designsystems und eine
+Werkzeugvorlage, beide mit Grund benannt statt stillschweigend übersprungen.
+
+Zwei Pflanzungen: einer Beschriftung ihr `for` genommen, und ein Feld ganz ohne
+Kennung eingesetzt. Beide werden mit Fläche, Kennung und Folge benannt.
+
 **B99 — Sechs Fragen, sechsmal Nein, und das ist das Ergebnis
 (2026-09-08).** Nach B97 und B98 ist die Fundrate auf null gefallen, und das
 gehört aufgeschrieben, sonst misst die nächste Sitzung dieselben Flächen noch
