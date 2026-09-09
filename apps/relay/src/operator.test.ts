@@ -48,7 +48,7 @@ interface Relay {
   }>;
 }
 
-async function relay(): Promise<Relay> {
+async function relay(lines?: Record<string, unknown>[]): Promise<Relay> {
   const dir = mkdtempSync(join(tmpdir(), 'pico-relay-operator-'));
   dirs.push(dir);
   const store = new PicoRelayStore(join(dir, 'relay.sqlite'), 'relay.example');
@@ -63,6 +63,7 @@ async function relay(): Promise<Relay> {
     host: '127.0.0.1',
     port: 0,
     now: () => new Date(clockMs),
+    ...(lines === undefined ? {} : { log: (line: Record<string, unknown>) => { lines.push(line); } }),
   });
   closers.push(() => listener.close());
   const url = `http://127.0.0.1:${listener.port}`;
@@ -527,5 +528,35 @@ describe('ADR 0154 RO9 - a bound on the door, and what it is for', () => {
     expect(limit.take().allowed).toBe(true);
     clockMs -= 60_000;
     expect(limit.take().allowed).toBe(false);
+  });
+});
+
+describe('ADR 0154 - was der Betreiber erfaehrt, wenn seine eigene Tuer bricht', () => {
+  it('nennt ihm einen Grund, statt nur 500 zu antworten', async () => {
+    /**
+     * Befund B111. Die Postfachtuer sagt es in ihrem eigenen Kopf: das
+     * Schweigen nach aussen ist Absicht, das nach innen war keine. An dieser
+     * Tuer galt es weiter - siebzehn Ereignisse, keines fuer eine gescheiterte
+     * Anfrage an der Tuer, die der Betreiber selbst benutzt.
+     */
+    const lines: Record<string, unknown>[] = [];
+    const started = await relay(lines);
+    (started.store as unknown as Record<string, unknown>).accountSummaries = () => {
+      throw new Error('ENOENT: no such file or directory, open /home/somebody/relay.sqlite');
+    };
+    const code = started.claimCode.mint();
+    const claimAnswer = await started.call(picoRelayOperatorRoutes.claim, { claimCode: code });
+    const credential = claimAnswer.body.credential as string;
+
+    const answer = await started.call(picoRelayOperatorRoutes.accountList, {}, credential);
+    expect(answer.status).toBe(500);
+    // Nach aussen ein Name und sonst nichts.
+    expect(answer.body).toEqual({ error: 'operator_request_failed' });
+    expect(JSON.stringify(answer.body)).not.toContain('/home/');
+    // Nach innen ein Grund, und eine freie Meldung wird auch dort nicht durchgereicht.
+    expect(lines).toContainEqual({
+      event: 'operator_request_failed',
+      reason: 'unnamed_failure',
+    });
   });
 });

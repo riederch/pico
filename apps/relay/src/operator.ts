@@ -75,7 +75,23 @@ export async function startPicoRelayOperatorListener(options: {
   });
 
   const server: Server = createServer((request, response) => {
-    void handle(request, response).catch(() => {
+    void handle(request, response).catch((error: unknown) => {
+      /**
+       * **Befund B111: dieselbe Tuer, dieselbe Stille.**
+       *
+       * Die Postfachtuer zwei Haefen weiter sagt es in ihrem eigenen Kopf: das
+       * Schweigen nach aussen ist Absicht, das nach innen war keine - der
+       * Betreiber hatte fuer jeden 500er nichts in der Hand, obwohl dieses
+       * Relay einen Protokollweg hat. Genau das galt hier weiter: siebzehn
+       * Ereignisse, und keines fuer eine gescheiterte Anfrage an der Tuer, die
+       * der Betreiber selbst benutzt.
+       *
+       * Nur ein Name wird durchgereicht, mit demselben Praedikat wie dort.
+       */
+      options.log?.({
+        event: 'operator_request_failed',
+        reason: picoRelayRefusalName(error, 'unnamed_failure'),
+      });
       send(response, 500, { error: 'operator_request_failed' });
     });
   });

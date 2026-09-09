@@ -912,6 +912,35 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B111 — Dieselbe Tür, dieselbe Stille (2026-09-09).** B110 hat die
+Postfachtür des Relays repariert. Die Betreibertür daneben antwortet auf einen
+inneren Fehler mit `500 {"error":"operator_request_failed"}` — nach aussen
+richtig, ein Name und sonst nichts. **Nach innen sagt sie gar nichts.**
+
+Die Postfachtür hat den Satz dazu in ihrem eigenen Kopf stehen:
+
+> *Das Schweigen nach aussen ist Absicht, das nach innen war keine — der
+> Betreiber hatte für jeden 500er nichts in der Hand, obwohl dieses Relay
+> einen Protokollweg hat.*
+
+Gemessen: **siebzehn Ereignisnamen** kennt das Relay, und keiner davon gilt
+einer gescheiterten Anfrage an der Tür, **die der Betreiber selbst benutzt**.
+`relay_request_failed` gibt es nur auf der Postfachseite.
+
+Sie sagt jetzt `operator_request_failed` mit einem Grund, gefiltert durch
+dasselbe Prädikat wie nebenan — eine freie Meldung trägt Pfade, auch in einem
+Protokoll.
+
+Gehalten von einem Test statt von einem Tor: die Eigenschaft gehört einer
+Fläche und nicht dem Baum, und die Postfachtür wird von ihrem Zwilling in
+`server.test.ts` genauso gehalten. Zwei Pflanzungen: die Protokollzeile
+entfernt, und die freie Meldung statt des Namens durchgereicht.
+
+**Was daraus folgt.** Ein Kopf, der eine Lehre aufschreibt, hält sie für *seine*
+Datei. Die Datei daneben liest ihn nicht. Nach B110 ist das die zweite Stelle
+an einem Tag, an der derselbe Satz an einer Tür stand und an der nächsten
+fehlte — und beide Male war die zweite Tür die ungeprüfte.
+
 **B110 — „Refusal names travel; nothing else does" — und der Anrufer bekam den
 Pfad der Datenbank (2026-09-09).** Ein Satz stand als Kommentar über dem Code,
 und der Code hielt ihn nicht. **Gegangen gegen einen laufenden Relaisserver**,
