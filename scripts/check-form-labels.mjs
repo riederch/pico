@@ -299,13 +299,13 @@ for (const path of renderers) {
 const trackedPaths = picoTrackedPaths();
 for (const surface of picoOperatedSurfaces()) {
   const html = readFileSync(join(repoRoot, surface), 'utf8');
-  const read = picoSurfaceRenderers(surface, trackedPaths)
+  const drawn = picoSurfaceRenderers(surface, trackedPaths)
     .filter((each) => !each.includes('.test.'))
-    .map((each) => readFileSync(join(repoRoot, each), 'utf8'));
-  if (read.length === 0) {
+    .map((each) => [each, readFileSync(join(repoRoot, each), 'utf8')]);
+  if (drawn.length === 0) {
     continue;
   }
-  const named = picoElementNames(read);
+  const named = picoElementNames(drawn.map(([, source]) => source));
   const variableOf = new Map([...named].map(([variable, id]) => [id, variable]));
   for (const [, id] of html.matchAll(/<form\b[^>]*\bid="([^"]+)"/gu)) {
     forms += 1;
@@ -320,8 +320,8 @@ for (const surface of picoOperatedSurfaces()) {
      */
     let listener = null;
     if (variable !== undefined) {
-      for (const source of read) {
-        const flat = blankStringsAndComments(source);
+      for (const [where, source] of drawn) {
+        const flat = blankStringsAndComments(source, where);
         for (const found of flat.matchAll(
           new RegExp(`\\b${variable}\\s*\\.\\s*addEventListener\\(`, 'gu'),
         )) {

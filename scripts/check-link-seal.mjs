@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { blankStringsAndComments, callSpan } from './source-spans.mjs';
 
 /**
  * ADR 0148 EX4. A relay mailbox address travels inside the ADR 0107 seal and
@@ -171,13 +172,31 @@ const searched = [
 ];
 
 let scannedFiles = 0;
+let sinkCalls = 0;
 const scannedPerDirectory = new Map(searched.map((directory) => [directory, 0]));
 for (const directory of searched) {
   for (const file of listSourceFiles(directory)) {
     scannedFiles += 1;
     scannedPerDirectory.set(directory, scannedPerDirectory.get(directory) + 1);
-    const lines = readFileSync(file, 'utf8').split('\n');
-    for (const [index, line] of lines.entries()) {
+    const content = readFileSync(file, 'utf8');
+    const lines = content.split('\n');
+    /**
+     * **Prosa ist kein Code** (Befund B109). Die Senken wurden bis heute auf
+     * der rohen Zeile gesucht, also traf `log (ADR 0075 A9)` in einem
+     * Kommentar dasselbe Muster wie ein Protokollaufruf. Drei von 1.874
+     * Senkenzeilen waren so - harmlos, solange kein verbotener Name in der
+     * Naehe steht, und ein verwirrender Fehlalarm an dem Tag, an dem einer
+     * dort steht. Gesucht wird jetzt auf der ausgeblendeten Fassung.
+     */
+    const flat = blankStringsAndComments(content, relative(repoRoot, file));
+    const flatLines = flat.split('\n');
+    const lineStart = [];
+    let offset = 0;
+    for (const each of lines) {
+      lineStart.push(offset);
+      offset += each.length + 1;
+    }
+    for (const [index, line] of flatLines.entries()) {
       for (const sink of forbiddenSinks) {
         if (!sink.pattern.test(line)) {
           continue;
@@ -192,43 +211,31 @@ for (const directory of searched) {
          * in einer Relay-Protokollzeile ging durch, dieselbe Mailbox in
          * *derselben* Zeile wie der Aufruf fiel.
          *
-         * Gelesen wird jetzt von der Senke bis zu der Klammer, die sie
-         * schliesst, mit einer Obergrenze - ein Aufruf, der laenger ist als
-         * vierzig Zeilen, ist kein Aufruf mehr, sondern eine Datei.
+         * Gelesen wird von der Senke bis zu der Klammer, die sie schliesst.
+         *
+         * **Seit Befund B109 zaehlt das `source-spans.mjs`** statt einer
+         * eigenen Zaehlung ueber vierzig Zeilen. Die eigene zaehlte auf einer
+         * Fassung, die Kommentare stehen liess und regulaere Ausdruecke fuer
+         * Zeichenketten hielt - dieselbe Klasse Fehler, die Befund B108 im
+         * gemeinsamen Leser gefunden hat, nur hier unentdeckt, weil sie heute
+         * an keiner Stelle beisst. Die Obergrenze von vierzig Zeilen faellt
+         * damit weg: eine Spanne, die an ihrer eigenen Klammer endet, braucht
+         * keine.
+         *
+         * **Gelesen wird weiter auf der Fassung mit den Interpolationen**
+         * (Befund B96), denn `${inbound}` ist genau das Leck, das hier gesucht
+         * wird. Zwei Sichten, zwei Aufgaben: die eine zaehlt, die andere
+         * liest.
          */
-        let depth = 0;
-        let seenOpen = false;
+        sinkCalls += 1;
+        const at = lineStart[index] + line.search(sink.pattern);
+        const bounds = callSpan(flat, at);
+        const lastLine = bounds === null
+          ? index
+          : content.slice(0, bounds[1]).split('\n').length - 1;
         let span = '';
-        for (let cursor = index; cursor < lines.length && cursor < index + 40; cursor += 1) {
+        for (let cursor = index; cursor <= lastLine && cursor < lines.length; cursor += 1) {
           span += `${withoutStringContents(lines[cursor])}\n`;
-          /**
-           * Gezaehlt wird auf einer Fassung *ohne* Zeichenketteninhalt, gelesen
-           * auf einer *mit* den Interpolationen (Befund B96).
-           *
-           * Zwei Sichten derselben Zeile, und das ist kein Luxus: der Filter
-           * oben behaelt `${...}` und sein Muster endet an der ersten
-           * schliessenden Klammer, also verliert
-           * `write(\`${JSON.stringify({ a })}\`)` ein `)`. Die Klammerzaehlung
-           * ging nicht auf, die Spanne lief vierzig Zeilen weiter und traf
-           * dort einen Namen, der mit dem Aufruf nichts zu tun hatte - ein
-           * Fehlalarm im Vault-Daemon, gefunden beim ersten Lauf der zweiten
-           * Wertefamilie.
-           */
-          const counted = lines[cursor]
-            .replace(/'[^']*'/gu, "''")
-            .replace(/"[^"]*"/gu, '""')
-            .replace(/`[^`]*`/gu, '``');
-          for (const character of counted) {
-            if (character === '(') {
-              depth += 1;
-              seenOpen = true;
-            } else if (character === ')') {
-              depth -= 1;
-            }
-          }
-          if (seenOpen && depth <= 0) {
-            break;
-          }
         }
         // String contents are stripped first, and that correction is the useful
         // part of this check. Written naively it fired on
@@ -294,6 +301,13 @@ for (const [directory, count] of scannedPerDirectory) {
   }
 }
 
+if (sinkCalls === 0) {
+  errors.push(
+    'scripts/check-link-seal.mjs found no call that could carry a value outside, so it read '
+    + 'no span at all. A reader without a subject is broken, not clean.',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Pico Link seal check failed:');
   for (const error of errors) {
@@ -305,5 +319,7 @@ if (errors.length > 0) {
 console.log(
   `Pico Link seal check passed (${scannedFiles} files across `
   + `${scannedPerDirectory.size} named directories, each of which answered; `
-  + 'neither a mailbox address nor a secret a person gave reaches a log, an error or a URL).',
+  + `${sinkCalls} matches of a sink pattern - a call that could carry a value outside; a line that is two kinds of sink counts twice - each read to its own closing `
+  + 'bracket; neither a mailbox address nor a secret a person gave reaches a log, an error '
+  + 'or a URL).',
 );

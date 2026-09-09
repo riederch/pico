@@ -242,9 +242,10 @@ const unresolved = [];
 for (const root of roots) {
   for (const path of sourceFiles(root)) {
     const source = readFileSync(path, 'utf8');
+    const flat = blankStringsAndComments(source, relative(repoRoot, path));
     signCall.lastIndex = 0;
     for (const call of source.matchAll(signCall)) {
-      const span = callSpan(blankStringsAndComments(source), call.index);
+      const span = callSpan(flat, call.index);
       const label = span === null
         ? null
         : /\blabel:\s*([^,\n]+)/u.exec(source.slice(span[0], span[1]));
@@ -274,7 +275,7 @@ const forwarders = new Set();
 for (const root of roots) {
   for (const path of sourceFiles(root)) {
     const source = readFileSync(path, 'utf8');
-    const flat = blankStringsAndComments(source);
+    const flat = blankStringsAndComments(source, relative(repoRoot, path));
     for (const call of source.matchAll(signCall)) {
       const span = callSpan(flat, call.index);
       if (span === null || !/^[A-Za-z_$][\w$]*$/u.test(source.slice(span[0] + 1, span[1] - 1).trim())) {
@@ -293,7 +294,7 @@ let throughForwarder = 0;
 for (const root of roots) {
   for (const path of sourceFiles(root)) {
     const source = readFileSync(path, 'utf8');
-    const flat = blankStringsAndComments(source);
+    const flat = blankStringsAndComments(source, relative(repoRoot, path));
     for (const name of forwarders) {
       for (const call of flat.matchAll(new RegExp(`\\b${name}\\s*\\(`, 'gu'))) {
         if (/function\s+$/u.test(source.slice(Math.max(0, call.index - 12), call.index))) {

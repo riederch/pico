@@ -19,7 +19,7 @@
  * weil er darin nach Namen sucht. Zwei Anforderungen, nicht dieselbe Wahrheit
  * zweimal.
  */
-export function blankStringsAndComments(source) {
+export function blankStringsAndComments(source, where) {
   const out = [...source];
   const blank = (from, to) => {
     for (let i = from; i < to && i < out.length; i += 1) {
@@ -112,7 +112,35 @@ export function blankStringsAndComments(source) {
     }
     i += 1;
   }
-  return out.join('');
+  const blanked = out.join('');
+  /**
+   * **Der Ausblender prueft sich selbst** (Befund B109).
+   *
+   * Geht eine Datei nach dem Ausblenden mit den Klammern nicht mehr auf, hat
+   * dieser Leser etwas falsch gelesen, und *jede* Spanne daraus ist
+   * unzuverlaessig - still, denn ein zu langer Rumpf enthaelt eher mehr als
+   * weniger. Genau so war der Fehler in Befund B108 zu finden: ein regulaerer
+   * Ausdruck mit Anfuehrungszeichen liess eine Zeichenkette beginnen, vier von
+   * 511 Dateien gingen nicht auf, und acht Testfaelle waren unsichtbar.
+   *
+   * Die Probe stand danach als Regel in *einem* Pruefer, waehrend drei andere
+   * denselben Leser benutzten. Jetzt steht sie hier: wer eine Datei
+   * ausblendet, bekommt sie mit, und `where` ist Pflicht, damit die Meldung
+   * sagt, welche Datei nicht aufging.
+   *
+   * **Ganze Dateien**, nicht Bruchstuecke: ein Bruchstueck geht mit Absicht
+   * nicht auf.
+   */
+  const parentheses = (blanked.match(/\(/gu) ?? []).length - (blanked.match(/\)/gu) ?? []).length;
+  const braces = (blanked.match(/\{/gu) ?? []).length - (blanked.match(/\}/gu) ?? []).length;
+  if (parentheses !== 0 || braces !== 0) {
+    throw new Error(
+      `pico_source_span_unbalanced: ${where ?? 'an unnamed source'} does not balance after `
+      + `blanking (${parentheses} parentheses, ${braces} braces), so every span read from it `
+      + 'is unreliable.',
+    );
+  }
+  return blanked;
 }
 
 /**

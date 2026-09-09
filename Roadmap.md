@@ -912,6 +912,65 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B109 — Die Probe stand in einem Prüfer, und vier benutzten den Leser
+(2026-09-09).** B108 hat einen Fehler im gemeinsamen Spannenleser gefunden und
+die Klammerprobe als Regel dagegen gesetzt — **in `tests:check`**. Drei andere
+Prüfer benutzen denselben Leser und hatten sie nicht. Eine Probe, die man
+mitnehmen muss, ist eine, die jemand vergisst.
+
+**Sie wohnt jetzt im Leser selbst.** `blankStringsAndComments(source, where)`
+prüft nach dem Ausblenden die Klammern und wirft mit dem Dateinamen; `where`
+ist Pflicht, damit die Meldung sagt, welche Datei nicht aufging. Gepflanzt —
+den Ausblender wieder blind für reguläre Ausdrücke gemacht — sprechen jetzt
+**zwei** Prüfer, jeder mit seiner Datei:
+
+> `pico_source_span_unbalanced: apps/companion-shell/src/model-providers.test.ts
+> does not balance after blanking (1 parentheses, -3 braces)`
+
+**Und dann der zweite Leser.** `check-link-seal.mjs` zählte seine Klammern
+selbst — auf einer Fassung, die **Kommentare stehen liess** und reguläre
+Ausdrücke für Zeichenketten hielt. Dieselbe Klasse wie B108, nur an einer
+zweiten Stelle. Gemessen: **3 von 1.874 Senkenzeilen standen in Prosa**, etwa
+
+```
+// reach the append-only log (ADR 0075 A9).
+```
+
+`log (` ist für das Muster ein Protokollaufruf. Harmlos, sagte ich — und habe
+es dann **nachgestellt statt behauptet.** Ein Kommentar mit einer *offenen*
+Klammer:
+
+```
+// Betreiber-log (ADR 0075 A9 und die Notiz darunter.
+function plantedProse(passphrase: string): string {
+```
+
+> **alter Prüfer:** `a secret a person gave or a plaintext this product holds
+> must not reach a logger handed in as a function`
+> **neuer Prüfer:** grün
+
+Ein Fehlalarm über ein Wort in einem Kommentar, drei Zeilen über einem
+Parameternamen. Der Prüfer sagt in seinem eigenen Kopf, warum das zählt: *„a
+check whose failures are mostly wrong teaches people to skip it."*
+
+**Die Vierzig-Zeilen-Grenze fällt damit weg.** Eine Spanne, die an ihrer eigenen
+Klammer endet, braucht keine Obergrenze — und die Obergrenze war die zweite
+Fehlerrichtung, die B105 und B106 an anderen Stellen gefunden haben. Gelesen
+wird weiter auf der Fassung **mit** den Interpolationen, denn `${inbound}` ist
+genau das Leck, das hier gesucht wird: zwei Sichten, zwei Aufgaben, und das
+bleibt begründet.
+
+Der Prüfer nennt jetzt seinen Gegenstand: **3.476 Treffer eines Senkenmusters**,
+jeder bis zu seiner eigenen schliessenden Klammer gelesen — und meldet einen
+Fehler, wenn es keinen gäbe.
+
+Kein neuer Kettenschritt; `link:check` kostet 570 ms, `tests:check` 790 ms.
+
+**Was daraus folgt.** Ein Werkzeug, das mehrere Prüfer schärfer macht, ist ein
+gemeinsamer Einzelpunkt: sein Fehler ist der Fehler aller. Die Probe gehört
+deshalb nicht neben das Werkzeug, sondern **hinein** — und ein zweites Werkzeug
+mit derselben Aufgabe gehört zusammengelegt, sobald man es findet.
+
 **B108 — Zweitausendsiebenhundert Tests behaupten etwas, und mein eigener
 Leser log über vier Dateien (2026-09-09).** B107 hat gefragt, welche *Regel*
 einen Gegenstand hat. Dieselbe Frage an die Tests: **ein `it`, das seinen

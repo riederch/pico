@@ -54,7 +54,7 @@ const sources = new Map(tracked.map((path) => [path, readFileSync(join(picoRepoR
 
 const helpers = new Set();
 for (const path of tracked) {
-  const flat = blankStringsAndComments(sources.get(path));
+  const flat = blankStringsAndComments(sources.get(path), path);
   for (const declaration of flat.matchAll(
     /(?:function\s+([A-Za-z_$][\w$]*)\s*\(|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?\()/gu,
   )) {
@@ -75,32 +75,26 @@ const asserts = new RegExp(
 );
 
 /**
- * **Der Leser prueft zuerst sich selbst** (Befund B108). Nach dem Ausblenden
- * muessen die Klammern einer Datei aufgehen. Tun sie es nicht, hat der
- * Ausblender etwas falsch gelesen, und *jede* Spanne in dieser Datei ist
- * unzuverlaessig - stillschweigend, denn ein zu langer Rumpf enthaelt eher
- * mehr Behauptungen und nicht weniger.
- *
- * Genau so ist der Fehler gefunden worden, der diese Regel veranlasst hat: ein
- * regulaerer Ausdruck wie `/<section id="admin-section"[^>]*\shidden/` traegt
- * zwei Anfuehrungszeichen, und der Ausblender hielt sie fuer eine Zeichenkette.
+ * **Der Leser prueft sich selbst, und die Probe wohnt bei ihm** (Befunde B108,
+ * B109). Nach dem Ausblenden muessen die Klammern einer Datei aufgehen; tut
+ * sie es nicht, hat der Ausblender etwas falsch gelesen, und *jede* Spanne
+ * daraus ist unzuverlaessig. Genau so ist der Fehler gefunden worden, der die
+ * Probe veranlasst hat: ein regulaerer Ausdruck wie
+ * `/<section id="admin-section"[^>]*\shidden/` traegt zwei
+ * Anfuehrungszeichen, und der Ausblender hielt sie fuer eine Zeichenkette.
  * Vier von 511 Dateien gingen nicht auf; acht Testfaelle und sechsundzwanzig
  * Behauptungen waren dadurch unsichtbar.
+ *
+ * Die Probe stand einen Tag lang *hier* - und drei andere Pruefer benutzten
+ * denselben Leser ohne sie. Seit B109 steht sie in `source-spans.mjs` selbst,
+ * also kann sie kein Aufrufer vergessen. Diese Schleife blendet die 511
+ * Quellen aus, damit die Probe ueber alle laeuft und die Zahl im Bericht
+ * steht.
  */
 let balanced = 0;
 for (const path of tracked) {
-  const flat = blankStringsAndComments(sources.get(path));
-  const parens = (flat.match(/\(/gu) ?? []).length - (flat.match(/\)/gu) ?? []).length;
-  const braces = (flat.match(/\{/gu) ?? []).length - (flat.match(/\}/gu) ?? []).length;
-  if (parens === 0 && braces === 0) {
-    balanced += 1;
-    continue;
-  }
-  errors.push(
-    `${path}: after blanking strings and comments its brackets no longer balance `
-    + `(${parens} parentheses, ${braces} braces). Every span read from this file is then `
-    + 'unreliable, and a span that runs too long finds more assertions rather than fewer.',
-  );
+  blankStringsAndComments(sources.get(path), path);
+  balanced += 1;
 }
 
 const testFiles = tracked.filter((path) => path.endsWith('.test.ts'));
@@ -108,7 +102,7 @@ let cases = 0;
 let assertions = 0;
 for (const path of testFiles) {
   const source = sources.get(path);
-  const flat = blankStringsAndComments(source);
+  const flat = blankStringsAndComments(source, path);
 
   for (const marked of flat.matchAll(/(?<![.\w$])(?:it|test|describe)\.(only|skip|todo)\b/gu)) {
     errors.push(
