@@ -43,6 +43,7 @@ const notOperated = new Map([
 
 const controlPattern = /<(input|select|textarea)\b[^>]*>/giu;
 const labelForPattern = /<label[^>]*\bfor="([^"]+)"/giu;
+const buttonPattern = /<button\b([^>]*)>([\s\S]*?)<\/button>/giu;
 
 const tracked = execSync('git ls-files "*.html"', { cwd: repoRoot, encoding: 'utf8' })
   .split('\n')
@@ -50,12 +51,51 @@ const tracked = execSync('git ls-files "*.html"', { cwd: repoRoot, encoding: 'ut
 
 let surfaces = 0;
 let controls = 0;
+let buttons = 0;
+let buttonsSeen = 0;
 for (const path of tracked) {
   if (notOperated.has(path)) {
     continue;
   }
   surfaces += 1;
   const html = readFileSync(join(repoRoot, path), 'utf8');
+  /**
+   * Drei weitere Fragen derselben Art (Befund B101), und alle drei waren beim
+   * Messen schon beantwortet: 42 Knoepfe, keiner namenlos; beide Flaechen mit
+   * `lang` und `<title>`. Sie stehen hier, weil ein Knopf, der nur ein Symbol
+   * traegt, fuer einen Screenreader nichts ist, und weil eine Seite ohne
+   * `lang` in der falschen Sprache vorgelesen wird - Deutsch als Englisch
+   * gesprochen ist nicht schwer zu verstehen, sondern gar nicht.
+   */
+  if (!/<html[^>]*\blang="[^"]+"/u.test(html)) {
+    errors.push(
+      `${path}: the page declares no \`lang\`. A screen reader then reads it in `
+      + 'whatever language it happens to be set to, and the wrong one is not hard to '
+      + 'follow - it is not language at all.',
+    );
+  }
+  if (!/<title>[^<]*\S[^<]*<\/title>/u.test(html)) {
+    errors.push(
+      `${path}: the page has no non-empty \`<title>\`. It is the first thing said `
+      + 'about a window and the only thing a tab shows.',
+    );
+  }
+  for (const [element, attributes, inner] of html.matchAll(buttonPattern)) {
+    const text = inner.replace(/<[^>]+>/gu, '').trim();
+    if (text !== '' || /aria-label|aria-labelledby/u.test(attributes)) {
+      continue;
+    }
+    buttons += 1;
+    errors.push(
+      `${path}: ${element.slice(0, 60).replace(/\s+/gu, ' ')} carries no text and no `
+      + '`aria-label`. A button that shows only a symbol has a name for whoever sees '
+      + 'it and none for whoever does not.',
+    );
+  }
+  for (const [] of html.matchAll(buttonPattern)) {
+    buttonsSeen += 1;
+  }
+
   const labelled = new Set([...html.matchAll(labelForPattern)].map(([, id]) => id));
   for (const [element] of html.matchAll(controlPattern)) {
     const type = /\btype="([^"]+)"/u.exec(element)?.[1];
@@ -103,5 +143,6 @@ if (errors.length > 0) {
 
 console.log(
   `Form-label check passed (${surfaces} operated surfaces, ${controls} controls, `
-  + `each with a label that points at it; ${notOperated.size} pages named as not operated).`,
+  + `each with a label that points at it, and ${buttonsSeen} buttons that each say `
+  + `what they are; ${notOperated.size} pages named as not operated).`,
 );

@@ -912,6 +912,31 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B101 — Drei weitere Fragen derselben Art, dreimal schon beantwortet
+(2026-09-09).** Nach B100 die naheliegenden Nachbarn: **sagen die Knöpfe, was
+sie sind? Sagt die Seite ihre Sprache? Hat sie einen Titel?**
+
+Gemessen: **42 Knöpfe, keiner namenlos**; beide Flächen mit `lang="en"` und
+einem nicht leeren `<title>`. Wieder nichts zu beheben — und wieder hielt es
+nichts.
+
+Die drei Regeln sind in **denselben** Prüfer gegangen. Es ist dieselbe Frage
+mit anderem Gegenstand, und eine zweite Datei hiesse eine zweite Maschinerie,
+die dieselben zwei Flächen ableitet, dieselben zwei unbedienten begründet und
+irgendwann anders driftet — die Lehre aus B96.
+
+Warum die drei zählen, in einem Satz je:
+
+- Ein Knopf, der nur ein Symbol trägt, **hat einen Namen für den, der ihn
+  sieht, und keinen für den, der ihn nicht sieht.**
+- Eine Seite ohne `lang` wird in irgendeiner Sprache vorgelesen, und die
+  falsche ist nicht schwer zu verstehen, sondern **gar keine Sprache**.
+- Der Titel ist das Erste, was über ein Fenster gesagt wird, und das Einzige,
+  was ein Reiter zeigt.
+
+Drei Pflanzungen, je eine: die Sprachauszeichnung entfernt, einen Knopf
+ausgeleert, den Titel geleert. Alle drei werden mit Fläche und Folge benannt.
+
 **B100 — Jedes Bedienelement sagt, was es ist, und nichts hielt das
 (2026-09-09).** B99 riet, woanders anzufangen. Also eine Frage, die dieser Baum
 noch nie mechanisch gestellt hat: **ist das, was eine Person vor sich hat,
