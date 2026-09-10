@@ -912,6 +912,31 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B127 — Ein Asset wird einmal angehängt, nie ersetzt (2026-09-10, Paket P1
+des externen Reviews).** Das Review vom 2026-09-09 ist gegen den Baum
+gemessen und liegt als Brief unter `docs/development/briefs/`; neun
+Entscheidungen, zwölf Pakete. Das erste mit Wirkung: der Client-Job hängte
+sein Paket mit `--clobber` an das Release, und er wartet nur auf `verify` und
+`suites`, während die Monotonieprüfung in den beiden Bild-Jobs läuft. Ein
+Tag, den die Registry abgelehnt hatte, konnte sein `.deb` samt Prüfsumme also
+trotzdem unter demselben Namen tauschen — zwei Artefakte einer Version aus
+zwei Quellständen.
+
+`scripts/check-release-asset-absent.mjs` fragt das Release, was schon
+angehängt ist, und beendet den Job vor dem Upload, wenn ein Name kollidiert;
+die Entscheidung ist rein und neben `decidePicoRelease` getestet, fünf Fälle,
+darunter die halbe Kollision (nur die Prüfsumme liegt schon) und der Lauf
+ohne Paket. Was die *Verdrahtung* hält, ist `split:check`, das ci.yml ohnehin
+liest: kein `--clobber` ausserhalb eines Kommentars, jeder `gh release upload`
+fragt im selben Schritt vorher, und ein Upload, den es nicht mehr gibt, ist
+ein Fehler statt ein sauberer Lauf. Zweimal gepflanzt, zweimal rot — und beim
+ersten sauberen Lauf war das Tor selbst rot, weil mein Kommentar am Schritt
+das Wort `--clobber` erklärt: ein Wort in einem Kommentar überschreibt nichts,
+und die Regel liest seitdem nur Zeilen, die keine Kommentare sind.
+
+Das `--draft` bleibt, jetzt mit Grund an der Zeile (E2): ein Mensch sieht
+Paket und Prüfsumme, bevor jemand sie laden kann.
+
 **B126 — Die Regel stand einmal, der Mantel um sie neunzehnmal (2026-09-10).**
 B125 hat `assertInstant` als nächsten Griff empfohlen: sechs Fassungen über
 vier verschiedenen Rümpfen, und B112 hatte an genau diesem Begriff schon zwei

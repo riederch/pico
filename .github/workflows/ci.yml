@@ -775,6 +775,18 @@ jobs:
 
       # `gh` rather than a release action: one fewer third-party action to pin,
       # and the token it uses is the one this job already has.
+      #
+      # Created as a draft, deliberately (decided 2026-09-10 on the external
+      # review's §6): a person sees the package and its checksum before anyone
+      # can download it, and publishes it by hand. The repository is private
+      # and unattested, so that look is the one place somebody checks.
+      #
+      # Attached once, never replaced. This used `--clobber` until 2026-09-10,
+      # and this job waits on `verify` and `suites` only - the monotonicity
+      # check runs in the two image jobs, not here - so a tag the registry had
+      # refused could still have its `.deb` swapped under the same name.
+      # `check-release-asset-absent.mjs` asks the release what is already
+      # attached and ends this job before the upload if any name collides.
       - name: Attach the package to the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -784,7 +796,9 @@ jobs:
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --title "$tag" --notes "Pico $tag" --draft
           fi
-          gh release upload "$tag" client-package/*.deb client-package/*.deb.sha256 --clobber
+          gh release view "$tag" --json assets > release-assets.json
+          node scripts/check-release-asset-absent.mjs release-assets.json client-package/*.deb client-package/*.deb.sha256
+          gh release upload "$tag" client-package/*.deb client-package/*.deb.sha256
           echo "### Published client package" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat client-package/*.deb.sha256 >> "$GITHUB_STEP_SUMMARY"

@@ -132,7 +132,7 @@ damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
 
 ### Vor dem nächsten Release, in dieser Reihenfolge
 
-**P1 — Client-Publish ohne Überschreiben** (R1, E2)
+**P1 — Client-Publish ohne Überschreiben** (R1, E2) — *erledigt 2026-09-10, Befund B127*
 - `ci.yml`, Job `client_package`: `--clobber` entfällt. Vor dem Hochladen
   liest der Schritt die Asset-Namen des Releases (`gh release view --json
   assets`) und endet mit Fehler, wenn einer der hochzuladenden Namen schon

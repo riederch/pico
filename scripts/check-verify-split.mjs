@@ -298,6 +298,52 @@ for (const job of jobs) {
   }
 }
 
+/**
+ * **Und der eine Schritt, der nichts mit `pnpm` startet** (externes Review
+ * vom 2026-09-09, §3; entschieden am 2026-09-10).
+ *
+ * Der Client-Job haengt sein Paket mit `gh release upload` an das Release. Bis
+ * zu diesem Tag stand `--clobber` dahinter, und der Job wartet nur auf
+ * `verify` und `suites` - die Monotoniepruefung laeuft in den Bild-Jobs. Ein
+ * Tag, den die Registry abgelehnt hatte, konnte sein `.deb` also trotzdem
+ * unter demselben Namen tauschen. Die Entscheidung liegt jetzt in
+ * `scripts/check-release-asset-absent.mjs` und ist dort getestet; was hier
+ * gehalten wird, ist die Verdrahtung: jeder Upload fragt vorher, und nirgends
+ * steht ein Ueberschreiben. Ein Upload, den es nicht mehr gibt, ist ebenfalls
+ * ein Fehler - dann hat diese Regel keinen Gegenstand, und das muss sie sagen.
+ */
+// Ohne Kommentarzeilen: der Kommentar am Upload-Schritt erklaert das Wort
+// `--clobber`, und ein Wort in einem Kommentar ueberschreibt nichts.
+const workflowText = jobs
+  .map((job) => job.lines.filter((line) => !/^\s*#/u.test(line)).join('\n'))
+  .join('\n');
+if (/--clobber/u.test(workflowText)) {
+  errors.push(
+    'ci.yml overwrites a release asset with `--clobber`. A published artifact never changes what '
+    + 'it is; `check-release-asset-absent.mjs` refuses a name that is already attached, and an '
+    + 'upload that can replace one makes that refusal decorative.',
+  );
+}
+const uploads = [...workflowText.matchAll(/gh release upload\b/gu)];
+if (uploads.length === 0) {
+  errors.push(
+    'ci.yml attaches nothing with `gh release upload`, so the rule that every upload asks '
+    + '`check-release-asset-absent.mjs` first has no subject. A reader that finds no subject is '
+    + 'broken, not clean.',
+  );
+}
+for (const upload of uploads) {
+  const stepStart = workflowText.lastIndexOf('run: |', upload.index);
+  const before = workflowText.slice(stepStart === -1 ? 0 : stepStart, upload.index);
+  if (!before.includes('node scripts/check-release-asset-absent.mjs ')) {
+    errors.push(
+      'ci.yml runs `gh release upload` without asking `scripts/check-release-asset-absent.mjs` '
+      + 'in the same step first. The check is what stops a second run on the same tag from '
+      + 'replacing what the first attached.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Verify-split check failed:');
   for (const error of errors) {
@@ -310,5 +356,6 @@ console.log(
   `Verify-split check passed (${chain.length} steps in \`release:verify\`, each started exactly `
   + `once across ${started.length} pnpm invocations in ci.yml; `
   + `${besideTheChain.size} run beside the chain with a reason; `
-  + `${chainJobs.length} jobs carry the chain, and everything that waits for one waits for all).`,
+  + `${chainJobs.length} jobs carry the chain, and everything that waits for one waits for all; `
+  + `${uploads.length} release upload${uploads.length === 1 ? '' : 's'}, each asking what is attached first, none clobbering).`,
 );

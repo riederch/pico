@@ -117,6 +117,19 @@ another household's outage.
   attached to the release, with its checksum, rather than a second build made
   for publishing. Two builds of one artifact is one artifact too many.
 
+  *Status note, 2026-09-10.* And attached once. Until this day the client job
+  attached with `--clobber`, and it waits on `verify` and `suites` only - the
+  monotonicity check of ADR 0122 Y4 runs in the two image jobs - so a tag the
+  registry had refused could still have its package swapped under the same
+  name: two artifacts of one version from two source states. An external
+  review found it (2026-09-09, §3). `scripts/check-release-asset-absent.mjs`
+  now asks the release what is attached and ends the job before the upload
+  when a name collides; the decision is pure and tested beside
+  `decidePicoRelease`, and `split:check` holds that the upload step asks it
+  and that no `--clobber` stands in the workflow. The release stays a draft
+  by decision (review §6): a person sees package and checksum before anyone
+  can download them.
+
 - **PK7 - The relay ships with no accounts and says so.** Provisioning is an
   open decision (below), and a container that invented one would be deciding
   it. A relay with no account refuses every registration as
