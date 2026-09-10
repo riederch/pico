@@ -49,6 +49,13 @@ const errors = [];
 
 /** Die Regeln, die im Protokollpaket genau eine Fassung haben duerfen. */
 const singleTruths = [
+  /**
+   * Befund B124. Dreizehn Funktionen dieses Namens standen im Paket; neun
+   * waren dieselbe Regel und sind jetzt eine. Die anderen vier heissen nur so
+   * und stehen unten als *dieselbe Bezeichnung ueber einer anderen Regel* -
+   * dieselbe Spalte `same: false`, aus der dieser Pruefer schon lebt.
+   */
+  'assertExactKeys',
   'canonicalTextEncoder',
   'canonicalAsciiTokenPattern',
   'canonicalHexPattern',
@@ -85,6 +92,23 @@ const elsewhere = [
     why: 'Derselbe Name ueber etwas anderem: sie kodiert *ohne jede Pruefung*. Eine '
       + 'Zusammenlegung wuerde dem Vault eine Pruefung geben, die er heute nicht hat - das '
       + 'ist eine Aenderung am Signierweg und keine Aufraeumarbeit.',
+  },
+  {
+    where: 'apps/companion/src/profile.ts',
+    name: 'assertExactKeys',
+    same: false,
+    why: 'Andere Regel unter demselben Namen (Befund B124): sie nimmt `unknown`, prueft erst, '
+      + 'dass ueberhaupt ein Objekt da ist, *gibt den Datensatz zurueck* und wirft zwei '
+      + 'verschiedene Meldungen mit dem Namen des Feldes darin. Das ist ein Parser fuer eine '
+      + 'Profildatei und keine Pruefung vor dem Signieren.',
+  },
+  {
+    where: 'packages/vault/src/index.ts',
+    name: 'assertExactKeys',
+    same: false,
+    why: 'Andere Regel unter demselben Namen (Befund B124): sie unterscheidet `unexpected_field` '
+      + 'von `missing_field`. Wer sie zusammenlegte, naehme dem Vault die Unterscheidung, '
+      + 'welche der beiden Haelften fehlt.',
   },
   {
     where: 'packages/appearance/src/appearance-document-v1-codec.ts',

@@ -1,3 +1,4 @@
+import { assertExactKeys } from './canonical-bytes.js';
 import { isPicoInstant } from './instant.js';
 import type { PicoEventOriginClass } from './origin-class.js';
 import {
@@ -110,21 +111,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function assertExactKeys(record: Record<string, unknown>, keys: readonly string[]): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error('invalid_pico_reader_output');
-  }
-}
 
 function parseValue(value: unknown): PicoReaderValue {
   const record = isRecord(value) ? value : undefined;
   if (record === undefined) {
     throw new Error('invalid_pico_reader_value');
   }
-  assertExactKeysFor(record, ['name', 'type', 'value', 'originClass'], 'invalid_pico_reader_value');
+  assertExactKeys(record, ['name', 'type', 'value', 'originClass'], 'invalid_pico_reader_value');
   if (typeof record.name !== 'string' || !picoReaderTokenPattern.test(record.name)) {
     throw new Error('invalid_pico_reader_value_name');
   }
@@ -197,25 +190,13 @@ function parseValue(value: unknown): PicoReaderValue {
   });
 }
 
-function assertExactKeysFor(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-  error: string,
-): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error(error);
-  }
-}
 
 function parseReference(value: unknown): PicoOpaqueReference {
   const record = isRecord(value) ? value : undefined;
   if (record === undefined) {
     throw new Error('invalid_pico_opaque_reference');
   }
-  assertExactKeysFor(
+  assertExactKeys(
     record,
     ['referenceId', 'expiresAt', 'originClass'],
     'invalid_pico_opaque_reference',
@@ -252,7 +233,7 @@ export function parsePicoReaderOutput(value: unknown): PicoReaderOutput {
   if (record === undefined) {
     throw new Error('invalid_pico_reader_output');
   }
-  assertExactKeys(record, ['schema', 'values', 'references']);
+  assertExactKeys(record, ['schema', 'values', 'references'], 'invalid_pico_reader_output');
   if (record.schema !== picoReaderOutputSchema) {
     throw new Error('invalid_pico_reader_output_schema');
   }
@@ -313,7 +294,7 @@ export function assemblePicoPlannerContext(
   if (record === undefined) {
     throw new Error('invalid_pico_planner_context_input');
   }
-  assertExactKeysFor(
+  assertExactKeys(
     record,
     ['policy', 'personPresent', 'values', 'references'],
     'invalid_pico_planner_context_input',

@@ -154,3 +154,58 @@ export function fixedHexBytes(
   }
   return output;
 }
+
+/**
+ * Ein Datensatz traegt genau diese Schluessel - nicht weniger und nicht mehr.
+ *
+ * **Der Anlass** (2026-09-10, Befund B124). Unter diesem Namen standen
+ * **dreizehn** Funktionen in `packages/protocol/src`. Neun davon waren
+ * dieselbe Regel - hier ist sie, einmal.
+ *
+ * **Warum das mehr ist als Doppelung.** Diese Funktion entscheidet, welche
+ * Felder ein Datensatz haben darf, *bevor* daraus Signatureingaben gebaut
+ * werden. Eine Fassung, die ein Feld mehr durchliesse, hiesse: eine
+ * Unterschrift ueber etwas, das der Bauer nebenan abgelehnt haette. Genau die
+ * Klasse Fehler, wegen der `canonical-bytes.ts` ueberhaupt existiert - und der
+ * Kopf dieser Datei sagt, dass im Protokollpaket jede dieser Regeln genau eine
+ * Fassung hat.
+ *
+ * **Gefunden ueber die Luecke, die der Pruefer selbst nennt**: *"Eine Regel,
+ * die unter einem anderen Namen noch einmal geschrieben wird, ginge an ihr
+ * vorbei."* Gesucht wurde deshalb nicht nach Namen, sondern nach *Gestalt* -
+ * Funktionsruempfe mit umbenannten Bezeichnern verglichen. Sechsundsiebzig
+ * Gruppen gleicher Gestalt kamen heraus; die meisten sind Zwillinge mit
+ * Absicht (eine Delegation und eine Widerrufung pruefen sich gleich).
+ *
+ * **Und dann waren es doch nicht dreizehn.** Der erste Satz dieses Kommentars
+ * hiess "alle dreizehn Ruempfe waren Zeichen fuer Zeichen dieselben" - er
+ * stammte aus fuenf angesehenen und acht angenommenen. Nachgemessen sind es
+ * *sieben verschiedene Ruempfe*: neun sind wirklich diese Regel, und vier sind
+ * andere, die nur so heissen:
+ *
+ * - `index.ts` verbietet zusaetzlich einen Schluessel `fieldOrder` und
+ *   unterscheidet drei Ablehnungen.
+ * - `model-context.ts` verbietet nur *unerwartete* Schluessel und verlangt
+ *   fehlende nicht.
+ * - `recovery.ts` ist die reichste: `isRecord`, `fieldOrder`, unerwartet,
+ *   fehlend.
+ * - `device-enrolment.ts` baut den Fehlernamen aus einem `kind` und ist
+ *   dieselbe Pruefung - die wurde zusammengelegt.
+ *
+ * Die drei anderen bleiben, wo sie sind. Aufgefallen ist es an zwei Tests, die
+ * nach dem Zusammenlegen `unexpected_field` erwarteten und `invalid_record`
+ * bekamen: **von einer Stichprobe auf die Menge geschlossen**, und die Tests
+ * haben es gefangen, nicht das Nachdenken.
+ */
+export function assertExactKeys(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  error: string,
+): void {
+  const actual = Object.keys(record).sort();
+  const expected = [...keys].sort();
+  if (actual.length !== expected.length
+    || actual.some((key, index) => key !== expected[index])) {
+    throw new Error(error);
+  }
+}

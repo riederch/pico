@@ -912,6 +912,60 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B124 — Ein Name über sechs Regeln, und meine erste Zählung war falsch
+(2026-09-10).** Der Prüfer für kanonische Bytes nennt seine Lücke selbst:
+*„Eine Regel, die unter einem anderen Namen noch einmal geschrieben wird, ginge
+an ihr vorbei."* Also nicht nach Namen gesucht, sondern nach **Gestalt** —
+Funktionsrümpfe mit umbenannten Bezeichnern verglichen. Sechsundsiebzig Gruppen
+gleicher Gestalt; die meisten Zwillinge mit Absicht (eine Delegation und eine
+Widerrufung prüfen sich gleich).
+
+**Der Fund war der Umkehrfall:** nicht eine Regel unter zwei Namen, sondern
+**ein Name über sechs Regeln** — in dem Paket, dessen Kopf sagt *„Ein Name ist
+keine Regel."*
+
+| | |
+|---|---|
+| `assertExactKeys`-Definitionen im Baum | **20** |
+| davon wirklich dieselbe Regel | **13** → eine geteilte Funktion |
+| verschiedene Regeln unter demselben Namen | **6** |
+
+**Und dann war meine erste Zählung falsch.** Ich hatte geschrieben, alle
+dreizehn Rümpfe im Protokollpaket seien Zeichen für Zeichen dieselben — fünf
+angesehen, acht angenommen. Nachgemessen waren es **sieben verschiedene
+Rümpfe**. Das Zusammenlegen änderte damit Verhalten, und zwei Tests fingen es:
+
+> `expected [Function] to throw error including 'unexpected_field'
+> but got 'invalid_record'`
+
+Drei Dateien zurückgenommen. **Von einer Stichprobe auf die Menge geschlossen**
+— genau der Fehler, den dieses Wochenende an fremdem Code viermal gefunden hat,
+und gefangen hat ihn nicht das Nachdenken, sondern der Testlauf.
+
+**Die sechs heissen jetzt, was sie sind:**
+
+- `index.ts` → `assertExactKeysWithoutFieldOrder` — verbietet zusätzlich einen
+  Schlüssel `fieldOrder`, weil eine umsortierte Feldliste eine andere
+  Signatureingabe ergäbe
+- `model-context.ts` → `assertNoUnexpectedKeys` — verlangt fehlende nicht
+- `recovery.ts` → `assertExactRecordShape` — vier Ablehnungen mit eigenen Namen
+- `profile.ts` und `packages/vault` bleiben und stehen mit Grund in der
+  Bestandsliste des Prüfers
+
+**Warum es zählt.** Diese Funktion entscheidet, welche Felder ein Datensatz
+haben darf, **bevor** daraus Signatureingaben gebaut werden. Eine Fassung, die
+ein Feld mehr durchliesse, hiesse: eine Unterschrift über etwas, das der Bauer
+nebenan abgelehnt hätte.
+
+`canonical:check` hält jetzt acht Regeln statt sieben und fünf benannte Kopien
+ausserhalb statt drei. Protokoll 621, Kern 1.112, Daemon 129, Begleiter 279 —
+alle grün.
+
+**Was daraus folgt.** Zwei Fragen sehen gleich aus und sind es nicht: *„Steht
+diese Regel zweimal?"* und *„Steht unter diesem Namen zweimal dasselbe?"* Der
+Prüfer stellte die erste; die zweite hatte niemand gestellt, und sie war die
+mit den sechs Antworten.
+
 **B123 — Hingesehen, und die eigene Reparatur sah kaputt aus (2026-09-10).**
 Seit B103 stand in `.agent-context.md` ein offener Punkt: *„Das Fenster sieht
 anders aus, und niemand hat hingesehen."* Also hingesehen — die Zeichner nehmen

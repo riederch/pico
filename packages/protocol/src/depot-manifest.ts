@@ -1,3 +1,4 @@
+import { assertExactKeys } from './canonical-bytes.js';
 import { assertPicoSupplierProtocolVersion } from './supplier-transport.js';
 import {
   maxPicoSupplierCoverage,
@@ -135,14 +136,6 @@ function assertNoCommandShapedField(record: Record<string, unknown>): void {
   }
 }
 
-function assertExactKeys(record: Record<string, unknown>, keys: readonly string[], error: string): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error(error);
-  }
-}
 
 function parseSupplierDeclaration(value: unknown): PicoDepotSupplierDeclaration {
   const record = isRecord(value) ? value : undefined;

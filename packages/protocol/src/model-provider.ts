@@ -33,6 +33,8 @@
  * have been written down.
  */
 
+import { assertExactKeys } from './canonical-bytes.js';
+
 /**
  * ADR 0048's list, closed and ordered as that ADR wrote it, with the sixth
  * added by the user's 2026-08-11 decision.
@@ -199,18 +201,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function assertExactKeys(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-  error: string,
-): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error(error);
-  }
-}
 
 /** A count of something real: finite, whole and greater than zero. */
 function assertPositiveInteger(value: unknown, error: string): number {

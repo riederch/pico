@@ -1,3 +1,4 @@
+import { assertExactKeys } from '@pico/protocol/canonical-bytes';
 import { isPicoInstant } from '@pico/protocol/instant';
 import {
   chmodSync,
@@ -63,7 +64,7 @@ export function parsePicoCompanionRecoveryState(
     throw new Error('invalid_companion_recovery_state_schema');
   }
   if (record.status === 'pending') {
-    assertExactKeys(record, ['schema', 'status', 'pending']);
+    assertExactKeys(record, ['schema', 'status', 'pending'], 'invalid_companion_recovery_state_shape');
     return Object.freeze({
       schema: picoCompanionRecoveryStateSchema,
       status: 'pending',
@@ -71,7 +72,7 @@ export function parsePicoCompanionRecoveryState(
     });
   }
   if (record.status === 'completed') {
-    assertExactKeys(record, ['schema', 'status', 'receipt']);
+    assertExactKeys(record, ['schema', 'status', 'receipt'], 'invalid_companion_recovery_state_shape');
     return Object.freeze({
       schema: picoCompanionRecoveryStateSchema,
       status: 'completed',
@@ -129,7 +130,7 @@ function parsePending(value: unknown): PicoHomeDeviceRecoveryPendingView {
     'acceptedAt',
     'effectiveAt',
     'completionExpiresAt',
-  ]);
+  ], 'invalid_companion_recovery_state_shape');
   assertToken(record.recoveryId, 'invalid_companion_recovery_id');
   assertHex32(record.claimDigestHex, 'invalid_companion_recovery_claim_digest');
   assertToken(record.targetDelegationId, 'invalid_companion_recovery_delegation');
@@ -160,7 +161,7 @@ function parseReceipt(value: unknown): PicoCompanionRecoveryReceiptSummary {
     'completedAt',
     'leavesExactlyOneActiveDevice',
     'otherDevicesRevoked',
-  ]);
+  ], 'invalid_companion_recovery_state_shape');
   assertToken(record.recoveryId, 'invalid_companion_recovery_id');
   assertToken(record.targetDelegationId, 'invalid_companion_recovery_delegation');
   assertHex32(
@@ -188,18 +189,6 @@ function requireRecord(value: unknown, reason: string): Record<string, unknown> 
   return value as Record<string, unknown>;
 }
 
-function assertExactKeys(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-): void {
-  const expected = new Set(keys);
-  if (
-    Object.keys(record).some((key) => !expected.has(key))
-    || keys.some((key) => !(key in record))
-  ) {
-    throw new Error('invalid_companion_recovery_state_shape');
-  }
-}
 
 function assertHex32(value: unknown, reason: string): asserts value is string {
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/u.test(value)) {

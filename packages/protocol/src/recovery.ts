@@ -219,7 +219,7 @@ export interface PicoHomeDeviceRecoveryPendingView {
 export function buildPicoHomeDeviceRecoveryPrepareSignatureInput(
   input: PicoHomeDeviceRecoveryPrepareSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactRecordShape(input as unknown as Record<string, unknown>, [
     'suite',
     'preparationId',
     'homeId',
@@ -263,7 +263,7 @@ export function buildPicoHomeDeviceRecoveryPrepareSignatureInput(
 export function buildPicoRecoveryCardPayload(
   input: PicoRecoveryCardPayload,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactRecordShape(input as unknown as Record<string, unknown>, [
     'schema',
     'suite',
     'picoName',
@@ -453,7 +453,7 @@ export function picoHomeDeviceRecoveryEvidenceDigestHex(
 export function buildPicoHomeDeviceRecoveryClaimSignatureInput(
   input: PicoHomeDeviceRecoveryClaimSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactRecordShape(input as unknown as Record<string, unknown>, [
     'suite',
     'recoveryId',
     'homeId',
@@ -513,7 +513,7 @@ export function picoHomeDeviceRecoveryClaimDigestHex(
 export function buildPicoHomeDeviceRecoveryReceiptSignatureInput(
   input: PicoHomeDeviceRecoveryReceiptSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactRecordShape(input as unknown as Record<string, unknown>, [
     'suite',
     'recoveryId',
     'homeId',
@@ -583,7 +583,7 @@ export function buildPicoHomeDeviceRecoveryReceiptSignatureInput(
 }
 
 function assertRecoveryEvidence(evidence: PicoHomeDeviceRecoveryEvidence): void {
-  assertExactKeys(evidence as unknown as Record<string, unknown>, [
+  assertExactRecordShape(evidence as unknown as Record<string, unknown>, [
     'identityKeyRecord',
     'targetDeviceSigningKeyRecord',
     'targetDeviceKeyAgreementKeyRecord',
@@ -604,7 +604,7 @@ function assertRecoveryEvidence(evidence: PicoHomeDeviceRecoveryEvidence): void 
   if (!isRecord(evidence.delegation)) {
     throw new Error('invalid_recovery_delegation');
   }
-  assertExactKeys(evidence.delegation, ['record', 'signatureHex']);
+  assertExactRecordShape(evidence.delegation, ['record', 'signatureHex']);
   assertDelegation(evidence.delegation.record as PicoIdentityDelegationSignatureInput);
   fixedHexBytes(evidence.delegation.signatureHex as string, 64, 'invalid_signature_length');
   if (!Array.isArray(evidence.revocations)) {
@@ -614,14 +614,14 @@ function assertRecoveryEvidence(evidence: PicoHomeDeviceRecoveryEvidence): void 
     if (!isRecord(revocation)) {
       throw new Error('invalid_recovery_revocation');
     }
-    assertExactKeys(revocation, ['record', 'signatureHex']);
+    assertExactRecordShape(revocation, ['record', 'signatureHex']);
     assertRevocation(revocation.record as PicoIdentityRevocationSignatureInput);
     fixedHexBytes(revocation.signatureHex as string, 64, 'invalid_signature_length');
   }
 }
 
 function assertKeyRecord(record: PicoIdentityKeyRecordSignatureInput): void {
-  assertExactKeys(record as unknown as Record<string, unknown>, [
+  assertExactRecordShape(record as unknown as Record<string, unknown>, [
     'suite',
     'keyRole',
     'publicKeyHex',
@@ -630,7 +630,7 @@ function assertKeyRecord(record: PicoIdentityKeyRecordSignatureInput): void {
 }
 
 function assertDelegation(record: PicoIdentityDelegationSignatureInput): void {
-  assertExactKeys(record as unknown as Record<string, unknown>, [
+  assertExactRecordShape(record as unknown as Record<string, unknown>, [
     'suite',
     'delegationId',
     'issuerIdentityKeyFingerprintHex',
@@ -645,7 +645,7 @@ function assertDelegation(record: PicoIdentityDelegationSignatureInput): void {
 }
 
 function assertRevocation(record: PicoIdentityRevocationSignatureInput): void {
-  assertExactKeys(record as unknown as Record<string, unknown>, [
+  assertExactRecordShape(record as unknown as Record<string, unknown>, [
     'suite',
     'revocationId',
     'issuerIdentityKeyFingerprintHex',
@@ -708,7 +708,12 @@ function assertLifecycleOrder(value: string): void {
   }
 }
 
-function assertExactKeys(
+/**
+ * Befund B124. Hiess `assertExactKeys` und ist die reichste der vier: `isRecord`,
+ * `fieldOrder`, unerwartet, fehlend - vier Ablehnungen mit eigenen Namen, auf dem
+ * Weg, auf dem eine Karte eine Wurzel zurueckbringt.
+ */
+function assertExactRecordShape(
   record: Record<string, unknown>,
   expectedKeys: readonly string[],
 ): void {

@@ -1,3 +1,4 @@
+import { assertExactKeys } from '@pico/protocol/canonical-bytes';
 import {
   isPicoInstant,
   picoHomeDeviceLifecycleCanonicalLabels,
@@ -735,7 +736,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
 
   switch (family) {
     case picoVaultDaemonRequestFamilies.hello: {
-      assertExactKeys(parsed, ['family', 'requestId', 'protocolVersion']);
+      assertExactKeys(parsed, ['family', 'requestId', 'protocolVersion'], 'invalid_request');
       const protocolVersion = parsed.protocolVersion;
       if (!Number.isSafeInteger(protocolVersion) || (protocolVersion as number) < 1) {
         throw new Error('invalid_request');
@@ -747,15 +748,15 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.status: {
-      assertExactKeys(parsed, ['family', 'requestId']);
+      assertExactKeys(parsed, ['family', 'requestId'], 'invalid_request');
       return { family: picoVaultDaemonRequestFamilies.status, requestId };
     }
     case picoVaultDaemonRequestFamilies.lock: {
-      assertExactKeys(parsed, ['family', 'requestId']);
+      assertExactKeys(parsed, ['family', 'requestId'], 'invalid_request');
       return { family: picoVaultDaemonRequestFamilies.lock, requestId };
     }
     case picoVaultDaemonRequestFamilies.unlock: {
-      assertExactKeys(parsed, ['family', 'requestId', 'keyRole', 'keyFingerprintHex', 'passphrase']);
+      assertExactKeys(parsed, ['family', 'requestId', 'keyRole', 'keyFingerprintHex', 'passphrase'], 'invalid_request');
       const keyRole = parsed.keyRole;
       if (typeof keyRole !== 'string' || !(picoVaultPersonKeyRoles as readonly string[]).includes(keyRole)) {
         throw new Error('invalid_request');
@@ -794,7 +795,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
        * arriving through the door that makes one. Founding has exactly two
        * inputs, and anything else is refused before the daemon looks at it.
        */
-      assertExactKeys(parsed, ['family', 'requestId', 'passphrase', 'targetDelegationId']);
+      assertExactKeys(parsed, ['family', 'requestId', 'passphrase', 'targetDelegationId'], 'invalid_request');
       const passphrase = parsed.passphrase;
       if (typeof passphrase !== 'string'
         || passphrase.length === 0
@@ -820,7 +821,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
        * a delegation id would be a second door into starting an identity or
        * naming an authority, and this door does neither.
        */
-      assertExactKeys(parsed, ['family', 'requestId', 'passphrase']);
+      assertExactKeys(parsed, ['family', 'requestId', 'passphrase'], 'invalid_request');
       const passphrase = parsed.passphrase;
       if (typeof passphrase !== 'string'
         || passphrase.length === 0
@@ -841,7 +842,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         'pin',
         'passphrase',
         'targetDelegationId',
-      ]);
+      ], 'invalid_request');
       const canonicalCardPayloadHex = parsed.canonicalCardPayloadHex;
       if (typeof canonicalCardPayloadHex !== 'string'
         || canonicalCardPayloadHex.length === 0
@@ -879,7 +880,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.sign: {
-      assertExactKeys(parsed, ['family', 'requestId', 'keyFingerprintHex', 'label', 'fields']);
+      assertExactKeys(parsed, ['family', 'requestId', 'keyFingerprintHex', 'label', 'fields'], 'invalid_request');
       const label = parsed.label;
       const fields = parsed.fields;
       if (
@@ -901,7 +902,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.readerAccessOpen: {
-      assertExactKeys(parsed, ['family', 'requestId', 'readerKeyFingerprintHex', 'maxDurationMs']);
+      assertExactKeys(parsed, ['family', 'requestId', 'readerKeyFingerprintHex', 'maxDurationMs'], 'invalid_request');
       const maxDurationMs = parsed.maxDurationMs;
       if (
         !Number.isSafeInteger(maxDurationMs)
@@ -918,7 +919,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.readerAccessIsLocked: {
-      assertExactKeys(parsed, ['family', 'requestId', 'leaseId']);
+      assertExactKeys(parsed, ['family', 'requestId', 'leaseId'], 'invalid_request');
       return {
         family: picoVaultDaemonRequestFamilies.readerAccessIsLocked,
         requestId,
@@ -926,7 +927,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.readerAccessClose: {
-      assertExactKeys(parsed, ['family', 'requestId', 'leaseId']);
+      assertExactKeys(parsed, ['family', 'requestId', 'leaseId'], 'invalid_request');
       return {
         family: picoVaultDaemonRequestFamilies.readerAccessClose,
         requestId,
@@ -934,7 +935,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.readerAccessOpenPayload: {
-      assertExactKeys(parsed, ['family', 'requestId', 'leaseId', 'batchRecord', 'evaluatedAt']);
+      assertExactKeys(parsed, ['family', 'requestId', 'leaseId', 'batchRecord', 'evaluatedAt'], 'invalid_request');
       // The instant a lease evaluates expiry at, and the Vault decides that by
       // comparing it as a string against the batch's own. A length was the
       // whole check until 2026-08-21, which let a value that is not an instant
@@ -1157,8 +1158,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
           'hostSigningKeyFingerprintHex',
           'hostKeyAgreementKeyFingerprintHex',
           'hostKeyAgreementPublicKeyHex', 'endpointHint', 'issuedAt', 'pin',
-        ],
-      );
+        ], 'invalid_request',);
       const pin = parsed.pin;
       if (!isPicoRecoveryCardPin(pin)) {
         throw new Error('invalid_request');
@@ -1197,11 +1197,11 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.approvalWait: {
-      assertExactKeys(parsed, ['family', 'requestId']);
+      assertExactKeys(parsed, ['family', 'requestId'], 'invalid_request');
       return { family: picoVaultDaemonRequestFamilies.approvalWait, requestId };
     }
     case picoVaultDaemonRequestFamilies.approvalWatch: {
-      assertExactKeys(parsed, ['family', 'requestId']);
+      assertExactKeys(parsed, ['family', 'requestId'], 'invalid_request');
       return { family: picoVaultDaemonRequestFamilies.approvalWatch, requestId };
     }
     case picoVaultDaemonRequestFamilies.approvalDecide: {
@@ -1211,7 +1211,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         'approvalId',
         'signatureInputDigestHex',
         'approved',
-      ]);
+      ], 'invalid_request');
       const approvalId = parsed.approvalId;
       if (
         typeof approvalId !== 'string'
@@ -1246,7 +1246,7 @@ export function parsePicoVaultDaemonResponse(frame: Buffer): PicoVaultDaemonResp
     throw new Error('invalid_response');
   }
   if (parsed.ok === true) {
-    assertExactKeys(parsed, ['family', 'requestId', 'ok', 'result']);
+    assertExactKeys(parsed, ['family', 'requestId', 'ok', 'result'], 'invalid_request');
     const result = parsed.result;
     if (!isRecord(result)) {
       throw new Error('invalid_response');
@@ -1254,7 +1254,7 @@ export function parsePicoVaultDaemonResponse(frame: Buffer): PicoVaultDaemonResp
     return { family: picoVaultDaemonResponseFamily, requestId, ok: true, result };
   }
   if (parsed.ok === false) {
-    assertExactKeys(parsed, ['family', 'requestId', 'ok', 'reason']);
+    assertExactKeys(parsed, ['family', 'requestId', 'ok', 'reason'], 'invalid_request');
     const reason = parsed.reason;
     if (typeof reason !== 'string' || reason.length === 0) {
       throw new Error('invalid_response');
@@ -1336,12 +1336,6 @@ function requireLeaseId(parsed: Record<string, unknown>): string {
   return value;
 }
 
-function assertExactKeys(record: Record<string, unknown>, keys: readonly string[]): void {
-  const actual = Object.keys(record);
-  if (actual.length !== keys.length || !keys.every((key) => Object.hasOwn(record, key))) {
-    throw new Error('invalid_request');
-  }
-}
 
 function assertExactKeysWithOptional(
   record: Record<string, unknown>,

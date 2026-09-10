@@ -25,6 +25,8 @@
  * Assistants are bridges and nobody wants two of the three switched off,
  * because they cover three buildings.
  */
+
+import { assertExactKeys } from './canonical-bytes.js';
 export const picoSupplierSlots = ['observation', 'memory_item', 'effect'] as const;
 
 export type PicoSupplierSlot = typeof picoSupplierSlots[number];
@@ -87,14 +89,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function assertExactKeys(record: Record<string, unknown>, keys: readonly string[]): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error('invalid_pico_supplier_manifest');
-  }
-}
 
 function assertIdentifier(value: unknown): string {
   if (typeof value !== 'string') {
@@ -127,7 +121,7 @@ export function parsePicoSupplierManifest(value: unknown): PicoSupplierManifest 
   if (record === undefined) {
     throw new Error('invalid_pico_supplier_manifest');
   }
-  assertExactKeys(record, ['identifier', 'kind', 'slots', 'coverage', 'privacyDomain']);
+  assertExactKeys(record, ['identifier', 'kind', 'slots', 'coverage', 'privacyDomain'], 'invalid_pico_supplier_manifest');
 
   const identifier = assertIdentifier(record.identifier);
 

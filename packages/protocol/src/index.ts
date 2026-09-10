@@ -3167,7 +3167,7 @@ export type PicoActionRecordRedaction = typeof picoActionRecordRedactionModes[nu
 export function buildPicoIdentityKeyRecordSignatureInput(
   input: PicoIdentityKeyRecordSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, ['suite', 'keyRole', 'publicKeyHex']);
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, ['suite', 'keyRole', 'publicKeyHex']);
   assertAsciiToken(input.suite);
   assertStringMember(input.keyRole, picoIdentityKeyRoles, 'invalid_key_role');
 
@@ -3182,7 +3182,7 @@ export function buildPicoIdentityKeyRecordSignatureInput(
 export function buildPicoIdentityPossessionSignatureInput(
   input: PicoIdentityPossessionSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'subjectKeyFingerprintHex',
     'verifierNonceHex',
@@ -3223,7 +3223,7 @@ export function picoLinkDirectPayloadDigestHex(
 export function buildPicoHomeDeviceActivationSignatureInput(
   input: PicoHomeDeviceActivationSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'activationId',
     'action',
@@ -3330,7 +3330,7 @@ export interface PicoHomeAuditRecordDigestInput {
 export function buildPicoHomeAuditRecordDigestInput(
   input: PicoHomeAuditRecordDigestInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'writerId',
     'chainPosition',
     'eventId',
@@ -3428,7 +3428,7 @@ export function picoHomeDeviceLifecycleSubmissionDigestHex(
 export function buildPicoHomeDeviceLifecycleReceiptSignatureInput(
   input: PicoHomeDeviceLifecycleReceiptSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'transitionId',
     'action',
@@ -3485,7 +3485,7 @@ export function buildPicoHomeDeviceLifecycleReceiptSignatureInput(
 export function buildPicoIdentityDelegationSignatureInput(
   input: PicoIdentityDelegationSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'delegationId',
     'issuerIdentityKeyFingerprintHex',
@@ -3534,7 +3534,7 @@ export function buildPicoIdentityDelegationSignatureInput(
 export function buildPicoIdentityRotationSignatureInput(
   input: PicoIdentityRotationSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'rotationId',
     'predecessorIdentityKeyFingerprintHex',
@@ -3584,7 +3584,7 @@ export function buildPicoIdentityRotationSignatureInput(
 export function buildPicoIdentityRevocationSignatureInput(
   input: PicoIdentityRevocationSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'revocationId',
     'issuerIdentityKeyFingerprintHex',
@@ -3624,7 +3624,7 @@ export function buildPicoIdentityRevocationSignatureInput(
 export function buildPicoLinkDirectRequestSignatureInput(
   input: PicoLinkDirectRequestSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'requestId',
     'operation',
@@ -3666,7 +3666,7 @@ export function buildPicoLinkDirectRequestSignatureInput(
 export function buildPicoLinkDirectResponseSignatureInput(
   input: PicoLinkDirectResponseSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'requestId',
     'operation',
@@ -3710,7 +3710,7 @@ export function buildPicoLinkDirectResponseSignatureInput(
 export function buildPicoLinkPushSignatureInput(
   input: PicoLinkPushSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'pushId',
     'hostSigningKeyFingerprintHex',
@@ -3829,7 +3829,7 @@ export const picoLinkPushSaysNothingAbout = Object.freeze({
 export function buildPicoIdentityReaderKeyFreshnessSignatureInput(
   input: PicoIdentityReaderKeyFreshnessSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'checkpointId',
     'homeId',
@@ -3879,7 +3879,7 @@ export function buildPicoHomeClaimSignatureInput(
     return buildPicoHomeClaimSignatureInputV1(input);
   }
 
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'claimId',
     'hostSigningKeyFingerprintHex',
@@ -3914,7 +3914,7 @@ export function buildPicoHomeClaimSignatureInput(
 }
 
 export function buildPicoHomeClaimSignatureInputV1(input: PicoHomeClaimSignatureInputV1): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'claimId',
     'hostSigningKeyFingerprintHex',
@@ -3942,7 +3942,7 @@ export function buildPicoHomeClaimSignatureInputV1(input: PicoHomeClaimSignature
 }
 
 export function buildPicoHomeClaimResponseSignatureInput(input: PicoHomeClaimResponseSignatureInput): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'claimId',
     'homeId',
@@ -3975,7 +3975,7 @@ export function buildPicoHomeClaimResponseSignatureInput(input: PicoHomeClaimRes
 export function buildPicoHomeFoundingSignatureInput(
   input: PicoHomeFoundingSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'foundingId',
     'homeId',
@@ -4016,7 +4016,7 @@ export function buildPicoHomeFoundingSignatureInput(
 }
 
 export function buildPicoHomeMembershipSignatureInput(input: PicoHomeMembershipSignatureInput): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'credentialId',
     'homeId',
@@ -4059,7 +4059,7 @@ export function buildPicoHomeMembershipSignatureInput(input: PicoHomeMembershipS
 export function buildPicoHomeMembershipLifecycleSignatureInput(
   input: PicoHomeMembershipLifecycleSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'lifecycleId',
     'homeId',
@@ -4098,7 +4098,7 @@ export function buildPicoHomeMembershipLifecycleSignatureInput(
 export function buildPicoHomeDomainReadGrantSignatureInput(
   input: PicoHomeDomainReadGrantSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'grantId',
     'homeId',
@@ -4137,7 +4137,7 @@ export function buildPicoHomeDomainReadGrantSignatureInput(
 export function buildPicoHomeDomainReadGrantLifecycleSignatureInput(
   input: PicoHomeDomainReadGrantLifecycleSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'lifecycleId',
     'grantId',
@@ -4183,7 +4183,7 @@ export function buildPicoHomeDomainReadGrantLifecycleSignatureInput(
 }
 
 export function buildPicoHomeContinuitySignatureInput(input: PicoHomeContinuitySignatureInput): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'continuityId',
     'homeId',
@@ -4220,7 +4220,7 @@ export function buildPicoHomeContinuitySignatureInput(input: PicoHomeContinuityS
 }
 
 export function buildPicoVaultKeyfileHeaderAad(input: PicoVaultKeyfileHeaderAadInput): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'format',
     'suite',
     'keyRole',
@@ -4268,7 +4268,7 @@ export function buildPicoVaultKeyfileHeaderAad(input: PicoVaultKeyfileHeaderAadI
 }
 
 export function buildPicoShareWrapPayload(input: PicoShareWrapPayloadInput): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'domainId',
     'kekVersion',
@@ -4289,7 +4289,7 @@ export function buildPicoShareWrapPayload(input: PicoShareWrapPayloadInput): Uin
 }
 
 export function buildPicoShareEnvelopeSignatureInput(input: PicoShareEnvelopeSignatureInput): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'grantId',
     'domainId',
@@ -4322,7 +4322,7 @@ export function buildPicoShareEnvelopeSignatureInput(input: PicoShareEnvelopeSig
 export function buildPicoReaderCustodyDomainSignatureInput(
   input: PicoReaderCustodyDomainSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'domainAuthorityId',
     'homeId',
@@ -4364,7 +4364,7 @@ export function buildPicoReaderCustodyDomainSignatureInput(
 export function buildPicoReaderCustodyReaderGrantSignatureInput(
   input: PicoReaderCustodyReaderGrantSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'readerGrantId',
     'domainAuthorityId',
@@ -4422,7 +4422,7 @@ export function buildPicoReaderCustodyReaderGrantSignatureInput(
 export function buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(
   input: PicoReaderCustodyReaderGrantLifecycleSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'lifecycleId',
     'readerGrantId',
@@ -4479,7 +4479,7 @@ export function buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(
 export function buildPicoReaderCustodyWriterGrantSignatureInput(
   input: PicoReaderCustodyWriterGrantSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'writerGrantId',
     'domainAuthorityId',
@@ -4525,7 +4525,7 @@ export function buildPicoReaderCustodyWriterGrantSignatureInput(
 export function buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(
   input: PicoReaderCustodyWriterGrantLifecycleSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'lifecycleId',
     'writerGrantId',
@@ -4582,7 +4582,7 @@ export function buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(
 export function buildPicoReaderCustodyKekRotationSignatureInput(
   input: PicoReaderCustodyKekRotationSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'rotationId',
     'domainAuthorityId',
@@ -4663,7 +4663,7 @@ export function buildPicoReaderCustodySyncEvidenceDigestInput(
     throw new Error('invalid_sync_evidence_set');
   }
   const canonical = references.map((reference) => {
-    assertExactKeys(reference as unknown as Record<string, unknown>, [
+    assertExactKeysWithoutFieldOrder(reference as unknown as Record<string, unknown>, [
       'family',
       'recordId',
       'recordDigestHex',
@@ -4708,7 +4708,7 @@ export function buildPicoReaderCustodySyncEvidenceDigestInput(
 export function buildPicoReaderCustodySyncManifestSignatureInput(
   input: PicoReaderCustodySyncManifestSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'syncBatchId',
     'routeRef',
@@ -4783,7 +4783,7 @@ export function buildPicoReaderCustodySyncManifestSignatureInput(
 export function buildPicoReaderCustodyItemSignatureInput(
   input: PicoReaderCustodyItemSignatureInput,
 ): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'packageId',
     'domainAuthorityId',
@@ -4840,7 +4840,7 @@ export function buildPicoMemoryContentAd(input: {
   privacyDomain: string;
   contentType: string;
 }): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'memoryItemId',
     'privacyDomain',
@@ -4862,7 +4862,7 @@ export function buildPicoModelProviderCredentialAd(input: {
   picoIdentityFingerprintHex: string;
   credentialRef: string;
 }): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'entryId',
     'picoIdentityFingerprintHex',
@@ -4889,7 +4889,7 @@ export function buildPicoModelProviderCredentialDekWrapAd(input: {
   entryId: string;
   picoIdentityFingerprintHex: string;
 }): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'keyEnvelopeId',
     'domainId',
@@ -4913,7 +4913,7 @@ export function buildPicoSupplierCredentialAd(input: {
   privacyDomain: string;
   scope: string;
 }): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'supplierIdentifier',
     'privacyDomain',
@@ -4937,7 +4937,7 @@ export function buildPicoSupplierCredentialDekWrapAd(input: {
   domainId: string;
   supplierIdentifier: string;
 }): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'keyEnvelopeId',
     'domainId',
@@ -4959,7 +4959,7 @@ export function buildPicoMemoryDekWrapAd(input: {
   domainId: string;
   memoryItemId: string;
 }): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
     'suite',
     'keyEnvelopeId',
     'domainId',
@@ -4995,7 +4995,7 @@ function positiveSafeIntegerBytes(value: number, reason: string): Uint8Array {
 function assertPicoHomeDeviceLifecycleEvidence(
   evidence: PicoHomeDeviceLifecycleEvidence,
 ): void {
-  assertExactKeys(evidence as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(evidence as unknown as Record<string, unknown>, [
     'transitionId',
     'action',
     'picoIdentityFingerprintHex',
@@ -5029,7 +5029,7 @@ function assertPicoHomeDeviceLifecycleEvidence(
     throw new Error('invalid_revocation_set');
   }
   for (const revocation of evidence.revocations) {
-    assertExactKeys(revocation as unknown as Record<string, unknown>, ['record', 'signatureHex']);
+    assertExactKeysWithoutFieldOrder(revocation as unknown as Record<string, unknown>, ['record', 'signatureHex']);
     buildPicoIdentityRevocationSignatureInput(revocation.record);
     fixedHexBytes(revocation.signatureHex, 64, 'invalid_signature_length');
     if (revocation.record.issuerIdentityKeyFingerprintHex !== evidence.picoIdentityFingerprintHex) {
@@ -5073,7 +5073,7 @@ function assertPicoHomeDeviceLifecycleEvidence(
   ) {
     throw new Error('invalid_device_key_role');
   }
-  assertExactKeys(
+  assertExactKeysWithoutFieldOrder(
     evidence.delegation as unknown as Record<string, unknown>,
     ['record', 'signatureHex'],
   );
@@ -5113,7 +5113,7 @@ function assertPicoHomeDeviceLifecycleEvidence(
 function assertPicoHomeDeviceLifecycleSubmission(
   submission: PicoHomeDeviceLifecycleSubmission,
 ): void {
-  assertExactKeys(submission as unknown as Record<string, unknown>, [
+  assertExactKeysWithoutFieldOrder(submission as unknown as Record<string, unknown>, [
     'schema',
     'evidence',
     'activation',
@@ -5131,7 +5131,7 @@ function assertPicoHomeDeviceLifecycleSubmission(
   if (submission.activation === null) {
     throw new Error('missing_device_activation');
   }
-  assertExactKeys(
+  assertExactKeysWithoutFieldOrder(
     submission.activation as unknown as Record<string, unknown>,
     ['input', 'targetSignatureHex'],
   );
@@ -5237,7 +5237,14 @@ function assertInstant(value: string): void {
   }
 }
 
-function assertExactKeys(record: Record<string, unknown>, expectedKeys: readonly string[]): void {
+/**
+ * Befund B124. Hiess `assertExactKeys` wie neun andere und ist eine andere Regel:
+ * sie verbietet zusaetzlich einen Schluessel `fieldOrder`, weil eine umsortierte
+ * Feldliste eine andere Signatureingabe ergaebe. Ein Name ist keine Regel - und
+ * vier Regeln unter einem Namen in einem Paket sind vier Gelegenheiten, die
+ * falsche zu erwischen.
+ */
+function assertExactKeysWithoutFieldOrder(record: Record<string, unknown>, expectedKeys: readonly string[]): void {
   if ('fieldOrder' in record) {
     throw new Error('field_reordering');
   }

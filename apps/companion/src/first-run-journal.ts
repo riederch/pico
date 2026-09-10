@@ -1,3 +1,4 @@
+import { assertExactKeys } from '@pico/protocol/canonical-bytes';
 import { isPicoInstant } from '@pico/protocol/instant';
 import {
   chmodSync,
@@ -156,7 +157,7 @@ export function parsePicoCompanionFirstRunJournal(
 
   switch (step as PicoCompanionFirstRunStep) {
     case 'bootstrapped': {
-      assertExactKeys(record, ['schema', 'step', 'binding']);
+      assertExactKeys(record, ['schema', 'step', 'binding'], 'invalid_first_run_journal_shape');
       return Object.freeze({
         schema: picoCompanionFirstRunJournalSchema,
         step: 'bootstrapped',
@@ -164,7 +165,7 @@ export function parsePicoCompanionFirstRunJournal(
       });
     }
     case 'submitted': {
-      assertExactKeys(record, ['schema', 'step', 'binding', 'pending']);
+      assertExactKeys(record, ['schema', 'step', 'binding', 'pending'], 'invalid_first_run_journal_shape');
       const binding = parseBinding(record.binding);
       return Object.freeze({
         schema: picoCompanionFirstRunJournalSchema,
@@ -174,7 +175,7 @@ export function parsePicoCompanionFirstRunJournal(
       });
     }
     case 'completed': {
-      assertExactKeys(record, ['schema', 'step', 'binding', 'receipt']);
+      assertExactKeys(record, ['schema', 'step', 'binding', 'receipt'], 'invalid_first_run_journal_shape');
       const binding = parseBinding(record.binding);
       return Object.freeze({
         schema: picoCompanionFirstRunJournalSchema,
@@ -190,7 +191,7 @@ export function parsePicoCompanionFirstRunJournal(
         'binding',
         'receipt',
         'platformUnlockBound',
-      ]);
+      ], 'invalid_first_run_journal_shape');
       if (typeof record.platformUnlockBound !== 'boolean') {
         throw new Error('invalid_first_run_journal_unlock_flag');
       }
@@ -282,12 +283,12 @@ function sameBinding(
 
 function parseBinding(value: unknown): PicoCompanionFirstRunBinding {
   const record = requireRecord(value, 'invalid_first_run_binding');
-  assertExactKeys(record, ['coreUrl', 'homeId', 'home', 'host', 'identity', 'device']);
+  assertExactKeys(record, ['coreUrl', 'homeId', 'home', 'host', 'identity', 'device'], 'invalid_first_run_journal_shape');
   assertCoreUrl(record.coreUrl);
   assertToken(record.homeId, 'invalid_first_run_home_id');
 
   const home = requireRecord(record.home, 'invalid_first_run_binding');
-  assertExactKeys(home, ['homeHostPicoIdentityFingerprintHex']);
+  assertExactKeys(home, ['homeHostPicoIdentityFingerprintHex'], 'invalid_first_run_journal_shape');
   assertHex32(
     home.homeHostPicoIdentityFingerprintHex,
     'invalid_first_run_acceptor_pin',
@@ -299,13 +300,13 @@ function parseBinding(value: unknown): PicoCompanionFirstRunBinding {
     'signingKeyFingerprintHex',
     'keyAgreementPublicKeyHex',
     'keyAgreementKeyFingerprintHex',
-  ]);
+  ], 'invalid_first_run_journal_shape');
   for (const field of Object.keys(host)) {
     assertHex32(host[field], 'invalid_first_run_host_key');
   }
 
   const identity = requireRecord(record.identity, 'invalid_first_run_binding');
-  assertExactKeys(identity, ['keyFingerprintHex', 'publicKeyHex']);
+  assertExactKeys(identity, ['keyFingerprintHex', 'publicKeyHex'], 'invalid_first_run_journal_shape');
   for (const field of Object.keys(identity)) {
     assertHex32(identity[field], 'invalid_first_run_identity_key');
   }
@@ -315,7 +316,7 @@ function parseBinding(value: unknown): PicoCompanionFirstRunBinding {
     'signingKeyFingerprintHex',
     'keyAgreementKeyFingerprintHex',
     'delegationId',
-  ]);
+  ], 'invalid_first_run_journal_shape');
   assertHex32(device.signingKeyFingerprintHex, 'invalid_first_run_device_key');
   assertHex32(
     device.keyAgreementKeyFingerprintHex,
@@ -352,7 +353,7 @@ function parsePending(
     'acceptedAt',
     'effectiveAt',
     'completionExpiresAt',
-  ]);
+  ], 'invalid_first_run_journal_shape');
   assertToken(record.recoveryId, 'invalid_first_run_recovery_id');
   assertHex32(record.claimDigestHex, 'invalid_first_run_claim_digest');
   assertTarget(record, binding);
@@ -378,7 +379,7 @@ function parseReceipt(
     'completedAt',
     'leavesExactlyOneActiveDevice',
     'otherDevicesRevoked',
-  ]);
+  ], 'invalid_first_run_journal_shape');
   assertToken(record.recoveryId, 'invalid_first_run_recovery_id');
   assertTarget(record, binding);
   assertInstant(record.completedAt);
@@ -409,16 +410,6 @@ function requireRecord(value: unknown, reason: string): Record<string, unknown> 
   return value as Record<string, unknown>;
 }
 
-function assertExactKeys(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-): void {
-  const expected = new Set(keys);
-  if (Object.keys(record).some((key) => !expected.has(key))
-    || keys.some((key) => !(key in record))) {
-    throw new Error('invalid_first_run_journal_shape');
-  }
-}
 
 function assertHex32(value: unknown, reason: string): asserts value is string {
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/u.test(value)) {

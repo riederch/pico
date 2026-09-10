@@ -1,3 +1,4 @@
+import { assertExactKeys } from './canonical-bytes.js';
 import { isPicoInstant } from './instant.js';
 import { isPicoConfidenceLevel, type PicoConfidenceLevel } from './confidence.js';
 
@@ -53,14 +54,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function assertExactKeys(record: Record<string, unknown>, keys: readonly string[]): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error('invalid_pico_supplier_answer_shape');
-  }
-}
 
 function assertInstant(value: unknown, error: string): string {
   // Befund B52. Stand hier ohne die feste Breite.
@@ -76,14 +69,14 @@ function parseMeasurement(value: unknown): PicoSupplierMeasurement {
     throw new Error('invalid_pico_supplier_measurement');
   }
   if (record.kind === 'instant') {
-    assertExactKeys(record, ['kind', 'at']);
+    assertExactKeys(record, ['kind', 'at'], 'invalid_pico_supplier_answer_shape');
     return Object.freeze({
       kind: 'instant' as const,
       at: assertInstant(record.at, 'invalid_pico_supplier_measurement'),
     });
   }
   if (record.kind === 'pin') {
-    assertExactKeys(record, ['kind', 'value']);
+    assertExactKeys(record, ['kind', 'value'], 'invalid_pico_supplier_answer_shape');
     if (typeof record.value !== 'string' || record.value.trim() === '') {
       throw new Error('invalid_pico_supplier_measurement');
     }
@@ -106,7 +99,7 @@ export function buildPicoSupplierAnswer(input: {
   if (record === undefined) {
     throw new Error('invalid_pico_supplier_answer_shape');
   }
-  assertExactKeys(record, ['askedAt', 'measured', 'confidence', 'value']);
+  assertExactKeys(record, ['askedAt', 'measured', 'confidence', 'value'], 'invalid_pico_supplier_answer_shape');
   if (!isPicoConfidenceLevel(record.confidence)) {
     // Its own error: a value without certainty is not a value with a default,
     // it is one nobody measured.
@@ -134,8 +127,7 @@ export function parsePicoSupplierAnswer(value: unknown): PicoSupplierAnswer {
   }
   assertExactKeys(
     record,
-    ['schema', 'askedAt', 'measured', 'confidence', 'confirmedByPerson', 'value'],
-  );
+    ['schema', 'askedAt', 'measured', 'confidence', 'confirmedByPerson', 'value'], 'invalid_pico_supplier_answer_shape',);
   if (record.schema !== picoSupplierAnswerSchema) {
     throw new Error('invalid_pico_supplier_answer_schema');
   }

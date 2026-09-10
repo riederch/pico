@@ -1,3 +1,4 @@
+import { assertExactKeys } from '@pico/protocol/canonical-bytes';
 import type Database from 'better-sqlite3';
 import {
   isPicoInstant,
@@ -1188,7 +1189,7 @@ export class ReaderCustodyStore {
         'ownerEnvelope',
         'ownerSignatureHex',
         'receivedAt',
-      ]);
+      ], 'invalid_record_shape');
       const founding = this.authority.foundingRecord();
       if (founding === undefined) {
         return 'no_founding_record';
@@ -1294,7 +1295,7 @@ export class ReaderCustodyStore {
         'envelopes',
         'ownerSignatureHex',
         'receivedAt',
-      ]);
+      ], 'invalid_record_shape');
       const domain = domainRecord.domain;
       const grant = record.grant;
       if (record.schema !== picoReaderCustodyReaderGrantRecordSchema
@@ -1371,7 +1372,7 @@ export class ReaderCustodyStore {
         'ownerIdentityKeyRecord',
         'ownerSignatureHex',
         'receivedAt',
-      ]);
+      ], 'invalid_record_shape');
       const domain = domainRecord.domain;
       const grant = grantRecord.grant;
       const lifecycle = record.lifecycle;
@@ -1422,7 +1423,7 @@ export class ReaderCustodyStore {
         'envelopes',
         'ownerSignatureHex',
         'receivedAt',
-      ]);
+      ], 'invalid_record_shape');
       const domain = domainRecord.domain;
       const rotation = record.rotation;
       if (record.schema !== picoReaderCustodyKekRotationRecordSchema
@@ -1590,7 +1591,7 @@ export class ReaderCustodyStore {
         'writerDeviceSigningKeyRecord',
         'ownerSignatureHex',
         'receivedAt',
-      ]);
+      ], 'invalid_record_shape');
       const domain = domainRecord.domain;
       const grant = record.grant;
       return record.schema === picoReaderCustodyWriterGrantRecordSchema
@@ -1640,7 +1641,7 @@ export class ReaderCustodyStore {
         'ownerIdentityKeyRecord',
         'ownerSignatureHex',
         'receivedAt',
-      ]);
+      ], 'invalid_record_shape');
       const domain = domainRecord.domain;
       const grant = grantRecord.grant;
       const lifecycle = record.lifecycle;
@@ -1690,7 +1691,7 @@ export class ReaderCustodyStore {
         'writerDeviceSigningKeyRecord',
         'writerSignatureHex',
         'receivedAt',
-      ]);
+      ], 'invalid_record_shape');
       const domain = domainRecord.domain;
       const grant = grantRecord.grant;
       const item = record.item;
@@ -2398,16 +2399,6 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
     && JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 }
 
-function assertExactKeys(
-  record: Record<string, unknown>,
-  expectedKeys: readonly string[],
-): void {
-  const expected = new Set(expectedKeys);
-  if (Object.keys(record).some((key) => !expected.has(key))
-    || expectedKeys.some((key) => !(key in record))) {
-    throw new Error('invalid_record_shape');
-  }
-}
 
 function isCanonicalHex(value: string): boolean {
   return typeof value === 'string'

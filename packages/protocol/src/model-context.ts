@@ -161,7 +161,7 @@ export function assemblePicoModelContext(
   input: PicoModelContextInput,
 ): PicoModelContext {
   const record = requireRecord(input, 'invalid_pico_model_context_input');
-  assertExactKeys(record, ['policy', 'units']);
+  assertNoUnexpectedKeys(record, ['policy', 'units']);
   if (!Array.isArray(record.policy) || !Array.isArray(record.units)) {
     throw new Error('invalid_pico_model_context_input');
   }
@@ -257,7 +257,7 @@ export function renderPicoModelContext(context: PicoModelContext): string {
 
 export function parsePicoModelContext(value: unknown): PicoModelContext {
   const record = requireRecord(value, 'invalid_pico_model_context');
-  assertExactKeys(record, ['schema', 'instructions', 'data']);
+  assertNoUnexpectedKeys(record, ['schema', 'instructions', 'data']);
   if (record.schema !== picoModelContextSchema) {
     throw new Error('invalid_pico_model_context_schema');
   }
@@ -266,7 +266,7 @@ export function parsePicoModelContext(value: unknown): PicoModelContext {
   }
   const instructions = (record.instructions as unknown[]).map((entry) => {
     const instruction = requireRecord(entry, 'invalid_pico_model_context');
-    assertExactKeys(instruction, ['source', 'text']);
+    assertNoUnexpectedKeys(instruction, ['source', 'text']);
     if (instruction.source !== 'pico_policy'
       && instruction.source !== 'person_present') {
       throw new Error('invalid_pico_model_context_instruction_source');
@@ -347,7 +347,11 @@ function requireRecord(value: unknown, reason: string): Record<string, unknown> 
   return value as Record<string, unknown>;
 }
 
-function assertExactKeys(
+/**
+ * Befund B124. Hiess `assertExactKeys` und ist es nicht: sie verbietet nur
+ * *unerwartete* Schluessel und verlangt fehlende nicht. Der Name sagt das jetzt.
+ */
+function assertNoUnexpectedKeys(
   record: Record<string, unknown>,
   keys: readonly string[],
 ): void {

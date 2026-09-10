@@ -1,3 +1,4 @@
+import { assertExactKeys } from './canonical-bytes.js';
 import { type PicoEventOriginClass } from './origin-class.js';
 import { lowestPicoOriginClass } from './model-context.js';
 
@@ -75,18 +76,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function assertExactKeys(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-  error: string,
-): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error(error);
-  }
-}
 
 function assertArgumentValue(value: unknown): PicoActionArgumentValue {
   if (typeof value === 'string') {

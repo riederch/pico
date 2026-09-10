@@ -1,3 +1,4 @@
+import { assertExactKeys } from './canonical-bytes.js';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceActivationSignatureInput,
@@ -369,18 +370,6 @@ function unflatten(values: Record<string, string>): Record<string, unknown> {
   return output;
 }
 
-function assertExactKeys(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-  kind: string,
-): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
-    throw new Error(`invalid_pico_device_enrolment_${kind}_fields`);
-  }
-}
 
 function assertDeviceKeys(device: PicoDeviceEnrolmentDeviceKeys): PicoDeviceEnrolmentDeviceKeys {
   if (typeof device !== 'object' || device === null) {
@@ -391,7 +380,7 @@ function assertDeviceKeys(device: PicoDeviceEnrolmentDeviceKeys): PicoDeviceEnro
     'signingPublicKeyHex',
     'keyAgreementKeyFingerprintHex',
     'keyAgreementPublicKeyHex',
-  ], 'offer');
+  ], 'invalid_pico_device_enrolment_offer_fields');
   for (const value of [
     device.signingKeyFingerprintHex,
     device.signingPublicKeyHex,
@@ -407,7 +396,7 @@ function assertDeviceKeys(device: PicoDeviceEnrolmentDeviceKeys): PicoDeviceEnro
 
 function assertGrant(grant: PicoDeviceEnrolmentGrant): PicoDeviceEnrolmentGrant {
   assertExactKeys(grant as unknown as Record<string, unknown>,
-    ['schema', 'activation', 'home'], 'grant');
+    ['schema', 'activation', 'home'], 'invalid_pico_device_enrolment_grant_fields');
   if (grant.schema !== picoDeviceEnrolmentGrantSchema) {
     throw new Error('invalid_pico_device_enrolment_grant_schema');
   }
@@ -420,7 +409,7 @@ function assertGrant(grant: PicoDeviceEnrolmentGrant): PicoDeviceEnrolmentGrant 
     throw new Error('invalid_pico_device_enrolment_grant_home');
   }
   assertExactKeys(home as unknown as Record<string, unknown>,
-    ['coreUrl', 'homeHostPicoIdentityFingerprintHex', 'host', 'identity'], 'grant');
+    ['coreUrl', 'homeHostPicoIdentityFingerprintHex', 'host', 'identity'], 'invalid_pico_device_enrolment_grant_fields');
   // The rule lives in `home-address.ts` since 2026-08-20, because this was
   // the strictest of four and the only one a person met three ceremonies
   // after typing the address. It refused `http://exa mple:3000` nowhere - a
@@ -433,9 +422,9 @@ function assertGrant(grant: PicoDeviceEnrolmentGrant): PicoDeviceEnrolmentGrant 
     'signingKeyFingerprintHex',
     'keyAgreementPublicKeyHex',
     'keyAgreementKeyFingerprintHex',
-  ], 'grant');
+  ], 'invalid_pico_device_enrolment_grant_fields');
   assertExactKeys(home.identity as unknown as Record<string, unknown>,
-    ['keyFingerprintHex', 'publicKeyHex'], 'grant');
+    ['keyFingerprintHex', 'publicKeyHex'], 'invalid_pico_device_enrolment_grant_fields');
   for (const value of [
     home.homeHostPicoIdentityFingerprintHex,
     home.host.signingPublicKeyHex,
@@ -465,7 +454,7 @@ function assertAcceptance(
   acceptance: PicoDeviceEnrolmentAcceptance,
 ): PicoDeviceEnrolmentAcceptance {
   assertExactKeys(acceptance as unknown as Record<string, unknown>,
-    ['schema', 'activationId', 'targetSignatureHex'], 'acceptance');
+    ['schema', 'activationId', 'targetSignatureHex'], 'invalid_pico_device_enrolment_acceptance_fields');
   if (acceptance.schema !== picoDeviceEnrolmentAcceptanceSchema) {
     throw new Error('invalid_pico_device_enrolment_acceptance_schema');
   }
