@@ -1,6 +1,6 @@
 # Externes Review vom 2026-09-09, gegen den Baum gemessen
 
-**Status:** Messung abgeschlossen am 2026-09-10; Arbeitspakete als Vorschlag, noch nicht geschnitten
+**Status:** Messung abgeschlossen am 2026-09-10; neun Entscheidungen getroffen; Arbeitspakete geschnitten
 **Gegenstand:** ein externes Repository-Review über `main` bei `a2bcc1a` (2026-09-09), 28 Abschnitte
 **Messstand:** `f698dab`, dreizehn Commits nach dem geprüften Stand; keiner davon berührt einen der Punkte, ausser dass `progress.md` weiter gewachsen ist
 
@@ -75,83 +75,177 @@ trotzdem billig (P12), und deshalb empfohlen.
 Jede mit Empfehlung zuerst. Sie stehen hier, damit sie nicht in jeder Antwort
 wiederholt werden.
 
-- **E1 — Ist das Repository öffentlich?** Die API sagt nein. *Empfohlen:* auf
-  GitHub nachsehen. Ist es öffentlich, gilt R5 und der nächste Tag-Lauf
-  attestiert; ist es privat, ist §7 gegenstandslos und R26 weniger dringend.
-- **E2 — Soll CI das Release veröffentlichen oder als Draft lassen?** Das
-  `--draft` steht ohne Begründung im Workflow. *Empfohlen:* Draft behalten und
-  den Grund an die Zeile schreiben (ein Mensch sieht das Paket, bevor es
-  jemand laden kann); P1 nimmt nur das Überschreiben heraus.
-- **E3 — Was ist eine „released version"?** *Empfohlen:* ein Tag `v*`, dessen
-  Lauf grün war und dessen Bilder und Paket unter diesem Tag liegen; ein Draft
-  zählt nicht. SECURITY.md sagt es dann so.
-- **E4 — Model-Jobs: klein oder gross?** Klein: Domänen-Shred erreicht die
-  Tabelle, und `home.memory.forget` leert auch die Wörter des Jobs, aus dem das
-  Item kam. Gross: Jobzeilen tragen die Posture der Domäne und liegen
-  verschlüsselt. *Empfohlen:* klein jetzt, gross als ADR-Frage danach.
-- **E5 — Replay-Zustand persistieren?** *Empfohlen:* ja, vor dem nächsten
-  Release; eine Tabelle mit Ablaufspalte, 1.024 Zeilen, vom Sweep geleert.
-- **E6 — Sitzungs-URLs in Commit-Nachrichten weiter schreiben?** Ob sie für
-  Dritte nutzbar sind, ist von hier nicht prüfbar. *Empfohlen:* weglassen, bis
-  das geklärt ist; die Historie bleibt, wie sie ist.
-- **E7 — Gibt es eine reale Pico-Identität, die behalten wird?** Wenn ja, ist
-  das Identitätsformat eine versionierte Schnittstelle, und das gehört als
-  Satz in ADR 0016 oder 0031. *Empfohlen:* Frage beantworten, ein Satz
-  genügt.
-- **E8 — `.agent-context.md` auf 200 Zeilen kürzen?** Die Geschichte steht in
-  der Roadmap und in Git. *Empfohlen:* ja.
-- **E9 — Wann laufen die Container nicht mehr als root?** *Empfohlen:* vor
-  produktiven Personendaten, nicht vor dem nächsten Release; das Startskript
-  bereitet `/data` vor und gibt dann die Rechte ab.
+- **E1 — Ist das Repository öffentlich?** *Entschieden 2026-09-10:* nein, es
+  ist wieder privat und wird nur auf Aufforderung öffentlich gestellt, wenn es
+  nötig ist. Damit ist §7 gegenstandslos, bis das geschieht; P3 kommt ohne
+  Attestation und SBOM aus; R26 bleibt relevant, weil das Repository jederzeit
+  öffentlich werden kann und die Historie mitgeht.
+- **E2 — Soll CI das Release veröffentlichen oder als Draft lassen?**
+  *Entschieden 2026-09-10:* Draft behalten. Ein Mensch sieht Paket und
+  Prüfsumme, bevor jemand es laden kann, und veröffentlicht selbst. P1 schreibt
+  den Grund an die Zeile und nimmt nur das Überschreiben heraus.
+- **E3 — Was ist eine „released version"?** *Entschieden 2026-09-10:* der
+  grüne Tag. Released ist ein Tag `v*`, dessen Lauf grün endete und dessen
+  Bilder und Paket unter dem Tag liegen; ob das GitHub-Release aus dem Draft
+  heraus ist, ändert daran nichts, und Sicherheitskorrekturen gehen an den
+  höchsten solchen Tag. P5 schreibt das in SECURITY.md.
+- **E4 — Model-Jobs: klein oder gross?** *Entschieden 2026-09-10:* klein
+  jetzt. Der Shred einer Domäne leert jede Jobzeile, deren Kontext die Domäne
+  nennt, mit demselben Mechanismus wie `home.recall.forget`; und
+  `home.memory.forget` leert zusätzlich die Wörter des Jobs, der das Item
+  hervorgebracht hat, lässt aber die Zeile mit dem Zeiger stehen (ADR 0126).
+  Gross - Posture und Domänenschlüssel auf der Jobzeile - wird als eigene
+  ADR-Frage gestellt, zusammen mit der Q5-Obergrenze für diese Tabelle, die
+  ADR 0049 im selben Absatz offen lässt.
+- **E5 — Replay-Zustand persistieren?** *Entschieden 2026-09-10:* ja, vor
+  dem nächsten Release. Eine Tabelle mit Anfrage-Id und Ablauf, geschrieben im
+  selben Moment wie heute die Map, gelesen vor der Signaturprüfung, vom Sweep
+  geleert, Obergrenze 1.024. Die Zeile in ADR 0107 und in `progress.md:22`
+  wird danach gestrichen. P12 wandert damit in die Gruppe vor dem Release.
+- **E6 — Sitzungs-URLs in Commit-Nachrichten weiter schreiben?**
+  *Entschieden 2026-09-10:* weglassen ab jetzt. Die Historie bleibt, wie sie
+  ist; sie umzuschreiben widerspräche dem, was der Baum sonst hält. Das
+  `Co-Authored-By` bleibt, es ist Zuschreibung, keine Adresse.
+- **E7 — Gibt es eine reale Pico-Identität, die behalten wird?**
+  *Entschieden 2026-09-10:* ja, eine bleibt. Damit ist das Identitätsformat
+  ab jetzt eine versionierte externe Schnittstelle: Änderungen an kanonischen
+  Bytes brauchen eine neue `suite`-Version und eine Wanderung mit Neusignatur,
+  nie einen stillen Umbau. P5 schreibt den Statussatz in ADR 0031.
+- **E8 — `.agent-context.md` auf 200 Zeilen kürzen?** *Entschieden
+  2026-09-10:* ja, mit Tor. Handoff bleibt, Geschichte fällt (sie steht in der
+  Roadmap und in Git), bleibende Erkenntnisse wandern in den Runbook; vor
+  jedem Streichen wird geprüft, ob die Zeile anderswo steht. Ein Prüfer hält
+  danach die 200 Zeilen aus AGENTS.md:149.
+- **E9 — Wann laufen die Container nicht mehr als root?** *Entschieden
+  2026-09-10:* vor produktiven Personendaten, gekoppelt an P9, weil der Grund
+  für root das gemountete `/data` ist und nur auf einer echten
+  Supervisor-Installation messbar ist. Das nächste Release geht noch als root,
+  mit dem Grund im Dockerfile.
 
-## Arbeitspakete, Vorschlag
+## Arbeitspakete
 
-Reihenfolge nach Gewicht: erst, was falsch ist und Wirkung hat, dann, was
-falsch ist und keine hat, zuletzt Geschmack. Jedes Paket trägt eine Pflanzung
-oder einen Test, der beweist, dass die Änderung greift, und wird einzeln
-festgeschrieben.
+Geschnitten am 2026-09-10 nach den neun Entscheidungen. Jedes Paket ist ein
+Commit, trägt einen Beweis (Test mit Pflanzung oder Tor, das über einen
+gepflanzten Baum rot wird) und sagt, wann es fertig ist. Reihenfolge: erst,
+was falsch ist und Wirkung hat, dann Rest schliessen, dann die Dokumente,
+damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
 
-### Vor dem nächsten Release
+### Vor dem nächsten Release, in dieser Reihenfolge
 
-- **P1 — Client-Publish ohne Überschreiben.** `--clobber` entfernen; vor dem
-  Hochladen prüfen, ob unter dem Tag schon ein Asset dieses Namens liegt, und
-  dann mit Fehler enden; der Grund für `--draft` an die Zeile (E2). Die
-  Entscheidung als Funktion in einem Skript, damit ein Test sie pflanzen kann,
-  so wie `check-release-monotonic.mjs` seine Vergleichsfunktion exportiert.
-- **P2 — Trust-Root auf GitHub.** Nutzeraufgabe: Ruleset für `main` (Pflicht-
-  Checks, kein Force-Push, kein Löschen), Tag-Schutz für `v*`. Im Baum nur ein
-  Absatz in `docs/release/upgrade-contract.md`, der sagt, was serverseitig
-  erwartet wird und was der Workflow nicht ersetzen kann.
-- **P3 — Der ausgelieferte Closure wird auditiert.** Das Paketier-Skript kennt
-  den Closure schon (`workspace-closure.mjs`); der Audit läuft über genau
-  diesen Closure plus Electron statt über `--prod` allein. SBOM und
-  Attestation des Pakets folgen, sobald E1 geklärt ist.
-- **P4 — Versionstor aus dem Workspace.** Manifeste aus `pnpm-workspace.yaml`
-  ableiten; Pflanzung: ein Manifest auf eine andere Version, das Tor muss rot
-  werden.
-- **P5 — Dokumentation abgleichen.** README-Zahlen von `progress:walk` halten
-  lassen statt von Hand; ReadmeTech (Rules, Runner, Pico Link, Vault-
-  Definition); SECURITY.md mit allen Netzflächen und der Definition aus E3;
-  `progress.md` als Momentaufnahme mit richtigem Standdatum, das Journal in
-  Zeile 23 geht in die Roadmap, wo es schon steht; Konsistenzdokument auf den
-  heutigen Umfang; der eine Kommentar im Relay-Dockerfile.
-- **P6 — `.agent-context.md` auf den Handoff kürzen** (E8).
-- **P7 — Der Kommentar in `action-path.ts`** sagt, was der Code tut.
+**P1 — Client-Publish ohne Überschreiben** (R1, E2)
+- `ci.yml`, Job `client_package`: `--clobber` entfällt. Vor dem Hochladen
+  liest der Schritt die Asset-Namen des Releases (`gh release view --json
+  assets`) und endet mit Fehler, wenn einer der hochzuladenden Namen schon
+  dort liegt. Der Grund für `--draft` steht als Kommentar an der Zeile.
+- Die Entscheidung liegt als exportierte Funktion in einem Skript, das die
+  JSON-Antwort liest, damit sie gepflanzt werden kann; das Muster ist
+  `check-release-monotonic.mjs`.
+- Beweis: Test, in dem ein vorhandenes Asset die Veröffentlichung ablehnt und
+  ein leeres Release sie zulässt; `split:check` kennt den neuen Schritt.
+- Fertig, wenn ein zweiter Lauf auf denselben Tag rot endet, bevor er lädt.
+
+**P4 — Versionstor aus dem Workspace** (R6)
+- `scripts/check-version.mjs` liest die Manifeste aus den Globs in
+  `pnpm-workspace.yaml` statt aus einer Liste; Ausnahmen gäbe es nur mit
+  Grund, heute gibt es keine.
+- Beweis: Test, der einen Baum mit einem abweichenden Manifest pflanzt und den
+  Prüfer rot sieht, sowie einen mit 17 gleichen Manifesten grün.
+- Fertig, wenn `packages/gesture` und die vier Module gezählt werden und die
+  Schlussmeldung die Zahl aus dem Workspace nennt.
+
+**P7 — Der Kommentar in `action-path.ts`** (R14)
+- Zeilen 271-273 sagen, was `applyPicoRulesRecordedDecision` tut und was ADR
+  0140 seit dem 2026-08-25 festhält: eine Regel wählt unter dem, was der Boden
+  übrig lässt, in beide Richtungen; Boden und Reichweite bleiben davor.
+- Kein Codeweg ändert sich; Beweis ist die bestehende Testgruppe in
+  `pico-rules.test.ts`, die beide Richtungen prüft.
+
+**P12 — Replay-Zustand in einer Tabelle** (R20, E5)
+- Wanderung: eine Tabelle mit Anfrage-Id und Ablauf. `PicoLinkDirectIntake`
+  fragt und schreibt einen Speicher statt der Map; der Kern verdrahtet SQLite,
+  Tests verdrahten dasselbe. Der Sweep leert abgelaufene Zeilen; Obergrenze
+  1.024 wie heute, und `store:check` bekommt das Wachstumsende gesagt.
+- Beweis: ein Test startet den Eingang innerhalb des Fensters neu und sieht
+  dieselbe Anfrage abgelehnt; ein zweiter sieht die Id nach Ablauf frei.
+- ADR 0107 bekommt eine Statusnotiz, die Zeile 371 zurücknimmt.
+- Fertig, wenn der Satz in `progress.md:22` gestrichen werden kann.
+
+**P11 — Domänen-Shred und Forget erreichen die Jobtabelle** (R19, E4)
+- `domain-shred.ts` leert jede Jobzeile, deren `recall_context_json` die
+  Domäne nennt, mit demselben Mechanismus wie `forgetRecall`, und stempelt
+  `forgotten_at`. `home.memory.forget` leert zusätzlich die Wörter des Jobs,
+  aus dem das Item kam; die Zeile und ihr Zeiger bleiben (ADR 0126).
+- Beweis: zwei Tests mit Pflanzung, je einer pro Weg, die eine Zeile mit
+  Wörtern vorher und ohne nachher sehen.
+- ADR 0049 bekommt eine Statusnotiz; die grosse Frage (Posture und
+  Domänenschlüssel auf der Jobzeile, Q5-Obergrenze) steht dort als offen.
+
+**P3 — Der ausgelieferte Closure wird auditiert** (R3, E1)
+- Ein Prüfer läuft `pnpm audit --json` ohne `--prod` und behält nur die
+  Hinweise, deren Paket im ausgelieferten Closure liegt (aus
+  `workspace-closure.mjs`) oder Electron ist; ab `high` rot. Er steht in
+  `ci.yml` neben dem bestehenden Audit, aus demselben Grund wie der: neben
+  der Kette, nicht darin.
+- Beweis: Test der Filterfunktion über eine aufgezeichnete Audit-Antwort mit
+  einem Hinweis im Closure und einem ausserhalb.
+- SBOM und Attestation des Pakets bleiben offen, bis das Repository öffentlich
+  ist (E1); der Brief nennt das als Rest.
+
+**P6 — `.agent-context.md` auf den Handoff kürzen** (R9, R16, E8)
+- Zeile für Zeile: Handoff bleibt, Geschichte fällt, wenn sie in der Roadmap
+  oder in Git steht, bleibende Erkenntnisse wandern in
+  `docs/development/agent-runbook.md`.
+- Ein Tor in `verify:gates` hält die 200 Zeilen aus AGENTS.md:149.
+- Beweis: 201 Zeilen gepflanzt, Tor rot.
+
+**P5 — Dokumentation abgleichen** (R7, R8, R10, R11, R12, R13, R22, R25, E3, E7)
+- README: die drei Zahlen werden von `progress:walk` gehalten statt von Hand.
+- ReadmeTech: Rules und Runner sind da (Zeilen 111-112), Pico Link ist da
+  (155, 163), Pico Vault ist die Verwahrkomponente eines vollen Clients und
+  nicht der Knoten (131).
+- SECURITY.md: alle Netzflächen mit ihrer Bindung (Pico-Link-Eingang, Relay-
+  Mailboxport öffentlich, Relay-Gesundheit und -Betreiber auf Loopback,
+  Foundation lokal, Home-Assistant-Ingress) und die Definition aus E3.
+- `progress.md`: Momentaufnahme mit Standdatum des Tages; das Journal in Zeile
+  23 geht auf einen Absatz zurück, die Befunde stehen in der Roadmap; die Sätze
+  zu Replay und Jobtabelle folgen P12 und P11.
+- `docs/release/documentation-consistency.md`: Rollen und Umfang von heute.
+- `docker/relay.Dockerfile:3`: der Kommentar zeigt auf ADR 0155.
+- ADR 0031: Statussatz zu E7, das Identitätsformat ist eine versionierte
+  Schnittstelle.
+- Beweis: `docs:check` und `progress:walk` grün; für jede geänderte Aussage
+  steht die Zeile Code daneben, gegen die sie geprüft wurde.
+
+**P2 — Trust-Root auf GitHub** (R2), jederzeit, Nutzeraufgabe
+- Ruleset für `main`: Pflicht-Checks, kein Force-Push, kein Löschen; Tag-Schutz
+  für `v*`.
+- Im Baum ein Absatz in `docs/release/upgrade-contract.md`, der sagt, was
+  serverseitig erwartet wird und was kein Workflow ersetzen kann.
 
 ### Vor produktiven Personendaten
 
-- **P11 — Domänen-Shred und Forget erreichen die Jobtabelle** (E4, klein).
-- **P12 — Replay-Zustand in einer Tabelle** (E5).
-- **P9 — Eine reale Home-Assistant-Fahrt:** Installation, Upgrade, Backup,
-  Restore auf neuem Host, Wiederherstellung von der Recovery-Karte. Ein
-  Runbook im Baum, gefahren vom Nutzer an einer echten Instanz, Ergebnis
-  in die Matrix.
-- **P10 — Container geben root ab** (E9).
+**P9 — Eine reale Home-Assistant-Fahrt** (R17)
+- Ein Runbook im Baum: Installation, Upgrade, Backup, Restore auf neuem Host,
+  Wiederherstellung von der Recovery-Karte, jeweils mit dem erwarteten
+  Ergebnis. Gefahren vom Nutzer an einer echten Instanz; das Ergebnis geht in
+  die Matrix.
+
+**P10 — Container geben root ab** (R18, E9), gekoppelt an P9
+- Ein Startskript bereitet `/data` als root vor und startet den Prozess als
+  unprivilegierter Benutzer; `no-new-privileges` im Add-on. Gemessen auf der
+  Instanz aus P9, weil der Grund für root dort liegt.
 
 ### Später
 
-- **P8 — `app.ts` entlang der Vertrauensgrenzen teilen.** Nicht zusammen mit
-  Sicherheitsänderungen, und nicht nach Zeilenzahl.
+**P8 — `app.ts` entlang der Vertrauensgrenzen teilen** (R15). Nicht zusammen
+mit Sicherheitsänderungen, nicht nach Zeilenzahl, `app.ts` wird am Ende die
+Kompositionswurzel.
+
+### Kein Paket
+
+R21 (Sync) bleibt Prüfauftrag; R23 (Meshtastic) ist Konzept und wird so
+behandelt; R24 (Zeroization) ist in den ADRs schon so zurückhaltend, wie das
+Review es verlangt; R26 (Hygiene) ist mit E6 entschieden.
 
 ## Model und Aufwand je Schritt
 
@@ -161,11 +255,12 @@ festgeschrieben.
 | 2 Entscheidungen | keines | – | Nutzer |
 | 3 Pakete schneiden | Fable | medium | Reihenfolge und Zuschnitt; die Messung ist im Kontext |
 | P1, P4, P7 | Opus | medium | kleine Skripte mit Pflanzung, mechanisch |
-| P2 | Nutzer, dann Opus | low | ein Absatz |
-| P3 | Fable | high | Sicherheitsurteil darüber, was der Closure ist |
-| P5 | Opus | high | Breite; jeder Satz muss gegen Code stimmen |
-| P6 | Fable | medium | der Handoff dieser Sitzung; wer kürzt, muss wissen, was trägt |
-| P9 | Nutzer, Fable für das Runbook | medium | echte Instanz nötig |
-| P10, P11 | Fable | high | Härtung und Privacy-Entwurf mit ADR-Berührung |
 | P12 | Opus | high | klein, aber sicherheitsrelevant; Tests entscheiden |
+| P11 | Fable | high | Privacy-Weg mit ADR-Berührung |
+| P3 | Fable | high | Sicherheitsurteil darüber, was der Closure ist |
+| P6 | Fable | medium | der Handoff dieser Sitzung; wer kürzt, muss wissen, was trägt |
+| P5 | Opus | high | Breite; jeder Satz muss gegen Code stimmen |
+| P2 | Nutzer, dann Opus | low | ein Absatz |
+| P9 | Nutzer, Fable für das Runbook | medium | echte Instanz nötig |
+| P10 | Fable | high | Härtung, gemessen auf der Instanz aus P9 |
 | P8 | Fable | high | grosser Umbau entlang Grenzen |
