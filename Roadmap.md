@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B119 — Die vierte Ausnahmeliste, und die erste war meine (2026-09-10).**
+B118 endete mit der Beobachtung, dass eine Ausnahmeliste eine Behauptung in
+zwei Richtungen ist und niemand die zweite aufschreibt. Also nachgesehen, statt
+es dabei zu lassen.
+
+**Die vierte stand in meinem eigenen Modul.** `operated-surfaces.mjs` nennt
+zwei HTML-Seiten, die niemand bedient — eine Demo und eine Werkzeugvorlage —,
+und drei Prüfer lesen die Liste. Gepflanzt: eine der beiden Seiten gelöscht,
+die Begründung stehen gelassen.
+
+> **alle drei grün**, und alle drei melden weiter *„2 pages named as not
+> operated"* — was dann nicht mehr stimmt.
+
+Sie wirft jetzt, statt zu melden, wie der Ausblender in B109: was eine
+Ableitung braucht, prüft sie selbst, und dann kann kein Leser es vergessen.
+Dieselbe Pflanzung nennt danach die Seite, in allen drei Prüfern.
+
+**Und dann die Klasse statt des Falls.** Ein Prüfer erklärt sich mit Pfaden —
+die ausgenommene Datei, das Dokument, das die Regel trägt. Zieht so eine Datei
+um, bleibt die Begründung stehen und liest sich weiter wie eine Tatsache.
+Gemessen, bevor die Regel geschrieben war: **122 Pfade stehen in den Prüfern,
+und alle 122 kennt das Repository.**
+
+Es ist also kein Fund, sondern ein Netz — dieselbe Wahl wie in B113, wo die
+Lücke auch leer war. `vacuity:check` stellt die Frage jetzt an alle Prüfer auf
+einmal, statt vierunddreissig Listen einzeln nachzurüsten.
+
+**Zum dritten Mal `const` vor seiner Zeile.** Der neue Block landete unter der
+Schlussmeldung, weil ich ihn vor einen Kommentar gesetzt habe, der weiter unten
+stand als der Bericht. B114 und B116 waren dieselbe Sache. Die Lehre von B116 —
+*was eine Funktion braucht, holt sie sich selbst* — trägt hier nicht: das hier
+ist ein Zähler, der in einer Schleife wächst. Für den gilt schlicht, dass
+Code auf oberster Ebene in Dateireihenfolge läuft, und ein Bericht am Ende nur
+lesen kann, was darüber lief.
+
+**Was daraus folgt.** Vier Ausnahmelisten in zwei Tagen mit derselben
+Asymmetrie, und die vierte war meine eigene — geschrieben an dem Tag, an dem
+ich die erste gefunden hatte. Eine Regel zu kennen und sie beim Schreiben
+anzuwenden sind zwei verschiedene Dinge, und nur das zweite hilft.
+
 **B118 — Zweimal in zwei Tagen driftete eine Zahl, und gefunden hat es beide
 Male nur eine Hand (2026-09-10).** `progress.md` trägt achtzehn nachrechenbare
 Zahlen. Zweimal hintereinander war eine falsch:

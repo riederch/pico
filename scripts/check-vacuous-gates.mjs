@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { execSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -202,6 +202,55 @@ if (directoriesMirrored < 2) {
   );
 }
 
+/**
+ * **Und die zweite Frage an dieselben Pruefer** (Befund B119): nennt einer
+ * einen Pfad, den das Repository nicht hat?
+ *
+ * Ein Pruefer erklaert sich mit Pfaden - die Datei, die ausgenommen ist, das
+ * Dokument, das die Regel traegt, das Verzeichnis, das gelesen wird. Zieht so
+ * eine Datei um, bleibt die Begruendung stehen und liest sich weiter wie eine
+ * Tatsache. Dieselbe Asymmetrie, die an diesem Wochenende viermal aufgefallen
+ * ist (B106, B115, B118 und die unbedienten Seiten in
+ * `operated-surfaces.mjs`): eine Liste sagt, was erlaubt ist, und niemand
+ * fragt, ob es das noch gibt.
+ *
+ * Gemessen, bevor die Regel geschrieben wurde: 122 Pfade stehen in den
+ * Pruefern, und alle 122 kennt das Repository. Es ist also keine Reparatur,
+ * sondern ein Netz - dieselbe Wahl wie bei B113.
+ *
+ * **Was sie nicht liest:** einen Pfad, der zur Laufzeit zusammengesetzt wird,
+ * und einen ohne Endung. Gesucht wird eine Zeichenkette, die mit einem
+ * verfolgten Wurzelverzeichnis beginnt und auf eine Endung endet - die Form,
+ * in der diese Dateien einander nennen.
+ */
+const namedPathPattern =
+  /'((?:apps|packages|modules|docs|scripts|tools|bridges|\.github)\/[^']+\.[a-z]{2,5})'/gu;
+let namedPaths = 0;
+for (const entry of readdirSync(join(repoRoot, 'scripts')).sort()) {
+  if (!entry.endsWith('.mjs')) {
+    continue;
+  }
+  const source = readFileSync(join(repoRoot, 'scripts', entry), 'utf8');
+  for (const match of source.matchAll(namedPathPattern)) {
+    namedPaths += 1;
+    if (trackedPaths().has(match[1])) {
+      continue;
+    }
+    errors.push(
+      `scripts/${entry}:${source.slice(0, match.index).split('\n').length} names \`${match[1]}\``
+      + ', and the repository has no such file. A checker explains itself with paths; when one '
+      + 'moves, the explanation stays behind and reads like a fact.',
+    );
+  }
+}
+
+if (namedPaths === 0) {
+  errors.push(
+    'no checker named a path at all, so this audit compared nothing. Either they stopped '
+    + 'explaining themselves or the reading of them broke.',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Vacuous-gate check failed:');
   for (const error of errors) {
@@ -223,7 +272,8 @@ if (errors.length > 0) {
  */
 console.log(
   `Vacuous-gate check passed (${checksRun} checks run against ${directoriesMirrored} `
-  + `mirrored directories holding no files; ${skippedByDesign} skipped by design and `
+  + `mirrored directories holding no files; ${namedPaths} paths the checkers name, each one `
+  + `a file the repository has; ${skippedByDesign} skipped by design and `
   + `${skipsLookedPast} of those run again with the environment that makes them work and `
   + `${skipsArgued} argued as unforceable, `
   + `${exitedNonZero} ended non-zero - refused or crashed, which this audit cannot tell `
@@ -259,6 +309,14 @@ console.log(
  * dass die Stellung der Zeile die falsche Absicherung ist: was eine Funktion
  * braucht, holt sie sich selbst.
  */
+function trackedPaths() {
+  return new Set(
+    execSync('git ls-files', { cwd: repoRoot, encoding: 'utf8' })
+      .split('\n')
+      .filter((line) => line !== ''),
+  );
+}
+
 function trackedDirectories() {
   const directories = new Set();
   for (const path of execSync('git ls-files', { cwd: repoRoot, encoding: 'utf8' })

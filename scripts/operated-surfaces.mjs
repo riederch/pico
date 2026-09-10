@@ -29,12 +29,35 @@ export const picoUnoperatedSurfaces = new Map([
 
 export const picoRepoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 
-/** Jede verfolgte HTML-Datei, die niemand als unbedient begruendet hat. */
+/**
+ * Jede verfolgte HTML-Datei, die niemand als unbedient begruendet hat.
+ *
+ * **Und die Gegenrichtung, weil sie sonst fehlt** (Befund B119). Diese Liste
+ * sagte bis heute nur, welche Seite uebersprungen werden *darf*. Gepflanzt -
+ * eine der beiden Seiten geloescht, die Begruendung stehen gelassen - blieben
+ * alle drei Pruefer gruen und meldeten weiter *"2 pages named as not
+ * operated"*, was dann nicht mehr stimmte.
+ *
+ * Es ist die vierte Ausnahmeliste an diesem Wochenende mit derselben
+ * Asymmetrie (B106, B115, B118) und die erste, die ich selbst geschrieben
+ * habe. Sie wirft statt zu melden, wie der Ausblender in B109: was eine
+ * Ableitung braucht, prueft sie selbst, und dann kann kein Leser es
+ * vergessen.
+ */
 export function picoOperatedSurfaces() {
-  return execSync('git ls-files "*.html"', { cwd: picoRepoRoot, encoding: 'utf8' })
+  const tracked = execSync('git ls-files "*.html"', { cwd: picoRepoRoot, encoding: 'utf8' })
     .split('\n')
-    .filter((line) => line !== '' && !line.includes('node_modules'))
-    .filter((line) => !picoUnoperatedSurfaces.has(line));
+    .filter((line) => line !== '' && !line.includes('node_modules'));
+  for (const [path, reason] of picoUnoperatedSurfaces) {
+    if (!tracked.includes(path)) {
+      throw new Error(
+        `pico_unoperated_surface_is_gone: ${path} is argued as not operated (${reason}) and the `
+        + 'repository has no such page. A reason for something that is gone outlives what it '
+        + 'explained.',
+      );
+    }
+  }
+  return tracked.filter((line) => !picoUnoperatedSurfaces.has(line));
 }
 
 /**
