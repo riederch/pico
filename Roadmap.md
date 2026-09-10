@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B132 — Das Audit las den Graphen, das Paket trägt Chromium (2026-09-10,
+Paket P3 des externen Reviews).** `pnpm audit --prod` liest den
+Produktionsgraphen des Workspaces. Das Debian-Paket enthält die
+Electron-Laufzeit samt Chromium und V8, und `electron` steht als
+`devDependency` in `apps/companion-shell/package.json` — `--prod` sieht sie
+also nie, während `package-linux.mjs` sie in jedes gebaute Paket kopiert. Was
+ein Paket ist, entscheidet der Packer und nicht ein Feld in einem Manifest.
+
+**Gemessen, und das Ergebnis stand quer zur Erwartung.** Über
+`pico-companion_0.2.1_amd64.deb`: `pnpm audit --prod` meldet **null** Hinweise,
+der volle Lauf **sieben** — und alle sieben betreffen Testwerkzeug (`vitest`,
+`vite`, `esbuild`), das in keinem Paket landet. Die Lücke lag also nicht dort,
+wo sie sichtbar war, sondern genau umgekehrt: das eine, was ausgeliefert wird
+und `--prod` entgeht, ist Electron, und dafür stand an diesem Tag nichts an.
+Ein Prüfer, der heute nichts findet, ist trotzdem der Unterschied dazu, es
+morgen zu finden.
+
+**Das Inventar kommt aus dem Artefakt.** Ein zweites Mal abzuleiten, was
+ausgeliefert werden *sollte*, wäre dieselbe Behauptung noch einmal;
+`dpkg-deb --contents` sagt, was drin ist. pnpm schreibt Name und Version in
+den Verzeichnisnamen unter `.pnpm`, die Electron-Version steht als Datei
+`version` neben der Binärdatei, und beides ist ohne Auspacken lesbar — auf
+einer Maschine mit einem tmpfs von 7,5 GB ist das kein Nebenpunkt. Gemessen:
+**39 npm-Pakete plus Electron 44.0.0**.
+
+Verglichen wird Name **und** Version: ein Hinweis nennt in `findings[].version`
+die installierte Fassung, gegen die er gilt. Ein Werkzeug, das im Baum in einer
+verwundbaren und im Paket in einer sicheren Fassung liegt, meldet damit nicht
+fälschlich — ein Prüfer, der Wolf ruft, ist einer, den jemand abschaltet.
+
+**Und die eigene Pflanzung fand einen Fehler in ihm selbst.** Nimmt man die
+Zeile heraus, die Electron ins Inventar setzt, lief der Prüfer grün durch und
+sagte im Schlusssatz weiterhin *„including electron"*. Die Zahl fiel von 40 auf
+39, und das sieht niemand. Ein Satz, der eine Eigenschaft behauptet, die der
+Lauf nicht geprüft hat — genau das, wogegen dieser Prüfer geschrieben ist, nur
+eine Ebene höher. Er fragt jetzt nach, und dieselbe Pflanzung spricht.
+
+Er läuft **neben** der Kette, aus demselben Grund wie das Audit daneben: ein
+bekannter Hinweis ist eine Tatsache über die Welt am Tag des Baus, und ihn in
+ein Tor zu falten liesse eine fremde Veröffentlichung wie einen kaputten Baum
+aussehen. Und er läuft *nach* `verify:gates`, weil das Artefakt erst dort
+entsteht. Über einem leeren Baum endet er, bevor er das Netz anfasst — der
+Vakuitätsprüfer fährt jetzt fünfzig Prüfer statt neunundvierzig.
+
+Was offen bleibt und benannt gehört: eine SBOM neben dem Artefakt und ihre
+Attestation. Beide hängen daran, dass das Repository öffentlich ist
+(Entscheidung E1), und es ist es bewusst nicht.
+
 **B131 — Ein Shred, der eine Klartextkopie stehen ließ — und eine Entscheidung,
 die beim Umsetzen umfiel (2026-09-10, Paket P11 des externen Reviews).** ADR
 0049 zählt seit dem 2026-08-24 fünf Dinge auf, die andere Speicher erreichen

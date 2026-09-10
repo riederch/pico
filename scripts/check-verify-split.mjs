@@ -165,6 +165,15 @@ const besideTheChain = new Map([
     + 'eines Tag-Baus hat er keinen Gegenstand.',
   ],
   [
+    'pnpm closure:check',
+    'Externes Review vom 2026-09-09, §5. Er braucht das gebaute `.deb`, das erst '
+    + '`verify:gates` erzeugt, und stellt eine andere Frage als jedes Tor: nicht "stimmt der '
+    + 'Baum", sondern "trägt das Paket etwas, das an diesem Tag als kaputt bekannt ist". Ein '
+    + 'bekannter Hinweis ist eine Tatsache über die Welt und kein Zustand dieses Baumes - '
+    + 'gefaltet in die Kette liesse eine fremde Veröffentlichung den Baum kaputt aussehen, '
+    + 'genau wie beim Audit daneben.',
+  ],
+  [
     'pnpm progress:walk',
     'Befund B118. Er fährt neun Tore selbst, die derselbe Auftrag gerade gefahren hat - '
     + 'in die Kette gefaltet liefe die Hälfte davon zweimal je Lauf. Und er beantwortet '

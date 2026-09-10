@@ -126,6 +126,23 @@ jobs:
           PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE: "1"
         run: pnpm verify:gates
 
+      # Externes Review vom 2026-09-09, §5. Was das Paket wirklich mitbringt,
+      # gegen das, was bekannt kaputt ist.
+      #
+      # Das Audit oben liest den Produktionsgraphen des Workspaces. Das Paket
+      # traegt aber die Electron-Laufzeit samt Chromium, und `electron` steht
+      # als `devDependency` - `--prod` sieht sie nie, waehrend der Packer sie
+      # in jedes Paket kopiert. Hier statt oben, weil das Artefakt erst nach
+      # `verify:gates` existiert; das Inventar kommt aus ihm und nicht aus
+      # einem zweiten Graphen.
+      #
+      # Neben der Kette und nicht darin, aus demselben Grund wie das Audit
+      # daneben: ein bekannter Hinweis ist eine Tatsache ueber die Welt am Tag
+      # des Baus, und ihn in ein Tor zu falten liesse eine fremde
+      # Veroeffentlichung wie einen kaputten Baum aussehen.
+      - name: Audit what the client package actually ships
+        run: pnpm closure:check
+
       # Befund B118. Die Zahlen in `progress.md` werden von Hand gepflegt, und
       # zweimal in zwei Tagen ist eine gedriftet: eine neue exportierte
       # Faehigkeit, und die Zeile daneben sagte weiter die alte Zahl. Gefunden

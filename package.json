@@ -70,6 +70,7 @@
     "cycle:check": "node scripts/check-barrel-cycles.mjs",
     "vacuity:check": "node scripts/check-vacuous-gates.mjs",
     "version:check": "node scripts/check-version.mjs",
+    "closure:check": "node scripts/check-shipped-closure.mjs",
     "wire:check": "node scripts/check-wire-labels.mjs"
   },
   "devDependencies": {

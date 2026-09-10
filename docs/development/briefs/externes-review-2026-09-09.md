@@ -124,8 +124,9 @@ wiederholt werden.
   Austausch zurück. *Empfohlen:* so lassen. Wer nur die Notiz aufheben wollte,
   soll nicht ungefragt einen Eintrag aus seinem Verlauf verlieren; der Rest ist
   ein Hinweis auf der Fläche, keine zweite Wirkung dieser Operation.
-  *Alternative:* E4 wie beschlossen umsetzen — dann fällt der Test vom
-  2026-08-25 und seine Begründung mit ihm.
+  *Entschieden 2026-09-10:* so lassen. Die beiden Operationen bleiben
+  getrennt, und der Rest ist ein Hinweis auf der Fläche, keine zweite Wirkung
+  dieser Operation.
 
 - **E9 — Wann laufen die Container nicht mehr als root?** *Entschieden
   2026-09-10:* vor produktiven Personendaten, gekoppelt an P9, weil der Grund
@@ -191,7 +192,7 @@ damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
 - ADR 0049 bekommt eine Statusnotiz; die grosse Frage (Posture und
   Domänenschlüssel auf der Jobzeile, Q5-Obergrenze) steht dort als offen.
 
-**P3 — Der ausgelieferte Closure wird auditiert** (R3, E1)
+**P3 — Der ausgelieferte Closure wird auditiert** (R3, E1) — *erledigt 2026-09-10, Befund B132*
 - Ein Prüfer läuft `pnpm audit --json` ohne `--prod` und behält nur die
   Hinweise, deren Paket im ausgelieferten Closure liegt (aus
   `workspace-closure.mjs`) oder Electron ist; ab `high` rot. Er steht in
