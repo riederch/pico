@@ -1,3 +1,4 @@
+import { bytesToHex } from '@pico/protocol/canonical-bytes';
 import {
   picoHomeContinuityRecordSchema,
   picoHomeMembershipCredentialSchema,
@@ -40,13 +41,6 @@ import type { PicoLinkDirectClient } from './link-direct-client.js';
  * for that sentence to drift.
  */
 
-function bytesToHex(bytes: Uint8Array): string {
-  let output = '';
-  for (const byte of bytes) {
-    output += byte.toString(16).padStart(2, '0');
-  }
-  return output;
-}
 
 export async function rotatePicoHomeHostKeys(input: {
   client: PicoVaultDaemonClient;

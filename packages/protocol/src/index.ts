@@ -4,6 +4,7 @@
 import {
   asciiBytes,
   assertAsciiToken,
+  bytesToHex,
   canonicalAsciiTokenPattern,
   canonicalHexPattern,
   canonicalTextEncoder,
@@ -5154,11 +5155,6 @@ function assertPicoHomeDeviceLifecycleSubmission(
   }
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 function canonicalJson(value: unknown): string {
   if (value === null) {

@@ -1,3 +1,4 @@
+import { bytesToHex } from '@pico/protocol/canonical-bytes';
 import { isPicoInstant } from '@pico/protocol/instant';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
@@ -6434,7 +6435,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             ?? foundingRecord.founding.lifecycleOrder;
           const continuity: PicoHomeContinuitySignatureInput = {
             suite: picoIdentitySuite,
-            continuityId: `hostrot_${bytesToHexString(sodium.randombytes_buf(16))}`,
+            continuityId: `hostrot_${bytesToHex(sodium.randombytes_buf(16))}`,
             homeId: foundingRecord.founding.homeId,
             outgoingHostSigningKeyFingerprintHex:
               homeHostKeys.publicBundle.signingKeyFingerprintHex,
@@ -8869,9 +8870,6 @@ function nextLifecycleOrder(previous: string): string {
   return `seq:${String(next).padStart(16, '0')}`;
 }
 
-function bytesToHexString(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('hex');
-}
 
 function verifyPicoHomeFoundingEvidence(
   record: PicoHomeFoundingRecord,

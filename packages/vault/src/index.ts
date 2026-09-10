@@ -1,5 +1,8 @@
 // Befund B51. Dasselbe Muster, jetzt von dort, wo es einmal steht.
-import { canonicalHexPattern } from '@pico/protocol/canonical-bytes';
+import {
+  bytesToHex,
+  canonicalHexPattern,
+} from '@pico/protocol/canonical-bytes';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { wordlist as bip39EnglishWordlist } from '@scure/bip39/wordlists/english.js';
@@ -3441,9 +3444,6 @@ function asciiBytes(value: string): Uint8Array {
   return textEncoder.encode(value);
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('hex');
-}
 
 function hexToBytes(hex: string): Uint8Array {
   if (typeof hex !== 'string' || hex.length % 2 !== 0 || !canonicalHexPattern.test(hex)) {

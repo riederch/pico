@@ -1,3 +1,4 @@
+import { bytesToHex } from '@pico/protocol/canonical-bytes';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -5096,9 +5097,6 @@ function randomHex(bytes: number): string {
   return bytesToHex(sodium.randombytes_buf(bytes));
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('hex');
-}
 
 function keyRecordFingerprintHex(keyRecord: PicoIdentityKeyRecordSignatureInput): string {
   return bytesToHex(sodium.crypto_generichash(

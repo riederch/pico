@@ -1,3 +1,4 @@
+import { bytesToHex } from '@pico/protocol/canonical-bytes';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1414,6 +1415,3 @@ function signHex(message: Uint8Array, privateKey: Uint8Array): string {
   return bytesToHex(testSodium.crypto_sign_detached(message, privateKey));
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}

@@ -56,6 +56,12 @@ const singleTruths = [
    * dieselbe Spalte `same: false`, aus der dieser Pruefer schon lebt.
    */
   'assertExactKeys',
+  /**
+   * Befund B125. Acht Fassungen in drei Schreibweisen, ausgefuehrt alle
+   * gleich - und `padStart(2, '0')` zu vergessen faellt nicht auf, weil die
+   * Zeichenkette Hex bleibt und nur kuerzer wird.
+   */
+  'bytesToHex',
   'canonicalTextEncoder',
   'canonicalAsciiTokenPattern',
   'canonicalHexPattern',
@@ -109,6 +115,14 @@ const elsewhere = [
     why: 'Andere Regel unter demselben Namen (Befund B124): sie unterscheidet `unexpected_field` '
       + 'von `missing_field`. Wer sie zusammenlegte, naehme dem Vault die Unterscheidung, '
       + 'welche der beiden Haelften fehlt.',
+  },
+  {
+    where: 'packages/appearance/src/test-fixtures.ts',
+    name: 'bytesToHex',
+    same: true,
+    why: 'Dieselbe Regel, und sie bleibt (Befund B125): `@pico/appearance` hat mit Absicht '
+      + 'keine Abhaengigkeit, auch nicht auf das Protokoll. Dieselbe Grenze, die die '
+      + '`asciiBytes` daneben stehen laesst.',
   },
   {
     where: 'packages/appearance/src/appearance-document-v1-codec.ts',

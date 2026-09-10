@@ -1,3 +1,4 @@
+import { bytesToHex } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeFoundingSignatureInput,
@@ -58,9 +59,6 @@ function randomHex(bytes: number): string {
   return randomBytes(bytes).toString('hex');
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('hex');
-}
 
 function hexToBytes(hex: string): Uint8Array {
   return new Uint8Array(Buffer.from(hex, 'hex'));

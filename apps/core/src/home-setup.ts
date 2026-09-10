@@ -1,3 +1,4 @@
+import { bytesToHex } from '@pico/protocol/canonical-bytes';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -555,9 +556,6 @@ function hexToBytes(hex: string, errorMessage = 'Pico Home host key material mus
   return Uint8Array.from(Buffer.from(hex, 'hex'));
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('hex');
-}
 
 function isWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child);

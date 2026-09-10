@@ -209,3 +209,26 @@ export function assertExactKeys(
     throw new Error(error);
   }
 }
+
+/**
+ * Bytes als Hex, so wie dieses Produkt Hex schreibt: klein und zweistellig.
+ *
+ * **Der Anlass** (2026-09-10, Befund B125). Diese eine Zeile stand **achtmal**
+ * im Baum, in drei Schreibweisen - `Buffer.from(...).toString('hex')`, eine
+ * Schleife mit `padStart`, und zweimal `Array.from(...).map(...).join('')`.
+ * Ausgefuehrt liefern alle vier dasselbe, auch an den Raendern (leer, Nullen,
+ * Werte unter sechzehn) - gemessen und nicht gelesen.
+ *
+ * **Warum eine Zeile eine Regel ist.** `padStart(2, '0')` zu vergessen faellt
+ * nicht auf: aus einem Byte `10` wird `'a'` statt `'0a'`, die Zeichenkette
+ * bleibt Hex, und jeder Fingerabdruck danach ist um ein Zeichen verschoben.
+ * `canonicalHexPattern` daneben verlangt Kleinschreibung; wer `toUpperCase`
+ * schriebe, bekaeme eine Zeichenkette, die dieses Produkt nirgends annimmt.
+ * Acht Gelegenheiten, das einmal falsch zu machen, sind sieben zu viel.
+ *
+ * `Buffer` statt einer Schleife, weil das Protokollpaket ohnehin darauf steht
+ * und die Umwandlung damit die des Laufzeitsystems ist statt einer eigenen.
+ */
+export function bytesToHex(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('hex');
+}

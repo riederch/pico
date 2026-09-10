@@ -1,3 +1,4 @@
+import { bytesToHex } from '@pico/protocol/canonical-bytes';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -455,6 +456,3 @@ function sign(input: Uint8Array): string {
   return bytesToHex(sodium.crypto_sign_detached(input, controller.privateKey));
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('hex');
-}

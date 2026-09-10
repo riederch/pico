@@ -1,6 +1,10 @@
 // Befund B51. Dieselbe Regel wie im Protokoll, nur mit einem Feldnamen -
 // jetzt von dort, wo sie einmal steht.
-import { assertAsciiToken, fixedHexBytes } from '@pico/protocol/canonical-bytes';
+import {
+  assertAsciiToken,
+  bytesToHex,
+  fixedHexBytes,
+} from '@pico/protocol/canonical-bytes';
 import { isPicoInstant } from '@pico/protocol/instant';
 import {
   buildPicoHomeContinuitySignatureInput,
@@ -1051,9 +1055,6 @@ function assertSigningCapableKeyRecord(
   }
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
 
 function timingSafeAsciiEqual(left: string, right: string): boolean {
   if (left.length !== right.length) {

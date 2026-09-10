@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B125 — Dieselbe Frage an alle Namen: fünfundvierzig stehen über
+verschiedenen Regeln (2026-09-10).** B124 fand einen Namen über sechs Regeln.
+Die Frage gehört an den ganzen Baum, nicht an einen Namen:
+
+| | |
+|---|---|
+| Funktionsnamen | **1.524** |
+| stehen mehr als einmal | **60** |
+| davon über **verschiedenen** Rümpfen | **45** |
+
+Die Spitzenreiter sind alle im Signierweg: `assertInstant` (6 Fassungen, 6
+verschieden), `hexToBytes` (7/6), `bytesToHex` (8/6), `hasExactKeys` (8/4),
+`assertLifecycleOrder` (4/4).
+
+**Gefaltet: `bytesToHex`, dreizehn Fassungen in vier Schreibweisen** — acht im
+Produkt, vier in Tests, eine unter dem Namen `bytesToHexString`. Ausgeführt
+statt gelesen, und alle vier stimmen überein, auch an den Rändern:
+
+```
+[0,1,10,15,16,255] -> 00010a0f10ff (alle gleich)
+[] -> (alle gleich)      [0,0,0] -> 000000 (alle gleich)
+```
+
+**Warum eine Zeile eine Regel ist.** `padStart(2, '0')` zu vergessen fällt
+nicht auf: aus Byte `10` wird `'a'` statt `'0a'`, die Zeichenkette bleibt Hex
+und wird nur kürzer, und jeder Fingerabdruck danach ist um ein Zeichen
+verschoben. `canonicalHexPattern` daneben verlangt zusätzlich Kleinschreibung.
+Dreizehn Gelegenheiten dafür sind zwölf zu viel.
+
+**Nicht gefaltet: `hexToBytes`.** Die sieben sind wirklich verschieden, und
+zwar in der Prüfung — eine wirft mit eigener Meldung, zwei werfen
+`invalid_hex`, und die auf dem Recovery-Card-Weg prüft **gar nicht**. Die ist
+trotzdem richtig: ihr Aufrufer hat den Hexwert zwei Zeilen vorher gegen das
+Muster *und* gegen die Kanonisierung der Nutzlast geprüft, und die Datei sagt
+das auch — *„not because the mapping checks for it afterwards, but because the
+printed side and the scanned side are read from the same bytes."*
+
+Nach B124 wäre die bequeme Lesart gewesen, auch diese sieben zusammenzulegen.
+Sie sind nachgesehen worden, einzeln, und das Ergebnis ist ein Nein.
+
+`canonical:check` hält jetzt neun Regeln statt sieben und sechs benannte Kopien
+ausserhalb. Protokoll 621, Identität 34, Vault 19, Kern 1.112, Daemon 129 —
+alle grün.
+
+**Was offen bleibt, benannt statt stillschweigend:** dreiundvierzig weitere
+Namen stehen über verschiedenen Rümpfen. Die meisten sind Zwillinge mit Absicht
+(`assertLifecycleOrder` prüft in vier Paketen vier verschiedene Ordnungen);
+`assertInstant` mit sechs Fassungen ist nach Befund B112 der nächste
+Kandidat. Das steht in `.agent-context.md`, damit die nächste Sitzung die
+Messung nicht wiederholt.
+
 **B124 — Ein Name über sechs Regeln, und meine erste Zählung war falsch
 (2026-09-10).** Der Prüfer für kanonische Bytes nennt seine Lücke selbst:
 *„Eine Regel, die unter einem anderen Namen noch einmal geschrieben wird, ginge

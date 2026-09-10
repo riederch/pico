@@ -4,6 +4,7 @@
 import {
   asciiBytes,
   assertAsciiToken,
+  bytesToHex,
   canonicalTextEncoder,
   concatCanonicalElements,
   fixedHexBytes,
@@ -805,9 +806,6 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
     && left.every((value, index) => value === right[index]);
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
