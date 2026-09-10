@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { picoDockerfiles } from './workspace-members.mjs';
 
 /**
  * ADR 0122 Y1: the commit determines the build.
@@ -51,13 +52,12 @@ for (const entry of readdirSync(workflowDir)) {
 
 // --- Base images: pinned by digest ------------------------------------------
 
-const dockerDir = join(repoRoot, 'docker');
-for (const entry of readdirSync(dockerDir)) {
-  if (!entry.endsWith('.Dockerfile') && entry !== 'Dockerfile') {
-    continue;
-  }
+// Dieselbe Entdeckung wie in `check-addon-config.mjs`, seit dem 2026-09-10 aus
+// einer Hand: welche Bilder dieses Repositorium veroeffentlicht, ist eine
+// Frage und keine zwei.
+for (const dockerfilePath of picoDockerfiles(repoRoot)) {
   dockerFilesRead += 1;
-  const path = join(dockerDir, entry);
+  const path = join(repoRoot, dockerfilePath);
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     const match = /^FROM\s+(\S+)/u.exec(line.trim());
     if (match === null) {

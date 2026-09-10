@@ -1,22 +1,34 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { picoAddons, picoWorkspaceManifests } from './workspace-members.mjs';
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const packageFiles = [
-  'apps/companion/package.json',
-  'apps/companion-shell/package.json',
-  'apps/core/package.json',
-  'apps/relay/package.json',
-  'apps/vault-daemon/package.json',
-  'apps/web/package.json',
-  'packages/appearance/package.json',
-  'packages/identity/package.json',
-  'packages/link-relay-client/package.json',
-  'packages/protocol/package.json',
-  'packages/sync/package.json',
-  'packages/vault/package.json',
-];
+/**
+ * Die Mitglieder aus dem Workspace, nicht aus einer Liste (externes Review vom
+ * 2026-09-09, §8).
+ *
+ * Hier standen zwoelf Pfade von Hand. Der Workspace hat siebzehn Mitglieder:
+ * `packages/gesture` und alle vier `modules/*` fehlten, also durfte ihre
+ * Version von der des Produkts abweichen, ohne dass dieses Tor etwas sagte.
+ * Dass sie es heute nicht tun, hat die Luecke unsichtbar gehalten - ein Tor
+ * beweist nur die Eigenschaft, die es wirklich misst, und diese Zeilen massen
+ * zwoelf Siebzehntel davon.
+ *
+ * Dasselbe gilt fuer die beiden Add-ons darunter: ihre Konfigurationen,
+ * READMEs, Changelogs und Bildschilder standen achtmal einzeln hier. Jetzt
+ * kommen sie aus der Entdeckung, und ein drittes Add-on ist am Tag seiner
+ * Entstehung geprueft statt an dem Tag, an dem es jemandem auffaellt.
+ */
+let packageFiles;
+let addons;
+try {
+  packageFiles = picoWorkspaceManifests(repoRoot);
+  addons = picoAddons(repoRoot);
+} catch (error) {
+  console.error(`Version consistency check failed: ${String(error?.message ?? error)}`);
+  process.exit(1);
+}
 const errors = [];
 const rootPackage = readJson('package.json');
 const currentVersion = rootPackage.version;
@@ -35,11 +47,37 @@ for (const packageFile of packageFiles) {
   assertVersion(packageJson.version, `${packageFile} version`);
 }
 
-assertVersion(matchRequired('pico_home/config.yaml', /^version:\s*"([^"]+)"/m, 'Home Assistant add-on version'), 'pico_home/config.yaml version');
-// ADR 0155. The second add-on is version-bearing for the same reason the first
-// one is: the Supervisor appends this number to the image name, so a config
-// that lags the release installs a tag that does not exist yet.
-assertVersion(matchRequired('pico_relay/config.yaml', /^version:\s*"([^"]+)"/m, 'relay add-on version'), 'pico_relay/config.yaml version');
+// ADR 0153 and ADR 0155. Every add-on is version-bearing for the same reason:
+// the Supervisor appends this number to the image name, so a config that lags
+// the release installs a tag that does not exist yet. Its README, changelog
+// heading and the image tag inside the changelog say the same number to a
+// person, and a number said in five places is five places to be wrong.
+for (const addon of addons) {
+  assertVersion(
+    matchRequired(addon.configPath, /^version:\s*"([^"]+)"/m, 'add-on version'),
+    `${addon.configPath} version`,
+  );
+  assertVersion(currentVersionFence(`${addon.directory}/README.md`), `${addon.directory}/README.md current version`);
+  assertVersion(
+    matchRequired(`${addon.directory}/CHANGELOG.md`, /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest changelog heading'),
+    `${addon.directory}/CHANGELOG.md latest heading`,
+  );
+  if (addon.image === undefined) {
+    errors.push(
+      `${addon.configPath}: names no \`image:\`. The Supervisor pulls that name with this `
+      + 'version appended, so an add-on without one says nothing about what it installs.',
+    );
+    continue;
+  }
+  assertVersion(
+    matchRequired(
+      `${addon.directory}/CHANGELOG.md`,
+      new RegExp(`${addon.image.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}:([0-9]+\\.[0-9]+\\.[0-9]+)`),
+      'current image tag',
+    ),
+    `${addon.directory}/CHANGELOG.md current image tag`,
+  );
+}
 assertVersion(matchRequired('apps/core/src/app.ts', /const SERVICE_VERSION = '([^']+)'/, 'service version'), 'apps/core/src/app.ts SERVICE_VERSION');
 assertVersion(matchRequired('apps/vault-daemon/src/daemon.ts', /const DAEMON_VERSION = '([^']+)'/, 'vault daemon version'), 'apps/vault-daemon/src/daemon.ts DAEMON_VERSION');
 // The protocol version is a separate axis and is deliberately NOT compared to
@@ -52,12 +90,6 @@ assertSemver(protocolVersion, 'packages/protocol/src/index.ts picoProtocolVersio
 assertVersion(currentVersionFence('README.md'), 'README.md current version');
 assertVersion(currentVersionFence('ReadmeTech.md'), 'ReadmeTech.md current version');
 assertVersion(matchRequired('ReadmeTech.md', /Current tag:\n\n```text\n([0-9]+\.[0-9]+\.[0-9]+)\n```/, 'Home Assistant add-on current tag'), 'ReadmeTech.md current add-on tag');
-assertVersion(currentVersionFence('pico_home/README.md'), 'pico_home/README.md current version');
-assertVersion(matchRequired('pico_home/CHANGELOG.md', /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest changelog heading'), 'pico_home/CHANGELOG.md latest heading');
-assertVersion(matchRequired('pico_home/CHANGELOG.md', /ghcr\.io\/riederch\/pico\/home:([0-9]+\.[0-9]+\.[0-9]+)/, 'current add-on image tag'), 'pico_home/CHANGELOG.md current image tag');
-assertVersion(currentVersionFence('pico_relay/README.md'), 'pico_relay/README.md current version');
-assertVersion(matchRequired('pico_relay/CHANGELOG.md', /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest relay changelog heading'), 'pico_relay/CHANGELOG.md latest heading');
-assertVersion(matchRequired('pico_relay/CHANGELOG.md', /ghcr\.io\/riederch\/pico\/relay:([0-9]+\.[0-9]+\.[0-9]+)/, 'current relay image tag'), 'pico_relay/CHANGELOG.md current image tag');
 assertAllVersions('docs/release/versioning.md', collectSemvers('docs/release/versioning.md'), 'docs/release/versioning.md version references');
 assertProtocolVersion(matchRequired('docs/protocol/public-surfaces.md', /claims compatibility with protocol version `([0-9]+\.[0-9]+\.[0-9]+)`/, 'public protocol compatibility claim version'), 'docs/protocol/public-surfaces.md compatibility claim version');
 assertProtocolVersion(matchRequired('docs/protocol/public-surfaces.md', /"protocolVersion": "([0-9]+\.[0-9]+\.[0-9]+)"/, 'public protocol claim example version'), 'docs/protocol/public-surfaces.md protocolVersion example');
@@ -74,7 +106,11 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Version consistency check passed for ${currentVersion}.`);
+console.log(
+  `Version consistency check passed for ${currentVersion} `
+  + `(${packageFiles.length} workspace manifests, read from the globs in pnpm-workspace.yaml, `
+  + `and ${addons.length} add-ons discovered by their config.yaml).`,
+);
 
 function read(path) {
   return readFileSync(join(repoRoot, path), 'utf8');

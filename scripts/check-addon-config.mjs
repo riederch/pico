@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { picoAddons, picoDockerfiles } from './workspace-members.mjs';
 
 /**
  * Home Assistant add-on metadata and published-image gate.
@@ -25,9 +26,24 @@ const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
  * have left the new config unchecked on the day it was written - which is the
  * day it is most likely to be wrong. The same reasoning as the Dockerfile list
  * below, which ADR 0153 taught this file once already.
+ *
+ * **Und seit dem 2026-09-10 haelt der Satz sich selbst** (externes Review vom
+ * 2026-09-09, §8). Er stand ueber zwei von Hand geschriebenen Pfaden, also
+ * stimmte er, solange jemand ihn nachfuehrte - eine Liste sagt, was erlaubt
+ * ist, nie, ob es das noch gibt. `picoAddons` entdeckt sie so, wie der
+ * Supervisor sie entdeckt: ein Verzeichnis oberster Ebene mit einer
+ * `config.yaml`, die einen `slug` traegt.
  */
-const configPaths = ['pico_home/config.yaml', 'pico_relay/config.yaml'];
 const errors = [];
+let configPaths;
+let dockerfilePaths;
+try {
+  configPaths = picoAddons(repoRoot).map((addon) => addon.configPath);
+  dockerfilePaths = picoDockerfiles(repoRoot);
+} catch (error) {
+  console.error(`Home Assistant add-on config check failed: ${String(error?.message ?? error)}`);
+  process.exit(1);
+}
 
 /**
  * Was ein Add-on vom Wirt verlangen kann, ohne dass jemand hinsieht
@@ -163,9 +179,10 @@ for (const configPath of configPaths) {
  * Every published image, not just the one this file was written for. ADR 0153
  * added a second deliverable, and a check that guarded the first one only
  * would have left the new image's CMD unguarded on the day it was written -
- * which is the day it is most likely to be wrong.
+ * which is the day it is most likely to be wrong. Discovered above rather than
+ * listed here, by the same reader `check-workflow-pinning.mjs` uses - one
+ * truth about which images this repository publishes, not two.
  */
-const dockerfilePaths = ['docker/home.Dockerfile', 'docker/relay.Dockerfile'];
 
 for (const dockerfilePath of dockerfilePaths) {
   if (!existsSync(join(repoRoot, dockerfilePath))) {

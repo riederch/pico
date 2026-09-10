@@ -912,6 +912,60 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B128 — Zwölf Siebzehntel, und die Liste sagte „jedes" (2026-09-10, Paket P4
+des externen Reviews).** `check-version.mjs` hielt zwölf Manifeste gegen die
+Produktversion. Der Workspace hat siebzehn Mitglieder — `pnpm list -r` zählt
+sie mit, achtzehn samt Wurzel. `packages/gesture` und alle vier `modules/*`
+standen nicht in der Liste, durften also eine eigene Version tragen, ohne dass
+ein Tor etwas sagte. Heute tragen sie dieselbe, und genau das hat die Lücke
+unsichtbar gehalten: ein grünes Tor beweist die Eigenschaft, die es misst, und
+dieses maß zwölf Siebzehntel davon.
+
+Die Mitglieder kommen jetzt aus den Globs in `pnpm-workspace.yaml`. Der Leser
+expandiert `<verzeichnis>/*` und **weigert sich hörbar bei allem anderen** —
+kein `**`, kein Ausschlussmuster, kein geratener Pfad. Ein Muster, das er
+falsch läse, verkleinerte die bewachte Menge stillschweigend, und eine
+kleinere Menge meldet keinen Fehler, sie meldet weniger. Ein Verzeichnis ohne
+`package.json` ist kein Mitglied, weil pnpm es so hält; ein *Glob* ohne jedes
+Mitglied ist einer, weil ein Wurzelverzeichnis, das aufhört zu antworten, ein
+Umzug ist und kein sauberes Ergebnis.
+
+**Dieselbe Frage traf zwei weitere Listen, und eine davon behauptete etwas.**
+In `check-addon-config.mjs` standen zwei Konfigurationspfade unter der
+Überschrift *„Every add-on in this repository, not the one this file was
+written for"*. Der Satz stimmt, solange jemand ihn nachführt — eine Liste sagt,
+was erlaubt ist, nie, ob es das noch gibt. Add-ons werden jetzt so entdeckt,
+wie der Supervisor sie entdeckt: ein Verzeichnis oberster Ebene mit einer
+`config.yaml`, die einen `slug` trägt. Das ist die Regel der Plattform und
+keine erfundene Konvention, und der Unterschied zählt, weil eine erfundene
+später genauso still bricht wie eine Liste. Damit fallen acht von Hand
+geschriebene Zeilen in `check-version.mjs` weg: Konfiguration, README,
+Changelog-Überschrift und Bildschild werden je Add-on abgeleitet, das Schild
+aus dem `image:`, das die Konfiguration selbst nennt.
+
+Die dritte Liste war die der Dockerfiles — und `check-workflow-pinning.mjs`
+las dasselbe Verzeichnis daneben schon. Zwei Sätze über dieselbe Menge driften;
+jetzt fragen beide `picoDockerfiles`.
+
+Fünf Pflanzungen, fünf rot: `packages/gesture` auf 0.2.2, `modules/depot` auf
+0.1.9 (beide vorher unsichtbar), ein `packages/**`, ein `!**/fixtures/**` und
+ein Glob ohne Mitglieder. Elf Tests halten den Leser, darunter einer gegen
+diesen Baum: siebzehn Manifeste, und die fünf, die die Handliste ausließ,
+namentlich.
+
+**Und die vierte Namenskollision dieser Sitzung.** Meine Schleifenvariable in
+`check-workflow-pinning.mjs` hieß erst `relative`, ein Import aus `node:path`,
+dann `dockerfile` — und weiter unten steht ein `const dockerfile` auf oberster
+Ebene, also lag der Name beim Durchlauf in der toten Zone. Dieselbe Klasse wie
+B114, B116 und B119: Skriptcode auf oberster Ebene läuft in Dateireihenfolge,
+und ein Name, der weiter unten gebunden wird, ist oben nicht frei.
+
+**Und eine Lehre über die eigene Prüfreihenfolge.** Die elf Tests waren grün,
+und der Build fiel trotzdem: `@ts-expect-error` stand über einem mehrzeiligen
+Import, TypeScript schreibt den Fehler aber der Modulzeile zu, nicht der
+ersten. Vitest typprüft nicht, `pnpm build` schon — eine grüne Testmenge sagt
+nichts darüber, ob der Baum übersetzt.
+
 **B127 — Ein Asset wird einmal angehängt, nie ersetzt (2026-09-10, Paket P1
 des externen Reviews).** Das Review vom 2026-09-09 ist gegen den Baum
 gemessen und liegt als Brief unter `docs/development/briefs/`; neun

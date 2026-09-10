@@ -144,7 +144,7 @@ damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
   ein leeres Release sie zulässt; `split:check` kennt den neuen Schritt.
 - Fertig, wenn ein zweiter Lauf auf denselben Tag rot endet, bevor er lädt.
 
-**P4 — Versionstor aus dem Workspace** (R6)
+**P4 — Versionstor aus dem Workspace** (R6) — *erledigt 2026-09-10, Befund B128*
 - `scripts/check-version.mjs` liest die Manifeste aus den Globs in
   `pnpm-workspace.yaml` statt aus einer Liste; Ausnahmen gäbe es nur mit
   Grund, heute gibt es keine.
@@ -249,18 +249,23 @@ Review es verlangt; R26 (Hygiene) ist mit E6 entschieden.
 
 ## Model und Aufwand je Schritt
 
-| Schritt | Model | Effort | Grund |
-|---|---|---|---|
-| 1 Messung | Fable | high | Jede Behauptung muss gegen den Baum; eine plausible falsche kostet mehr als die Messung |
-| 2 Entscheidungen | keines | – | Nutzer |
-| 3 Pakete schneiden | Fable | medium | Reihenfolge und Zuschnitt; die Messung ist im Kontext |
-| P1, P4, P7 | Opus | medium | kleine Skripte mit Pflanzung, mechanisch |
-| P12 | Opus | high | klein, aber sicherheitsrelevant; Tests entscheiden |
-| P11 | Fable | high | Privacy-Weg mit ADR-Berührung |
-| P3 | Fable | high | Sicherheitsurteil darüber, was der Closure ist |
-| P6 | Fable | medium | der Handoff dieser Sitzung; wer kürzt, muss wissen, was trägt |
-| P5 | Opus | high | Breite; jeder Satz muss gegen Code stimmen |
-| P2 | Nutzer, dann Opus | low | ein Absatz |
-| P9 | Nutzer, Fable für das Runbook | medium | echte Instanz nötig |
-| P10 | Fable | high | Härtung, gemessen auf der Instanz aus P9 |
-| P8 | Fable | high | grosser Umbau entlang Grenzen |
+*Aufwand ist keine Spalte mehr:* der Nutzer hat am 2026-09-10 eine Untergrenze
+gesetzt (Opus ab xhigh, Fable ab high), und diese Sitzung liefert das Argument
+dafür — meine beiden „medium"-Einstufungen (B124, B125) waren Aufgaben, die ich
+für mechanisch hielt und die es nicht waren.
+
+| Schritt | Model | Grund |
+|---|---|---|
+| 1 Messung | Fable | Jede Behauptung muss gegen den Baum; eine plausible falsche kostet mehr als die Messung |
+| 2 Entscheidungen | keines | Nutzer |
+| 3 Pakete schneiden | Fable | Reihenfolge und Zuschnitt; die Messung ist im Kontext |
+| P1, P4, P7 | Opus | kleine Skripte mit engem Netz |
+| P12 | Opus | klein, aber sicherheitsrelevant; Tests entscheiden |
+| P11 | Fable | Privacy-Weg mit ADR-Berührung |
+| P3 | Fable | Sicherheitsurteil darüber, was der Closure ist |
+| P6 | Fable | der Handoff dieser Sitzung; wer kürzt, muss wissen, was trägt |
+| P5 | Opus | Breite; jeder Satz muss gegen Code stimmen |
+| P2 | Nutzer, dann Opus | ein Absatz |
+| P9 | Nutzer, Fable für das Runbook | echte Instanz nötig |
+| P10 | Fable | Härtung, gemessen auf der Instanz aus P9 |
+| P8 | Fable | grosser Umbau entlang Grenzen |
