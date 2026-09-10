@@ -78,7 +78,9 @@ export class PicoSupplierScratch {
   /** Creates the directory if it is missing, and returns it either way. */
   public ensure(identifier: string): string {
     const path = this.pathFor(identifier);
-    mkdirSync(path, { recursive: true });
+    // Befund B120: dieselbe Frage wie bei der Datenbank daneben - wer darf das
+    // lesen. Bisher stand hier die Vorgabe, also 0755 unter der Maske.
+    mkdirSync(path, { recursive: true, mode: 0o700 });
     return path;
   }
 

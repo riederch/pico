@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parsePicoLinkPacket, picoLinkPacketSchema } from '@pico/protocol/link-packet';
@@ -277,5 +277,41 @@ describe('ADR 0147 RY4 - deregistration leaves a tombstone', () => {
     const collected = second.collect({ accountId: 'account-1', mailbox: mailboxOf('a'), nowMs });
     expect(collected.ok && collected.packets.map((p) => p.tag)).toEqual([mailboxOf('b')]);
     second.close();
+  });
+});
+
+describe('ADR 0149 RS1 - wer auf dieser Maschine die Adressen lesen darf', () => {
+  /**
+   * Befund B120, gegen einen laufenden Relaisprozess gegangen: gegen ein
+   * Datenverzeichnis, das schon existierte, blieben `644 relay.sqlite`,
+   * `644 -wal` und `644 -shm` in einem Verzeichnis mit `755` liegen.
+   *
+   * Was darin steht, ist versiegelt - ADR 0107 siegelt Ende zu Ende und ein
+   * Relay haelt keinen Schluessel. Die *Adressen* sind es nicht:
+   * `check-link-seal.mjs` verbietet eine Mailboxadresse in einer
+   * Protokollzeile, weil eine Mailbox eine Beziehung ist, und diese Datei
+   * haelt alle auf einmal. Ein Relay ist die eine Komponente, die auf der
+   * Maschine eines anderen laeuft (RS1) - genau dort hoert "ein weiteres Konto
+   * auf diesem Rechner" auf, hypothetisch zu sein.
+   */
+  it('haelt Datenbank und Begleitdateien beim Eigentuemer, auch in einem offenen Verzeichnis', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'pico-relay-mode-'));
+    tempDirs.push(directory);
+    const data = join(directory, 'data');
+    mkdirSync(data, { recursive: true });
+    chmodSync(data, 0o755);
+
+    const store = new PicoRelayStore(join(data, 'relay.sqlite'), 'relay.example.invalid');
+    store.close();
+
+    for (const name of ['relay.sqlite', 'relay.sqlite-wal', 'relay.sqlite-shm']) {
+      let mode: number | null = null;
+      try {
+        mode = statSync(join(data, name)).mode & 0o777;
+      } catch {
+        continue;
+      }
+      expect(mode & ~0o600).toBe(0);
+    }
   });
 });

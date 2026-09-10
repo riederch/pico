@@ -101,7 +101,7 @@ try {
   const config = loadPicoRelayConfig();
   // The directory rather than the file: a mounted empty volume is the normal
   // first start, and better-sqlite3 creates the database but not its parent.
-  mkdirSync(dirname(config.databasePath), { recursive: true });
+  mkdirSync(dirname(config.databasePath), { recursive: true, mode: 0o700 });
   store = new PicoRelayStore(config.databasePath, config.operator);
   server = await startPicoRelayServer({
     store,

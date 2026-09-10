@@ -126,7 +126,8 @@ export function fetchPicoDepot(options: PicoDepotFetchOptions): PicoDepotFetchOu
     }
 
     if (!existsSync(gitDir)) {
-      mkdirSync(path, { recursive: true });
+      // Befund B120, wie beim Arbeitsverzeichnis daneben.
+      mkdirSync(path, { recursive: true, mode: 0o700 });
       run(['init', '--quiet'], path);
     }
 

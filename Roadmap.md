@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B120 — Dieselbe Frage auf der Maschine eines anderen (2026-09-10).** B117
+hat die Datenbank des Homes verengt. Die naheliegende Nachbarfrage: **das
+Relay ist die eine Komponente, die auf fremder Hardware läuft.** Ein echtes
+Relay gestartet und hingesehen:
+
+```
+755 data
+644 data/relay.sqlite
+644 data/relay.sqlite-wal
+644 data/relay.sqlite-shm
+```
+
+**Was darin steht, ist versiegelt — die Adressen sind es nicht.** ADR 0107
+siegelt Ende zu Ende und ein Relay hält keinen Schlüssel. Aber
+`check-link-seal.mjs` verbietet eine Mailboxadresse in einer *Protokollzeile*,
+weil eine Mailbox eine Beziehung ist — und diese Datei hält **alle auf
+einmal**, lesbar für jedes Konto auf dem Rechner des Betreibers. Genau dort
+hört „ein weiteres Konto auf dieser Maschine" auf, hypothetisch zu sein.
+
+Nach der Reparatur, gegen denselben laufenden Prozess: `600`, `600`, `600`.
+
+**Eine zweite Kopie, und sie ist begründet.** ADR 0149 RS1 verbietet dem Relay,
+`@pico/core` zu erreichen — zu Recht: ein Relay, das einen Store importieren
+könnte, ist eines, dem man später beibringen kann, einen zu lesen. Der Zwilling
+steht deshalb in `apps/relay/src/database-file-mode.ts` und nennt seinen
+Bruder. Zwanzig Zeilen `chmod` sind keine Regel über Pico, und die Grenze ist
+mehr wert als die zwanzig Zeilen.
+
+**Und die drei Verzeichnisse daneben.** `depots`, das Arbeitsverzeichnis eines
+Depots, und der Kratzplatz eines Lieferanten entstanden mit der Vorgabe. Der
+Kratzplatz ist der interessante: der Kopf über ihm sagt, dort packe ein
+Extraktor „ein 1,4-GB-Korpus" aus — also **Material der Person**, auf dem Weg
+durch fremden Code. Alle drei sagen jetzt `0700`; gegangen ist das
+Arbeitsverzeichnis, das gegen ein `755`-Elternverzeichnis `700` herauskommt.
+
+Zwei Pflanzungen: die Verengung im Relaisspeicher entfernt, und ein
+Datenverzeichnis, das schon `755` war.
+
+**Was daraus folgt.** B117 war ein Fund, B120 ist seine Nachbarschaft — und die
+Nachbarschaft war grösser als der Fund. Wer eine Datei repariert, sollte fragen,
+welche anderen dieselbe Herkunft haben; hier waren es vier weitere, davon eine
+auf einer Maschine, die dem Betreiber gehört und nicht der Person.
+
 **B119 — Die vierte Ausnahmeliste, und die erste war meine (2026-09-10).**
 B118 endete mit der Beobachtung, dass eine Ausnahmeliste eine Behauptung in
 zwei Richtungen ist und niemand die zweite aufschreibt. Also nachgesehen, statt

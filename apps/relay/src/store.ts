@@ -4,6 +4,7 @@ import type {
   PicoRelayAccountSummary,
 } from '@pico/protocol/link-relay-operator';
 import { picoRelayAccountRefLength } from '@pico/protocol/link-relay-operator';
+import { narrowToOwner } from './database-file-mode.js';
 import { picoRelayCredentialDigest } from './operator-claim.js';
 import {
   picoLinkMailboxPattern,
@@ -84,6 +85,8 @@ export class PicoRelayStore {
     }
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
+    // Befund B120. Was hier liegt, ist versiegelt - die Adressen sind es nicht.
+    narrowToOwner(databasePath);
     this.db.exec(`
       -- ADR 0154 RO2/RO4. One row or none, holding the digest of the operator
       -- credential. A relay's database is not the key to the relay it came
