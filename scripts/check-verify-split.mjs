@@ -164,6 +164,14 @@ const besideTheChain = new Map([
     'ADR 0122. Läuft nur im Tag-Bau und hält den Tag gegen die Version; ausserhalb '
     + 'eines Tag-Baus hat er keinen Gegenstand.',
   ],
+  [
+    'pnpm progress:walk',
+    'Befund B118. Er fährt neun Tore selbst, die derselbe Auftrag gerade gefahren hat - '
+    + 'in die Kette gefaltet liefe die Hälfte davon zweimal je Lauf. Und er beantwortet '
+    + 'eine andere Frage als jedes Tor: nicht "stimmt der Baum", sondern "sagt das '
+    + 'Statusdokument die Wahrheit über ihn". Zweimal in zwei Tagen ist eine Zahl '
+    + 'gedriftet, und gefunden hat es beide Male nur ein Aufruf von Hand.',
+  ],
 ]);
 
 /**
@@ -245,6 +253,25 @@ for (const [leaf] of reached) {
       + 'not know is one nobody can run before pushing.',
     );
   }
+}
+
+/**
+ * **Und die Gegenrichtung** (Befund B118).
+ *
+ * Diese Liste sagte bisher nur, was der Laeufer starten *darf*. Eine
+ * Begruendung fuer einen Schritt, den niemand mehr startet, faellt damit nicht
+ * auf - sie ueberlebt, was sie erklaerte, und liest sich beim naechsten Mal
+ * wie eine Tatsache. Dieselbe Asymmetrie wie bei den etikettlosen `.sign(` in
+ * Befund B106, und dort war sie schon einmal die halbe Regel.
+ */
+for (const [leaf, reason] of besideTheChain) {
+  if (reached.has(leaf)) {
+    continue;
+  }
+  errors.push(
+    `\`${leaf}\` is argued as running beside the chain (${reason.slice(0, 60)}...) and ci.yml `
+    + 'does not start it. A reason for something that is gone outlives what it explained.',
+  );
 }
 
 /**

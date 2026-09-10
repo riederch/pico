@@ -126,6 +126,20 @@ jobs:
           PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE: "1"
         run: pnpm verify:gates
 
+      # Befund B118. Die Zahlen in `progress.md` werden von Hand gepflegt, und
+      # zweimal in zwei Tagen ist eine gedriftet: eine neue exportierte
+      # Faehigkeit, und die Zeile daneben sagte weiter die alte Zahl. Gefunden
+      # hat es beide Male nur, dass jemand `progress:walk` von Hand rief.
+      #
+      # Er ist kein Kettenschritt und wird keiner: er faehrt neun Tore selbst,
+      # die dieser Auftrag gerade gefahren hat, und in die Kette gefaltet
+      # liefe die Haelfte davon zweimal je Lauf. Hier neben der Kette kostet
+      # er einundzwanzig Sekunden auf achtundfuenfzig Minuten und beantwortet
+      # eine andere Frage als jedes Tor: nicht "stimmt der Baum", sondern
+      # "sagt das Statusdokument die Wahrheit ueber ihn".
+      - name: Walk the numbers in progress.md
+        run: pnpm progress:walk
+
       # ADR 0153 PK6. `release:verify` builds this package and takes it apart
       # again, byte by byte, to check it. Keeping it means the artifact a
       # person downloads is the one that was verified - not a second build

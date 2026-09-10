@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B118 — Zweimal in zwei Tagen driftete eine Zahl, und gefunden hat es beide
+Male nur eine Hand (2026-09-10).** `progress.md` trägt achtzehn nachrechenbare
+Zahlen. Zweimal hintereinander war eine falsch:
+
+| Tag | behauptet | gemessen | Ursache |
+|---|---|---|---|
+| 2026-09-09 | 437 | 438 | `picoRelayRefusalName` aus B110 |
+| 2026-09-10 | 438 | 439 | `narrowToOwner` aus B117 |
+
+Beide Male hat es **kein Tor** gefunden, sondern dass ich `progress:walk`
+aufrief. Ein Werkzeug, das nur läuft, wenn jemand daran denkt, hat genau die
+Zuverlässigkeit dessen, der daran denkt — und die war an zwei Tagen zweimal
+nicht genug.
+
+**Er wird trotzdem kein Kettenschritt.** Er fährt neun Tore selbst, die
+derselbe Auftrag gerade gefahren hat; in die Kette gefaltet liefe die Hälfte
+davon zweimal je Lauf. Er läuft jetzt **neben** ihr, im selben Auftrag, nach
+`verify:gates`: **21 Sekunden auf 58 Minuten**, und er beantwortet eine andere
+Frage als jedes Tor — nicht „stimmt der Baum", sondern *„sagt das
+Statusdokument die Wahrheit über ihn"*.
+
+**Und beim Pflanzen fiel die Gegenrichtung auf.** `check-verify-split.mjs`
+führt eine Liste dessen, was der Läufer neben der Kette starten darf. Sie sagte
+nur, was erlaubt *ist*:
+
+- Schritt ohne Begründung → **fällt**
+- Begründung ohne Schritt → **ging durch**
+
+Eine Begründung für etwas, das niemand mehr startet, überlebt damit, was sie
+erklärte, und liest sich beim nächsten Mal wie eine Tatsache. Dieselbe
+Asymmetrie wie bei den etikettlosen `.sign(` in B106 — dort war sie schon
+einmal die halbe Regel, und hier stand sie unbemerkt daneben.
+
+Zwei Pflanzungen, beide sprechen jetzt.
+
+**Was daraus folgt.** Eine Liste von Ausnahmen ist eine Behauptung in zwei
+Richtungen, und die zweite schreibt niemand auf. Ich habe sie an diesem
+Wochenende dreimal gebraucht: bei den Signierstellen, bei den Pfaden in den
+Dokumenten und hier.
+
 **B117 — Die Schlüssel waren sorgfältig, die Datenbank lag offen
 (2026-09-10).** Ein echtes Home gestartet und danach hingesehen, statt den Code
 zu lesen:
