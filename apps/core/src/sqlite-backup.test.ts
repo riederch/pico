@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -423,5 +423,36 @@ describe('restoreSqliteBackup', () => {
     expect(row.value).toBe('backup value');
     expect(readFileSync(reservedTemporaryPath, 'utf8')).toBe('reserved temp file');
     expect(readdirSync(dir).filter((entry) => entry.includes('.restore'))).toEqual(['.pico.sqlite.restore.tmp']);
+  });
+});
+
+describe('ADR 0071 - was eine Sicherung fuer andere auf der Maschine ist', () => {
+  /**
+   * Befund B117, gegangen und nicht angenommen. Eine Sicherung ist die ganze
+   * Datenbank noch einmal: `db.backup()` legt die Zieldatei mit der Vorgabe an
+   * und nicht mit der Fassung der Quelle, also entstand aus einer Quelle mit
+   * `600` eine Kopie mit `644` in einem Verzeichnis mit `755`.
+   *
+   * Der Standardzustand fuer Inhalte ist `plaintext_foundation` - der Inhalt
+   * liegt so, wie er gegeben wurde, solange niemand einen Domaenenschluessel
+   * dafuer gewaehlt hat. Es geht hier also nicht nur um Metadaten.
+   */
+  it('legt sie so ab, dass nur der Eigentuemer sie lesen kann', async () => {
+    const directory = createTempDir();
+    const databasePath = join(directory, 'pico.sqlite');
+    const database = new Database(databasePath);
+    database.exec('CREATE TABLE remembered (id INTEGER PRIMARY KEY, note TEXT)');
+    database.prepare('INSERT INTO remembered (note) VALUES (?)').run('etwas Privates');
+    database.close();
+
+    // Ein Sicherungsziel, das jemand anders angelegt hat - eine Freigabe, ein
+    // Band, ein Verzeichnis aus einem Installationsskript.
+    const backupDirectory = join(directory, 'backups');
+    mkdirSync(backupDirectory, { recursive: true });
+    chmodSync(backupDirectory, 0o755);
+
+    const result = await createSqliteBackup(databasePath, backupDirectory);
+
+    expect(statSync(result.backupPath).mode & 0o777).toBe(0o600);
   });
 });

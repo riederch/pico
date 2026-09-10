@@ -1,4 +1,5 @@
 import { constants, copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { narrowToOwner } from './database-file-mode.js';
 import { basename, dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 
@@ -29,7 +30,17 @@ export async function createSqliteBackup(databasePath: string, backupDirectory: 
     throw new Error(`SQLite database does not exist: ${databasePath}`);
   }
 
-  mkdirSync(backupDirectory, { recursive: true });
+  /**
+   * Befund B117: eine Sicherung ist die ganze Datenbank, noch einmal.
+   *
+   * Gegangen: aus einer Quelle mit `600` entstand `644` in einem Verzeichnis
+   * mit `755` - `copyFileSync` und `db.backup()` legen die Zieldatei mit der
+   * Vorgabe an und nicht mit der Fassung der Quelle. Wer die Rechte der
+   * laufenden Datei in Ordnung bringt und die Sicherungen vergisst, hat die
+   * Erinnerungen einer Person weiterhin offen liegen, nur unter einem anderen
+   * Namen.
+   */
+  mkdirSync(backupDirectory, { recursive: true, mode: 0o700 });
 
   const createdAt = now.toISOString();
   const sourceName = basename(databasePath).replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -43,6 +54,7 @@ export async function createSqliteBackup(databasePath: string, backupDirectory: 
   } finally {
     db.close();
   }
+  narrowToOwner(backupPath);
 
   return {
     sourcePath: databasePath,
@@ -62,7 +74,7 @@ export function restoreSqliteBackup(backupPath: string, databasePath: string, op
     throw new Error(`SQLite database already exists: ${databasePath}`);
   }
 
-  mkdirSync(dirname(databasePath), { recursive: true });
+  mkdirSync(dirname(databasePath), { recursive: true, mode: 0o700 });
 
   const temporaryRestorePath = nextAvailableRestorePath(databasePath);
   let movedSidecars: MovedSqliteSidecarFile[] = [];
@@ -77,6 +89,8 @@ export function restoreSqliteBackup(backupPath: string, databasePath: string, op
 
     movedSidecars = moveSqliteSidecarFilesAside(databasePath);
     renameSync(temporaryRestorePath, databasePath);
+    // Wiederhergestellt heisst nicht offen: dieselbe Verengung wie beim Sichern.
+    narrowToOwner(databasePath);
     removeMovedSqliteSidecarFiles(movedSidecars);
     movedSidecars = [];
   } catch (error) {

@@ -912,6 +912,68 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B117 — Die Schlüssel waren sorgfältig, die Datenbank lag offen
+(2026-09-10).** Ein echtes Home gestartet und danach hingesehen, statt den Code
+zu lesen:
+
+```
+755 data
+644 data/pico.sqlite
+644 data/pico.sqlite-wal
+644 data/pico.sqlite-shm
+700 data/home-host-keys
+600 data/home-host-keys/home_host_signing.key.json
+```
+
+Der Schlüsselspeicher setzt `0700` und `0600` ausdrücklich. Die Datenbank, für
+die es diese Schlüssel gibt, bekam die Vorgabe von SQLite.
+
+**Der Schutz, den sie hatte, war ein Versehen.** Gegen ein *neues* Verzeichnis
+kam `700` heraus — aber nur, weil `mkdirSync(…, { mode: 0o700 })` für den
+Schlüsselspeicher den Elternteil unterwegs mit anlegt. Gegen ein vorhandenes
+Verzeichnis (Installationsskript, eingehängtes Volume, zurückgespielte
+Sicherung) bleibt es `755`, und dann ist die Datei selbst die einzige Grenze —
+und die war `644`.
+
+**Es geht nicht nur um Metadaten.** Der Standardzustand für Inhalte ist
+`plaintext_foundation`: der Inhalt liegt so, wie er gegeben wurde, solange
+niemand einen Domänenschlüssel dafür gewählt hat.
+
+**Die Begleitdateien zählen so viel wie die Datei.** SQLites `-wal` trägt die
+Seiten der letzten Schreibvorgänge, `-shm` den Index darauf. Eine Datenbank mit
+`600` neben einem Schreibprotokoll mit `644` schützt gestern und nicht heute
+früh.
+
+**Die Sicherungen waren die schärfere Hälfte:**
+
+| | vorher | nachher |
+|---|---|---|
+| `data/pico.sqlite` | 644 | **600** |
+| `-wal`, `-shm` | 644 | **600** |
+| Sicherungsverzeichnis | 755 | **700** |
+| Sicherungsdatei | 644 | **600** |
+
+`db.backup()` legt die Zieldatei mit der Vorgabe an und nicht mit der Fassung
+der Quelle: aus einer Quelle mit `600` entstand eine Kopie mit `644`. Wer die
+laufende Datei in Ordnung bringt und die Sicherungen vergisst, hat die
+Erinnerungen einer Person weiterhin offen liegen, nur unter einem anderen
+Namen. Dasselbe beim Zurückspielen.
+
+**Verengt, nie geweitet.** Liegt eine Datei schon bei `0600` oder enger, bleibt
+sie — wer enger gestellt hat, hat es so gemeint. Weggenommen werden nur die
+Bits, die jemand anders lesen lassen; das kann nichts kaputt machen, was schon
+privat war.
+
+**Gehalten von Tests, nicht von einem Tor.** Die Eigenschaft gehört diesen
+Dateien und nicht dem Baum — dieselbe Wahl wie in B111. Vier Pflanzungen: die
+Verengung im Speicher entfernt, die in der Sicherung entfernt, die
+Nur-verengen-Regel umgedreht, und ein Verzeichnis, das schon `755` war.
+
+**Was daraus folgt.** Der Unterschied zwischen „ist geschützt" und „ist
+absichtlich geschützt" sieht man nur, wenn man die zweite Bedingung herstellt.
+Ein frisches Verzeichnis hätte diesen Befund nie gezeigt; ein vorhandenes
+zeigte ihn sofort.
+
 **B116 — Den Läufer nachgestellt: 49 Prüfer, fünf Unterschiede, vier davon
 harmlos (2026-09-09).** Nach B115 die Frage, die sich aufdrängt: **welches Tor
 fragt sonst noch den Arbeitsplatz?** Nicht überlegt, sondern nachgestellt — ein

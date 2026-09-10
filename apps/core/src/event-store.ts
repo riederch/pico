@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
+import { narrowToOwner } from './database-file-mode.js';
 import { PicoModelProviderConsent, PicoModelProviderRegistry } from './model-provider-registry.js';
 import { PicoModelJobQueue } from './model-job-queue.js';
 import { PicoPresenceRegistry } from './presence-registry.js';
@@ -826,9 +827,10 @@ export class EventStore {
   }
 
   public constructor(databasePath: string, options: EventStoreConstructorOptions = {}) {
-    mkdirSync(dirname(databasePath), { recursive: true });
+    mkdirSync(dirname(databasePath), { recursive: true, mode: 0o700 });
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
+    narrowToOwner(databasePath);
     this.memoryCrypto = options.memoryCrypto;
     this.recoveryAnchor = options.recoveryAnchor;
     this.auditSodium = options.auditSodium;
