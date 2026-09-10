@@ -574,6 +574,48 @@ for (const row of trackedRows.split('\n')) {
   }
 }
 
+/**
+ * Die eine Groessengrenze, die `AGENTS.md` ausspricht - und die niemand hielt.
+ *
+ * `AGENTS.md` sagt seit Langem: *„`.agent-context.md`: nur aktueller Handoff,
+ * Zielgroesse maximal 200 Zeilen."* Am 2026-09-10 hatte die Datei **2.235**,
+ * ueberwiegend Augustverlauf, und ihr eigener Kopf sagte seit dem 2026-08-20,
+ * dass sie nicht mehr stimmt. Ein externes Review hat denselben Punkt gemacht:
+ * ein Agent liest so eine Datei als aktuellen Stand, und ein Stand von gestern
+ * steuert ihn falsch.
+ *
+ * **Die Zahl wird aus `AGENTS.md` gelesen und nicht hier wiederholt.** Sonst
+ * stuende dieselbe Wahrheit zweimal, und die zweite driftet. Verschwindet der
+ * Satz dort, faellt dieser Lauf: eine Regel ohne Aussage ist keine, und ein
+ * Tor, das sie trotzdem durchsetzte, setzte etwas durch, das niemand mehr
+ * sagt.
+ */
+const handoffPath = 'AGENTS.md';
+const handoffLimit = /`\.agent-context\.md`:[^\n]*?maximal (\d+) Zeilen\./u
+  .exec(readFileSync(join(repoRoot, handoffPath), 'utf8'));
+let handoffLines = null;
+if (handoffLimit === null) {
+  errors.push(
+    `${handoffPath}: no longer states a maximum size for \`.agent-context.md\`, so the rule this `
+    + 'check enforces has no source. A gate that outlives its statement enforces something '
+    + 'nobody says any more.',
+  );
+} else {
+  const limit = Number(handoffLimit[1]);
+  handoffLines = readFileSync(join(repoRoot, '.agent-context.md'), 'utf8')
+    .split('\n')
+    .filter((line, index, all) => index < all.length - 1 || line !== '')
+    .length;
+  if (handoffLines > limit) {
+    errors.push(
+      `.agent-context.md has ${handoffLines} lines and ${handoffPath} allows ${limit}. It is `
+      + 'read as the current handoff, so what stands in it is read as current - and history '
+      + 'kept there is history an agent acts on. Git holds the course and `Roadmap.md` holds '
+      + 'the reasons.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Documentation structure check failed:');
   for (const error of errors) {
@@ -595,5 +637,6 @@ console.log(
   + `${matrixPathsChecked} named files under a root directory, each real; `
   + `${claimsChecked} present-tense absence claims and `
   + `${statusClaimsChecked} nothing-is-built claims, each still true, read across `
-  + `${claimDocuments} tracked documents).`,
+  + `${claimDocuments} tracked documents; the handoff is ${handoffLines} lines against the `
+  + `limit ${handoffPath} states).`,
 );

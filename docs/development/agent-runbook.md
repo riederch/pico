@@ -307,6 +307,20 @@ naechste Schritte nur nach direkter Repository-Pruefung aktualisieren.
   Speicherdruck auf einer 16-GB-Maschine, deren `/tmp` im RAM liegt. Die
   Zeitgrenze ist nicht das Problem und gehoert nicht erhoeht.
 
+- **Die Relaisbereitstellung des Nutzers laeuft ueber einen Tunnel auf 443,
+  nicht ueber Portweiterleitung.** Das traegt, weil das Relay am oeffentlichen
+  Port schlichtes HTTP spricht und der Endpunkt vom Adressnamen getrennt ist -
+  `apps/core/src/link-relay-transport.ts` sagt es woertlich: *"Where
+  the operator answers. A deployment property, not an address."* Der
+  Operator-Name selbst steht bewusst **nicht** in diesem Repository.
+
+  Er ist ausserdem **dauerhaft**: er ist der Teil hinter dem `@` in jeder
+  Adresse, die dieses Relay ausgibt, und `apps/relay/src/store.ts` weist jedes
+  Paket ab, dessen Adresse einen anderen Operator nennt. Ein spaeterer Wechsel
+  toetet alle bereits ausgegebenen Adressen, also wird der Wert einmal gesetzt
+  und nicht ausprobiert. (Stand vom 2026-08-20, hierher verschoben am
+  2026-09-10 beim Kuerzen von `.agent-context.md`.)
+
 Historische erfolgreiche Testlaeufe werden nicht hier protokolliert. Der
 aktuelle Handoff nennt nur den zuletzt direkt verifizierten Gate; Git und CI
 halten den Verlauf.

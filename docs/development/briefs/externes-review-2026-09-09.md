@@ -203,7 +203,7 @@ damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
 - SBOM und Attestation des Pakets bleiben offen, bis das Repository öffentlich
   ist (E1); der Brief nennt das als Rest.
 
-**P6 — `.agent-context.md` auf den Handoff kürzen** (R9, R16, E8)
+**P6 — `.agent-context.md` auf den Handoff kürzen** (R9, R16, E8) — *erledigt 2026-09-10, Befund B133*
 - Zeile für Zeile: Handoff bleibt, Geschichte fällt, wenn sie in der Roadmap
   oder in Git steht, bleibende Erkenntnisse wandern in
   `docs/development/agent-runbook.md`.

@@ -912,6 +912,45 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B133 — Eine Regel, die niemand hielt, und eine Datei, die sich selbst
+widersprach (2026-09-10, Paket P6 des externen Reviews).** `AGENTS.md` sagt
+seit Langem: *„`.agent-context.md`: nur aktueller Handoff, Zielgröße maximal
+200 Zeilen."* Die Datei hatte **2.235**, überwiegend Augustverlauf. Ihr eigener
+Kopf sagte seit dem 2026-08-20, dass sie nicht mehr stimmt, und trug im selben
+Absatz zwei Zahlen von damals — 45 Schritte statt 51, 2.947 Tests. Ein Agent
+liest so eine Datei als aktuellen Stand, und ein Stand von gestern steuert ihn
+falsch; das Review hat denselben Punkt gemacht.
+
+**Vor dem Streichen nachgesehen, nicht danach.** Von den 285 fett markierten
+Aussagen der alten Datei stehen 279 nirgends wörtlich sonst — ein grobes Maß,
+denn das meiste ist Prosa über Dinge, die in Git, im Code oder in einer ADR
+stehen. Gezielt geprüft wurden die vier Sätze, die *Arbeitsanweisung* sind: der
+Probe-Modus entscheidet über das PSS-Budget (steht im Runbook), Real-Process-
+Tests laufen gegen `dist/` (steht im Runbook), `3200` wird weitergeleitet und
+`3100` nie (steht in beiden Add-on-Konfigurationen und wird von
+`check-addon-config.mjs` gelesen), und nie `git add -A` (in den neuen Einstieg
+übernommen). Ein fünfter ist gewandert statt zu fallen: dass die
+Relaisbereitstellung über einen Tunnel auf 443 läuft und der Operator-Name
+dauerhaft ist, steht jetzt im Runbook — mitsamt dem Grund, warum ein späterer
+Wechsel jede ausgegebene Adresse tötet.
+
+Dabei fiel auf, dass der Satz einen toten Pfad nannte: er suchte
+`link-relay-transport.ts` unter `packages/protocol/src`, und die Datei liegt in
+`apps/core/src`. Das Tor aus Befund B115 hat es beim Verschieben sofort
+gemeldet — genau die Sorte Zeiger, wegen der es geschrieben wurde. Und beim
+Aufschreiben dieses Absatzes ein zweites Mal, weil ich den toten Pfad als
+Beispiel hinschrieb: die Regel liest einen Pfad in Backticks als Zeiger,
+gleichgültig ob der Satz ihn gerade für tot erklärt.
+
+Übrig sind **124 Zeilen**: wo die Wahrheit steht, der Einstieg, was gerade
+läuft, acht offene Entscheidungen und der Verifikationsstand.
+
+**Und ein Tor hält die Zahl, das sie nicht wiederholt.** Es liest die Grenze
+aus `AGENTS.md` statt sie ein zweites Mal hinzuschreiben; verschwindet der Satz
+dort, fällt der Lauf. Eine Regel ohne Aussage ist keine, und ein Tor, das sie
+trotzdem durchsetzte, setzte etwas durch, das niemand mehr sagt. Zwei
+Pflanzungen, beide rot: 203 Zeilen, und die Regel aus `AGENTS.md` entfernt.
+
 **B132 — Das Audit las den Graphen, das Paket trägt Chromium (2026-09-10,
 Paket P3 des externen Reviews).** `pnpm audit --prod` liest den
 Produktionsgraphen des Workspaces. Das Debian-Paket enthält die
