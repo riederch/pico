@@ -912,6 +912,58 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B131 — Ein Shred, der eine Klartextkopie stehen ließ — und eine Entscheidung,
+die beim Umsetzen umfiel (2026-09-10, Paket P11 des externen Reviews).** ADR
+0049 zählt seit dem 2026-08-24 fünf Dinge auf, die andere Speicher erreichen
+und diesen nicht. Eines davon: *„A domain shred does not reach it.
+`domain-shred.ts` never names the table."* Das Review hat danach gefragt.
+
+**Warum dieses eine schwerer wiegt als seine vier Nachbarn.** Ein Shred ist der
+Vorgang, der Inhalt *unlesbar* macht, indem er die Schlüssel einer Domäne
+zerstört. Eine Zeile, die Frage, Antwort und gelesenen Kontext derselben Domäne
+im Klartext hält, überlebt ihn unberührt — er tut dann, was er verspricht, an
+allem außer an der Stelle, an der die Worte ohnehin offen lagen. Hier wählt
+auch kein Mensch zwischen zwei Gütern; es gibt nur eines.
+
+Der Weg dorthin ist ein **Port** in `domain-shred.ts`, wie beim
+Beobachtungspuffer, und aus dem Grund, den die Datei selbst nennt: „shred a
+domain" ist eine Handlung, und eine Kaskade mit zwei Eingängen ist eine, von
+der jemand die Hälfte vergisst. Geleert wird, was `home.recall.forget` leert;
+`kept_memory_item_id` bleibt stehen, weil die Handhabe alles ist, womit eine
+Person ein behaltenes Item noch aufheben kann (ADR 0126). Eine noch laufende
+Zeile bekommt `outcome = 'domain_shredded'` statt `taken_back` — ein Shred ist
+keine Rücknahme durch die Person, und diese Liste ist ein Verlauf für Menschen.
+
+**Die zweite Hälfte des Pakets ist beim Umsetzen umgefallen, und das ist der
+eigentliche Befund.** Entscheidung E4 sah vor, dass `home.memory.forget`
+zusätzlich die Worte des Austauschs leert, aus dem das Item stammte. Beim
+Schreiben stand ein bestehender Test dagegen, mit ausgeschriebener Begründung
+vom 2026-08-25: *„The answer stays and the memory goes. What was taken back is
+the memory, not the record that an answer was once given — and the line then
+offers to keep it again, which is the honest state: they have one and did not
+keep it."*
+
+Das ist nicht bloß ein Test, es ist die Gestalt, die der Nutzer damals gewählt
+hat: die eine Operation hebt die Erinnerung auf, die andere nimmt den Austausch
+zurück, und beide zusammen lassen die Person wählen. Wer den Austausch
+mitnimmt, wenn jemand nur die Notiz aufheben wollte, entfernt einen Eintrag aus
+dessen Verlauf, ohne dass er danach gefragt hat. **Als ich E4 vorlegte, kannte
+ich diesen Test nicht** — ich hatte ADR 0049 gelesen und die Nachbarschaft
+nicht. Die Hälfte ist zurückgenommen, der Grund steht an der Stelle im Code, in
+ADR 0049 und hier; die Umkehr gehört dem Nutzer und nicht mir.
+
+Drei Netze, drei Ebenen, weil die Lücke zwischen ihnen läge: sechs Tests halten
+die Semantik der Warteschlange, zwei den Ruf des Ports im Shred, und einer die
+**Verdrahtung** im Kern — ohne den dritten wären die ersten beiden wahr und der
+Weg dazwischen trotzdem offen. Zwei Pflanzungen, beide punktgenau: ein
+verstellter JSON-Pfad lässt vier Warteschlangentests fallen, ein abgehängter
+Port genau den Verdrahtungstest.
+
+Offen bleiben die drei übrigen Punkte aus ADR 0049: keine Q5-Obergrenze, kein
+Sweep, keine Posture auf der Jobzeile. Die grosse Fassung gehört mit der
+Obergrenzenfrage zusammen entschieden, weil beide davon abhängen, was ein
+Verlauf ist, den eine Person behalten will.
+
 **B130 — Ein Wiederholungsschutz, der im Prozess wohnte (2026-09-10, Paket P12
 des externen Reviews).** ADR 0107 nannte den Rest seit seinem ersten Tag in der
 eigenen Bedrohungstabelle: *„the seen set is in-memory; a restart inside a

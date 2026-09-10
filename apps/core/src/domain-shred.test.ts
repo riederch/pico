@@ -92,6 +92,41 @@ describe('shredDomainWithAudit (ADR 0071 step 4)', () => {
     expect(JSON.stringify(audits[0].payload)).not.toContain('secret');
   });
 
+  it('reaches the recall history, and says how many exchanges it cleared', () => {
+    /**
+     * ADR 0049 mit ADR 0071 (2026-09-10). Der Shred ist ein Vorgang, der
+     * Inhalt unlesbar macht; eine Klartextkopie derselben Worte daneben lässt
+     * ihn tun, was er verspricht, an allem ausser an der Stelle, an der die
+     * Worte ohnehin offen lagen. Der Port ist der Weg dorthin, aus demselben
+     * Grund wie beim Beobachtungspuffer: ein Kaskadenschritt, den man von
+     * aussen anhängt, ist einer, den jemand vergisst.
+     */
+    const { store, append } = openHarness();
+    const cleared: string[] = [];
+
+    const result = shredDomainWithAudit(
+      store.memory(),
+      append,
+      { privacyDomain: 'domain-private' },
+      undefined,
+      (domain) => {
+        cleared.push(domain);
+        return 3;
+      },
+    );
+
+    expect(cleared).toEqual(['domain-private']);
+    expect(result.forgottenRecalls).toBe(3);
+  });
+
+  it('answers zero for the recall history when nobody wired it', () => {
+    // The port is optional, and a shred without it says zero rather than
+    // pretending it reached something.
+    const { store, append } = openHarness();
+    expect(shredDomainWithAudit(store.memory(), append, { privacyDomain: 'domain-private' })
+      .forgottenRecalls).toBe(0);
+  });
+
   it('records an audit event even when the domain had no keys', () => {
     const { store, append } = openHarness();
 

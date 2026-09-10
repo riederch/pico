@@ -4152,6 +4152,28 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             memoryItemId: null,
             privacyDomain: null,
           });
+          /**
+           * **Und die Worte des Austauschs bleiben, mit Absicht** (nachgesehen
+           * am 2026-09-10, Paket P11 des externen Reviews).
+           *
+           * Die Entscheidung E4 sah vor, hier auch `forgetRecall` zu rufen.
+           * Beim Umsetzen stand der Nachbar-Test dagegen, und mit Grund: „The
+           * answer stays and the memory goes. What was taken back is the
+           * memory, not the record that an answer was once given - and the
+           * line then offers to keep it again, which is the honest state: they
+           * have one and did not keep it." Das ist die Gestalt, die der Nutzer
+           * am 2026-08-25 gewählt hat, und sie ist sauber: diese Operation
+           * hebt die Erinnerung auf, `home.recall.forget` nimmt den Austausch
+           * zurück, und beide zusammen lassen die Person wählen.
+           *
+           * Was als Rest bleibt: wer nur diese Operation kennt, hat den
+           * Austausch noch im eigenen Verlauf stehen. Das ist sein Verlauf und
+           * ihm gezeigt, und es gibt genau eine Handlung, die ihn entfernt -
+           * ob die Oberfläche darauf hinweisen soll, ist eine Frage an die
+           * Fläche und nicht an diese Zeile. Der Domänen-Shred dagegen erreicht
+           * die Warteschlange jetzt, weil dort kein Mensch wählt: ein Vorgang,
+           * der Inhalt unlesbar macht, darf keine lesbare Kopie stehen lassen.
+           */
           return { outcome: 'ok', result: { forgotten: true } };
         }
         /**
@@ -7971,7 +7993,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       });
     }
 
-    const { removedKeyVersions, removedObservations } = shredDomainWithAudit(
+    const { removedKeyVersions, removedObservations, forgottenRecalls } = shredDomainWithAudit(
       store.memory(),
       (audit) => {
         appendServerEvent('memory.domain_shredded', audit);
@@ -7985,10 +8007,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // carry no key envelope, and data designed not to outlive its window has
       // nothing worth leaving behind undecryptable.
       (domain) => store.deletePicoObservationsInDomain(domain),
+      // ADR 0049 with ADR 0071. And the recall history, which holds the same
+      // words in the clear. Cleared rather than deleted: the row is the handle
+      // a person has on a memory item they kept (ADR 0126).
+      (domain) => store.picoModelJobQueue()
+        .forgetDomainRecalls({ privacyDomain: domain, at: new Date().toISOString() }),
     );
 
     request.log.warn(
-      { privacyDomain, removedKeyVersions, removedObservations },
+      { privacyDomain, removedKeyVersions, removedObservations, forgottenRecalls },
       'Privacy domain crypto-shredded.',
     );
     reconcileShareEnvelopes();

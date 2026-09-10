@@ -40,17 +40,44 @@ export interface ShredDomainInput {
  */
 export type DeleteDomainObservations = (privacyDomain: string) => number;
 
+/**
+ * ADR 0049 with ADR 0071. The model-job queue, which the shred must also reach.
+ *
+ * **It did not until 2026-09-10**, and ADR 0049 had said so in as many words
+ * since 2026-08-24: *"A domain shred does not reach it. `domain-shred.ts`
+ * never names the table."* An external review asked about it on 2026-09-09.
+ * The queue is not a log beside the product - it *is* the recall history a
+ * person is shown, and it holds the question, the answer and the material the
+ * answer was formed from, all three in the clear.
+ *
+ * That is what makes it worse here than elsewhere: a shred is the act that
+ * makes a domain's content unreadable by destroying its keys, and a plaintext
+ * copy of the same words survives it untouched. The words are cleared rather
+ * than the rows deleted, for the reason ADR 0126 gives - a kept memory item is
+ * found through its job row, and taking the row would take the person's only
+ * handle on the item with it.
+ *
+ * A port for the same reason the observation buffer is one: "shred a domain"
+ * is one act, and a cascade with two entry points is a cascade someone forgets
+ * half of.
+ */
+export type ForgetDomainRecalls = (privacyDomain: string) => number;
+
 export function shredDomainWithAudit(
   memory: MemoryStore,
   appendAudit: AppendShredAudit,
   input: ShredDomainInput,
   deleteObservations?: DeleteDomainObservations,
-): { removedKeyVersions: number; removedObservations: number } {
+  forgetRecalls?: ForgetDomainRecalls,
+): { removedKeyVersions: number; removedObservations: number; forgottenRecalls: number } {
   const { removed } = memory.cryptoShredDomain(input.privacyDomain);
   // After the keys, so a failure between the two leaves readings whose domain
   // key is already gone rather than keys for readings that are already gone.
   // Both are bad; only one of them is recoverable by running the shred again.
   const removedObservations = deleteObservations?.(input.privacyDomain) ?? 0;
+  // And the same ordering for the same reason: a failure here leaves words
+  // whose domain key is gone, which the next run of the shred clears.
+  const forgottenRecalls = forgetRecalls?.(input.privacyDomain) ?? 0;
 
   appendAudit({
     privacyDomain: input.privacyDomain,
@@ -58,5 +85,5 @@ export function shredDomainWithAudit(
     ...(input.reason === undefined ? {} : { reason: input.reason }),
   });
 
-  return { removedKeyVersions: removed, removedObservations };
+  return { removedKeyVersions: removed, removedObservations, forgottenRecalls };
 }

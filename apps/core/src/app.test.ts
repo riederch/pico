@@ -80,6 +80,8 @@ import {
   picoTestValidityWindow,
 } from '@pico/protocol';
 import { buildPicoLibraryDerivation } from '@pico/protocol/library-pin';
+import { parsePicoModelJob } from '@pico/protocol/model-job';
+import { PicoModelJobQueue } from './model-job-queue.js';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { KeyStore } from './key-store.js';
@@ -4710,6 +4712,76 @@ describe('domain crypto-shred trigger', () => {
     const item = readStoredContent(databasePath, memoryItemId);
     expect(item.content).toBeUndefined();
     expect(item.contentUnavailable).toBe('key_shredded');
+  });
+
+  it('reaches the recall history, so no plaintext copy of the words survives it', async () => {
+    /**
+     * ADR 0049 mit ADR 0071 (2026-09-10, Paket P11 des externen Reviews). Der
+     * Nachbar-Test oben prüft, dass der Inhalt des Items unlesbar wird. Die
+     * Modelljob-Warteschlange hielt dieselben Worte im Klartext daneben, und
+     * `domain-shred.ts` nannte die Tabelle nicht - ADR 0049 sagte das seit dem
+     * 2026-08-24.
+     *
+     * Geprüft wird hier die **Verdrahtung**: dass der Kern den Port übergibt.
+     * Was der Port tut, halten die Tests der Warteschlange; dass ein Shred ihn
+     * ruft, hält `domain-shred.test.ts`. Ohne diesen dritten wäre beides wahr
+     * und der Weg dazwischen trotzdem offen.
+     */
+    const databasePath = createDatabasePath();
+    const app = await buildAppWithCapturedLog({ databasePath, memoryEncryption: true });
+    await bootstrap(app);
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+    await recordMemoryItem(app, session);
+
+    const writer = new Database(databasePath);
+    new PicoModelJobQueue(writer).enqueue({
+      job: parsePicoModelJob({
+        schema: 'pico.model.job.v1',
+        jobId: 'job_shred_wiring',
+        role: 'reader',
+        units: [{ originClass: 'person_present', text: 'where did I park?' }],
+        references: [{
+          schema: 'pico.model.context.ref.v1',
+          contextRefId: 'ref_shred_wiring',
+          jobId: 'job_shred_wiring',
+          originClass: 'own_pico',
+          privacyDomain: 'domain-private',
+          excerpt: 'the blue space behind the bakery',
+          materializedAt: '2026-08-14T11:59:00.000Z',
+          expiresAt: '2026-08-14T12:05:00.000Z',
+        }],
+        expects: [{ name: 'sentence', type: 'token' }],
+        carries: 'live_turn_and_retrieved_memory',
+      }, Date.parse('2026-08-14T12:00:00.000Z')),
+      picoIdentityFingerprintHex: 'aa'.repeat(32),
+      entryId: 'entry_shred_wiring',
+      at: '2026-08-14T12:00:00.000Z',
+      kind: 'recall',
+      recallContext: { privacyDomain: 'domain-private', memoryItemIds: ['mem_shred_wiring'] },
+    });
+    writer.close();
+
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      headers: auth,
+      payload: { confirm: 'domain-private' },
+    })).statusCode).toBe(200);
+    await app.close();
+
+    const reader = new Database(databasePath, { readonly: true });
+    const row = reader.prepare(`
+      SELECT job_json AS jobJson, recall_context_json AS recallContextJson,
+             forgotten_at AS forgottenAt
+      FROM pico_model_job_queue WHERE job_id = ?
+    `).get('job_shred_wiring') as
+      { jobJson: string; recallContextJson: string | null; forgottenAt: string | null };
+    reader.close();
+
+    expect(row.jobJson).not.toContain('where did I park?');
+    expect(row.recallContextJson).toBeNull();
+    expect(row.forgottenAt).not.toBeNull();
   });
 
   it('refuses to shred when encryption is off instead of pretending it protected something', async () => {

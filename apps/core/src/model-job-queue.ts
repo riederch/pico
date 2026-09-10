@@ -494,6 +494,44 @@ export class PicoModelJobQueue {
     return 'forgotten';
   }
 
+  /**
+   * ADR 0071 mit ADR 0049. Ein Domänen-Shred erreicht auch diese Tabelle.
+   *
+   * **Er tat es bis zum 2026-09-10 nicht, und ADR 0049 sagte das seit dem
+   * 2026-08-24 im Klartext:** *„A domain shred does not reach it.
+   * `domain-shred.ts` never names the table."* Ein externes Review hat am
+   * 2026-09-09 danach gefragt.
+   *
+   * Warum das schwerer wiegt als die anderen Lücken derselben Zeile: ein
+   * Shred ist der Vorgang, der Inhalt **unlesbar** macht, indem er die
+   * Schlüssel der Domäne zerstört. Eine Zeile, die Frage, Antwort und
+   * gelesenen Kontext derselben Domäne im Klartext hält, überlebt genau das -
+   * der Vorgang tut dann, was er verspricht, an allem ausser an der Stelle,
+   * an der die Worte ohnehin unverschlüsselt lagen.
+   *
+   * Geleert wird, was `forgetRecall` leert, denn es sind dieselben Felder und
+   * dieselbe Frage. Was *nicht* geleert wird, ist `kept_memory_item_id`: das
+   * Item ist nach dem Shred unlesbar, aber es ist noch da, und die Handhabe,
+   * mit der eine Person es aufhebt, bleibt ihr. `outcome` sagt
+   * `domain_shredded` statt `taken_back` - ein Shred ist keine Rücknahme
+   * durch die Person, und eine Zeile, die das behauptete, wäre eine falsche
+   * Auskunft an genau dem Ort, den ADR 0049 als Verlauf für Menschen
+   * beschreibt.
+   */
+  public forgetDomainRecalls(input: { privacyDomain: string; at: string }): number {
+    const result = this.db.prepare(`
+      UPDATE pico_model_job_queue
+      SET job_json = '{}', result_json = NULL, recall_context_json = NULL,
+          forgotten_at = ?,
+          settled_at = COALESCE(settled_at, ?),
+          outcome = COALESCE(outcome, 'domain_shredded')
+      WHERE forgotten_at IS NULL
+        AND (json_extract(recall_context_json, '$.privacyDomain') = ?
+             OR kept_privacy_domain = ?)
+    `).run(input.at, input.at, input.privacyDomain, input.privacyDomain);
+    return result.changes;
+  }
+
   /** ADR 0071. Which job, if any, holds this memory item for this person. */
   public jobKeepingMemoryItem(input: {
     picoIdentityFingerprintHex: string;

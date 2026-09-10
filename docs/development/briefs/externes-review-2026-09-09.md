@@ -116,6 +116,17 @@ wiederholt werden.
   Roadmap und in Git), bleibende Erkenntnisse wandern in den Runbook; vor
   jedem Streichen wird geprüft, ob die Zeile anderswo steht. Ein Prüfer hält
   danach die 200 Zeilen aus AGENTS.md:149.
+- **E10 — Soll `home.memory.forget` den Austausch mitnehmen?** *Aufgeworfen
+  2026-09-10 beim Umsetzen von P11.* E4 sagte ja; ein bestehender Test hält
+  seit dem 2026-08-25 das Gegenteil fest, mit Begründung, und das war mir bei
+  E4 nicht bekannt. Heute sind es zwei getrennte Handlungen:
+  `home.memory.forget` hebt die Erinnerung auf, `home.recall.forget` nimmt den
+  Austausch zurück. *Empfohlen:* so lassen. Wer nur die Notiz aufheben wollte,
+  soll nicht ungefragt einen Eintrag aus seinem Verlauf verlieren; der Rest ist
+  ein Hinweis auf der Fläche, keine zweite Wirkung dieser Operation.
+  *Alternative:* E4 wie beschlossen umsetzen — dann fällt der Test vom
+  2026-08-25 und seine Begründung mit ihm.
+
 - **E9 — Wann laufen die Container nicht mehr als root?** *Entschieden
   2026-09-10:* vor produktiven Personendaten, gekoppelt an P9, weil der Grund
   für root das gemountete `/data` ist und nur auf einer echten

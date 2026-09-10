@@ -358,3 +358,144 @@ describe('ADR 0116 W5 - what waits, and whose it is', () => {
     }
   });
 });
+
+/**
+ * ADR 0071 mit ADR 0049 - ein Shred erreicht auch diese Tabelle.
+ *
+ * Bis zum 2026-09-10 tat er es nicht, und ADR 0049 sagte es seit dem
+ * 2026-08-24 im Klartext. Was das schwerer macht als die Nachbarlücken
+ * derselben Zeile: ein Shred zerstört die Schlüssel einer Domäne, damit ihr
+ * Inhalt unlesbar wird - und diese Zeilen halten Frage, Antwort und gelesenen
+ * Kontext derselben Domäne im Klartext, überleben ihn also unberührt.
+ */
+describe('ADR 0071 mit ADR 0049 - ein Domänen-Shred erreicht die Warteschlange', () => {
+  async function queueWithTwoDomains(): Promise<{
+    queue: PicoModelJobQueue;
+    db: Database.Database;
+    close: () => void;
+  }> {
+    const opened = await queue();
+    for (const [jobId, privacyDomain, answer] of [
+      ['job_household_1', 'household', 'the boiler service is due in March'],
+      ['job_private_1', 'private', 'the spare key is under the third pot'],
+    ] as const) {
+      opened.queue.enqueue({
+        job: job(jobId),
+        picoIdentityFingerprintHex: 'aa'.repeat(32),
+        entryId: `entry_${jobId}`,
+        at: '2026-08-14T12:00:00.000Z',
+        kind: 'recall',
+        recallContext: { privacyDomain, memoryItemIds: [`mem_${jobId}`] },
+      });
+      opened.queue.settle({
+        jobId,
+        outcome: 'answered',
+        result: { values: [{ name: 'sentence', value: answer }] },
+        at: '2026-08-14T12:00:01.000Z',
+      });
+    }
+    return opened;
+  }
+
+  const rowOf = (db: Database.Database, jobId: string) => db.prepare(`
+    SELECT job_json AS jobJson, result_json AS resultJson,
+           recall_context_json AS recallContextJson, forgotten_at AS forgottenAt,
+           outcome, kept_memory_item_id AS keptMemoryItemId
+    FROM pico_model_job_queue WHERE job_id = ?
+  `).get(jobId) as {
+    jobJson: string; resultJson: string | null; recallContextJson: string | null;
+    forgottenAt: string | null; outcome: string | null; keptMemoryItemId: string | null;
+  };
+
+  it('nimmt die Worte der geschredderten Domäne und lässt die andere unberührt', async () => {
+    const { queue: jobs, db, close } = await queueWithTwoDomains();
+
+    expect(rowOf(db, 'job_household_1').resultJson).toContain('boiler service');
+    expect(jobs.forgetDomainRecalls({ privacyDomain: 'household', at: '2026-08-15T09:00:00.000Z' }))
+      .toBe(1);
+
+    const shredded = rowOf(db, 'job_household_1');
+    expect(shredded.jobJson).not.toContain('What is due?');
+    expect(shredded.resultJson).toBeNull();
+    expect(shredded.recallContextJson).toBeNull();
+    expect(shredded.forgottenAt).toBe('2026-08-15T09:00:00.000Z');
+
+    // Und die Nachbardomäne steht unverändert da: ein Shred gilt einer Domäne
+    // und nicht dem Verlauf.
+    const untouched = rowOf(db, 'job_private_1');
+    expect(untouched.resultJson).toContain('spare key');
+    expect(untouched.forgottenAt).toBeNull();
+    close();
+  });
+
+  it('sagt `domain_shredded` und nicht `taken_back`, weil niemand etwas zurücknahm', async () => {
+    const { queue: jobs, db, close } = await queueWithTwoDomains();
+    // Eine Zeile, die noch läuft: sie bekommt ihr Ergebnis nie und muss es
+    // sagen, sonst wartet der Zähler auf Arbeit, die niemand mehr will.
+    jobs.enqueue({
+      job: job('job_household_running'),
+      picoIdentityFingerprintHex: 'aa'.repeat(32),
+      entryId: 'entry_running',
+      at: '2026-08-14T12:00:00.000Z',
+      kind: 'recall',
+      recallContext: { privacyDomain: 'household', memoryItemIds: ['mem_running'] },
+    });
+
+    expect(jobs.forgetDomainRecalls({ privacyDomain: 'household', at: '2026-08-15T09:00:00.000Z' }))
+      .toBe(2);
+    expect(rowOf(db, 'job_household_running').outcome).toBe('domain_shredded');
+    // Die schon beantwortete behält ihr eigenes Ergebniswort.
+    expect(rowOf(db, 'job_household_1').outcome).toBe('answered');
+    close();
+  });
+
+  it('lässt die Handhabe auf eine behaltene Notiz stehen', async () => {
+    const { queue: jobs, db, close } = await queueWithTwoDomains();
+    jobs.markKept({ jobId: 'job_household_1', memoryItemId: 'mem_kept', privacyDomain: 'household' });
+
+    jobs.forgetDomainRecalls({ privacyDomain: 'household', at: '2026-08-15T09:00:00.000Z' });
+
+    // ADR 0126. Ohne sie wäre die Notiz unaufhebbar - der Fehler, den die
+    // Handhabe überhaupt erst gegen sich hat.
+    expect(rowOf(db, 'job_household_1').keptMemoryItemId).toBe('mem_kept');
+    close();
+  });
+
+  it('greift eine Zeile über ihre behaltene Domäne, auch ohne Kontext', async () => {
+    const { queue: jobs, db, close } = await queueWithTwoDomains();
+    // Ein Bibliothekslauf hat keinen Recall-Kontext. Wurde aus ihm etwas in
+    // dieser Domäne behalten, gehören seine Worte trotzdem dazu.
+    jobs.enqueue({
+      job: job('job_library_1'),
+      picoIdentityFingerprintHex: 'aa'.repeat(32),
+      entryId: 'entry_library',
+      at: '2026-08-14T12:00:00.000Z',
+      derivedFrom: { supplierIdentifier: 'supplier_a', commit: 'c'.repeat(40), pinCoversContent: true },
+    });
+    jobs.markKept({ jobId: 'job_library_1', memoryItemId: 'mem_lib', privacyDomain: 'household' });
+
+    expect(jobs.forgetDomainRecalls({ privacyDomain: 'household', at: '2026-08-15T09:00:00.000Z' }))
+      .toBe(2);
+    expect(rowOf(db, 'job_library_1').forgottenAt).not.toBeNull();
+    close();
+  });
+
+  it('zählt beim zweiten Lauf nichts mehr, statt Zeilen zweimal zu stempeln', async () => {
+    const { queue: jobs, db, close } = await queueWithTwoDomains();
+    expect(jobs.forgetDomainRecalls({ privacyDomain: 'household', at: '2026-08-15T09:00:00.000Z' }))
+      .toBe(1);
+    expect(jobs.forgetDomainRecalls({ privacyDomain: 'household', at: '2026-08-16T09:00:00.000Z' }))
+      .toBe(0);
+    // Der erste Zeitpunkt bleibt stehen: wann etwas fortkam, ist eine Tatsache
+    // und kein Zähler.
+    expect(rowOf(db, 'job_household_1').forgottenAt).toBe('2026-08-15T09:00:00.000Z');
+    close();
+  });
+
+  it('meldet null für eine Domäne, in der nichts steht', async () => {
+    const { queue: jobs, close } = await queueWithTwoDomains();
+    expect(jobs.forgetDomainRecalls({ privacyDomain: 'nobody-uses-this', at: '2026-08-15T09:00:00.000Z' }))
+      .toBe(0);
+    close();
+  });
+});

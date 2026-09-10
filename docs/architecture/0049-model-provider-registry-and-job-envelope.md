@@ -19,7 +19,7 @@ rather than inferred:
   and calls `markKept(null)`, which clears the *pointer*. The answer stays in
   the row it came from.
 - **A domain shred does not reach it.** `domain-shred.ts` never names the
-  table.
+  table. *Closed 2026-09-10; see the status note below.*
 - **The encryption decision does not reach it.** A `memory_item` carries a
   `content_posture` that can be `domain_encrypted`; a job row has no posture
   at all, whatever the person decided about their memories.
@@ -50,6 +50,49 @@ The queue is deliberately load-bearing for forget - ADR 0126's status note
 records why: a kept item is found *through* its job, and before that link
 existed a person could make a memory and never unmake one. That is the reason
 the row survives, and it is also why the row's content survives with it.
+
+**Status note 2026-09-10: der Shred erreicht die Tabelle, das Vergessen einer
+Notiz absichtlich nicht.** Ein externes Review vom 2026-09-09 hat die fünf
+Punkte oben aufgegriffen. Zwei davon sind jetzt entschieden, und in
+verschiedene Richtungen.
+
+**Der Domänen-Shred ist geschlossen.** Er ist der Vorgang, der Inhalt
+*unlesbar* macht, indem er die Schlüssel einer Domäne zerstört; eine Zeile,
+die Frage, Antwort und gelesenen Kontext derselben Domäne im Klartext hält,
+überlebt ihn unberührt, und damit tut er, was er verspricht, an allem ausser
+an der Stelle, an der die Worte ohnehin offen lagen. Hier wählt kein Mensch
+zwischen zwei Gütern - es gibt nur eines. `forgetDomainRecalls` leert dieselben
+Felder wie `home.recall.forget`, stempelt `forgotten_at` und setzt für eine
+noch laufende Zeile `outcome = 'domain_shredded'` statt `taken_back`: ein
+Shred ist keine Rücknahme durch die Person, und diese Liste ist ein Verlauf
+für Menschen. `kept_memory_item_id` bleibt stehen, aus dem Grund, den ADR 0126
+nennt - die Handhabe auf ein behaltenes Item ist alles, womit eine Person es
+noch aufheben kann. Der Weg dorthin ist ein Port in `domain-shred.ts`, wie beim
+Beobachtungspuffer: „shred a domain" ist eine Handlung, und eine Kaskade mit
+zwei Eingängen ist eine, von der jemand die Hälfte vergisst.
+
+**`home.memory.forget` leert die Worte weiterhin nicht, und das ist eine
+Entscheidung und kein Rest.** Der Plan sah vor, auch dort `forgetRecall` zu
+rufen. Beim Umsetzen stand der Test dagegen, der die Gestalt vom 2026-08-25
+hält: *„The answer stays and the memory goes. What was taken back is the
+memory, not the record that an answer was once given - and the line then
+offers to keep it again, which is the honest state: they have one and did not
+keep it."* Die beiden Operationen sind sauber getrennt: die eine hebt die
+Erinnerung auf, die andere nimmt den Austausch zurück, und beide zusammen
+lassen die Person wählen. Wer den Austausch mitnimmt, wenn jemand nur die
+Notiz aufheben wollte, entfernt einen Eintrag aus dessen Verlauf, ohne dass er
+danach gefragt hat.
+
+Was als Rest bleibt und benannt gehört: wer nur `home.memory.forget` kennt,
+hat den Austausch noch im eigenen Verlauf stehen. Es gibt genau eine Handlung,
+die ihn entfernt; ob eine Fläche darauf hinweisen soll, ist eine Frage an die
+Fläche.
+
+**Die drei übrigen Punkte stehen unverändert offen:** keine Q5-Obergrenze,
+kein Sweep, und keine Posture auf der Jobzeile. Die grosse Fassung - Worte
+unter dem Domänenschlüssel statt im Klartext - ist bewusst nicht Teil dieser
+Runde; sie gehört mit der Obergrenzenfrage zusammen entschieden, weil beide
+davon abhängen, was ein Verlauf ist, den eine Person behalten will.
 
 Held from now on by `scripts/check-store-ceilings.mjs`, which asks every table
 how it stops growing. This one answers that it does not, in the check's own
