@@ -912,6 +912,59 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B129 — Ein Satz, oben zurückgenommen und unten stehen geblieben (2026-09-10,
+Paket P7 des externen Reviews).** Das Review meldete einen falschen Kommentar
+in `action-path.ts`: er behauptete, eine aufgezeichnete Regel könne nur
+verschärfen. Der Code tut das Gegenteil, und zwar mit Absicht —
+`applyPicoRulesRecordedDecision` gibt `recorded ?? derived` zurück, und aus der
+Frage, die `external_write` hergibt, wird damit eine Erlaubnis. Das ist der
+Mechanismus, mit dem ADR 0143 DP8 einen unbeaufsichtigten Lauf überhaupt
+handeln lässt; ohne stehende Regel muss jeder Pfad einen Menschen finden.
+
+**Der Kommentar log doppelt.** Er sagte nicht nur das Falsche, er behauptete
+auch, die Berichtigung sei schon eingebaut: *„seit dem 2026-08-25 auch im Code
+und nicht nur im Titel der Testgruppe daneben"*. An dem Tag ist die Testgruppe
+berichtigt worden und eine Statusnotiz an den Kopf von ADR 0140 gekommen — der
+Kommentar nicht.
+
+**Und das Review sah nur die Hälfte.** Nachgemessen steht der zurückgenommene
+Satz auch in ADR 0140 selbst: die Statusnotiz oben zitiert *„a recorded rule
+refines and never grants"* und nimmt ihn zurück, und derselbe Satz stand
+dreihundert Zeilen darunter fett im Entscheidungstext, den ein Umsetzer liest.
+Beide sind berichtigt; jede verbliebene Nennung im Baum steht jetzt in
+Anführungszeichen innerhalb einer Rücknahme.
+
+Der Kommentar an der Aufrufstelle wiederholt die Regel nicht mehr, er zeigt
+auf die Funktion, die sie hält. Eine Wahrheit, an der Aufrufstelle noch einmal
+hingeschrieben, driftet von der Funktion weg — das ist genau der Weg, den
+dieser Satz genommen hat.
+
+**Gemessen und verworfen: ein Tor dafür.** Die naheliegende Regel wäre „ein
+Satz, der in einem Dokument zitiert wird, steht nicht unzitiert daneben". Über
+247 Dokumente gezählt: 551 verschiedene Zitate ab fünf Wörtern, davon stehen
+**40** auch unzitiert daneben — fast alle harmlos, weil ein Dokument seine
+eigene frühere Formulierung zitiert. Ein Tor daraus wäre Rauschen. Eine engere
+Regel müsste auf Rücknahmewörter keyen, und die gäbe es genau einmal: ein Tor,
+das seinen eigenen Anlass prüft und nicht seine Klasse, ist der Fehler, den
+`instant:check` in Befund B52 schon einmal gemacht hat.
+
+Die Messung fand dabei einen echten Geschwister-Fall: ADR 0153 sagt *„Pico
+Relay is deliberately not a Home Assistant add-on"*, und ADR 0155 hat das
+überholt. Er steht als R12 schon in Paket P5.
+
+**Und ein Nebenbefund aus dem Kettenlauf dazu, dieselbe Familie.** Die Kette
+riss einmal am Paketprüfer, und die Meldung lautete `failed: null`. Nachgesehen
+statt vermutet: `run()` in `verify-linux-package.mjs` gibt `result.status` aus
+und lässt `result.signal` weg. `status` ist aber genau dann `null`, wenn ein
+Signal den Prozess beendet hat — die eine Angabe, die die Ursache benennt, war
+die weggelassene. Bei Dateideskriptor-Stdio gibt es auch kein `stderr`, auf das
+man zurückfallen könnte. Der Wiederholungslauf war grün, und woran der erste
+starb, ist deshalb nicht mehr feststellbar. Die Meldung sagt jetzt `signal
+SIGKILL` oder `exit status 3`; beim nächsten Mal steht dort, ob es der
+OOM-Killer war (diese Maschine hat 14 GiB und einen pnpm-Store im RAM) oder
+eine Zeitgrenze. Ein Prüfer, der nicht sagen kann, was geschehen ist, ist auf
+die Weise kaputt, auf die es zählt.
+
 **B128 — Zwölf Siebzehntel, und die Liste sagte „jedes" (2026-09-10, Paket P4
 des externen Reviews).** `check-version.mjs` hielt zwölf Manifeste gegen die
 Produktversion. Der Workspace hat siebzehn Mitglieder — `pnpm list -r` zählt

@@ -268,9 +268,14 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
   // RL3 refused for want of an input or what ADR 0138 CO3 never permitted.
   const decided: PicoRulesDecisionValue = floor !== null || reachRefused
     ? 'deny'
-    // ADR 0140 RL4. Nur verschärfend, seit dem 2026-08-25 auch im Code und
-    // nicht nur im Titel der Testgruppe daneben: eine Regel kann nichts
-    // erlauben, was ohne sie eine Frage gewesen wäre.
+    // ADR 0140 RL4. Was die Risikoklasse allein hergibt: `read_only` und
+    // `local_write` eine Erlaubnis, alles andere eine Frage. Was die
+    // aufgezeichnete Regel damit tun darf, steht bei
+    // `applyPicoRulesRecordedDecision` und absichtlich nicht noch einmal hier
+    // - hier stand bis zum 2026-09-10 „nur verschärfend", und das war das
+    // Gegenteil dessen, was seit dem 2026-08-25 gilt und was die Testgruppe
+    // daneben seither beweist. Eine Wahrheit, an der Aufrufstelle noch einmal
+    // hingeschrieben, driftet von der Funktion weg, die sie hält.
     : applyPicoRulesRecordedDecision(
       consented.risk === 'read_only' || consented.risk === 'local_write'
         ? 'allow'

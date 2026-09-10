@@ -322,10 +322,17 @@ a revised verdict.
   other two. Nothing reads a rule from the environment, and a test sets
   `PICO_RULES_*` to prove it changes nothing (ADR 0104).
 
-  **A recorded rule refines and never grants.** It chooses among the
-  answers that remain: it can tighten an `allow` into an approval or a
-  denial, and it cannot overrule the RL3 floor or ADR 0138 CO3's reach
-  precondition - tests state both. Absence is not `deny`, because the
+  **A recorded rule chooses among the answers the floor leaves.**
+  *Corrected 2026-09-10.* This bullet said "refines and never grants" until
+  then - the sentence the status note at the top of this ADR quotes and
+  retracts, still standing here in the decision text three hundred lines
+  below the retraction. What holds is both directions: a rule can tighten an
+  `allow` into an approval or a denial, **and** it can turn the approval that
+  `external_write` derives into an allow. The second is not a gap, it is the
+  purpose - a standing rule is what lets an unattended run act at all (ADR
+  0143 DP8), and without one every path has to find a person. What a rule
+  cannot do is overrule the RL3 floor or ADR 0138 CO3's reach precondition,
+  which become `deny` before it is consulted - tests state all three. Absence is not `deny`, because the
   ADR 0139 AC4 consent record already carries a person's decision that
   this effect may exist; a Home where nobody wrote an explicit rule is not
   a Home that forbade everything, which is the asymmetry ADR 0127 M3 draws

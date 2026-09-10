@@ -945,9 +945,27 @@ function run(
     const details = [result.error?.message, result.stderr, result.stdout]
       .filter((value) => typeof value === 'string' && value.length > 0)
       .join('\n');
+    /**
+     * Wie es geendet hat, und nicht nur dass.
+     *
+     * `status` ist `null`, wenn ein Signal den Prozess beendet hat, und diese
+     * Meldung sagte dann `failed: null` - das eine Wort, das die Ursache
+     * benannt haette, war genau das weggelassene. Am 2026-09-10 ist die
+     * Erreichbarkeitssonde so gestorben, nachdem sie ihre ganze Ausgabe
+     * geschrieben hatte; ein Wiederholungslauf war gruen, und woran der erste
+     * starb, ist seitdem nicht mehr feststellbar. Bei
+     * Dateideskriptor-Stdio gibt es auch kein `stderr`, auf das man
+     * zurueckfallen koennte, also ist das Signal alles, was es gibt.
+     *
+     * `SIGKILL` hiesse hier der OOM-Killer (diese Maschine hat 14 GiB und
+     * einen pnpm-Store im RAM), `SIGTERM` die Zeitgrenze des Aufrufers.
+     */
+    const ended = result.signal === null || result.signal === undefined
+      ? `exit status ${result.status}`
+      : `signal ${result.signal}`;
     throw new Error(
-      `${command} ${args.join(' ')} failed: `
-        + `${details || result.status}`,
+      `${command} ${args.join(' ')} failed: ${ended}`
+        + `${details === '' ? '' : `\n${details}`}`,
     );
   }
   return result;

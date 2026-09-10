@@ -39,7 +39,7 @@ dieser Frage.
 | R11 | §9.5 | Konsistenzdokument veraltet | **stimmt** | `docs/release/documentation-consistency.md` reicht bis ADR 0076 und nennt `.agent-context.md` „compact" | P5 |
 | R12 | §9.6 | Relay-Dockerfile-Kommentar veraltet | **stimmt** | `docker/relay.Dockerfile:3` „not a Home Assistant add-on (ADR 0153)"; `pico_relay/config.yaml` existiert unter ADR 0155 | P5 |
 | R13 | §9.7, §18, §21 | SECURITY.md nennt nur Pico Link als Netzfläche | **stimmt** | SECURITY.md:48; der Mailbox-Port 3200 des Relays ist die öffentliche Tür (`pico_relay/config.yaml:64`) | P5, E3 |
-| R14 | §10.2 | Kommentar zur Regelrichtung falsch | **stimmt** | `apps/core/src/action-path.ts:271` „nur verschärfend"; `packages/protocol/src/pico-rules.ts` gibt `recorded ?? derived` zurück und nennt das Gewähren den Zweck; ADR 0140, Notiz 2026-08-25, sagt dasselbe | P7 |
+| R14 | §10.2 | Kommentar zur Regelrichtung falsch | **stimmt**, und breiter | `apps/core/src/action-path.ts:271` „nur verschärfend"; `packages/protocol/src/pico-rules.ts` gibt `recorded ?? derived` zurück und nennt das Gewähren den Zweck; ADR 0140, Notiz 2026-08-25, sagt dasselbe. Nachgemessen stand der zurückgenommene Satz auch im Entscheidungstext von ADR 0140 selbst, 290 Zeilen unter seiner Rücknahme | P7 |
 | R15 | §11 | `app.ts` zu gross | **stimmt** | 415.933 Bytes, 9.820 Zeilen | P8 (später) |
 | R16 | §12 | grosse Wahrheitsdokumente | **stimmt** | Matrix 393 KB, Roadmap 362 KB, Agent-Kontext 150 KB | P5, P6 |
 | R17 | §13 | HA-Modul sauber; reale Lebenszyklustests fehlen | **stimmt** | `modules/home-assistant/src/manifest.ts:31` connector, :38 keine Effekte; kein Test spricht mit einem echten Supervisor | P9 |
@@ -153,7 +153,7 @@ damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
 - Fertig, wenn `packages/gesture` und die vier Module gezählt werden und die
   Schlussmeldung die Zahl aus dem Workspace nennt.
 
-**P7 — Der Kommentar in `action-path.ts`** (R14)
+**P7 — Der Kommentar in `action-path.ts`** (R14) — *erledigt 2026-09-10, Befund B129*
 - Zeilen 271-273 sagen, was `applyPicoRulesRecordedDecision` tut und was ADR
   0140 seit dem 2026-08-25 festhält: eine Regel wählt unter dem, was der Boden
   übrig lässt, in beide Richtungen; Boden und Reichweite bleiben davor.
