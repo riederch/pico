@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B122 — „Abwesenheit ist eine Antwort" — siebenmal nachgesehen, einmal
+etwas gefunden (2026-09-10).** B121 hat gezeigt, was passiert, wenn eine
+abgeschnittene Datei als *„nichts da"* gelesen wird. Also die Klasse gesucht,
+statt es beim Fall zu lassen.
+
+**Wo ein Lesefehler zu einer Abwesenheit wird: sieben Stellen.**
+
+| Stelle | Was die Abwesenheit bedeutet |
+|---|---|
+| `reader-custody-space.ts` | der Fall aus B121 — die Ursache ist seit gestern behoben |
+| `app.ts` (Depot-Manifest) | *„A depot whose manifest does not parse is a depot Pico will not act on"* — begründet, und die sichere Richtung |
+| `event-store.ts` ×2 | keine Kontinuität, kein Lebenslaufindex — beides heisst *weniger* dürfen |
+| `model-job-queue.ts` | **schluckt gar nicht**: der Auftrag wird mit dem Fehler als Ergebnis abgeschlossen |
+| Testhelfer, WebSocket-Nachricht | dort ist Abwesenheit wirklich Abwesenheit |
+
+**Und die schärfere Gegenfrage: wo ist eine Abwesenheit ein *Ja*?** Acht
+Stellen. Sechs sind Anfrageparameter (kein `limit` → Vorgabe), eine ist mit ADR
+0114 T3 begründet. Die achte war die interessante.
+
+```ts
+function isWebSocketOriginAllowed(originHeader, hostHeader, allowedOrigins) {
+  if (originHeader === undefined) {
+    return true;
+  }
+```
+
+**Die erste Zeile einer Sicherheitsentscheidung ist ein `return true`, und
+darüber stand nichts.** Beim Prüfen greift man zum Alarm — zu Unrecht:
+
+- Ein Browser sendet bei einem WebSocket-Handshake **immer** einen `Origin`
+  (RFC 6455 verlangt es). Fehlt er, ist der Anrufer kein Browser, und der
+  Angriff, gegen den diese Prüfung schützt, ist ein Angriff *über eine fremde
+  Seite im Browser eines Menschen*.
+- Einen Ursprung zu verlangen, den nur Browser schicken, sperrte den Begleiter
+  und jedes Werkzeug aus und schützte niemanden.
+- Und es ist **nicht die einzige Schicht**: der Aufrufer verlangt unmittelbar
+  danach ein Kreditiv, sobald irgendetwas diesen Host beansprucht (ADR 0039).
+
+Geändert hat sich also nichts am Verhalten — nur steht der Grund jetzt da. Der
+Rest dieses Befunds ist ein Nein, und das ist der Punkt: sechs von sechs
+Aufrufern des Lebenslaufindex scheitern **geschlossen**, nicht offen, und das
+ist gemessen und nicht gehofft.
+
+**Was daraus folgt.** Der Unterschied zwischen B110 und B122: dort behauptete
+ein Kommentar eine Eigenschaft, die der Code nicht hielt; hier hielt der Code
+eine Eigenschaft, die kein Kommentar behauptete. Die zweite Sorte kostet keinen
+Schaden, sondern Zeit — jedes Mal, wenn jemand die Stelle prüft.
+
 **B121 — Die Datei neben dem Profil, und der Modus war die kleinere Hälfte
 (2026-09-10).** `profile.ts` legt seine Datei seit jeher sorgfältig ab:
 Zwischendatei mit `0600`, `chmod`, `fsync`, umbenennen, Verzeichnis `fsync`.

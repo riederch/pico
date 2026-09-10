@@ -9220,6 +9220,28 @@ function isMemoryContentCursor(value: unknown): value is MemoryContentCursor {
   return isRecord(value) && typeof value.createdAt === 'string' && typeof value.memoryItemId === 'string';
 }
 
+/**
+ * Der Ursprung einer Aufstiegsanfrage - und warum ein fehlender einer ist, den
+ * diese Funktion durchlaesst (Befund B122).
+ *
+ * Die erste Zeile einer Sicherheitsentscheidung ist ein `return true`, und das
+ * liest sich beim Pruefen wie ein offenes Tor. Es ist keines, aber der Grund
+ * stand nirgends:
+ *
+ * **Ein Browser sendet bei einem WebSocket-Handshake immer einen `Origin`**
+ * (RFC 6455 verlangt es von ihm). Fehlt er, ist der Anrufer kein Browser - und
+ * dann ist die Frage, gegen die diese Pruefung schuetzt, gar nicht gestellt:
+ * Cross-Site-WebSocket-Hijacking ist ein Angriff *ueber* eine fremde Seite im
+ * Browser eines Menschen. Einen Ursprung zu verlangen, den nur Browser
+ * schicken, sperrte den Begleiter und jedes Werkzeug aus und schuetzte
+ * niemanden.
+ *
+ * **Und es ist nicht die einzige Schicht.** Der Aufrufer verlangt unmittelbar
+ * danach ein Kreditiv, sobald irgendetwas diesen Host beansprucht - ein
+ * konfiguriertes Token, eine Sitzung oder ein kurzlebiges Einmalticket
+ * (ADR 0039). Diese Funktion entscheidet also nicht, *wer* hereindarf, sondern
+ * nur, ob eine fremde Seite es im Namen eines Menschen versuchen darf.
+ */
 function isWebSocketOriginAllowed(originHeader: string | string[] | undefined, hostHeader: string | string[] | undefined, allowedOrigins: readonly string[]): boolean {
   if (originHeader === undefined) {
     return true;
