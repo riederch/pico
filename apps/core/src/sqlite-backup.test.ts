@@ -20,6 +20,7 @@ import {
   picoPresenceRegistryMigrationId,
   picoPresenceSwitchMigrationId,
   picoModelJobKeptMemoryMigrationId,
+  picoLinkDirectSeenRequestMigrationId,
   picoModelJobForgottenMigrationId,
   picoModelProviderCredentialMigrationId,
   picoMemoryEncryptionDecisionMigrationId,
@@ -340,6 +341,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: picoModelJobForgottenMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoLinkDirectSeenRequestMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

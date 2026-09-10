@@ -14,6 +14,7 @@ import {
 import { verifyPicoIdentityDetachedSignature, verifyPicoIdentityKeyRecordFingerprint } from '@pico/identity';
 import type { IdentityVerificationSodium } from '@pico/identity';
 import { PicoRequestQuota } from './request-quota.js';
+import type { PicoLinkDirectSeenRequests } from './link-direct-seen-requests.js';
 
 /**
  * ADR 0107 D2: the Foundation's Pico Link Direct intake.
@@ -37,7 +38,6 @@ export const MAX_PICO_LINK_DIRECT_ENVELOPE_HEX_CHARS = 256 * 1024;
 export const MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES =
   MAX_PICO_LINK_DIRECT_ENVELOPE_HEX_CHARS + 1024;
 export const MAX_PICO_LINK_DIRECT_REQUEST_LIFETIME_MS = 60 * 1_000;
-export const MAX_PICO_LINK_DIRECT_SEEN_REQUESTS = 1_024;
 
 export type PicoLinkDirectFailure =
   | 'invalid_envelope'
@@ -119,20 +119,23 @@ const preAuthorityOperations: ReadonlySet<string> = new Set<PicoLinkDirectOperat
 ]);
 
 export class PicoLinkDirectIntake {
-  /**
-   * Bounded idempotency inside the expiry window (ADR 0107: replay is bounded,
-   * not impossible). Insertion-ordered, so eviction drops the oldest; every
-   * entry is short-lived by construction because a request outside its window
-   * is refused before this map is consulted.
-   */
-  readonly #seenRequests = new Map<string, number>();
-
   public constructor(
     private readonly sodium: IdentityVerificationSodium & {
       crypto_generichash(length: number, message: Uint8Array, key: null): Uint8Array;
     },
     private readonly authority: PicoLinkDirectAuthority,
-    private readonly maxSeenRequests = MAX_PICO_LINK_DIRECT_SEEN_REQUESTS,
+    /**
+     * Bounded idempotency inside the expiry window (ADR 0107: replay is
+     * bounded, not impossible).
+     *
+     * **Required rather than defaulted, since 2026-09-10.** This was a `Map`
+     * on the instance until then, so the guard was a property of the process
+     * and a restart inside a request's remaining window admitted it again. A
+     * default here would be the same fault wearing a parameter: whoever wires
+     * an intake has to say where the memory lives, and there is one place it
+     * can live that outlives the process.
+     */
+    private readonly seenRequests: PicoLinkDirectSeenRequests,
     /** ADR 0119 Q4. Aggregate send budgets, keyed on relationship. */
     private readonly quota: PicoRequestQuota = new PicoRequestQuota(),
   ) {}
@@ -253,8 +256,7 @@ export class PicoLinkDirectIntake {
     //    replayed request costs no verification, and recorded only after the
     //    signature holds so an unauthenticated caller cannot poison the set
     //    with a request id it never had the key to send.
-    this.#evictExpired(nowMs);
-    if (this.#seenRequests.has(request.requestId)) {
+    if (this.seenRequests.hasSeen(request.requestId, nowMs)) {
       return { ok: false, reason: 'request_replayed' };
     }
 
@@ -326,7 +328,7 @@ export class PicoLinkDirectIntake {
       return { ok: false, reason: 'quota_exceeded' };
     }
 
-    this.#remember(request.requestId, expiresAtMs);
+    this.seenRequests.remember(request.requestId, expiresAtMs);
 
     // 11. Only now does an operation run, and its own authorization still
     //     applies on top of this - the link authenticates a sender, it does
@@ -383,26 +385,6 @@ export class PicoLinkDirectIntake {
     }));
   }
 
-  #evictExpired(nowMs: number): void {
-    for (const [requestId, expiresAtMs] of this.#seenRequests) {
-      if (expiresAtMs <= nowMs) {
-        this.#seenRequests.delete(requestId);
-      }
-    }
-  }
-
-  #remember(requestId: string, expiresAtMs: number): void {
-    // Bounded even if every entry is still live: a caller holding a valid key
-    // can fill this, and dropping the oldest is preferable to unbounded growth.
-    // The dropped entry is replayable only within its own remaining window.
-    if (this.#seenRequests.size >= this.maxSeenRequests) {
-      const oldest = this.#seenRequests.keys().next();
-      if (!oldest.done) {
-        this.#seenRequests.delete(oldest.value);
-      }
-    }
-    this.#seenRequests.set(requestId, expiresAtMs);
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

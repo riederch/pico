@@ -2,6 +2,33 @@
 
 ## Status
 
+Status note, 2026-09-10: **der Wiederholungsschutz überlebt jetzt einen
+Neustart.** Die Zeile in der Bedrohungstabelle unten sagte seit dem ersten Tag,
+was fehlte - *„the seen set is in-memory; a restart inside a request's
+remaining validity window can admit the same otherwise-valid request again"* -,
+und ein externes Review hat am 2026-09-09 danach gefragt. Der Rest war klein
+und benannt: es brauchte eine Anfrage, die mit gültigem Geräteschlüssel
+signiert war, und einen Neustart innerhalb ihrer eigenen Restgültigkeit von
+höchstens sechzig Sekunden. Klein ist aber nicht keiner, und ein
+Fernprotokoll, dessen Wiederholungsschutz eine Prozesseigenschaft ist, hat
+keinen.
+
+Die Merkmenge ist jetzt `pico_link_direct_seen_request` (Wanderung
+`0026_pico_link_direct_seen_request`), und der Eingang bekommt sie als
+Pflichtargument statt als Vorgabe: wer einen Eingang verdrahtet, muss sagen,
+wo das Gedächtnis liegt. Beide Grenzen bleiben, wo sie waren — jede Zeile
+läuft ab und wird bei der nächsten Anfrage gelöscht, und der Deckel von 1.024
+Zeilen verdrängt beim Einfügen. **Wer verdrängt wird, hat sich geändert**: bis
+hierher der zuerst eingefügte Eintrag, jetzt der, der ohnehin zuerst
+verfällt, bei Gleichstand weiterhin der älteste. Verdrängt wird damit immer
+die kürzeste verbleibende Wiederholbarkeit, die es zu vergeben gibt.
+
+Gegangen statt behauptet: eine Datenbank auf der Platte, ein Eingang, eine
+angenommene Anfrage, ein geschlossenes und neu geöffnetes Handle als echter
+Neustart, ein zweiter Eingang — dieselbe Anfrage wird abgelehnt und die
+Operation läuft kein zweites Mal. Die Pflanzung, die den Prozessspeicher
+zurückholt, lässt genau diesen einen Test fallen.
+
 Status note, 2026-08-25: **ein abgelehntes Home meldet sich, ein stummes
 nicht.** `link_home_did_not_answer` deckt den Fall ab, in dem die Verbindung
 scheitert - `fetch` wirft, der Grund wird benannt, der Aufrufer weiß es
@@ -368,7 +395,7 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
 |---|---|---|
 | Carrier reads payload | Requests are sealed to the Home agreement key; responses are sealed to the request's one-use reply key. The dedicated listener sees envelope JSON and ciphertext only. | A compromised Home agreement key reveals recorded requests; requests have no forward secrecy. The Home endpoint necessarily sees the operation after opening it. |
 | Carrier forges a Pico or Home result | The delegated device key signs request, audience and arguments; the pinned Home signing key signs response, request id, operation, outcome and result digest. URL, source address and HTTP identity grant no authority. | A carrier can still drop traffic or forge a bare pre-authentication HTTP refusal. It cannot forge a client-accepted success or authenticated refusal. |
-| Replay, duplication and reordering | Requests expire after 30 seconds client-side with a 60-second server ceiling. A bounded 1,024-entry set rejects an authenticated request id already seen during the process lifetime. Response binding prevents moving a response to another request. | The seen set is in-memory; a restart inside a request's remaining validity window can admit the same otherwise-valid request again. There is no ordering or exactly-once availability guarantee. |
+| Replay, duplication and reordering | Requests expire after 30 seconds client-side with a 60-second server ceiling. A bounded 1,024-row table rejects an authenticated request id already seen, and it is this Home's database rather than the process, so a restart changes nothing (2026-09-10). Response binding prevents moving a response to another request. | Losing the database loses the memory with it, which is the same event as losing the Home. There is no ordering or exactly-once availability guarantee. |
 | Foundation surface exposure | The optional listener admits exactly `POST /api/home/link`; diagnostics, dashboard, health, WebSocket and all other Foundation routes are absent. `direct-token` cannot be enabled beside it. | HA/container packaging must still publish only the intended listener. Port forwarding or a public reverse proxy remains outside the product model. |
 | Parsing and resource exhaustion | Exact target/method gate, 32-header cap, five-second header/keep-alive bounds, ten-second request timeout, 100 requests per socket, route body limit, sealed-field limit, cheap shape checks and closed operations precede private-key verification. | One seal-open is unavoidable before sender authentication. There is no IP/account rate limit, adaptive abuse control or distributed DoS protection; public exposure is not supported. |
 | Metadata privacy | Payload fields are hidden from the carrier and only one HTTP target exists, so the target itself reveals no operation name. | Direct transport still reveals source/destination addresses, TCP/HTTP timing, direction, ciphertext size, retries and availability. Core request logs include source address/port, and log retention is deployment-controlled. No padding, batching, routing-identity indirection or retention protocol exists. |

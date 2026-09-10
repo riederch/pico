@@ -744,7 +744,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         sodium,
         at,
       }),
-  }, undefined, new PicoRequestQuota(config.linkRequestQuota));
+  }, store.linkDirectSeenRequests(), new PicoRequestQuota(config.linkRequestQuota));
   const readerKeySelector = new PicoIdentityReaderKeySelector(
     store,
     sodium,

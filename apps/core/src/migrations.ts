@@ -292,7 +292,30 @@ export const picoModelJobForgottenMigrationId =
 // audit and unknown-version protections are unchanged, and an existing
 // development database - which now reports sixteen unknown migrations and
 // refuses to open - is recreated rather than migrated.
-const migrations: readonly MigrationDefinition[] = [
+/**
+ * ADR 0107 D2. Welche Anfrage-Kennungen dieses Home schon gesehen hat, und bis
+ * wann sie noch wiederholbar waeren.
+ *
+ * **Der Wiederholungsschutz lag im Prozess und ueberlebte keinen Neustart.**
+ * ADR 0107 sagt das seit dem ersten Tag im Klartext - *„the seen set is
+ * in-memory; a restart inside a request's remaining validity window can admit
+ * the same otherwise-valid request again"* -, und ein externes Review hat am
+ * 2026-09-09 danach gefragt. Der Rest ist klein: es braucht eine Anfrage, die
+ * mit gueltigem Geraeteschluessel signiert war, und einen Neustart innerhalb
+ * ihrer eigenen Restgueltigkeit von hoechstens sechzig Sekunden. Klein ist
+ * aber nicht keiner, und ein Fernprotokoll, dessen Wiederholungsschutz eine
+ * Prozesseigenschaft ist, hat keinen.
+ *
+ * `seq` traegt die Einfuegereihenfolge, weil der Deckel bei Gleichstand den
+ * aeltesten Eintrag verdraengt - dieselbe Wahl wie bisher, jetzt aber
+ * hinter dem Ablauf: verdraengt wird der Eintrag, der ohnehin zuerst
+ * verfaellt, und seine verbleibende Wiederholbarkeit ist damit die kuerzeste,
+ * die es zu vergeben gibt.
+ */
+export const picoLinkDirectSeenRequestMigrationId =
+  '0026_pico_link_direct_seen_request' as const;
+
+export const migrations: readonly MigrationDefinition[] = [
   {
     id: picoSchemaBaselineMigrationId,
     requiresBackup: false,
@@ -1619,6 +1642,22 @@ const migrations: readonly MigrationDefinition[] = [
       db.exec(`
         ALTER TABLE pico_model_job_queue
         ADD COLUMN forgotten_at TEXT NULL;
+      `);
+    },
+  },
+  {
+    id: picoLinkDirectSeenRequestMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_link_direct_seen_request (
+          request_id TEXT PRIMARY KEY,
+          expires_at_ms INTEGER NOT NULL,
+          seq INTEGER NOT NULL
+        );
+
+        CREATE INDEX idx_pico_link_direct_seen_request_eviction
+        ON pico_link_direct_seen_request (expires_at_ms, seq);
       `);
     },
   },

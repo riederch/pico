@@ -78,7 +78,7 @@ const claims = [
     from: /(\d+) IPC channels, named identically/u,
   },
   { phrase: 'geprüfte Fensterelemente', from: /(\d+) elements the window requires/u },
-  { phrase: 'zehn Stores', from: /passed \((\d+) stores, \d+ writing methods/u, spelled: 10 },
+  { phrase: 'elf Stores', from: /passed \((\d+) stores, \d+ writing methods/u, spelled: 11 },
   { phrase: 'Schreibmethoden', from: /\d+ stores, (\d+) writing methods/u },
   { phrase: 'exportierte Fähigkeiten', from: /Capability reach check passed \((\d+)/u },
   { phrase: 'Tabellen benennen ihr Wachstumsende', from: /passed \((\d+) tables/u },

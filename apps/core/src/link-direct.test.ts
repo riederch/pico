@@ -9,8 +9,12 @@ import {
   type PicoLinkDirectRequestSignatureInput,
   type PicoLinkDirectResponseSignatureInput,
 } from '@pico/protocol';
+import Database from 'better-sqlite3';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import sodium from 'libsodium-wrappers-sumo';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   MAX_PICO_LINK_DIRECT_ENVELOPE_HEX_CHARS,
   PicoLinkDirectIntake,
@@ -19,6 +23,11 @@ import {
   type PicoLinkDirectExecution,
   type PicoLinkDirectPrincipal,
 } from './link-direct.js';
+import {
+  MAX_PICO_LINK_DIRECT_SEEN_REQUESTS,
+  PicoLinkDirectSeenRequests,
+} from './link-direct-seen-requests.js';
+import { migrations, picoLinkDirectSeenRequestMigrationId, runMigrations } from './migrations.js';
 
 /**
  * ADR 0107 D2. One test per step of the verification order, because that order
@@ -97,7 +106,47 @@ function hostAuthority(overrides: Partial<PicoLinkDirectAuthority> = {}): PicoLi
   };
 }
 
-function makeIntake(overrides: Partial<PicoLinkDirectAuthority> = {}, maxSeenRequests?: number): {
+const openDatabases: Database.Database[] = [];
+const temporaryRoots: string[] = [];
+
+afterEach(() => {
+  while (openDatabases.length > 0) {
+    openDatabases.pop()?.close();
+  }
+  while (temporaryRoots.length > 0) {
+    rmSync(temporaryRoots.pop() as string, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The replay memory the product uses, on a database this test owns.
+ *
+ * The shipped migration builds the table rather than a `CREATE TABLE` written
+ * a second time here: the schema this exercises has to be the schema that
+ * ships, or the test proves something about a table nobody has.
+ */
+function seenRequests(
+  databasePath = ':memory:',
+  maxRows = MAX_PICO_LINK_DIRECT_SEEN_REQUESTS,
+): PicoLinkDirectSeenRequests {
+  const db = new Database(databasePath);
+  openDatabases.push(db);
+  const migration = migrations.find((candidate) => candidate.id === picoLinkDirectSeenRequestMigrationId);
+  if (migration === undefined) {
+    throw new Error('the seen-request migration is gone, so this test has no subject.');
+  }
+  // Through the runner rather than calling `up` directly: reopening a database
+  // has to be a no-op, and the bookkeeping that makes it one is the thing the
+  // restart below depends on.
+  runMigrations(db, { migrationDefinitions: [migration] });
+  return new PicoLinkDirectSeenRequests(db, maxRows);
+}
+
+function makeIntake(
+  overrides: Partial<PicoLinkDirectAuthority> = {},
+  maxSeenRequests?: number,
+  sharedSeenRequests?: PicoLinkDirectSeenRequests,
+): {
   intake: PicoLinkDirectIntake;
   calls: Recorded[];
   execute: Execute;
@@ -105,9 +154,11 @@ function makeIntake(overrides: Partial<PicoLinkDirectAuthority> = {}, maxSeenReq
   const calls: Recorded[] = [];
 
   return {
-    intake: maxSeenRequests === undefined
-      ? new PicoLinkDirectIntake(sodium, hostAuthority(overrides))
-      : new PicoLinkDirectIntake(sodium, hostAuthority(overrides), maxSeenRequests),
+    intake: new PicoLinkDirectIntake(
+      sodium,
+      hostAuthority(overrides),
+      sharedSeenRequests ?? seenRequests(':memory:', maxSeenRequests ?? MAX_PICO_LINK_DIRECT_SEEN_REQUESTS),
+    ),
     calls,
     execute: async (operation, args, principal) => {
       calls.push({ operation, args, principal });
@@ -369,6 +420,34 @@ describe('Pico Link direct intake (ADR 0107 D2)', () => {
       .toEqual({ ok: false, reason: 'request_replayed' });
     // The operation ran once, which is the whole point of the check.
     expect(calls).toHaveLength(1);
+  });
+
+  it('refuses a replayed request id after a restart inside its window', async () => {
+    /**
+     * **Der Rest, den ADR 0107 seit dem ersten Tag nannte** (geschlossen am
+     * 2026-09-10, Paket P12 des externen Reviews). Die Merkmenge lag in einer
+     * `Map` auf der Instanz, also nahm ein Home nach einem Neustart dieselbe,
+     * sonst gültige Anfrage innerhalb ihrer Restgültigkeit noch einmal an.
+     *
+     * Gefahren statt behauptet: eine Datei auf der Platte, ein Eingang, ein
+     * echter Prozessneustart als geschlossene und neu geöffnete Datenbank, ein
+     * zweiter Eingang - und dieselbe Anfrage.
+     */
+    const root = mkdtempSync(join(tmpdir(), 'pico-link-replay-'));
+    temporaryRoots.push(root);
+    const databasePath = join(root, 'home.sqlite');
+    const envelope = sealedRequest();
+
+    const before = makeIntake({}, undefined, seenRequests(databasePath));
+    expect((await before.intake.handle(envelope, before.execute, NOW)).ok).toBe(true);
+    openDatabases.pop()?.close();
+
+    const after = makeIntake({}, undefined, seenRequests(databasePath));
+    expect(await after.intake.handle(envelope, after.execute, NOW))
+      .toEqual({ ok: false, reason: 'request_replayed' });
+    // And the operation did not run a second time, which is what the refusal
+    // is for.
+    expect(after.calls).toHaveLength(0);
   });
 
   it('forgets a request id once its window has passed, so the set stays bounded', async () => {

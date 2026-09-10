@@ -912,6 +912,61 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B130 — Ein Wiederholungsschutz, der im Prozess wohnte (2026-09-10, Paket P12
+des externen Reviews).** ADR 0107 nannte den Rest seit seinem ersten Tag in der
+eigenen Bedrohungstabelle: *„the seen set is in-memory; a restart inside a
+request's remaining validity window can admit the same otherwise-valid request
+again"*. Das Review fragte danach, und die Zeile stimmte.
+
+**Gewogen, bevor er geschlossen wurde.** Was ein Angreifer braucht, ist eine
+Anfrage, die mit gültigem Geräteschlüssel signiert war, und ein Neustart des
+Homes innerhalb ihrer eigenen Restgültigkeit von höchstens sechzig Sekunden.
+Was er erreicht, ist die zweite Ausführung derselben Operation. Bei den meisten
+der 55 Operationen ist das folgenlos, weil sie idempotent sind oder an einen
+Zustand gebunden, den die erste Ausführung verändert hat. Das Review wog ihn
+schwerer als er ist; ihn zu schliessen war trotzdem billiger, als alle 55 auf
+ihre zweite Ausführung durchzusehen.
+
+Die Merkmenge ist jetzt `pico_link_direct_seen_request` (Wanderung 0026), und
+der Eingang bekommt sie als **Pflichtargument** statt als Vorgabe. Eine Vorgabe
+wäre derselbe Fehler mit einem Parameter davor: wer einen Eingang verdrahtet,
+muss sagen, wo das Gedächtnis liegt, und es gibt genau einen Ort, der den
+Prozess überlebt. Dieselbe Lehre wie in B117 — ein Schutz, der aus Versehen
+gilt, gilt bis jemand anders installiert.
+
+Beide Grenzen bleiben, wo sie waren: jede Zeile läuft ab und wird bei der
+nächsten Anfrage gelöscht, der Deckel von 1.024 Zeilen verdrängt beim
+Einfügen. **Wer verdrängt wird, hat sich geändert.** Die Map liess den zuerst
+Eingefügten gehen; die Tabelle ordnet nach `(expires_at_ms, seq)`, verdrängt
+also den, der ohnehin zuerst verfällt, und bei Gleichstand weiterhin den
+ältesten. Die verbleibende Wiederholbarkeit, die dabei verschenkt wird, ist
+damit immer die kürzeste, die zu vergeben ist — und der alte Test, in dem alle
+Fristen gleich sind, geht unverändert durch.
+
+Zwei Pflanzungen, beide punktgenau: der Prozessspeicher zurück lässt genau den
+Neustart-Test fallen, und `ORDER BY seq` allein genau den zur
+Verdrängungsordnung. Der Neustart ist gefahren statt behauptet — eine Datei auf
+der Platte, ein Eingang, ein geschlossenes und neu geöffnetes Handle, ein
+zweiter Eingang, dieselbe Anfrage: abgelehnt, und die Operation lief kein
+zweites Mal. Sechs Tests halten den Speicher selbst, 25 den Eingang.
+
+Damit fällt der Satz aus `progress.md`, der seit Wochen dort stand, und die
+Zeile in ADR 0107 nennt jetzt einen anderen Rest: wer die Datenbank verliert,
+verliert das Gedächtnis mit ihr, und das ist dasselbe Ereignis wie das Home
+zu verlieren.
+
+**Was eine Wanderung sonst noch kostet, gemessen statt vermutet.** Die
+sechsundzwanzigste Wanderung liess acht Tests fallen, und keiner davon war ein
+Fehler: `migrations.test.ts`, `app.test.ts` und `sqlite-backup.test.ts` führen
+die angewandten Wanderungen einzeln auf, weil die *Reihenfolge* Teil des
+Vertrags ist. Das ist die richtige Strenge — und beim Nachziehen hat mein
+eigener Ersatz erst den 0025-Eintrag überschrieben statt ergänzt, was
+dieselben Tests sofort gemeldet haben. Zwei Zahlen in `progress.md` sind
+mitgewandert (48 Tabellen statt 47, elf Läden mit 85 Schreibmethoden statt
+zehn mit 83), und die ausgeschriebene Zahl im Messer selbst dazu: `progress:walk`
+trägt „zehn Stores" als Satzteil, den es in `progress.md` sucht, also wandert
+sie an zwei Orten oder an keinem.
+
 **B129 — Ein Satz, oben zurückgenommen und unten stehen geblieben (2026-09-10,
 Paket P7 des externen Reviews).** Das Review meldete einen falschen Kommentar
 in `action-path.ts`: er behauptete, eine aufgezeichnete Regel könne nur

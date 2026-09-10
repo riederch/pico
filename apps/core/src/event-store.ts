@@ -2,6 +2,10 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { narrowToOwner } from './database-file-mode.js';
+import {
+  MAX_PICO_LINK_DIRECT_SEEN_REQUESTS,
+  PicoLinkDirectSeenRequests,
+} from './link-direct-seen-requests.js';
 import { PicoModelProviderConsent, PicoModelProviderRegistry } from './model-provider-registry.js';
 import { PicoModelJobQueue } from './model-job-queue.js';
 import { PicoPresenceRegistry } from './presence-registry.js';
@@ -6056,6 +6060,18 @@ export class EventStore {
   public memory(): MemoryStore {
     this.ensureOpen();
     return new MemoryStore(this.db, this.memoryCrypto, this.rowCounter);
+  }
+
+  /**
+   * ADR 0107 D2. The Pico Link Direct replay memory, on this Home's disk.
+   *
+   * Here rather than in the intake because it is durable Home state, and the
+   * intake is the file that decides an order of checks - it holds no route, no
+   * policy and, until 2026-09-10, no memory that outlived the process.
+   */
+  public linkDirectSeenRequests(maxRows = MAX_PICO_LINK_DIRECT_SEEN_REQUESTS): PicoLinkDirectSeenRequests {
+    this.ensureOpen();
+    return new PicoLinkDirectSeenRequests(this.db, maxRows);
   }
 
   /**
