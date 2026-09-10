@@ -90,8 +90,27 @@ h2 { margin: 0 0 .75rem; font-size: 1.25rem; }
 #body { margin: 0; color: var(--pico-text-secondary); line-height: 1.6; overflow-wrap: anywhere; }
 .scope { margin: 1rem 0 0; padding: 1rem; border-left: .25rem solid var(--pico-status-warning); color: var(--pico-text-secondary); line-height: 1.5; }
 .form-card { margin-top: 1rem; padding: 1.25rem; border: 1px solid var(--pico-border); border-radius: var(--pico-radius-card); background: var(--pico-surface-1); }
-.form-card label { display: block; margin: .85rem 0 .35rem; color: var(--pico-text-secondary); font-weight: 700; }
-.form-card input, .form-card select { width: 100%; min-height: 2.75rem; padding: 0 .8rem; border: 1px solid var(--pico-border-strong); border-radius: var(--pico-radius-input); background: var(--pico-surface-2); color: var(--pico-text-primary); font: inherit; }
+/*
+  Befund B123. Dieselbe Erscheinung an zwei Orten, und der zweite kam dazu,
+  weil ein Feld in seine Beschriftung gezogen wurde.
+
+  Befund B102 hat das eine freie Eingabefeld des Fensters *in* sein `<label>`
+  gesetzt - richtig, weil eine Verschachtelung nicht auseinandergehen kann.
+  Nur trafen es die Regeln hier nicht mehr: sie sprechen ueber `.form-card
+  input`, und dieses Feld steht in einer Zeile einer Liste. Angesehen sah das
+  so aus, dass "Where its material belongs" ohne Abstand in ein kleines graues
+  Kaestchen laeuft - eine Zeile, die kaputt aussieht, statt eines Feldes mit
+  Aufschrift.
+
+  Deshalb steht die Regel hier mit zwei Traegern statt zweimal geschrieben. Der
+  verschachtelte Fall braucht sein `display: block`, weil ein `<label>` sonst
+  in einer Zeile bleibt.
+*/
+.form-card label,
+.provider-line label { display: block; margin: .85rem 0 .35rem; color: var(--pico-text-secondary); font-weight: 700; }
+.form-card input, .form-card select,
+.provider-line label input { width: 100%; min-height: 2.75rem; padding: 0 .8rem; border: 1px solid var(--pico-border-strong); border-radius: var(--pico-radius-input); background: var(--pico-surface-2); color: var(--pico-text-primary); font: inherit; }
+.provider-line label input { display: block; margin-top: .35rem; }
 .form-card p { color: var(--pico-text-secondary); line-height: 1.5; }
 .actions { display: flex; gap: .75rem; margin-top: 2rem; }
 button { min-height: 2.75rem; padding: 0 1.1rem; border: 0; border-radius: var(--pico-radius-button); background: var(--pico-primary); color: var(--pico-text-on-primary); font: inherit; font-weight: 700; cursor: pointer; }

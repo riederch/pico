@@ -3296,6 +3296,15 @@ export class EventStore {
    * only as proven as its weakest prefix, and the claim state's host pins are
    * repaired to the verified head so a tampered row cannot leave the Home
    * answering to a key nobody proved.
+   *
+   * **Ohne Transaktion, und das ist die Antwort und keine Luecke** (gemessen
+   * 2026-09-10). Zwei der drei Schreibwege koennen in einem Lauf beide
+   * greifen: der unbewiesene Kettenrest faellt, danach werden die Pins
+   * repariert. Ein Absturz dazwischen liesse einen halben Zustand liegen - nur
+   * kann ihn niemand sehen. Dies laeuft **beim Start**, einmal, aus
+   * `app.ts`, bevor irgendetwas bedient wird; ein abgestuerzter Start bedient
+   * nichts, und der naechste faehrt denselben Abgleich noch einmal. Ein
+   * Abgleich, der zusammenlaeuft, braucht keine Klammer um sich.
    */
   public reconcilePicoHomeHostContinuity(
     sodium: IdentityVerificationSodium,

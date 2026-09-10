@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B123 — Hingesehen, und die eigene Reparatur sah kaputt aus (2026-09-10).**
+Seit B103 stand in `.agent-context.md` ein offener Punkt: *„Das Fenster sieht
+anders aus, und niemand hat hingesehen."* Also hingesehen — die Zeichner nehmen
+`document` als Parameter, also im Browser, mit dem echten Stilblatt.
+
+**Was hielt:** die Zeilen sind Karten mit Rahmen und Innenabstand, die
+verschachtelte Angebotsliste hat keine Aufzählungspunkte, und *„Forget this
+device and everything you decided about it"* ist sichtbar der leise Knopf.
+B103 ist angekommen.
+
+**Was kaputt aussah, war meine eigene Reparatur.** Die Aufschrift lief ohne
+Abstand in ein kleines graues Kästchen:
+
+> `Where its material belongs▭`
+
+B102 hat das Feld *in* seine Beschriftung gezogen — für die Verbindung richtig,
+und eine Verschachtelung kann nicht auseinandergehen. Nur trafen es die
+Stilregeln danach nicht mehr: sie sprechen über `.form-card input`, und dieses
+Feld steht in einer Listenzeile. Die Regel hat jetzt **zwei Träger statt zweier
+Fassungen**, und der verschachtelte Fall bekommt sein `display: block`, weil
+ein `<label>` sonst in einer Zeile bleibt.
+
+**Kein Prüfer hätte das gefunden**, und keiner sollte es. `labels:check` fragt,
+ob die Beschriftung auf ihr Feld zeigt — sie tut es, sogar durch Enthaltensein.
+`style:check` fragt, ob jeder Name eine Regel hat — hat er. Was fehlte, war,
+dass **niemand hingesehen** hatte. Die drei Prüfer decken die Syntax; das
+Aussehen deckt ein Blick, und der ist billiger als jede Regel, die ihn ersetzen
+wollte.
+
+**Gesehen und nicht geändert:** drei primärblaue Knöpfe übereinander — *„Do not
+use this"*, *„Allow this again"*, *„Do not use this device"*. Alle drei sind
+Rücknahmen oder Wiederherstellungen und alle drei so laut wie ein Hauptknopf.
+Ob das richtig ist, ist ein Urteil über die Fläche; es steht als Beobachtung in
+`.agent-context.md` statt als stille Änderung im Baum.
+
+**Was daraus folgt.** Zwischen B100 und B105 sind fünf Regeln über diese Fläche
+entstanden, und alle fünf waren an dem Tag grün, an dem die Fläche schlecht
+aussah. Eine Regel prüft, was sie prüft. Der Rest braucht Augen — und dieser
+Punkt stand vier Tage offen, weil ich ihn für teurer hielt, als er war.
+
 **B122 — „Abwesenheit ist eine Antwort" — siebenmal nachgesehen, einmal
 etwas gefunden (2026-09-10).** B121 hat gezeigt, was passiert, wenn eine
 abgeschnittene Datei als *„nichts da"* gelesen wird. Also die Klasse gesucht,
