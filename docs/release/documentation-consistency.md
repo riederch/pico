@@ -125,82 +125,44 @@ When changing architecture decisions, also check:
 
 ## Concept consistency rule
 
-README files must stay consistent with the architecture decision records under:
+Documents must stay consistent with the architecture decision records under
+`docs/architecture`. Where a document and an ADR disagree about what a concept
+means, the ADR decides and the document is wrong.
 
-```text
-docs/architecture/
-```
+**This section used to enumerate that rule, one line per ADR, and it stopped at
+`0076`** - 80 lines covering roughly half of the decisions, last extended long
+before the rest were written. Rewritten on 2026-09-10 after an external review
+named it: a list that claims to be the rule is a list somebody stops extending,
+and then it reads as coverage rather than as a fragment. The rule above is one
+sentence and does not go out of date.
 
-In particular:
+### What holds it mechanically
 
-- sovereignty and relationship boundaries must remain consistent with `0003` and `0004`
-- authority and execution language must remain consistent with `0010`
-- audit, privacy and security language must remain consistent with `0011`
-- roadmap wording must remain consistent with `0012`
-- visual identity language must remain consistent with `0013`
-- deletion and memory wording must remain consistent with `0014`
-- Full Client / Light Client / Relay wording must remain consistent with `0015`
-- cryptography claims must remain consistent with `0016`
-- trust-signal language must remain consistent with `0017`
-- presence, activity and location sharing language must remain consistent with `0018`
-- Home Assistant threat-model language must remain consistent with `0019`
-- service and emergency access language must remain consistent with `0020`
-- private behaviour, legal risk and harm language must remain consistent with `0021`
-- shared commitment and cooperative nudging language must remain consistent with `0022`
-- adaptive tone, motivation and self-binding language must remain consistent with `0023`
-- server bootstrap, Gastgeber Pico, residency, eviction and Core Host ownership language must remain consistent with `0024`
-- inter-Pico protocol compatibility language must remain consistent with `0025`
-- product terminology and naming language must remain consistent with `0026`
-- dedicated Pico Home Image, Setup Mode and Move-In Code language must remain consistent with `0027`
-- Pico Link, Relay Network, transport facade and low-bandwidth transport language must remain consistent with `0028`
-- identity, device, Home, transport and domain key language must remain consistent with `0029`
-- Foundation API exposure and local trust boundary language must remain consistent with `0030`
-- Pico Link identity, relay metadata and protected-domain threat-model language must remain consistent with `0031`
-- Pico Link envelope, credential and key-envelope schema language must remain consistent with `0032`
-- key lifecycle, rotation, revocation, lost-device, reset and recovery language must remain consistent with `0033`
-- canonicalization, signature-input and test-vector language must remain consistent with `0034`
-- digital companion, technical twin and Pico subject language must remain consistent with `0035`
-- capability, connector and MCP boundary language must remain consistent with `0036`
-- proactive delegation, procurement and approval language must remain consistent with `0037`
-- Foundation access hardening, Home Assistant ingress and temporary direct-access token language must remain consistent with `0038`
-- Foundation WebSocket ticket and direct-access realtime hardening language must remain consistent with `0039`
-- Home Assistant ingress metadata, add-on token option and packaging-default language must remain consistent with `0040`
-- Pico Link draft schema and fixture staging language must remain consistent with `0042`
-- Pico Link draft packet-envelope preflight language must remain consistent with `0043`
-- Pico Link draft protected-payload placeholder language must remain consistent with `0044`
-- Pico Home Link draft membership-credential placeholder language must remain consistent with `0045`
-- draft compatibility-claim placeholder language must remain consistent with `0046`
-- draft canonicalization rejection placeholder language must remain consistent with `0047`
-- delegated model capability and remote inference authority language must remain consistent with `0048`
-- model provider registry and job-envelope language must remain consistent with `0049`
-- model-delegation draft fixture staging language must remain consistent with `0050`
-- Pico Link device credential placeholder language must remain consistent with `0051`
-- Pico Link lost-device revocation placeholder language must remain consistent with `0052`
-- Pico Link revocation registry placeholder language must remain consistent with `0053`
-- Pico Link key-envelope rotation placeholder language must remain consistent with `0054`
-- Pico Link identity-key placeholder language must remain consistent with `0055`
-- Pico Home Link Home Host Key placeholder language must remain consistent with `0056`
-- Pico Home Link residency and eviction placeholder language must remain consistent with `0057`
-- Model Delegation job-envelope scoping placeholder language must remain consistent with `0058`
-- Model Delegation result-envelope provenance placeholder language must remain consistent with `0059`
-- Model Delegation context-reference scoping placeholder language must remain consistent with `0060`
-- Model Delegation provider-registry advertisement placeholder language must remain consistent with `0061`
-- Pico Link signed event segment placeholder language must remain consistent with `0062`
-- Pico Link protected-payload rejection placeholder language must remain consistent with `0063`
-- Pico Link replica manifest placeholder language must remain consistent with `0064`
-- Pico Link packet-envelope rejection placeholder language must remain consistent with `0065`
-- Pico Home Link Home Membership rejection placeholder language must remain consistent with `0066`
-- Foundation payload-posture, reference-target and tombstone language must remain consistent with `0014` and `0067`
-- Reference-target and deleteable memory store language must remain consistent with `0014`, `0067` and `0068`
-- memory.recorded and reference-only write language must remain consistent with `0068` and `0069`
-- memory encryption-at-rest and crypto-shredding language must remain consistent with `0016`, `0033` and `0070`
-- memory encryption threat-model and primitive-suite language must remain consistent with `0016`, `0032`, `0034`, `0070` and `0071`
-- memory key-storage, backup-separation and key-recovery language must remain consistent with `0033`, `0071` and `0072`
-- memory-content associated-data canonicalization, byte-layout and test-vector language must remain consistent with `0034`, `0047`, `0071` and `0073`
-- memory retention-policy and expiry-deletion language must remain consistent with `0014`, `0021`, `0033`, `0037`, `0068`, `0070` and `0074`
-- foundation local authentication, session, membership-scoping and access-class language must remain consistent with `0016`, `0024`, `0027`, `0029`, `0030`, `0038`, `0039`, `0040`, `0041` and `0075`
-- operator credential, session-mechanics, bootstrap-code and auth-audit language must remain consistent with `0016`, `0027`, `0037`, `0039`, `0075` and `0076`
-- conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
+Not the whole rule - none of these reads prose for meaning - but the parts that
+can be measured, so a person spends their attention on the part that cannot:
+
+- `scripts/check-docs-structure.mjs` (`pnpm docs:check`): every path a document
+  names is a file the repository has; every ADR has a status-matrix row or a
+  written reason for not having one; present-tense absence claims are still
+  true, read across every tracked document; the README's maturity numbers match
+  the matrix; the handoff stays inside the size `AGENTS.md` states.
+- `scripts/measure-progress-numbers.mjs` (`pnpm progress:walk`): the counted
+  numbers in `progress.md` are held against the gate outputs of the same run.
+- `scripts/check-version.mjs` (`pnpm version:check`): every workspace manifest,
+  add-on config, README, changelog and image tag says the same version - the
+  manifests read from `pnpm-workspace.yaml` rather than from a list.
+- The subject gates hold the *code* side of a concept, which is the half a
+  document is usually wrong about: instants, labels, refusals, stores, link
+  operations and the rest each have one.
+
+### What a person still has to do
+
+- Read a changed concept sentence against the ADR that decided it. Nothing
+  mechanical compares meaning, and the two documents agreeing with each other
+  rather than with the ADR is exactly how a wrong name survives.
+- Notice when one word carries two concepts. "Pico Vault" is the open case
+  today: ADR 0015 uses it for the full-client node type and ADR 0097 for the
+  custody daemon inside one, and both readings are in `ReadmeTech.md`.
 
 ## Review checklist
 

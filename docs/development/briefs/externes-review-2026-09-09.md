@@ -128,6 +128,19 @@ wiederholt werden.
   getrennt, und der Rest ist ein Hinweis auf der Fläche, keine zweite Wirkung
   dieser Operation.
 
+- **E11 — Traegt „Pico Vault" zwei Begriffe?** *Aufgeworfen 2026-09-10 beim
+  Umsetzen von P5; das Review hat es in §9.2 benannt.* Gemessen: ADR 0015
+  benutzt das Wort fuer den Knotentyp „voller Client", ADR 0097 fuer den
+  Verwahr-Daemon *innerhalb* eines solchen, und beide Lesarten stehen in
+  `ReadmeTech.md` - Zeile 131 als Knoten, Zeile 249 als „Full Client", Zeile
+  285 als Daemon. Das Review haelt die zweite fuer die saubere. *Empfohlen:*
+  nicht im Vorbeigehen aendern. Es ist eine ADR-Vokabel, sie steht in ADR 0015
+  im Titel, und ein Umbenennen beruehrt jeden Text, der sie benutzt. Wenn, dann
+  als eigene ADR-Entscheidung mit einer Umbenennung in einem Zug.
+  *Alternative:* so lassen und in beiden ADRs einen Satz ergaenzen, der sagt,
+  welche Lesart wo gilt - billiger, und es schliesst genau die Verwechslung,
+  die ein Leser haette.
+
 - **E9 — Wann laufen die Container nicht mehr als root?** *Entschieden
   2026-09-10:* vor produktiven Personendaten, gekoppelt an P9, weil der Grund
   für root das gemountete `/data` ist und nur auf einer echten
@@ -210,7 +223,7 @@ damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
 - Ein Tor in `verify:gates` hält die 200 Zeilen aus AGENTS.md:149.
 - Beweis: 201 Zeilen gepflanzt, Tor rot.
 
-**P5 — Dokumentation abgleichen** (R7, R8, R10, R11, R12, R13, R22, R25, E3, E7)
+**P5 — Dokumentation abgleichen** (R7, R8, R10, R11, R12, R13, R22, R25, E3, E7) — *erledigt 2026-09-10, Befund B134*
 - README: die drei Zahlen werden von `progress:walk` gehalten statt von Hand.
 - ReadmeTech: Rules und Runner sind da (Zeilen 111-112), Pico Link ist da
   (155, 163), Pico Vault ist die Verwahrkomponente eines vollen Clients und

@@ -108,10 +108,10 @@ flowchart TD
     Core --> EventStore[(SQLite event store)]
     Core --> Sync[Sync primitives\nLamport clock / version vectors]
     Core --> Protocol[Shared protocol]
-    Core --> PicoRules[Pico Rules\nplanned]
-    PicoRules --> ActionRunner[Action Runner\nplanned]
+    Core --> PicoRules[Pico Rules\nADR 0140]
+    PicoRules --> ActionRunner[Action Runner\nADR 0140 RL5]
     ActionRunner --> Actions[Actions\nHA / files / services / devices]
-    Core --> ActionHistory[(Action History\nplanned)]
+    Core --> ActionHistory[(Action History\nin the event log)]
 ```
 
 ## Core authority model
@@ -152,7 +152,7 @@ A future Pico Home Image is an appliance-style installation path for the same mo
 
 ## Pico Link, Relay Network and transport facade
 
-Pico Link is the future transport-neutral communication layer between Picos, Homes and related Pico endpoints.
+Pico Link is the transport-neutral communication layer between Picos, Homes and related Pico endpoints. It exists: `apps/core/src/link-direct.ts` verifies sealed envelopes to the own Home (ADR 0107), `apps/relay/src/server.ts` forwards packets between mailboxes (ADR 0147-0149), and the operation list is closed at 55 names. What is still ahead is the *facade* - one call site that chooses a transport - and a published wire contract others could implement against.
 
 Core rule:
 
@@ -160,7 +160,7 @@ Core rule:
 Pico speaks Pico Link. Transports carry Pico Link packets.
 ```
 
-A future Pico Link packet should be encrypted above the transport. Relays and adapters may route, queue, retry, deduplicate, fragment or drop packets according to capability and policy, but they must not decrypt payloads, authorize actions, own identities, alter signed content or become trust anchors.
+A Pico Link packet is encrypted above the transport. Relays and adapters may route, queue, retry, deduplicate, fragment or drop packets according to capability and policy, but they must not decrypt payloads, authorize actions, own identities, alter signed content or become trust anchors - and the relay in this repository holds to that: it sees an address and a sealed payload, and refuses a packet whose address names another operator.
 
 Remote reachability model:
 

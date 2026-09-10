@@ -40,14 +40,36 @@ otherwise.
 Only the latest released version receives security fixes. There are no
 backports.
 
+**What counts as released** (decided 2026-09-10, because the word carried four
+possible meanings that had come apart): a tag `v*` whose CI run ended green and
+whose images and client package were published under that tag. The GitHub
+release for the client package is created as a draft on purpose - a person sees
+the package and its checksum before anyone can download it - and whether it has
+been published out of that draft does not change which version is supported.
+Security fixes go to the highest such tag.
+
 ## Scope notes
 
-- The Foundation HTTP/WebSocket surface is a local trust boundary
-  (ADR 0030). Publishing it is unsupported, so reports that assume its
+- **Every network surface this repository builds, and how it is bound.**
+  Until 2026-09-10 this section named one, and by then there were more.
+
+  | Surface | Default binding | Meant to be published |
+  |---|---|---|
+  | Pico Link Direct intake, `POST /api/home/link` (ADR 0107 D4) | absent unless a deployment sets both host and port | **yes**, this is the one |
+  | Relay mailbox port (ADR 0149), default `3200` | all interfaces | **yes**, and it is the only port that may be forwarded from a router |
+  | Relay health port, default `3201` | loopback | no |
+  | Relay operator API (ADR 0154), default `3202` | loopback, and a LAN binding needs an explicit option | no |
+  | Foundation HTTP/WebSocket, default `3100` (ADR 0030) | local trust boundary; the add-on forwards no port for it | no |
+  | Home Assistant ingress | the Supervisor's own authenticated proxy in front of `3100` | no, and it is the Supervisor's surface rather than this product's |
+
+  The desktop companion opens no listener at all.
+
+  Findings against the Pico Link intake's verification order are especially
+  valuable, and so are findings against the relay's door: it speaks plain HTTP
+  and leaves TLS to the deployment, which is a stated property rather than an
+  oversight.
+- Publishing the Foundation surface is unsupported, so reports that assume its
   public exposure are design input rather than vulnerabilities.
-- The only surface designed for network publication is the Pico Link
-  intake (ADR 0107); findings against its verification order are
-  especially valuable.
 - Cryptographic and containment claims are bounded by ADR 0016 and the
   threat-model ADRs (0031, 0071, 0075, 0079, 0080, 0081, 0116, 0117).
   The residuals named there are known and deliberate; a report showing

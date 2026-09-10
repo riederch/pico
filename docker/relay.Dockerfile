@@ -1,8 +1,14 @@
 # Pico Relay - a queue with a door on it, and nothing else (ADR 0149).
 #
-# Deliberately not a Home Assistant add-on (ADR 0153): a relay has to stay
-# reachable when one household's Supervisor is restarting, and an add-on's
-# lifecycle belongs to that Supervisor.
+# This image is not itself a Home Assistant add-on - it is a container a
+# deployment runs. ADR 0153 argued against packaging a relay as one at all,
+# because a relay has to stay reachable when one household's Supervisor is
+# restarting and an add-on's lifecycle belongs to that Supervisor.
+#
+# The user decided for it on 2026-08-20, and ADR 0155 ships `pico_relay/`
+# beside that argument rather than instead of it: the objection did not go
+# away, and `pico_relay/config.yaml` records it where somebody installing meets
+# it. Both paths run these bytes; the add-on only points at this image.
 #
 # ADR 0122 Y1. Pinned by digest, with the tag kept as a comment: a tag says
 # what an image was called, a digest says which bytes were built against.

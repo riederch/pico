@@ -912,6 +912,78 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B134 — Sieben Dokumente, gegen den Code gehalten (2026-09-10, Paket P5 des
+externen Reviews).** Das breiteste Paket der Runde: jede geänderte Aussage
+gegen die Zeile Code geprüft, gegen die sie steht.
+
+**Zwei von drei Reifegradzahlen in der README waren falsch.** Sie sagte *„Of
+155 architecture decisions, 36 are implemented and 86 partially"*; gezählt sind
+es **157** Entscheidungen und **87** teilweise umgesetzte, und nur die 36
+stimmten. Keine Abweichung ist groß, und genau das ist der Punkt: eine Zahl von
+Hand driftet leise, und die README ist das Erste, was jemand liest. Sie kommt
+jetzt aus der Statusmatrix, gehalten von `docs:check`, das die Matrix ohnehin
+liest. Verschwindet der Satz, fällt der Lauf — ein Tor, das eine Angabe
+bewacht, die niemand mehr macht, bewacht nichts und sagt es nicht.
+
+**`ReadmeTech.md` beschrieb Gebautes als geplant.** Das Diagramm führte Pico
+Rules und den Action Runner als *planned*, während ADR 0140 RL1-RL6 als
+umgesetzt gilt, `packages/protocol/src/pico-rules.ts` die Entscheidung trifft
+und `apps/core/src/action-path.ts` sie trennt in entscheiden und ausführen. Die
+Action History stand als *planned* und ist der Ereignistyp
+`pico_rules.decision_created`. Und Pico Link hiess *„the future
+transport-neutral communication layer"*, während der direkte Eingang, das
+Relay und 55 geschlossene Operationen im Baum stehen. Was wirklich noch fehlt,
+steht jetzt dort: die Fassade und ein veröffentlichter Wire-Vertrag.
+
+**`SECURITY.md` nannte eine Netzfläche, und es sind sechs.** Der Satz *„The
+only surface designed for network publication is the Pico Link intake"* stimmte
+vor dem Relay. Gemessen und als Tabelle aufgenommen: der Link-Eingang (nur
+gebunden, wenn eine Bereitstellung Host und Port setzt), der Mailbox-Port des
+Relays (der einzige, der von einem Router weitergeleitet werden darf), sein
+Gesundheits- und sein Betreiberport (beide Loopback), die Foundation-Fläche
+(lokal, nie weitergeleitet) und der Ingress von Home Assistant. Der Companion
+öffnet gar keinen Listener. Dazu die Definition aus Entscheidung E3: released
+ist ein grüner Tag, und ob das Release aus dem Draft heraus ist, ändert nichts
+daran.
+
+**`progress.md` war eine Momentaufnahme mit einem Journal darin.** Der Kopf
+trug den 2026-08-31, der Inhalt reichte bis heute, und Zeile 23 war ein einziger
+Absatz von **3.131 Wörtern** — die Geschichte jedes Tores, in einem Dokument,
+das den Stand sagen soll. Der Absatz trägt jetzt, was ein Stand braucht: die
+51 Schritte, die achtzehn gezählten Zahlen und die beiden Messungen daneben.
+Alle achtzehn stimmen nach dem Kürzen weiter, denn `progress:walk` sucht die
+Satzteile und nicht die Zeile. Der Kopf sagt jetzt ausserdem, was das Dokument
+*ist*: eine Momentaufnahme, und ein Datum von gestern darin ist ein Fehler und
+keine Historie.
+
+**Das Konsistenzdokument zählte die Regel auf, statt sie zu sagen.** 80 Zeilen
+der Form *„X language must remain consistent with ADR NNNN"*, endend bei
+`0076` — etwa die Hälfte der Entscheidungen, lange nicht mehr fortgeschrieben.
+Eine Liste, die die Regel *ist*, ist eine, die jemand aufhört fortzuschreiben,
+und dann liest sie sich als Abdeckung statt als Ausschnitt. Übrig ist ein Satz,
+der nicht veraltet, dazu was mechanisch gehalten wird und was ein Mensch noch
+tun muss.
+
+**Der Dockerfile-Kommentar sagte das Gegenteil der Entscheidung.** Er nannte
+das Relay *„deliberately not a Home Assistant add-on (ADR 0153)"*, und ADR 0155
+hat es am 2026-08-20 zu einem gemacht. Er sagt jetzt beides: das Bild ist
+keines, der Einwand von ADR 0153 steht weiter, und `pico_relay/config.yaml`
+trägt ihn dort, wo jemand ihn beim Installieren trifft.
+
+**Und die Antwort auf E7 gehört in eine andere ADR als gedacht.** Der Brief
+sagte ADR 0031; ADR 0134 heisst *„Formats Revise in Place Until the First Kept
+Identity"* und ist genau die Erlaubnis, die mit der ersten behaltenen Identität
+endet. Der Nutzer hat bestätigt, dass es eine gibt. Damit ist die Erlaubnis
+abgelaufen, und der Satz, der sie ersetzt, stand von Anfang an in ihrem Titel:
+Serialisierung und Kanonisierung der Identität sind ab jetzt eine versionierte
+externe Schnittstelle.
+
+**Offen gestellt statt entschieden:** „Pico Vault" trägt zwei Begriffe — ADR
+0015 den Knotentyp, ADR 0097 den Verwahr-Daemon darin —, und beide Lesarten
+stehen in `ReadmeTech.md`. Das Review hält die zweite für die saubere. Eine
+ADR-Vokabel im Vorbeigehen umzubenennen wäre derselbe Fehler wie bei E10; sie
+liegt als E11 im Brief.
+
 **B133 — Eine Regel, die niemand hielt, und eine Datei, die sich selbst
 widersprach (2026-09-10, Paket P6 des externen Reviews).** `AGENTS.md` sagt
 seit Langem: *„`.agent-context.md`: nur aktueller Handoff, Zielgröße maximal

@@ -8,6 +8,25 @@ go-live. This ADR accepts that with one correction to the trigger, and
 turns it into the rule that governs both the Recovery Card cleanup and a
 sweep for compatibility kept on behalf of nobody.
 
+**Status note 2026-09-10: the trigger has fired.** This ADR's whole rule is
+that formats revise in place *until the first kept identity*. Asked directly
+during the external review of 2026-09-09, the user confirmed that a real Pico
+identity now exists and is being kept.
+
+So the licence this document grants has expired, and the sentence that
+replaces it is the one it always named: **identity serialisation and
+canonicalisation are a versioned external interface from here on.** A change
+to canonical bytes needs a new suite version and a migration that re-signs,
+never a quiet revision - because a quiet one invalidates every signature that
+identity has already made and moves every fingerprint derived from it, and
+nothing can repair that afterwards. The canonical vectors under
+`docs/protocol/fixtures` are the record of what the bytes are, and
+`packages/protocol/src/canonical-bytes.ts` is where the rule lives.
+
+What this does *not* change: the Recovery Card cleanup and the compatibility
+sweep that F1-F3 already carried out. Those were the cost of v1 being free,
+and it was paid before the trigger fired.
+
 **Status note 2026-08-24: F2's collapse left the retired name in three
 places, and the cause is in this document.** The Context below names three
 facts that decide what v1 costs, and the second is "the companion types the

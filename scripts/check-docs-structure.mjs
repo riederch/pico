@@ -575,6 +575,55 @@ for (const row of trackedRows.split('\n')) {
 }
 
 /**
+ * Die drei Zahlen, mit denen die README den Reifegrad angibt.
+ *
+ * **Sie standen von Hand da und zwei von dreien waren falsch** (externes
+ * Review vom 2026-09-09, §9.1). Am 2026-09-10 sagte der Satz *„Of 155
+ * architecture decisions, 36 are implemented and 86 partially"*; gezaehlt
+ * waren es **157** Entscheidungen und **87** teilweise umgesetzte. Keine der
+ * beiden Abweichungen ist gross, und genau das ist der Punkt: eine Zahl, die
+ * von Hand gepflegt wird, driftet leise, und die README ist das Erste, was
+ * jemand liest.
+ *
+ * Die Zahlen kommen aus der Statusmatrix, also wird hier gegen sie gehalten
+ * statt sie ein zweites Mal aufzuschreiben. Verschwindet der Satz aus der
+ * README, faellt der Lauf: eine Angabe, die niemand mehr macht, kann auch
+ * niemand mehr falsch machen - aber ein Tor, das sie weiter bewacht, bewacht
+ * nichts und sagt es nicht.
+ */
+const maturityPath = 'README.md';
+const maturity = /Of (\d+) architecture decisions, (\d+) are implemented and (\d+) partially/u
+  .exec(readFileSync(join(repoRoot, maturityPath), 'utf8'));
+const implementedRows = [...trackedRows.matchAll(/^\| \[\d{4}\][^\n]*$/gmu)]
+  .map((row) => row[0].split('|')[4]?.trim());
+const maturityCounts = {
+  decisions: adrNumbers.length,
+  implemented: implementedRows.filter((status) => status === 'implemented').length,
+  partially: implementedRows.filter((status) => status === 'partially implemented').length,
+};
+if (maturity === null) {
+  errors.push(
+    `${maturityPath}: no longer says how many architecture decisions there are and how many are `
+    + 'implemented, so this check has nothing to hold. The sentence is what a first reader takes '
+    + 'the maturity from.',
+  );
+} else {
+  const said = {
+    decisions: Number(maturity[1]),
+    implemented: Number(maturity[2]),
+    partially: Number(maturity[3]),
+  };
+  for (const [what, counted] of Object.entries(maturityCounts)) {
+    if (said[what] !== counted) {
+      errors.push(
+        `${maturityPath} says ${said[what]} ${what} and ${matrixPath} counts ${counted}. `
+        + 'The matrix is where that number is decided; the README is where somebody reads it.',
+      );
+    }
+  }
+}
+
+/**
  * Die eine Groessengrenze, die `AGENTS.md` ausspricht - und die niemand hielt.
  *
  * `AGENTS.md` sagt seit Langem: *„`.agent-context.md`: nur aktueller Handoff,
@@ -638,5 +687,7 @@ console.log(
   + `${claimsChecked} present-tense absence claims and `
   + `${statusClaimsChecked} nothing-is-built claims, each still true, read across `
   + `${claimDocuments} tracked documents; the handoff is ${handoffLines} lines against the `
-  + `limit ${handoffPath} states).`,
+  + `limit ${handoffPath} states; ${maturityPath} says ${maturityCounts.decisions} decisions, `
+  + `${maturityCounts.implemented} implemented and ${maturityCounts.partially} partially, and `
+  + 'the matrix counts the same).',
 );
