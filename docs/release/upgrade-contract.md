@@ -148,6 +148,42 @@ supported way to move or restore an encrypted memory domain. Until one exists,
 enabling memory encryption on an instance whose data matters means accepting
 that a host loss is a data loss.
 
+## What the server has to enforce, and what no workflow can
+
+Everything above is enforced by code in this repository, and code in this
+repository is exactly what a branch protection rule stops somebody from
+bypassing. The pipeline can refuse to publish a version twice
+(`scripts/check-release-monotonic.mjs`), refuse to replace an attached asset
+(`scripts/check-release-asset-absent.mjs`) and refuse a tag that disagrees with
+the version (`scripts/check-release-tag.mjs`). **None of that survives a direct
+push to `main` or a moved tag**, because a workflow runs after the fact and a
+force-push rewrites the fact.
+
+So the following belong on the forge and not in this tree. **Set on
+2026-09-10** and written down here because a setting nobody wrote down is one
+nobody notices has been turned off - an external review found `main` and the
+release tags unprotected, and a forge setting leaves no trace in a commit:
+
+- **`main`**: a pull request is required, the status checks below are required,
+  force-pushes and deletion are forbidden.
+- **Required status checks** are the jobs that run on a pull request:
+  `Verify release gates`, `Test suite`, `Test suite under a shifted clock`,
+  `Test suite in Pacific/Kiritimati`, `Test suite in Pacific/Niue`,
+  `Build and smoke-test the Pico Home container` and `Build and smoke-test the
+  Pico Relay container`.
+
+  The last two are the one judgement in this list: they build containers on
+  every pull request, so they cost wait. Dropping them is the intended lever if
+  that wait ever becomes the reason somebody merges past the rule - the chain
+  itself is carried by `Verify release gates` and the four suites.
+- **Never require `Publish the Pico Client package`.** It runs only on a tag
+  (`github.ref_type == 'tag'`), so requiring it would leave every pull request
+  waiting for a job that cannot start.
+- **Tags matching `v*`**: deletion and moving are forbidden. This is the one
+  the pipeline genuinely cannot do for itself - ADR 0122 Y4 removes the
+  *legitimate* path to a moved tag and says so in its own words: it "does not
+  make a tag immutable - nothing here can".
+
 ## Current limitations
 
 - No automated upgrade test. Every release is verified against a fresh install

@@ -27,7 +27,7 @@ dieser Frage.
 | Nr | Review | Punkt | Urteil | Beleg | Paket |
 |---|---|---|---|---|---|
 | R1 | §3 | Client-Artefakte überschreibbar | **stimmt** | `.github/workflows/ci.yml:787` `--clobber`; der Client-Job wartet nur auf `verify` und `suites`, die Monotonieprüfung läuft in den beiden Bild-Jobs (Zeilen 274, 497) | P1 |
-| R2 | §4 | `main` und Tags serverseitig ungeschützt | nicht lokal messbar | Repository-Konfiguration | P2 (Nutzer) |
+| R2 | §4 | `main` und Tags serverseitig ungeschützt | **stimmte**, gesetzt am 2026-09-10 | Repository-Konfiguration | P2 (Nutzer) |
 | R3 | §5 | Ausgelieferter Electron-Closure nicht auditiert | **stimmt** | Electron ist devDependency in `apps/companion-shell/package.json`; `package-linux.mjs` paketiert es aus `node_modules`; `pnpm audit --prod` (ci.yml:87) sieht devDependencies nicht | P3 |
 | R4 | §6 | `v0.2.1` ist nur Draft | Ermessen | ci.yml:785 erzeugt das Release mit `--draft`; kein ADR begründet das; keine Doku behauptet „shipped" (`progress.md:16` sagt ausdrücklich: nicht nachgewiesen) | E2 |
 | R5 | §7 | Provenance-Lücke nach Öffentlichmachen | stimmt als Mechanik, Prämisse unbestätigt | ci.yml:424 attestiert nur bei `repository.private == false`; `progress.md:22` sagt, dass keine Attestation gespeichert wird | E1 |
@@ -241,7 +241,7 @@ damit sie den Endzustand beschreiben und nicht einen Zwischenstand.
 - Beweis: `docs:check` und `progress:walk` grün; für jede geänderte Aussage
   steht die Zeile Code daneben, gegen die sie geprüft wurde.
 
-**P2 — Trust-Root auf GitHub** (R2), jederzeit, Nutzeraufgabe
+**P2 — Trust-Root auf GitHub** (R2) — *erledigt 2026-09-10 vom Nutzer, Befund B135*
 - Ruleset für `main`: Pflicht-Checks, kein Force-Push, kein Löschen; Tag-Schutz
   für `v*`.
 - Im Baum ein Absatz in `docs/release/upgrade-contract.md`, der sagt, was

@@ -912,6 +912,29 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B135 — Der Trust-Root lag ausserhalb des Baums (2026-09-10, Paket P2 des
+externen Reviews).** Die Kette kann sich weigern, eine Version zweimal zu
+veröffentlichen, ein angehängtes Artefakt zu ersetzen und einen Tag anzunehmen,
+der der Version widerspricht — drei Prüfer tun genau das. **Nichts davon
+übersteht einen direkten Push auf `main` oder einen verschobenen Tag**, denn ein
+Workflow läuft danach, und ein Force-Push schreibt das Danach um. ADR 0122 Y4
+sagt es über sich selbst: *„does not make a tag immutable — nothing here can."*
+
+Der Nutzer hat es am 2026-09-10 auf der Forge gesetzt: `main` verlangt einen
+Pull Request und die sieben Checks, die auf einem Pull Request überhaupt
+laufen; Force-Push und Löschen sind verboten; Tags `v*` lassen sich weder
+löschen noch verschieben.
+
+**Eine Falle, die vorher benannt wurde statt hinterher:** `Publish the Pico
+Client package` läuft nur auf einem Tag. Als Pflicht-Check gesetzt hätte er
+jeden Pull Request auf einen Auftrag warten lassen, der nie startet — eine
+Sperre, die aussieht wie Sorgfalt.
+
+Aufgeschrieben ist es in `docs/release/upgrade-contract.md`, weil eine
+Forge-Einstellung keine Spur in einem Commit hinterlässt: wer sie abschaltet,
+tut das lautlos, und nur ein Satz im Baum sagt jemandem, dass sie da sein
+sollte. Damit ist das letzte der neun Pakete vor dem Release geschlossen.
+
 **B134 — Sieben Dokumente, gegen den Code gehalten (2026-09-10, Paket P5 des
 externen Reviews).** Das breiteste Paket der Runde: jede geänderte Aussage
 gegen die Zeile Code geprüft, gegen die sie steht.
