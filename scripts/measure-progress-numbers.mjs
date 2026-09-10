@@ -206,7 +206,7 @@ process.stdout.write(
  */
 process.stdout.write(
   'Die Testzahlen prueft dies nicht - sie brauchen einen vollen Lauf. '
-  + 'Vollstaendig von Hand nachgezaehlt zuletzt am 2026-09-08, 17 von 17 ohne Abweichung.\n',
+  + 'Vollstaendig von Hand nachgezaehlt zuletzt am 2026-09-10, 17 von 17 ohne Abweichung.\n',
 );
 if (unchecked > 0) {
   process.stdout.write(
