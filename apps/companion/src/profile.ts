@@ -13,6 +13,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { writePicoCompanionFileAtomically } from './atomic-file.js';
 
 /**
  * ADR 0113: the device-local companion profile. Deployment/binding data in
@@ -132,34 +133,12 @@ export function writePicoCompanionProfile(
   profile: PicoCompanionProfile,
 ): void {
   parsePicoCompanionProfile(profile);
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   // Written the same way the recovery anchor is: a half-written profile would
   // point this device at a partially described Home, and a crash mid-write
-  // must leave the previous one intact rather than a truncated file.
-  const temporaryPath = `${path}.tmp`;
-  writeFileSync(temporaryPath, `${JSON.stringify(profile, null, 2)}\n`, { mode: 0o600 });
-  chmodSync(temporaryPath, 0o600);
-  fsyncFile(temporaryPath);
-  renameSync(temporaryPath, path);
-  fsyncDirectory(dirname(path));
-}
-
-function fsyncFile(path: string): void {
-  const handle = openSync(path, 'r+');
-  try {
-    fsyncSync(handle);
-  } finally {
-    closeSync(handle);
-  }
-}
-
-function fsyncDirectory(path: string): void {
-  const handle = openSync(path, 'r');
-  try {
-    fsyncSync(handle);
-  } finally {
-    closeSync(handle);
-  }
+  // must leave the previous one intact rather than a truncated file. Seit
+  // Befund B121 steht dieses Wie in `atomic-file.ts`, weil die Datei daneben
+  // dasselbe braucht und es nicht hatte.
+  writePicoCompanionFileAtomically(path, `${JSON.stringify(profile, null, 2)}\n`);
 }
 
 const hexPattern = /^[0-9a-f]{64}$/;

@@ -912,6 +912,50 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B121 — Die Datei neben dem Profil, und der Modus war die kleinere Hälfte
+(2026-09-10).** `profile.ts` legt seine Datei seit jeher sorgfältig ab:
+Zwischendatei mit `0600`, `chmod`, `fsync`, umbenennen, Verzeichnis `fsync`.
+Die Datei **daneben** — im selben Verzeichnis, von derselben Anwendung
+geschrieben — machte nichts davon: `writeFileSync(pfad, json, 'utf8')`,
+dreimal.
+
+**Die grössere Hälfte ist nicht der Modus, sondern die Ganzheit.** Der Leser
+des Verwahrraums fängt einen Parse-Fehler und antwortet `undefined`, mit einem
+guten Grund im Kopf: *„Kein Raum ist eine Antwort und kein Fehler."* Das
+stimmt, solange die Abwesenheit echt ist. Eine abgeschnittene Datei liest sich
+damit als **„dieses Gerät hat keinen Verwahrraum"** — und die Fläche bietet an,
+einen anzulegen, während der Ablehnungssatz daneben sagt, was das kostet:
+
+> *„Making a second one would leave what is in the first unreachable from this
+> device."*
+
+Ein halb geschriebener Zustand, der als sauberer Anfangszustand gelesen wird,
+ist die teuerste Sorte kaputt.
+
+Beide Dateien benutzen jetzt denselben Schreiber — **eine Kopie weniger statt
+einer mehr**, und `profile.ts` gibt seine zwei privaten `fsync`-Helfer dabei
+ab.
+
+**Und dann feuerte eine Pflanzung nicht.** Ich hatte in den Kopf geschrieben,
+`chmod` stehe neben `mode`, weil *„`mode` durch die `umask` geht"*. Die
+Pflanzung — `chmodSync` entfernt — blieb grün. Nachgemessen:
+
+```
+neu angelegt mit mode 0600 unter umask 022: 600
+vorhandene 0644 mit mode 0600 ueberschrieben: 644
+```
+
+Eine Maske nimmt nur Bits weg, und `0600` hat keine, die `022` wegnähme. Meine
+Begründung war schlicht falsch. Der **wirkliche** Grund steht in der zweiten
+Zeile: `mode` gilt nur beim *Anlegen*. Nach einem Absturz liegt eine `.tmp` von
+vorher da, `writeFileSync` lässt ihre Rechte, und das Umbenennen trägt sie auf
+das Ziel. Der Test dafür steht jetzt daneben, und dieselbe Pflanzung fällt.
+
+**Was daraus folgt.** Eine übernommene Begründung ist eine ungeprüfte
+Behauptung, auch wenn sie aus der eigenen Datei nebenan stammt. Gefunden hat es
+nicht das Nachdenken, sondern dass die Pflanzung schwieg — zum zweiten Mal an
+diesem Wochenende (B105 war die erste).
+
 **B120 — Dieselbe Frage auf der Maschine eines anderen (2026-09-10).** B117
 hat die Datenbank des Homes verengt. Die naheliegende Nachbarfrage: **das
 Relay ist die eine Komponente, die auf fremder Hardware läuft.** Ein echtes

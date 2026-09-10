@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { picoIdentitySuite } from '@pico/protocol';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import type { VaultSodium } from '@pico/vault';
+import { writePicoCompanionFileAtomically } from './atomic-file.js';
 import { createPicoCompanionLifecycleReader } from './lifecycle-reader.js';
 import type { PicoCompanionProfile } from './profile.js';
 import { createPicoCompanionLinkClient } from './recovery-controller.js';
@@ -218,10 +219,9 @@ export async function createPicoCompanionReaderCustodySpace(input: {
    * Gerät kennt und der Home noch nicht, ist reparierbar - der umgekehrte
    * Fall war es nicht.
    */
-  writeFileSync(
+  writePicoCompanionFileAtomically(
     picoCompanionReaderCustodySpacePath(input.profilePath),
     JSON.stringify(space, null, 2),
-    'utf8',
   );
   await submitPicoCompanionReaderCustodyRecords({
     linkClient: await createPicoCompanionLinkClient({
@@ -346,10 +346,9 @@ export async function rotatePicoCompanionReaderCustodyDomain(input: {
    */
   const chainWasStale = (space.rotationRecords ?? []).length !== bundle.rotations.length;
   if (chainWasStale) {
-    writeFileSync(
+    writePicoCompanionFileAtomically(
       picoCompanionReaderCustodySpacePath(input.profilePath),
       `${JSON.stringify({ ...space, rotationRecords: bundle.rotations }, null, 2)}\n`,
-      'utf8',
     );
     space.rotationRecords = bundle.rotations;
   }
@@ -460,10 +459,9 @@ export async function rotatePicoCompanionReaderCustodyDomain(input: {
    * schreiben wäre hier falsch herum: bis das Home die Aufzeichnungen
    * angenommen hat, ist das alte Recht das gültige.
    */
-  writeFileSync(
+  writePicoCompanionFileAtomically(
     picoCompanionReaderCustodySpacePath(input.profilePath),
     `${JSON.stringify({ ...space, writerGrantRecord, rotationRecords: rotations }, null, 2)}\n`,
-    'utf8',
   );
 
   return Object.freeze({
