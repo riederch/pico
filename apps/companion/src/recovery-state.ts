@@ -1,5 +1,5 @@
 import { assertExactKeys } from '@pico/protocol/canonical-bytes';
-import { isPicoInstant } from '@pico/protocol/instant';
+import { assertPicoInstant, picoInstantToEpochMs } from '@pico/protocol/instant';
 import {
   chmodSync,
   closeSync,
@@ -142,9 +142,9 @@ function parsePending(value: unknown): PicoHomeDeviceRecoveryPendingView {
     record.targetDeviceKeyAgreementKeyFingerprintHex,
     'invalid_companion_recovery_agreement_fingerprint',
   );
-  const acceptedAt = assertInstant(record.acceptedAt);
-  const effectiveAt = assertInstant(record.effectiveAt);
-  const completionExpiresAt = assertInstant(record.completionExpiresAt);
+  const acceptedAt = picoInstantToEpochMs(record.acceptedAt, 'invalid_companion_recovery_instant');
+  const effectiveAt = picoInstantToEpochMs(record.effectiveAt, 'invalid_companion_recovery_instant');
+  const completionExpiresAt = picoInstantToEpochMs(record.completionExpiresAt, 'invalid_companion_recovery_instant');
   if (!(acceptedAt < effectiveAt && effectiveAt < completionExpiresAt)) {
     throw new Error('invalid_companion_recovery_timing');
   }
@@ -172,7 +172,7 @@ function parseReceipt(value: unknown): PicoCompanionRecoveryReceiptSummary {
     record.targetDeviceKeyAgreementKeyFingerprintHex,
     'invalid_companion_recovery_agreement_fingerprint',
   );
-  assertInstant(record.completedAt);
+  assertPicoInstant(record.completedAt, 'invalid_companion_recovery_instant');
   if (
     record.leavesExactlyOneActiveDevice !== true
     || record.otherDevicesRevoked !== true
@@ -203,14 +203,6 @@ function assertToken(value: unknown, reason: string): asserts value is string {
   ) {
     throw new Error(reason);
   }
-}
-
-function assertInstant(value: unknown): number {
-  // Befund B52. Dieselbe Regel, von Hand ein zweites Mal.
-  if (!isPicoInstant(value)) {
-    throw new Error('invalid_companion_recovery_instant');
-  }
-  return Date.parse(value);
 }
 
 function fsyncPath(path: string, flags: 'r' | 'r+'): void {

@@ -1,4 +1,4 @@
-import { isPicoInstant } from './instant.js';
+import { assertPicoInstant } from './instant.js';
 
 /**
  * ADR 0128 H4. What Home Assistant tells Pico, and what Pico is allowed to
@@ -91,9 +91,7 @@ export function parsePicoHomeAssistantEntityState(
     && !isBoundedString(record.friendlyName, maxPicoHomeAssistantFriendlyNameChars)) {
     throw new Error('invalid_pico_home_assistant_friendly_name');
   }
-  if (!isPicoInstant(record.changedAt)) {
-    throw new Error('invalid_pico_home_assistant_changed_at');
-  }
+  assertPicoInstant(record.changedAt, 'invalid_pico_home_assistant_changed_at');
   return Object.freeze({
     entityId: record.entityId,
     state: record.state,

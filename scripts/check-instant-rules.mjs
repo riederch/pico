@@ -142,6 +142,42 @@ const handWrittenInstantShape =
   /\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}T\\d\{2\}:\\d\{2\}:\\d\{2\}\\\.\\d\{3\}Z\$\//g;
 
 /**
+ * Die dritte Gestalt: nicht die Regel, sondern der Mantel um sie (Befund B126).
+ *
+ * Die beiden Regeln darueber halten seit dem 2026-08-21 fest, dass niemand
+ * *entscheidet*, was ein Zeitpunkt ist. Was sie nicht sehen: den Satz
+ * ringsherum. `if (!isPicoInstant(x)) throw new Error('...')` fragt die richtige
+ * Regel und schreibt trotzdem etwas hin, das **neunzehnmal** im Baum stand -
+ * sechs davon unter dem Namen `assertInstant`, dreizehn anonym mitten in einem
+ * Parser. Wer nur den Namen zaehlt, findet sechs; zwei der dreizehn trugen
+ * ausserdem eine Begruendung im Rumpf und fielen der ersten Messung durch.
+ *
+ * **Und die neunzehn waren nicht gleich.** Zwei stellten `assertAsciiToken`
+ * davor, und das entschied nichts: jeden Wert, den diese Wache ablehnt, lehnt
+ * `isPicoInstant` auch ab - ein Zeitpunkt sind vierundzwanzig ASCII-Zeichen aus
+ * Ziffern, `-`, `:`, `.`, `T` und `Z`, die das kanonische Tokenmuster alle
+ * zulaesst. Geaendert hat der Vorlauf nur den *Namen* der Ablehnung: leer,
+ * nicht-ASCII, zu lang und keine Zeichenkette - fuenf von elf gemessenen
+ * Eingaben - kamen als allgemeiner Feldfehler zurueck statt als
+ * `invalid_instant`. Der spezifische Name gegen den vagen eingetauscht, in
+ * genau den Faellen, in denen jemand wissen muss, welches Feld gemeint war.
+ *
+ * Auch was herauskam, war nicht entschieden: von den sechs benannten gaben zwei
+ * eine Zahl zurueck, eine die Zeichenkette, drei nichts. `Date.parse`
+ * auf einer ungeprueften Zeichenkette ist `NaN`, und `NaN` vor einer Frist ist
+ * in beide Richtungen falsch - weder abgelaufen noch gueltig, was jeder dieser
+ * Aufrufer als "nicht abgelaufen" liest.
+ *
+ * `assertPicoInstant(wert, name)` ist die Ablehnung, `picoInstantToEpochMs` die
+ * Umrechnung, beide in `@pico/protocol/instant`. Erkannt wird die Form, nicht
+ * der Name: eine einzige Bedingung, und der Rumpf wirft. Mehrfachbedingungen
+ * (`typeof x !== 'string' || !isPicoInstant(y)`) bleiben draussen, weil sie
+ * etwas anderes tun - dreiundzwanzig davon stehen im Baum und sind richtig.
+ */
+const handWrittenInstantCoat =
+  /if\s*\(\s*!isPicoInstant\([^()]*\)\s*\)\s*\{\s*(?:\/\/[^\n]*\n\s*)*throw new \w+\(/g;
+
+/**
  * An instant-shaped field, named the way this tree names them.
  *
  * `validFrom` is listed and `From` is not, because `derivedFrom` is a supplier
@@ -237,6 +273,16 @@ for (const file of sourceFiles(...scanRoots.map((root) => join(repoRoot, root)))
       + 'a string that disagrees with the instant it names.');
   }
 
+  for (const _ of content.matchAll(handWrittenInstantCoat)) {
+    errors.push(`${path}: writes its own refusal around \`isPicoInstant\`. `
+      + '`assertPicoInstant(value, reason)` in `@pico/protocol/instant` is that refusal, and '
+      + 'the coat is where these drifted: of the nineteen written by hand, two put '
+      + '`assertAsciiToken` in front - which rejects nothing `isPicoInstant` would accept and '
+      + 'only replaces `invalid_instant` with a generic field fault - and of the six that had a '
+      + 'name, two handed back a number, one the string and three nothing. If this needs a number, '
+      + '`picoInstantToEpochMs` is the one that cannot return `NaN`.');
+  }
+
   for (const _ of content.matchAll(handWrittenInstantRule)) {
     errors.push(`${path}: decides what a canonical instant is with a rule of its own. `
       + '`isPicoInstant` in `@pico/protocol/instant` is the product\'s answer, and it pins the '
@@ -310,7 +356,8 @@ console.log(
   + `${[...scannedPerRoot.keys()].join(' and ')}, each of which answered,`
   + ` ${renderers.size} renderings named with reasons, no instant reaching a person raw,`
   + ' cut to a UTC day, counted in blocks, spoken as a literal duration,'
-  + ' or judged canonical by a rule of its own - the window included).',
+  + ' judged canonical by a rule of its own, or refused by a coat of its own'
+  + ' - the window included).',
 );
 
 function* sourceFiles(...roots) {

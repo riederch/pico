@@ -1,5 +1,5 @@
 import { assertExactKeys } from '@pico/protocol/canonical-bytes';
-import { isPicoInstant } from '@pico/protocol/instant';
+import { assertPicoInstant, picoInstantToEpochMs } from '@pico/protocol/instant';
 import {
   chmodSync,
   closeSync,
@@ -357,9 +357,9 @@ function parsePending(
   assertToken(record.recoveryId, 'invalid_first_run_recovery_id');
   assertHex32(record.claimDigestHex, 'invalid_first_run_claim_digest');
   assertTarget(record, binding);
-  const acceptedAt = assertInstant(record.acceptedAt);
-  const effectiveAt = assertInstant(record.effectiveAt);
-  const completionExpiresAt = assertInstant(record.completionExpiresAt);
+  const acceptedAt = picoInstantToEpochMs(record.acceptedAt, 'invalid_first_run_instant');
+  const effectiveAt = picoInstantToEpochMs(record.effectiveAt, 'invalid_first_run_instant');
+  const completionExpiresAt = picoInstantToEpochMs(record.completionExpiresAt, 'invalid_first_run_instant');
   if (!(acceptedAt < effectiveAt && effectiveAt < completionExpiresAt)) {
     throw new Error('invalid_first_run_recovery_timing');
   }
@@ -382,7 +382,7 @@ function parseReceipt(
   ], 'invalid_first_run_journal_shape');
   assertToken(record.recoveryId, 'invalid_first_run_recovery_id');
   assertTarget(record, binding);
-  assertInstant(record.completedAt);
+  assertPicoInstant(record.completedAt, 'invalid_first_run_instant');
   if (record.leavesExactlyOneActiveDevice !== true
     || record.otherDevicesRevoked !== true) {
     throw new Error('invalid_first_run_receipt_outcome');
@@ -422,15 +422,6 @@ function assertToken(value: unknown, reason: string): asserts value is string {
     || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(value)) {
     throw new Error(reason);
   }
-}
-
-function assertInstant(value: unknown): number {
-  // Befund B52. Beide Haelften standen hier von Hand, richtig und ein zweites
-  // Mal - `@pico/protocol/instant` ist die Regel, die sie meinen.
-  if (!isPicoInstant(value)) {
-    throw new Error('invalid_first_run_instant');
-  }
-  return Date.parse(value);
 }
 
 function assertCoreUrl(value: unknown): asserts value is string {

@@ -1,5 +1,5 @@
 import { assertExactKeys } from './canonical-bytes.js';
-import { isPicoInstant } from './instant.js';
+import { assertPicoInstant } from './instant.js';
 import type { PicoEventOriginClass } from './origin-class.js';
 import {
   assemblePicoModelContext,
@@ -166,9 +166,7 @@ function parseValue(value: unknown): PicoReaderValue {
       // ohne die feste Breite. `+275760-09-13T00:00:00.000Z` kam durch, und
       // ein solcher Wert sortiert als Zeichenkette vor jedem gewoehnlichen
       // Jahr. Was hier hereinkommt, hat ein Modell geantwortet.
-      if (!isPicoInstant(record.value)) {
-        throw new Error('invalid_pico_reader_value');
-      }
+      assertPicoInstant(record.value, 'invalid_pico_reader_value');
       break;
     }
     case 'reference': {
@@ -207,11 +205,9 @@ function parseReference(value: unknown): PicoOpaqueReference {
   }
   // Befund B52. Dieselbe schwache Haelfte an einem Ablauf - und ein Ablauf,
   // der vor allem sortiert, ist keine Frist.
-  if (!isPicoInstant(record.expiresAt)) {
-    // ADR 0060: a reference that never expires is a standing grant, and this
-    // one is handed to a model.
-    throw new Error('invalid_pico_opaque_reference_expiry');
-  }
+  // ADR 0060: a reference that never expires is a standing grant, and this
+  // one is handed to a model.
+  assertPicoInstant(record.expiresAt, 'invalid_pico_opaque_reference_expiry');
   if (typeof record.originClass !== 'string') {
     throw new Error('invalid_pico_opaque_reference');
   }

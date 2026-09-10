@@ -28,7 +28,7 @@
  * - `payload` - what, sealed.
  */
 
-import { isPicoInstant } from './instant.js';
+import { assertPicoInstant } from './instant.js';
 
 export const picoLinkPacketSchema = 'pico.link.packet.v1' as const;
 
@@ -251,9 +251,7 @@ export function parsePicoLinkPacket(value: unknown, nowMs?: number): PicoLinkPac
    * wirklicher Zeitpunkt zwei Tage spaeter lag, und die Ablaufvergleiche des
    * Relays sind Zeichenkettenvergleiche.
    */
-  if (!isPicoInstant(record.expiresAt)) {
-    throw new Error('invalid_pico_link_expiry');
-  }
+  assertPicoInstant(record.expiresAt, 'invalid_pico_link_expiry');
   if (!isPicoLinkExpiryOnBucket(record.expiresAt)) {
     // Refused rather than rounded here. Rounding an off-grid instant would
     // accept the leak and then hide it: the sender would keep producing

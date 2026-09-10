@@ -1,5 +1,5 @@
 import { assertExactKeys } from './canonical-bytes.js';
-import { isPicoInstant } from './instant.js';
+import { assertPicoInstant, picoInstantToEpochMs } from './instant.js';
 import { isPicoConfidenceLevel, type PicoConfidenceLevel } from './confidence.js';
 
 /**
@@ -55,14 +55,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 
-function assertInstant(value: unknown, error: string): string {
-  // Befund B52. Stand hier ohne die feste Breite.
-  if (!isPicoInstant(value)) {
-    throw new Error(error);
-  }
-  return value;
-}
-
 function parseMeasurement(value: unknown): PicoSupplierMeasurement {
   const record = isRecord(value) ? value : undefined;
   if (record === undefined) {
@@ -70,9 +62,10 @@ function parseMeasurement(value: unknown): PicoSupplierMeasurement {
   }
   if (record.kind === 'instant') {
     assertExactKeys(record, ['kind', 'at'], 'invalid_pico_supplier_answer_shape');
+    assertPicoInstant(record.at, 'invalid_pico_supplier_measurement');
     return Object.freeze({
       kind: 'instant' as const,
-      at: assertInstant(record.at, 'invalid_pico_supplier_measurement'),
+      at: record.at,
     });
   }
   if (record.kind === 'pin') {
@@ -110,9 +103,10 @@ export function buildPicoSupplierAnswer(input: {
     && typeof record.value !== 'boolean') {
     throw new Error('invalid_pico_supplier_answer_value');
   }
+  assertPicoInstant(record.askedAt, 'invalid_pico_supplier_asked_at');
   return Object.freeze({
     schema: picoSupplierAnswerSchema,
-    askedAt: assertInstant(record.askedAt, 'invalid_pico_supplier_asked_at'),
+    askedAt: record.askedAt,
     measured: parseMeasurement(record.measured),
     confidence: record.confidence,
     confirmedByPerson: false as const,
@@ -155,7 +149,7 @@ export function picoSupplierCacheAgeMs(
   answer: PicoSupplierAnswer,
   now: string,
 ): number {
-  return Date.parse(assertInstant(now, 'invalid_pico_supplier_now'))
+  return picoInstantToEpochMs(now, 'invalid_pico_supplier_now')
     - Date.parse(answer.askedAt);
 }
 
@@ -171,6 +165,6 @@ export function picoSupplierContentAgeMs(
   if (answer.measured.kind !== 'instant') {
     return null;
   }
-  return Date.parse(assertInstant(now, 'invalid_pico_supplier_now'))
+  return picoInstantToEpochMs(now, 'invalid_pico_supplier_now')
     - Date.parse(answer.measured.at);
 }

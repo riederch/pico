@@ -9,7 +9,7 @@ import {
   concatCanonicalElements,
   fixedHexBytes,
 } from './canonical-bytes.js';
-import { isPicoInstant } from './instant.js';
+import { assertPicoInstant } from './instant.js';
 import type {
   PicoIdentityDelegationSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
@@ -239,8 +239,8 @@ export function buildPicoHomeDeviceRecoveryPrepareSignatureInput(
   assertAsciiToken(input.preparationId);
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.targetDelegationId);
-  assertInstant(input.createdAt);
-  assertInstant(input.expiresAt);
+  assertPicoInstant(input.createdAt);
+  assertPicoInstant(input.expiresAt);
   if (Date.parse(input.expiresAt) <= Date.parse(input.createdAt)) {
     throw new Error('invalid_validity_bounds');
   }
@@ -290,7 +290,7 @@ export function buildPicoRecoveryCardPayload(
   assertDisplayText(input.homeNameOrId, 'invalid_home_name');
   assertAsciiToken(input.homeId);
   assertEndpointHint(input.endpointHint);
-  assertInstant(input.issuedAt);
+  assertPicoInstant(input.issuedAt);
   if (typeof input.pinProtected !== 'boolean') {
     throw new Error('invalid_pin_protection_flag');
   }
@@ -476,8 +476,8 @@ export function buildPicoHomeDeviceRecoveryClaimSignatureInput(
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.targetDelegationId);
   assertLifecycleOrder(input.observedLifecycleOrder);
-  assertInstant(input.createdAt);
-  assertInstant(input.expiresAt);
+  assertPicoInstant(input.createdAt);
+  assertPicoInstant(input.expiresAt);
   if (Date.parse(input.expiresAt) <= Date.parse(input.createdAt)) {
     throw new Error('invalid_validity_bounds');
   }
@@ -547,7 +547,7 @@ export function buildPicoHomeDeviceRecoveryReceiptSignatureInput(
     input.completionExpiresAt,
     input.completedAt,
   ]) {
-    assertInstant(instant);
+    assertPicoInstant(instant);
   }
   if (
     Date.parse(input.effectiveAt) <= Date.parse(input.pendingAcceptedAt)
@@ -692,14 +692,6 @@ function assertEndpointHint(value: string): void {
     || /[\u0000-\u001f\u007f]/u.test(value)
   ) {
     throw new Error('invalid_endpoint_hint');
-  }
-}
-
-function assertInstant(value: string): void {
-  assertAsciiToken(value);
-  // Befund B52. Beide Haelften standen hier richtig - und ein zweites Mal.
-  if (!isPicoInstant(value)) {
-    throw new Error('invalid_instant');
   }
 }
 

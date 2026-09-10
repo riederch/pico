@@ -1,6 +1,6 @@
 import { assertExactKeys } from '@pico/protocol/canonical-bytes';
 import {
-  isPicoInstant,
+  assertPicoInstant,
   picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeV2SignatureInputLabels,
@@ -1366,9 +1366,7 @@ function assertExactKeysWithOptional(
  */
 function requireInstant(parsed: Record<string, unknown>, key: string): string {
   const value = requireBoundedString(parsed, key);
-  if (!isPicoInstant(value)) {
-    throw new Error('invalid_request');
-  }
+  assertPicoInstant(value, 'invalid_request');
   return value;
 }
 

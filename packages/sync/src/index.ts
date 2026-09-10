@@ -1,4 +1,4 @@
-import { isPicoInstant } from '@pico/protocol/instant';
+import { assertPicoInstant } from '@pico/protocol/instant';
 import { randomUUID } from 'node:crypto';
 import {
   closeSync,
@@ -4306,9 +4306,7 @@ function assertLifecycleOrder(value: string): void {
 function assertCanonicalInstant(value: string): void {
   // Befund B52. Beide Haelften standen hier von Hand, richtig und ein zweites
   // Mal.
-  if (!isPicoInstant(value)) {
-    throw new Error('invalid_sync_instant');
-  }
+  assertPicoInstant(value, 'invalid_sync_instant');
 }
 
 function formatOpaqueCursor(sequence: number): string {

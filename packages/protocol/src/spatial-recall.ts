@@ -3,7 +3,7 @@ import {
   picoConfidenceRank,
   type PicoConfidenceLevel,
 } from './confidence.js';
-import { isPicoInstant } from './instant.js';
+import { assertPicoInstant } from './instant.js';
 import { assertPicoPlace, type PicoPlace } from './place.js';
 
 /**
@@ -130,9 +130,7 @@ export function parsePicoLocationFix(value: unknown): PicoLocationFix {
   if (!hasExactKeys(record, ['at', 'latitudeDeg', 'longitudeDeg', 'accuracyM'])) {
     throw new Error('invalid_pico_location_fix');
   }
-  if (!isPicoInstant(record.at)) {
-    throw new Error('invalid_pico_location_fix_at');
-  }
+  assertPicoInstant(record.at, 'invalid_pico_location_fix_at');
   // The position half is the core capability, validated by its own code so
   // this and the memory-item column cannot disagree about what is usable.
   const place = assertPicoPlace(record);
@@ -144,9 +142,7 @@ export function parsePicoMobilitySample(value: unknown): PicoMobilitySample {
   if (!hasExactKeys(record, ['at', 'mobility', 'confidence'])) {
     throw new Error('invalid_pico_mobility_sample');
   }
-  if (!isPicoInstant(record.at)) {
-    throw new Error('invalid_pico_mobility_sample_at');
-  }
+  assertPicoInstant(record.at, 'invalid_pico_mobility_sample_at');
   if (typeof record.mobility !== 'string'
     || !(picoMobilityKinds as readonly string[]).includes(record.mobility)) {
     throw new Error('invalid_pico_mobility_sample_kind');
@@ -183,9 +179,7 @@ export function parsePicoParkingCandidate(value: unknown): PicoParkingCandidate 
     longitudeDeg: record.longitudeDeg,
     accuracyM: record.accuracyM,
   });
-  if (!isPicoInstant(record.sourceTransitionAt)) {
-    throw new Error('invalid_pico_parking_candidate_source');
-  }
+  assertPicoInstant(record.sourceTransitionAt, 'invalid_pico_parking_candidate_source');
   if (typeof record.confidence !== 'string'
     || !(picoSpatialConfidences as readonly string[]).includes(record.confidence)) {
     throw new Error('invalid_pico_parking_candidate_confidence');

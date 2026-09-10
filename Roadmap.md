@@ -912,19 +912,77 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B126 — Die Regel stand einmal, der Mantel um sie neunzehnmal (2026-09-10).**
+B125 hat `assertInstant` als nächsten Griff empfohlen: sechs Fassungen über
+vier verschiedenen Rümpfen, und B112 hatte an genau diesem Begriff schon zwei
+echte Fehler gefunden. Beim Nachsehen war die Zahl falsch — nach unten. (Die
+Wiederholung dieser Zählung hat nebenbei den Fehler im Messskript aufgedeckt,
+der oben in B125 korrigiert steht.)
+
+Alle sechs fragten längst `isPicoInstant`; die *Regel* ist seit dem 2026-08-20
+einmal geschrieben, und das Tor `instant:check` hält sie. Was daneben stand,
+war der **Mantel**: `if (!isPicoInstant(x)) throw new Error('…')`. Gezählt statt
+geschätzt, mit dem Tor über den Baum bei HEAD: **neunzehn**. Sechs trugen den
+Namen `assertInstant`, dreizehn standen anonym mitten in einem Parser — und
+zwei der dreizehn trugen eine Begründung im Rumpf und fielen meiner ersten
+Messung durch, die nur `{ throw` direkt hinter der Klammer kannte. Wer nur
+Namen zählt, findet sechs. Ein Name ist keine Regel, und eine Regel ist nicht
+ihr Mantel.
+
+**Die neunzehn waren nicht gleich, und der Unterschied war nie entschieden.**
+Zwei stellten `assertAsciiToken` davor. Ausgeführt statt gelesen, über elf
+Eingaben: der Vorlauf ändert **kein Urteil** — jeden Wert, den er ablehnt,
+lehnt `isPicoInstant` auch ab, denn ein Zeitpunkt sind vierundzwanzig
+ASCII-Zeichen aus Ziffern, `-`, `:`, `.`, `T` und `Z`, die das kanonische
+Tokenmuster alle zulässt. Geändert hat er nur den **Namen** der Ablehnung: leer,
+mit Leerzeichen, nicht-ASCII, zu lang, keine Zeichenkette — fünf von elf Fällen
+— kamen als `empty_field`, `invalid_field_charset` oder `field_too_long` zurück
+statt als `invalid_instant`. Der spezifische Name gegen den vagen eingetauscht,
+in genau den Fällen, in denen jemand wissen muss, welches Feld gemeint war. Und
+niemand hatte das verlangt: von den drei `invalid_field_charset`-Vektoren ist
+keiner ein Zeitpunkt, sondern eine Domain, eine Item-Id und ein Umschlagsfeld.
+
+Auch was herauskam, war nicht entschieden: von den sechs benannten gaben zwei
+eine Zahl zurück, eine die Zeichenkette, drei nichts. `Date.parse` auf einer
+ungeprüften Zeichenkette ist `NaN`, und `NaN` vor einer Frist ist in beide
+Richtungen falsch — weder abgelaufen noch gültig, was jeder dieser Aufrufer als
+"nicht abgelaufen" liest. Deshalb sind es jetzt zwei Namen und nicht einer:
+`assertPicoInstant(wert, name)` ist die Ablehnung, `picoInstantToEpochMs` die
+Umrechnung, die nur durch die Ablehnung hindurch erreichbar ist.
+
+Neunzehn Mäntel bei HEAD, null jetzt. Die **dreiundzwanzig** echten
+Mehrfachbedingungen (`typeof x !== 'string' || !isPicoInstant(y)`) bleiben
+unberührt — sie tun etwas anderes, und beide Zahlen sind vorher und nachher
+gemessen worden.
+
+Zwei Netze gepflanzt, beide bissen: der Vorlauf zurück in `assertPicoInstant`
+lässt zwei Tests fallen (`erwartet 'invalid_instant', bekam 'empty_field'`), ein
+neuer handgeschriebener Mantel in `observation.ts` lässt `instant:check`
+fallen. Das Tor kennt jetzt die Form statt des Namens: eine einzige Bedingung,
+und der Rumpf wirft.
+
 **B125 — Dieselbe Frage an alle Namen: fünfundvierzig stehen über
 verschiedenen Regeln (2026-09-10).** B124 fand einen Namen über sechs Regeln.
 Die Frage gehört an den ganzen Baum, nicht an einen Namen:
 
-| | |
-|---|---|
-| Funktionsnamen | **1.524** |
-| stehen mehr als einmal | **60** |
-| davon über **verschiedenen** Rümpfen | **45** |
+| | | |
+|---|---|---|
+| | gezählt am 2026-09-10 | **korrigiert** am selben Tag |
+| Funktionsnamen | 1.524 | **1.592** |
+| stehen mehr als einmal | 60 | **65** |
+| davon über **verschiedenen** Rümpfen | 45 | **50** |
 
-Die Spitzenreiter sind alle im Signierweg: `assertInstant` (6 Fassungen, 6
-verschieden), `hexToBytes` (7/6), `bytesToHex` (8/6), `hasExactKeys` (8/4),
-`assertLifecycleOrder` (4/4).
+**Die erste Zählung war zu hoch, und der Fehler lag im Messskript** (bemerkt
+beim Wiederholen für B126). Es las `braceSpan` als Objekt statt als Paar,
+`span.end` war also `undefined`, und jeder Rumpf lief bis zum Dateiende und
+verschluckte die nächste Funktion. So sahen 33 wortgleiche `isRecord` wie 29
+verschiedene aus. Mit der richtigen Spanne stimmen die Kennzahlen wieder:
+`hexToBytes` 7/6 und `hasExactKeys` 8/4 sind in beiden Läufen dieselben — was
+sie damals plausibel machte und den Fehler daneben verdeckte.
+
+Die Spitzenreiter sind alle im Signierweg: `hexToBytes` (7 Fassungen, 6
+verschieden), `hasExactKeys` (8/4), `assertInstant` (6/4),
+`assertLifecycleOrder` (4/4), `assertFingerprint` (4/3).
 
 **Gefaltet: `bytesToHex`, dreizehn Fassungen in vier Schreibweisen** — acht im
 Produkt, vier in Tests, eine unter dem Namen `bytesToHexString`. Ausgeführt

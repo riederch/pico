@@ -5,7 +5,7 @@ import {
   bytesToHex,
   fixedHexBytes,
 } from '@pico/protocol/canonical-bytes';
-import { isPicoInstant } from '@pico/protocol/instant';
+import { assertPicoInstant } from '@pico/protocol/instant';
 import {
   buildPicoHomeContinuitySignatureInput,
   buildPicoIdentityDelegationSignatureInput,
@@ -224,7 +224,7 @@ export class PicoIdentityLifecycleIndex {
     options: PicoIdentityDelegationLookupOptions,
   ): PicoIdentityDelegationLookupResult {
     assertAsciiToken(delegationId, 'invalid_delegation_id');
-    assertInstant(options.at, 'invalid_lookup_time');
+    assertPicoInstant(options.at, 'invalid_lookup_time');
     const delegation = this.#delegationsById.get(delegationId);
     if (delegation === undefined) {
       return {
@@ -1025,19 +1025,6 @@ function assertFingerprint(value: string): void {
  * for `validFrom`/`validUntil`. A `+02:00` form sorts before `Z` at the same
  * instant and would report an expired delegation as active.
  */
-function assertInstant(value: string, reason: string): void {
-  /**
-   * Befund B52 hat die Rundlaufhaelfte allein verworfen und die Breite daneben
-   * gestellt; Befund B112 nimmt die Breite wieder heraus, weil `isPicoInstant`
-   * beide Haelften traegt. Zwei Zeilen, die dasselbe sagen, sind eine Zeile zu
-   * viel - und die eine, die bleibt, ist die, die das Produkt sonst ueberall
-   * fragt.
-   */
-  if (!isPicoInstant(value)) {
-    throw new Error(reason);
-  }
-}
-
 function assertIdentityIssuerKeyRecord(keyRecord: PicoIdentityKeyRecordSignatureInput): void {
   buildPicoIdentityKeyRecordSignatureInput(cloneKeyRecord(keyRecord));
   if (keyRecord.suite !== picoIdentitySuite || keyRecord.keyRole !== 'pico_identity') {

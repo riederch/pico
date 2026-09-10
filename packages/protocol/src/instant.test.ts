@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isPicoInstant, picoCanonicalInstantPattern } from './instant.js';
+import {
+  assertPicoInstant,
+  isPicoInstant,
+  picoCanonicalInstantPattern,
+  picoInstantToEpochMs,
+} from './instant.js';
 
 describe('what counts as an instant', () => {
   it('takes the one fixed-width UTC form and nothing else', () => {
@@ -34,5 +39,42 @@ describe('what counts as an instant', () => {
     // to March 2 rather than failing, so the re-serialization stays.
     expect(picoCanonicalInstantPattern.test('2026-02-30T00:00:00.000Z')).toBe(true);
     expect(isPicoInstant('2026-02-30T00:00:00.000Z')).toBe(false);
+  });
+});
+
+describe('the one refusal around it', () => {
+  it('names the field that was wrong, for every way of being wrong', () => {
+    /**
+     * The decision this test exists to hold (finding B126). Two of the
+     * nineteen hand-written coats put `assertAsciiToken` in front of the
+     * rule, and it decided nothing: every value that guard rejects,
+     * `isPicoInstant` rejects too. What it did change was the *name* - these
+     * five inputs came back as `empty_field`, `invalid_field_charset` or
+     * `field_too_long`, a generic field fault where the reader needed to be
+     * told the value was not an instant. Put the prefix back and this test
+     * fails on the first four.
+     */
+    for (const notAnInstant of ['', '2026-08-20 10:00:00.000Z', '2026-08-20T10:00:00.000Z\u200b', 'x'.repeat(1_025), 42, null, undefined]) {
+      expect(() => assertPicoInstant(notAnInstant)).toThrow('invalid_instant');
+    }
+    expect(() => assertPicoInstant('2026-08-20T10:00:00.000Z')).not.toThrow();
+  });
+
+  it('lets a caller name its own refusal, and that is the only thing it varies', () => {
+    expect(() => assertPicoInstant('nope', 'invalid_first_run_instant'))
+      .toThrow('invalid_first_run_instant');
+    expect(() => assertPicoInstant('2026-02-30T00:00:00.000Z', 'invalid_pico_link_expiry'))
+      .toThrow('invalid_pico_link_expiry');
+  });
+
+  it('never hands out a NaN', () => {
+    // `Date.parse` on an unchecked string returns NaN silently, and NaN
+    // compared against a deadline is false in both directions - neither
+    // expired nor valid, which every caller here would read as "not expired".
+    expect(Number.isNaN(Date.parse('2026-08-20T10:00:00.000Z\u200b'))).toBe(true);
+    expect(() => picoInstantToEpochMs('2026-08-20T10:00:00.000Z\u200b')).toThrow('invalid_instant');
+    expect(picoInstantToEpochMs('2026-08-20T10:00:00.000Z')).toBe(Date.parse('2026-08-20T10:00:00.000Z'));
+    expect(() => picoInstantToEpochMs('2026-02-30T00:00:00.000Z', 'invalid_companion_recovery_instant'))
+      .toThrow('invalid_companion_recovery_instant');
   });
 });
