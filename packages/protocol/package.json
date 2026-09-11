@@ -103,6 +103,10 @@
       "types": "./dist/lifecycle-order.d.ts",
       "import": "./dist/lifecycle-order.js"
     },
+    "./privacy-domain": {
+      "types": "./dist/privacy-domain.d.ts",
+      "import": "./dist/privacy-domain.js"
+    },
     "./instant": {
       "types": "./dist/instant.d.ts",
       "import": "./dist/instant.js"

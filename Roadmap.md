@@ -912,6 +912,53 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B143 — Drei Namen für einen Begriff, und eine Regel, die niemand fährt
+(2026-09-11).** Die Musterzählung zeigte `/^[a-z0-9]+(?:_[a-z0-9]+)*$/` in vier
+Protokolldateien. Drei davon sind **exportierte Konstanten mit verschiedenen
+Namen über demselben Begriff**: `picoSupplierDomainPattern`,
+`picoRulesDomainPattern`, `picoApprovalDomainPattern` — und alle drei bewachen
+dasselbe Feld, `privacyDomain`. Das ist die Umkehrung von B140: dort bewachte
+eine Form vier Begriffe, hier tragen drei Namen einen.
+
+**Und der Baum ist sich über diesen Begriff nicht einig.** Vier Regeln messen
+dasselbe Feld, und über zwölf Namen gemessen beurteilen sie **sieben
+verschieden**:
+
+| Name | Protokoll | `model-context-ref` | Schlüsselspeicher |
+|---|---|---|---|
+| `household` | ja | ja | ja |
+| `my.domain` | nein | ja | nein |
+| `my-domain` | **nein** | ja | **ja** |
+| `Domain` | **nein** | nein | **ja** |
+| `1domain` | ja | **nein** | ja |
+
+Die folgenreiche Richtung ist die letzte Spalte: der Schreibweg eines
+verschlüsselten Items nimmt `my-domain` und `Domain` an, weil der Name dort ein
+**Schlüsseldateiname** wird (ADR 0072), und die Protokollregel weist beide ab.
+Eine Domäne, die ein Weg nicht benennen kann, ist Inhalt, über den dieser Weg
+nicht sprechen kann.
+
+**Was das heute vor einem Vorfall bewahrt, gemessen statt vermutet:** die
+Parser, die diese Regel bewacht — `parsePicoRulesInput`,
+`buildPicoApprovalStatement`, der Supplier-Parser — haben **keinen Aufrufer im
+Produkt**. Nur ihre eigenen Tests fahren sie. Was das Produkt wirklich anwendet,
+ist `typeof value === 'string'` mit nicht-leerem Trim auf den Link-Operationen,
+plus die Zeichenmenge des Schlüsselspeichers dort, wo ein verschlüsseltes Item
+geschrieben wird.
+
+**Eine ausgesprochene Regel, die niemand durchsetzt, neben einer durchgesetzten,
+die niemand ausspricht.** Und sie sitzt im blinden Fleck des Fähigkeitsprüfers:
+`check-capability-reach.mjs` lässt `packages/*` ausdrücklich aus, mit dem
+Argument, Bibliotheken würden von anderen Paketen gerufen. Für diese drei
+stimmt das nicht.
+
+Die drei Kopien sind jetzt eine, in `packages/protocol/src/privacy-domain.ts`,
+und der Widerspruch steht im Kopf dieser Datei und als Test. **Welche der vier
+Regeln *die* Regel ist, ist eine Produktentscheidung und keine
+Aufräumarbeit** — sie zu treffen heisst entweder Domänennamen abzulehnen, die
+jemand schon hat, oder zu weiten, wie eine Schlüsseldatei heissen darf. Sie
+liegt als E12 im Brief.
+
 **B142 — Eine Regel, drei Schreibweisen, und zwei echte Löcher darunter
 (2026-09-11).** Nach B140 blieb `/^[0-9a-f]+$/` in fünf Dateien stehen, und
 `canonicalHexPattern` ist genau das und **exportiert**. Nachgemessen war es

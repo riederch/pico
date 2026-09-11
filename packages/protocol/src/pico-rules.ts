@@ -1,3 +1,4 @@
+import { isPicoPrivacyDomain } from './privacy-domain.js';
 import { assertExactKeys } from './canonical-bytes.js';
 import { type PicoEventOriginClass } from './origin-class.js';
 import { picoOriginTrustRank } from './model-context.js';
@@ -128,7 +129,6 @@ export const picoRulesMissingInputCodes = [
 
 export type PicoRulesMissingInputCode = typeof picoRulesMissingInputCodes[number];
 
-export const picoRulesDomainPattern = /^[a-z0-9]+(?:_[a-z0-9]+)*$/u;
 export const picoRulesInstancePattern = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/u;
 
 /**
@@ -222,7 +222,7 @@ export function parsePicoRulesInput(value: unknown): PicoRulesInput {
     }
   }
   if (typeof record.privacyDomain !== 'string'
-    || !picoRulesDomainPattern.test(record.privacyDomain)) {
+    || !isPicoPrivacyDomain(record.privacyDomain)) {
     throw new Error('invalid_pico_rules_domain');
   }
   if (typeof record.personPresent !== 'boolean'

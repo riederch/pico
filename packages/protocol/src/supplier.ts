@@ -26,6 +26,7 @@
  * because they cover three buildings.
  */
 
+import { isPicoPrivacyDomain } from './privacy-domain.js';
 import { assertExactKeys } from './canonical-bytes.js';
 export const picoSupplierSlots = ['observation', 'memory_item', 'effect'] as const;
 
@@ -69,7 +70,6 @@ export const picoSupplierIdentifierPattern = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/u;
 
 export const picoSupplierCoveragePattern = /^[a-z0-9]+(?:[-_.][a-z0-9]+)*$/u;
 
-export const picoSupplierDomainPattern = /^[a-z0-9]+(?:_[a-z0-9]+)*$/u;
 
 export const maxPicoSupplierCoverage = 64;
 
@@ -164,7 +164,7 @@ export function parsePicoSupplierManifest(value: unknown): PicoSupplierManifest 
   }
 
   if (typeof record.privacyDomain !== 'string'
-    || !picoSupplierDomainPattern.test(record.privacyDomain)) {
+    || !isPicoPrivacyDomain(record.privacyDomain)) {
     throw new Error('invalid_pico_supplier_domain');
   }
 

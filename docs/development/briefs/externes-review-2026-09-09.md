@@ -128,6 +128,18 @@ wiederholt werden.
   getrennt, und der Rest ist ein Hinweis auf der Fläche, keine zweite Wirkung
   dieser Operation.
 
+- **E12 — Welche Regel ist *die* Regel für einen Domänennamen?**
+  *Aufgeworfen 2026-09-11 (Befund B143).* Vier Regeln messen dasselbe Feld und
+  beurteilen sieben von zwölf gemessenen Namen verschieden. Der Schreibweg
+  eines verschlüsselten Items nimmt `my-domain` und `Domain`, weil der Name
+  dort ein Schlüsseldateiname wird; die Protokollregel weist beide ab. Heute
+  bricht nichts, weil die Parser mit der strengen Regel keinen Produktaufrufer
+  haben. *Empfohlen:* die Zeichenmenge des Schlüsselspeichers als die Regel
+  nehmen und sie im Protokoll aussprechen — sie ist die, die heute wirklich
+  gilt, und sie ist die engste, die ein Dateiname verträgt. *Alternative:* die
+  strenge snake_case-Regel überall durchsetzen; dann ist zu prüfen, ob eine
+  bestehende Domäne einen Bindestrich trägt, denn die verlöre ihren Namen.
+
 - **E11 — Traegt „Pico Vault" zwei Begriffe?** *Aufgeworfen 2026-09-10 beim
   Umsetzen von P5; das Review hat es in §9.2 benannt.* Gemessen: ADR 0015
   benutzt das Wort fuer den Knotentyp „voller Client", ADR 0097 fuer den

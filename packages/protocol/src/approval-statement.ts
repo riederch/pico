@@ -1,3 +1,4 @@
+import { isPicoPrivacyDomain } from './privacy-domain.js';
 import { assertExactKeys } from './canonical-bytes.js';
 import type { PicoActionArgument, PicoActionRequest } from './action.js';
 import { picoActionEffectNamePattern } from './action.js';
@@ -41,7 +42,6 @@ import { picoRulesInstancePattern } from './pico-rules.js';
  */
 export const picoApprovalStatementSchema = 'pico.approval.statement.v1' as const;
 
-export const picoApprovalDomainPattern = /^[a-z0-9]+(?:_[a-z0-9]+)*$/u;
 
 export interface PicoApprovalSentence {
   effectName: string;
@@ -187,7 +187,7 @@ export function buildPicoApprovalStatement(
     throw new Error('invalid_pico_approval_risk');
   }
   if (typeof record.privacyDomain !== 'string'
-    || !picoApprovalDomainPattern.test(record.privacyDomain)) {
+    || !isPicoPrivacyDomain(record.privacyDomain)) {
     throw new Error('invalid_pico_approval_domain');
   }
   if (record.instance !== null
@@ -239,7 +239,7 @@ export function picoApprovalSentenceForeignFields(
     && !picoRulesInstancePattern.test(statement.sentence.instance)) {
     foreign.push('instance');
   }
-  if (!picoApprovalDomainPattern.test(statement.sentence.privacyDomain)) {
+  if (!isPicoPrivacyDomain(statement.sentence.privacyDomain)) {
     foreign.push('privacyDomain');
   }
   return Object.freeze(foreign);
