@@ -912,6 +912,80 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B145 — Eine geteilte Wahrheit schützt den Gang darüber nicht (2026-09-11).**
+Die Namensliste war leer geworden, also habe ich die Frage gewechselt: nicht
+„welcher Name steht zweimal", sondern **„welche Ablehnung steht zweimal"**.
+Gemessen über `apps|packages|modules/*/src` ohne Tests: **1.002 verschiedene
+Ablehnungsnamen, 39 davon in mehr als einer Datei.**
+
+Der schärfste Haufen waren sieben Namen, die sich `supplier.ts` und
+`depot-manifest.ts` teilten — im **selben Paket**. Die Wahrheiten waren längst
+gefaltet: `depot-manifest.ts` holt Muster, Artenliste, Schlitzliste und
+Obergrenze aus `supplier.ts`. Doppelt war der **Gang darüber**, acht Würfe in
+derselben Reihenfolge.
+
+**Ausgeführt urteilen beide Gänge gleich** — über jede Eingabe, die ich fand;
+das Bezeichnermuster verbietet Punkt, Doppelpunkt und Schrägstrich ohnehin.
+Verschieden war der **Name der Ablehnung**, und zwar genau in den zwei Fällen,
+die `supplier.ts` eigens benannt hatte: eine Adresse und ein Pfad. Sein
+Kommentar sagt, warum: *der Grund ist nicht „falsche Zeichen", sondern „das ist
+keine Identität"*. Ein Depotmanifest schreibt ein **Dritter** — die Stelle mit
+dem stärksten Grund, es zu sagen, war die, die es nicht sagte. Der bestehende
+Test sagte den Befund selbst: sein Titel lautet *„refuses an unlisted slot and
+an identifier that is an address"*, und er verlangte „ungültig".
+
+**Fünf Faltungen, alle mit Pflanzung belegt:**
+
+| Was | Wo es stand | Jetzt |
+|---|---|---|
+| Was ein Zulieferer über sich erklärt | `supplier.ts` + `depot-manifest.ts` | `assertPicoSupplierDeclaration` |
+| Feldform einer Signatureingabe | `index.ts` + `recovery.ts` | `assertExactKeysWithoutFieldOrder` |
+| Ein Gültigkeitsfenster geht vorwärts | `index.ts` + `recovery.ts` (zweimal) | `assertPicoValidityBounds` |
+| Was ein Home anstoßen darf | `link-push-floor.ts` + `event-store.ts` | `assertPicoLinkPushOccasion` |
+| Der Peer-Fingerabdruck | `link-mailbox.ts` + `link-mailbox-exchange.ts` | `assertPicoLinkPeerFingerprint` |
+
+**Zwei Regeln hielt kein einziger Test, und beide Male stand es auf dem
+gefährlicheren Weg.** Die eigens benannte Obergrenze
+`pico_supplier_coverage_too_large` war nirgends geprüft. Und auf dem Weg, auf
+dem eine Karte eine Wurzel zurückbringt, hielt weder das `fieldOrder`-Verbot
+noch das Gültigkeitsfenster ein Test: beide Pflanzungen ließen 660 Prüfungen
+grün und trafen nur das Barrel. Beide Wege haben jetzt ihren.
+
+**Der Gültigkeitsvergleich ist B50 noch einmal.** Das Barrel verglich
+Zeichenketten, `recovery.ts` `Date.parse` — über 55 kanonische Paare urteilen
+beide gleich, aber *nur weil* ein kanonischer Instant feste Breite hat, in UTC
+steht und drei Nachkommastellen trägt. Ein Satz, dessen Richtigkeit an einer
+Form hängt, steht jetzt neben der Form.
+
+**Das Tor, und warum es je Paket schneidet.** Der naheliegende Schnitt wäre
+„zwei Dateien ohne Importbeziehung". Nachgemessen fängt der genau *nicht*: ein
+doppelt geschriebener Gang **hat** die Importbeziehung, weil er die geteilte
+Konstante holt und dann selbst darüber läuft — er hätte B145 durchgelassen. Von
+34 mehrfach stehenden Namen liegen 10 in einer Paketgrenze; fünf waren eine
+Regel mit zwei Gängen, vier sind als **zwei verschiedene Fragen unter einem
+Wort** eingetragen und begründet. `check-refusal-reasons.mjs` trägt die Regel
+als zweite Frage über denselben Gegenstand, mit der Gegenprobe: ein Eintrag,
+den der Baum nicht mehr trägt, schlägt ebenso an.
+
+**Was die Messung sonst noch ergab, damit es niemand ein zweites Mal misst.**
+Von 252 Ausfuhren in `packages/*` ohne Aufrufer außerhalb ihrer Datei sind
+**182 paketintern in Ordnung**, 68 fahren nur ihre eigenen Tests, und **zwei**
+werden nirgends genannt (`requireExactInteger`, `picoModuleCaptureDefault`).
+`packages/protocol/src/link-mailbox.ts` ist der Grenzfall: von zwölf Ausfuhren
+erreicht **eine** das Produkt. Das Buch mit seinen drei Ablehnungen, die sein
+Kommentar *„the security of this whole design"* nennt, hat keinen Aufrufer —
+das Home setzt alle drei im SQLite-Schema durch, mit Primärschlüssel und zwei
+`UNIQUE`, und bildet die Verletzungen auf **dieselben Fehlernamen** ab.
+Nachgemessen: kein Widerspruch. Aber nichts hält sie in Schritt, und
+`apps/companion/src/link-mailbox.ts` schickt den Leser ausdrücklich dorthin
+(*„The Home's side is the book"*). Das bleibt als Beobachtung stehen und ist
+keine Faltung: die SQLite-Fassung ist die stärkere, und sie durch eine
+Speicherfassung zu ersetzen wäre ein Rückschritt.
+
+Und `check-capability-reach.mjs` hat seinen dritten ungemessenen
+Geltungssatz — *„`packages/*` stay out: there an unreached export is module
+hygiene"*. Für die 68 stimmt er. Für das Postfachbuch nicht.
+
 **B144 — Die durchgesetzte Regel wird die ausgesprochene (2026-09-11,
 Entscheidung E12).** Auf B143 hin hat der Nutzer entschieden: **die
 Zeichenmenge des Schlüsselspeichers ist die Regel.** Der Grund ist kein

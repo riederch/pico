@@ -112,17 +112,37 @@ function assertIdentifier(value: unknown): string {
   return value;
 }
 
-/**
- * ADR 0136 BR1 and ADR 0137 IN1/IN2. Refuses rather than repairing, for
- * ADR 0117 X2's reason: a manifest that half-parsed is one nobody declared.
- */
-export function parsePicoSupplierManifest(value: unknown): PicoSupplierManifest {
-  const record = isRecord(value) ? value : undefined;
-  if (record === undefined) {
-    throw new Error('invalid_pico_supplier_manifest');
-  }
-  assertExactKeys(record, ['identifier', 'kind', 'slots', 'coverage', 'privacyDomain'], 'invalid_pico_supplier_manifest');
+/** ADR 0136 BR1 and ADR 0137 IN1/IN2. The four things a supplier declares. */
+export interface PicoSupplierDeclaration {
+  identifier: string;
+  kind: PicoSupplierKind;
+  slots: readonly PicoSupplierSlot[];
+  coverage: readonly string[];
+}
 
+/**
+ * ADR 0136 BR1 and ADR 0137 IN1/IN2. What a supplier declares about itself,
+ * checked once wherever it is declared.
+ *
+ * A supplier is declared in two places in this protocol: standalone, where it
+ * also names the privacy domain it answers in (ADR 0137 IN5), and inside a
+ * depot's manifest, where it names an entry point and a protocol version
+ * instead (ADR 0143 DP3). What surrounds a declaration differs. The
+ * declaration does not, and this is it.
+ *
+ * **Written once because the depot half had already drifted.** Measured on
+ * 2026-09-11: the two walks accepted and refused exactly the same values, so
+ * nothing was reachable through one and not the other - but the depot half
+ * answered `invalid_pico_supplier_identifier` where this one answers
+ * `pico_supplier_identifier_is_not_an_address`, and folded an oversized
+ * coverage list into the generic refusal too. The named refusals exist because
+ * "wrong characters" tells an author to hunt for a typo; and a depot manifest
+ * is written by a **third party**, so the place with the strongest reason to
+ * name them was the place that did not.
+ */
+export function assertPicoSupplierDeclaration(
+  record: Record<string, unknown>,
+): PicoSupplierDeclaration {
   const identifier = assertIdentifier(record.identifier);
 
   if (typeof record.kind !== 'string'
@@ -163,16 +183,34 @@ export function parsePicoSupplierManifest(value: unknown): PicoSupplierManifest 
     throw new Error('duplicate_pico_supplier_coverage');
   }
 
+  return Object.freeze({
+    identifier,
+    kind: record.kind as PicoSupplierKind,
+    slots: Object.freeze([...(record.slots as PicoSupplierSlot[])]),
+    coverage: Object.freeze([...(record.coverage as string[])]),
+  });
+}
+
+/**
+ * ADR 0136 BR1 and ADR 0137 IN1/IN2. Refuses rather than repairing, for
+ * ADR 0117 X2's reason: a manifest that half-parsed is one nobody declared.
+ */
+export function parsePicoSupplierManifest(value: unknown): PicoSupplierManifest {
+  const record = isRecord(value) ? value : undefined;
+  if (record === undefined) {
+    throw new Error('invalid_pico_supplier_manifest');
+  }
+  assertExactKeys(record, ['identifier', 'kind', 'slots', 'coverage', 'privacyDomain'], 'invalid_pico_supplier_manifest');
+
+  const declaration = assertPicoSupplierDeclaration(record);
+
   if (typeof record.privacyDomain !== 'string'
     || !isPicoPrivacyDomain(record.privacyDomain)) {
     throw new Error('invalid_pico_supplier_domain');
   }
 
   return Object.freeze({
-    identifier,
-    kind: record.kind as PicoSupplierKind,
-    slots: Object.freeze([...(record.slots as PicoSupplierSlot[])]),
-    coverage: Object.freeze([...(record.coverage as string[])]),
+    ...declaration,
     privacyDomain: record.privacyDomain,
   });
 }

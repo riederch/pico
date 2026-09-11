@@ -1,7 +1,7 @@
 // Befund B50. Die kanonischen Bytes-Regeln stehen in `./canonical-bytes.js`
 // und nirgends sonst: sie standen hier und in `recovery.ts` zweimal, mit
 // denselben Bytes und vier verschiedenen Ablehnungen.
-import { asciiBytes, assertAsciiToken, bytesToHex, canonicalAsciiTokenPattern, canonicalHexPattern, canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isAsciiToken, isHexOfBytes } from './canonical-bytes.js';
+import { asciiBytes, assertAsciiToken, assertExactKeysWithoutFieldOrder, bytesToHex, canonicalAsciiTokenPattern, canonicalHexPattern, canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isAsciiToken, isHexOfBytes } from './canonical-bytes.js';
 import { foundationEventTypes, type FoundationEventType } from './foundation-event-type.js';
 // ADR 0116 W2 (Befund B49). Diese Barriere gibt die Herkunftsklasse weiter und
 // benutzt sie auch selbst; `export … from` legt dafuer keinen lokalen Namen an.
@@ -15,7 +15,7 @@ export {
   picoCanonicalInstantPattern,
   picoInstantToEpochMs,
 } from './instant.js';
-import { assertPicoInstant } from './instant.js';
+import { assertPicoInstant, assertPicoValidityBounds } from './instant.js';
 import { assertPicoLifecycleOrder, picoLifecycleOrderFrom } from './lifecycle-order.js';
 import type { PicoActionRisk, PicoModuleActivationView } from './module.js';
 import type { PicoApprovalOutcome } from './approval.js';
@@ -3248,7 +3248,7 @@ export function buildPicoHomeDeviceActivationSignatureInput(
   assertPicoLifecycleOrder(input.observedLifecycleOrder);
   assertPicoInstant(input.createdAt);
   assertPicoInstant(input.expiresAt);
-  assertValidBounds(input.createdAt, input.expiresAt);
+  assertPicoValidityBounds(input.createdAt, input.expiresAt);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeDeviceLifecycleCanonicalLabels.activation),
@@ -3498,7 +3498,7 @@ export function buildPicoIdentityDelegationSignatureInput(
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
   assertPicoLifecycleOrder(input.lifecycleOrder);
-  assertValidBounds(input.validFrom, input.validUntil);
+  assertPicoValidityBounds(input.validFrom, input.validUntil);
   const scopes = canonicalScopeSet(input.scopes);
 
   return concatCanonicalElements([
@@ -3641,7 +3641,7 @@ export function buildPicoLinkDirectRequestSignatureInput(
   assertAsciiToken(input.senderDelegationId);
   assertPicoInstant(input.createdAt);
   assertPicoInstant(input.expiresAt);
-  assertValidBounds(input.createdAt, input.expiresAt);
+  assertPicoValidityBounds(input.createdAt, input.expiresAt);
 
   return concatCanonicalElements([
     asciiBytes(picoLinkDirectRequestSignatureInputLabel),
@@ -3719,7 +3719,7 @@ export function buildPicoLinkPushSignatureInput(
   assertAsciiToken(input.pushId);
   assertPicoInstant(input.createdAt);
   assertPicoInstant(input.expiresAt);
-  assertValidBounds(input.createdAt, input.expiresAt);
+  assertPicoValidityBounds(input.createdAt, input.expiresAt);
 
   return concatCanonicalElements([
     asciiBytes(picoLinkPushSignatureInputLabel),
@@ -3851,7 +3851,7 @@ export function buildPicoIdentityReaderKeyFreshnessSignatureInput(
   assertPicoLifecycleOrder(input.observedThroughLifecycleOrder);
   assertPicoInstant(input.checkedAt);
   assertPicoInstant(input.freshUntil);
-  assertValidBounds(input.checkedAt, input.freshUntil);
+  assertPicoValidityBounds(input.checkedAt, input.freshUntil);
 
   return concatCanonicalElements([
     asciiBytes(picoIdentityReaderKeyFreshnessSignatureInputLabel),
@@ -4033,7 +4033,7 @@ export function buildPicoHomeMembershipSignatureInput(input: PicoHomeMembershipS
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
   assertPicoLifecycleOrder(input.lifecycleOrder);
-  assertValidBounds(input.validFrom, input.validUntil);
+  assertPicoValidityBounds(input.validFrom, input.validUntil);
   const scopes = canonicalHomeMembershipScopeSet(input.scopes);
 
   return concatCanonicalElements([
@@ -4114,7 +4114,7 @@ export function buildPicoHomeDomainReadGrantSignatureInput(
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
   assertPicoLifecycleOrder(input.lifecycleOrder);
-  assertValidBounds(input.validFrom, input.validUntil);
+  assertPicoValidityBounds(input.validFrom, input.validUntil);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeSignatureInputLabels.domainReadGrant),
@@ -4393,7 +4393,7 @@ export function buildPicoReaderCustodyReaderGrantSignatureInput(
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
   assertPicoLifecycleOrder(input.lifecycleOrder);
-  assertValidBounds(input.validFrom, input.validUntil);
+  assertPicoValidityBounds(input.validFrom, input.validUntil);
 
   return concatCanonicalElements([
     asciiBytes(picoReaderCustodyCanonicalLabels.readerGrant),
@@ -4499,7 +4499,7 @@ export function buildPicoReaderCustodyWriterGrantSignatureInput(
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
   assertPicoLifecycleOrder(input.lifecycleOrder);
-  assertValidBounds(input.validFrom, input.validUntil);
+  assertPicoValidityBounds(input.validFrom, input.validUntil);
 
   return concatCanonicalElements([
     asciiBytes(picoReaderCustodyCanonicalLabels.writerGrant),
@@ -4733,7 +4733,7 @@ export function buildPicoReaderCustodySyncManifestSignatureInput(
   assertPicoLifecycleOrder(input.observedThroughLifecycleOrder);
   assertPicoInstant(input.createdAt);
   assertPicoInstant(input.expiresAt);
-  assertValidBounds(input.createdAt, input.expiresAt);
+  assertPicoValidityBounds(input.createdAt, input.expiresAt);
 
   return concatCanonicalElements([
     asciiBytes(picoReaderCustodyCanonicalLabels.syncManifest),
@@ -5222,30 +5222,6 @@ function kdfParameterBytes(value: number, minimumValue: number, maximumValue: nu
  * (`+` = 0x2B, `.` = 0x2E, `Z` = 0x5A), which would keep an expired delegation
  * looking active; second precision misses the exact boundary the same way.
  */
-/**
- * Befund B124. Hiess `assertExactKeys` wie neun andere und ist eine andere Regel:
- * sie verbietet zusaetzlich einen Schluessel `fieldOrder`, weil eine umsortierte
- * Feldliste eine andere Signatureingabe ergaebe. Ein Name ist keine Regel - und
- * vier Regeln unter einem Namen in einem Paket sind vier Gelegenheiten, die
- * falsche zu erwischen.
- */
-function assertExactKeysWithoutFieldOrder(record: Record<string, unknown>, expectedKeys: readonly string[]): void {
-  if ('fieldOrder' in record) {
-    throw new Error('field_reordering');
-  }
-
-  const expected = new Set(expectedKeys);
-  const unexpected = Object.keys(record).find((key) => !expected.has(key));
-  if (unexpected !== undefined) {
-    throw new Error('unexpected_field');
-  }
-
-  const missing = expectedKeys.find((key) => !(key in record));
-  if (missing !== undefined) {
-    throw new Error('missing_field');
-  }
-}
-
 function assertStringMember<const TValues extends readonly string[]>(
   value: string,
   allowedValues: TValues,
@@ -5330,8 +5306,3 @@ function canonicalHomeMembershipScopeSet(scopes: readonly string[]): PicoHomeMem
 
 const snakeCaseOutcomePattern = /^[a-z0-9_]+$/;
 
-function assertValidBounds(validFrom: string, validUntil: string): void {
-  if (validUntil <= validFrom) {
-    throw new Error('invalid_validity_bounds');
-  }
-}

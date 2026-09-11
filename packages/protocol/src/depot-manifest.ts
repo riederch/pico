@@ -1,11 +1,8 @@
 import { assertExactKeys } from './canonical-bytes.js';
 import { assertPicoSupplierProtocolVersion } from './supplier-transport.js';
 import {
-  maxPicoSupplierCoverage,
-  picoSupplierCoveragePattern,
+  assertPicoSupplierDeclaration,
   picoSupplierIdentifierPattern,
-  picoSupplierKinds,
-  picoSupplierSlots,
   type PicoSupplierKind,
   type PicoSupplierSlot,
 } from './supplier.js';
@@ -157,40 +154,10 @@ function parseSupplierDeclaration(value: unknown): PicoDepotSupplierDeclaration 
     'invalid_pico_depot_supplier',
   );
 
-  if (typeof record.identifier !== 'string'
-    || !picoSupplierIdentifierPattern.test(record.identifier)) {
-    throw new Error('invalid_pico_supplier_identifier');
-  }
-  if (typeof record.kind !== 'string'
-    || !(picoSupplierKinds as readonly string[]).includes(record.kind)) {
-    throw new Error('invalid_pico_supplier_kind');
-  }
-
-  if (!Array.isArray(record.slots) || record.slots.length === 0) {
-    throw new Error('invalid_pico_supplier_slots');
-  }
-  for (const slot of record.slots as unknown[]) {
-    if (typeof slot !== 'string' || !(picoSupplierSlots as readonly string[]).includes(slot)) {
-      throw new Error('pico_supplier_slot_not_listed');
-    }
-  }
-  if (new Set(record.slots as string[]).size !== record.slots.length) {
-    throw new Error('duplicate_pico_supplier_slot');
-  }
-
-  if (!Array.isArray(record.coverage)
-    || record.coverage.length === 0
-    || record.coverage.length > maxPicoSupplierCoverage) {
-    throw new Error('invalid_pico_supplier_coverage');
-  }
-  for (const entry of record.coverage as unknown[]) {
-    if (typeof entry !== 'string' || !picoSupplierCoveragePattern.test(entry)) {
-      throw new Error('invalid_pico_supplier_coverage');
-    }
-  }
-  if (new Set(record.coverage as string[]).size !== record.coverage.length) {
-    throw new Error('duplicate_pico_supplier_coverage');
-  }
+  // ADR 0136 BR1 and ADR 0137 IN1/IN2, and not a second copy of them: what a
+  // supplier declares is the same here as standalone, so it is asked in the
+  // same place. What follows is what only a depot's supplier declares.
+  const declared = assertPicoSupplierDeclaration(record);
 
   if (typeof record.entryPoint !== 'string'
     || record.entryPoint.length > maxPicoDepotEntryPointChars
@@ -215,10 +182,7 @@ function parseSupplierDeclaration(value: unknown): PicoDepotSupplierDeclaration 
   }
 
   return Object.freeze({
-    identifier: record.identifier,
-    kind: record.kind as PicoSupplierKind,
-    slots: Object.freeze([...(record.slots as PicoSupplierSlot[])]),
-    coverage: Object.freeze([...(record.coverage as string[])]),
+    ...declared,
     entryPoint: record.entryPoint,
     protocolVersion: record.protocolVersion as number,
     ...(record.dependsOn === undefined

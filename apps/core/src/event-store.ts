@@ -32,7 +32,7 @@ import {
 } from '@pico/protocol/depot';
 import { picoGitCommitPattern } from '@pico/protocol/library-pin';
 import {
-  picoLinkPushOccasions,
+  assertPicoLinkPushOccasion,
   type PicoLinkPushLedgerEntry,
   type PicoLinkPushOccasion,
 } from './link-push-floor.js';
@@ -7259,9 +7259,7 @@ export class EventStore {
     pushedAt: string;
   }): void {
     this.ensureOpen();
-    if (!(picoLinkPushOccasions as readonly string[]).includes(input.occasion)) {
-      throw new Error('unknown_pico_link_push_occasion');
-    }
+    assertPicoLinkPushOccasion(input.occasion);
     try {
       this.db
         .prepare(`

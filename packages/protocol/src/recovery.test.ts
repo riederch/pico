@@ -231,6 +231,56 @@ describe('ADR 0110 recovery protocol forms', () => {
     }
   });
 
+  /**
+   * Befund B145. Der Weg, auf dem eine Karte eine Wurzel zurueckbringt, teilt
+   * seine Formregel seit heute mit dem Barrel - und bis heute hielt sie auf
+   * *dieser* Seite kein Test: das `fieldOrder`-Verbot ausgebaut, und von 661
+   * Pruefungen fielen drei, alle drei im Barrel.
+   *
+   * Eine mitgelieferte Feldliste waere eine andere Signatureingabe ueber
+   * denselben Inhalt. Wer sie setzen darf, bestimmt, was unterschrieben wurde.
+   */
+  it('refuses a field list travelling with a preparation, and names each fault', () => {
+    const prepare = (fixtureSuite().prepare as JsonRecord).fields as JsonRecord;
+    expect(() => buildPicoHomeDeviceRecoveryPrepareSignatureInput({
+      ...prepare, fieldOrder: Object.keys(prepare),
+    } as never)).toThrow('field_reordering');
+    expect(() => buildPicoHomeDeviceRecoveryPrepareSignatureInput({
+      ...prepare, extra: 1,
+    } as never)).toThrow('unexpected_field');
+    const { homeId: _removed, ...missing } = prepare;
+    expect(() => buildPicoHomeDeviceRecoveryPrepareSignatureInput(missing as never))
+      .toThrow('missing_field');
+    expect(() => buildPicoHomeDeviceRecoveryPrepareSignatureInput(null as never))
+      .toThrow('invalid_record');
+  });
+
+  /**
+   * Befund B145, dieselbe Luecke ein Stueck weiter. Der Satz „ein
+   * Gueltigkeitsfenster geht vorwaerts" stand auf diesem Weg mit `Date.parse`
+   * geschrieben und im Barrel als Zeichenvergleich; gemessen urteilen beide
+   * ueber 55 kanonische Paare gleich, und seit heute stehen sie einmal. Kein
+   * Test hielt ihn hier: die Pflanzung „ein Fenster der Laenge null gilt" liess
+   * 660 Pruefungen gruen und traf nur das Barrel.
+   */
+  it('refuses a preparation whose window does not go forward', () => {
+    const prepare = (fixtureSuite().prepare as JsonRecord).fields as JsonRecord;
+    const gleich = { ...prepare, expiresAt: prepare.createdAt };
+    expect(() => buildPicoHomeDeviceRecoveryPrepareSignatureInput(gleich as never))
+      .toThrow('invalid_validity_bounds');
+    const rueckwaerts = {
+      ...prepare,
+      createdAt: prepare.expiresAt,
+      expiresAt: prepare.createdAt,
+    };
+    expect(() => buildPicoHomeDeviceRecoveryPrepareSignatureInput(rueckwaerts as never))
+      .toThrow('invalid_validity_bounds');
+    // Und die Form behaelt ihren eigenen Grund, statt in diesen zu fallen.
+    expect(() => buildPicoHomeDeviceRecoveryPrepareSignatureInput({
+      ...prepare, expiresAt: '2026-09-11T12:00:00Z',
+    } as never)).toThrow('invalid_instant');
+  });
+
   it('binds Home, identity, target, evidence and lifecycle head distinctly', () => {
     const suite = fixtureSuite();
     const claim = (suite.claim as JsonRecord)

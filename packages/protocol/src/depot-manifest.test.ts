@@ -160,7 +160,57 @@ describe('ADR 0143 DP3 - what a depot must not be able to say', () => {
     expect(() => parsePicoDepotManifest({
       ...manifest,
       suppliers: [{ ...supplier, identifier: 'https://x.invalid' }],
-    })).toThrow('invalid_pico_supplier_identifier');
+    })).toThrow('pico_supplier_identifier_is_not_an_address');
+  });
+
+  /**
+   * B145. Both parsers ask the same question, so they must give the same
+   * answer - and until 2026-09-11 they did not: a depot author who wrote an
+   * address or a path was told the characters were wrong, which is the one
+   * thing that does not help. The verdicts always agreed; only the reason
+   * differed, and the reason is the whole point of naming it.
+   *
+   * Bound over the values rather than asserted twice, so a name that moves in
+   * one walk cannot stay put in the other.
+   */
+  it('refuses a declaration for the same named reason as a standalone manifest', () => {
+    const cases = [
+      ['https://x.invalid', 'pico_supplier_identifier_is_not_an_address'],
+      ['192.168.0.1', 'pico_supplier_identifier_is_not_an_address'],
+      ['a/b', 'pico_supplier_identifier_is_not_a_path'],
+      ['a\\b', 'pico_supplier_identifier_is_not_a_path'],
+      ['Rchkb', 'invalid_pico_supplier_identifier'],
+      [42, 'invalid_pico_supplier_identifier'],
+    ] as const;
+    for (const [identifier, reason] of cases) {
+      expect(() => parsePicoDepotManifest({
+        ...manifest,
+        suppliers: [{ ...supplier, identifier }],
+      }), String(identifier)).toThrow(reason);
+      expect(() => parsePicoSupplierManifest({
+        identifier,
+        kind: supplier.kind,
+        slots: supplier.slots,
+        coverage: supplier.coverage,
+        privacyDomain: 'household',
+      }), String(identifier)).toThrow(reason);
+    }
+  });
+
+  /** B145. The oversized list, too: one refusal with one name on both paths. */
+  it('names an oversized coverage list on both paths', () => {
+    const coverage = Array.from({ length: 65 }, (_, index) => `subject${index}`);
+    expect(() => parsePicoDepotManifest({
+      ...manifest,
+      suppliers: [{ ...supplier, coverage }],
+    })).toThrow('pico_supplier_coverage_too_large');
+    expect(() => parsePicoSupplierManifest({
+      identifier: supplier.identifier,
+      kind: supplier.kind,
+      slots: supplier.slots,
+      coverage,
+      privacyDomain: 'household',
+    })).toThrow('pico_supplier_coverage_too_large');
   });
 
   it('refuses an undeclared extra field rather than dropping it', () => {

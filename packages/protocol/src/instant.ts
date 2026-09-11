@@ -82,3 +82,35 @@ export function picoInstantToEpochMs(value: unknown, reason = 'invalid_instant')
   assertPicoInstant(value, reason);
   return Date.parse(value);
 }
+
+/**
+ * Ein Gueltigkeitsfenster geht vorwaerts. Die eine Fassung davon.
+ *
+ * **Warum das hierher gehoert und nicht neben seine Aufrufer** (Befund B145,
+ * 2026-09-11). Der Satz stand zweimal im Protokollpaket, mit zwei Methoden:
+ * das Barrel verglich die Zeichenketten (`validUntil <= validFrom`),
+ * `recovery.ts` verglich Zahlen (`Date.parse(...) <= Date.parse(...)`).
+ * Ausgefuehrt urteilen beide ueber 55 kanonische Paare gleich - aber nur,
+ * *weil* ein kanonischer Instant feste Breite hat, immer in UTC steht und
+ * immer drei Nachkommastellen traegt. Genau diese Vorbedingung wird eine Datei
+ * weiter oben entschieden, also wird sie hier auch erzwungen, statt sie zu
+ * erben: die Einigkeit der beiden Vergleiche haengt an der Form, und ein Satz,
+ * dessen Richtigkeit an einer Form haengt, gehoert neben die Form.
+ *
+ * Das ist dieselbe Lehre wie Befund B50, wo zwei Fassungen dieselben Bytes
+ * lieferten, solange das Zeichenmuster ASCII blieb.
+ */
+export function assertPicoValidityBounds(
+  from: unknown,
+  until: unknown,
+  reason = 'invalid_validity_bounds',
+): void {
+  // Mit *ihrem* Grund, nicht mit diesem: „das ist kein Zeitpunkt" und „das
+  // Fenster geht rueckwaerts" sind zwei Auskuenfte, und die Aufrufer sprachen
+  // die erste schon vorher aus.
+  assertPicoInstant(from);
+  assertPicoInstant(until);
+  if ((until as string) <= (from as string)) {
+    throw new Error(reason);
+  }
+}

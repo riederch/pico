@@ -339,6 +339,46 @@ export function assertExactKeys(
 }
 
 /**
+ * Dieselbe Frage fuer eine **Signatureingabe**, und deshalb eine andere Regel:
+ * zusaetzlich verboten ist ein Schluessel `fieldOrder`, und jede der drei
+ * Ablehnungen hat ihren eigenen Namen.
+ *
+ * **Warum `fieldOrder` verboten ist.** Eine mitgelieferte Feldliste ergaebe
+ * eine andere Bytefolge und damit eine andere Signatureingabe ueber denselben
+ * Inhalt. Wer sie setzen darf, darf bestimmen, was unterschrieben wurde.
+ *
+ * **Warum eigene Namen.** Der Aufrufer ist hier ein Aussteller, der eine Karte
+ * schreibt, und „unerwartetes Feld" gegen „fehlendes Feld" ist der ganze
+ * Unterschied zwischen einem Tippfehler und einer veralteten Fassung.
+ * `assertExactKeys` darueber wirft *einen* Grund, weil seine Aufrufer an einer
+ * Grenze stehen, an der ein Fremder nichts ueber die Form erfahren soll.
+ *
+ * **Der Anlass** (2026-09-11, Befund B145). Befund B124 hatte die beiden
+ * Fassungen dieser Regel im Protokollpaket gefunden und *auseinanderbenannt* -
+ * `assertExactKeysWithoutFieldOrder` im Barrel, `assertExactRecordShape` in
+ * `recovery.ts` - und damit die Frage beantwortet, ob sie dasselbe sind wie die
+ * neun `assertExactKeys`. Sie sind es nicht. Aber sie sind dasselbe wie
+ * *einander*: dieselben drei Pruefungen, in derselben Reihenfolge, mit
+ * denselben drei Namen. `recovery.ts` legt nur eine `isRecord`-Wache davor, und
+ * die bleibt dort, wo sie hingehoert.
+ */
+export function assertExactKeysWithoutFieldOrder(
+  record: Record<string, unknown>,
+  expectedKeys: readonly string[],
+): void {
+  if ('fieldOrder' in record) {
+    throw new Error('field_reordering');
+  }
+  const expected = new Set(expectedKeys);
+  if (Object.keys(record).some((key) => !expected.has(key))) {
+    throw new Error('unexpected_field');
+  }
+  if (expectedKeys.some((key) => !(key in record))) {
+    throw new Error('missing_field');
+  }
+}
+
+/**
  * Bytes als Hex, so wie dieses Produkt Hex schreibt: klein und zweistellig.
  *
  * **Der Anlass** (2026-09-10, Befund B125). Diese eine Zeile stand **achtmal**

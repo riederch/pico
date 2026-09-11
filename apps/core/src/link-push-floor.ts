@@ -60,6 +60,21 @@ export const picoLinkPushOccasions = [
 
 export type PicoLinkPushOccasion = typeof picoLinkPushOccasions[number];
 
+/**
+ * Befund B145. Die Liste stand zweimal begangen: hier und im Ereignisspeicher,
+ * derselbe Zweizeiler ueber derselben Konstanten. Eine geteilte Wahrheit mit
+ * zwei Gaengen darueber ist die Form, in der eine Regel driftet, ohne dass ein
+ * Test es sieht - die Konstante haelt beide zusammen, der *Umgang* mit ihr
+ * nicht. Jetzt ist beides einmal.
+ */
+export function assertPicoLinkPushOccasion(
+  occasion: string,
+): asserts occasion is PicoLinkPushOccasion {
+  if (!(picoLinkPushOccasions as readonly string[]).includes(occasion)) {
+    throw new Error('unknown_pico_link_push_occasion');
+  }
+}
+
 export interface PicoLinkPushDecision {
   push: boolean;
   /** Present when it refused, so a caller can say which bound it met. */
@@ -94,9 +109,7 @@ export function decidePicoLinkPush(input: {
   eventId: string;
   nowMs: number;
 }): PicoLinkPushDecision {
-  if (!(picoLinkPushOccasions as readonly string[]).includes(input.occasion)) {
-    throw new Error('unknown_pico_link_push_occasion');
-  }
+  assertPicoLinkPushOccasion(input.occasion);
   if (typeof input.eventId !== 'string' || input.eventId === '') {
     throw new Error('invalid_pico_link_push_event');
   }

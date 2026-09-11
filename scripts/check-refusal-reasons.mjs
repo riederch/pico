@@ -176,6 +176,113 @@ for (const [reason, files] of [...declared].sort()) {
   }
 }
 
+/**
+ * **Die zweite Frage ueber dieselbe Ablehnung** (2026-09-11, Befund B145):
+ * nicht "ist sie einmal gegangen worden", sondern **"hat sie ein Zuhause"**.
+ *
+ * Der Anlass. `packages/protocol` erklaerte, was ein Zulieferer ueber sich
+ * sagt, an zwei Stellen: `supplier.ts` und `depot-manifest.ts` teilten die
+ * Muster, die Artenliste, die Schlitzliste und die Obergrenze - und gingen
+ * zweimal getrennt darueber. Gemessen urteilten beide Gaenge ueber jede
+ * Eingabe gleich; verschieden war der **Name**. Wer eine Adresse oder einen
+ * Pfad als Bezeichner schrieb, bekam im Manifest gesagt, dass das keine
+ * Identitaet ist, und im Depot nur "ungueltig" - und ein Depotmanifest
+ * schreibt ein **Dritter**, also traf es den, der die Auskunft am noetigsten
+ * hatte.
+ *
+ * **Warum je Paket und nicht je Baum.** Der naheliegende Schnitt waere "zwei
+ * Dateien ohne Importbeziehung". Nachgemessen faengt der genau *nicht*: ein
+ * doppelt geschriebener Gang **hat** die Importbeziehung, weil er die geteilte
+ * Konstante holt und dann selbst darueber laeuft. Er haette B145 durchgelassen.
+ * Die Paketgrenze faengt ihn, denn eine Regel, die in einem Paket zweimal
+ * begangen wird, hat dort ein Zuhause, das sie noch nicht kennt.
+ *
+ * **Was das Tor nicht ist.** Es verlangt nicht, dass ein Ablehnungsname nur
+ * einmal im Baum vorkommt - ein Weiterwurf ueber eine Paketgrenze ist genau
+ * das, was ein Grund tun soll. Gemessen am 2026-09-11: 34 Namen standen in
+ * mehr als einer Datei, davon 10 in einer Paketgrenze; fuenf davon waren eine
+ * Regel mit zwei Gaengen und sind seither gefaltet.
+ *
+ * Ein Argument ist keine Erlaubnis. Jeder Eintrag sagt, warum zwei Stellen
+ * denselben Satz sprechen und **verschiedene Fragen** beantworten.
+ */
+const arguedHomes = new Map([
+  ['apps/core|pico_depot_not_attached',
+    'Dieselbe Nachschlagefrage an drei Tueren - im Ereignisspeicher vor zwei '
+    + 'Schreibvorgaengen, in `app.ts` zwischen der Entscheidung und dem Lauf. '
+    + 'Kein zweiter Gang ueber eine Regel: es gibt keine Regel, nur ein '
+    + 'Nachsehen, und jede Tuer muss fuer sich antworten, weil zwischen ihnen '
+    + 'abgehaengt worden sein kann'],
+  ['apps/vault-daemon|invalid_response',
+    'Vier verschiedene Antworten des Daemons - Zeremonie, Klient, Protokoll, '
+    + 'Leserzugang -, jede mit eigener Form. Ein gemeinsames Wort fuer "das ist '
+    + 'nicht die Antwort, auf die ich gewartet habe", nicht ein gemeinsamer '
+    + 'Gang: die vier Formen haben nichts miteinander zu tun'],
+  ['packages/protocol|invalid_pico_link_address',
+    '`link-packet.ts` traegt die Regel; `link-mailbox.ts` engt davor nur den '
+    + 'Typ ein, damit der Parser den Wert nehmen kann. Ein eigener Name fuer '
+    + '"du hast mir eine Zahl gegeben" waere eine schlechtere Auskunft als der, '
+    + 'den die Regel selbst gibt'],
+  ['packages/protocol|invalid_pico_link_mailbox',
+    'Zwei verschiedene Gegenstaende ueber demselben Muster: in `link-packet.ts` '
+    + 'die Postfachhaelfte einer Adresse, in `link-relay-surface.ts` ein '
+    + 'nacktes Postfach am Betreiber. `picoLinkMailboxPattern` ist geteilt; '
+    + 'was gefragt wird, ist es nicht'],
+]);
+
+const thrownPattern = /throw new Error\(\s*(?:'([a-z][a-z0-9_]{4,})'|`([a-z][a-z0-9_]{4,}):)/gu;
+const homes = new Map();
+for (const file of sourceFiles) {
+  const rel = relative(repoRoot, file);
+  if (!/^(apps|packages|modules)\/[^/]+\/src\//u.test(rel)) {
+    continue;
+  }
+  const pkg = rel.split('/').slice(0, 2).join('/');
+  const seen = new Set();
+  for (const match of readFileSync(file, 'utf8').matchAll(thrownPattern)) {
+    seen.add(match[1] ?? match[2]);
+  }
+  for (const reason of seen) {
+    const key = `${pkg}|${reason}`;
+    if (!homes.has(key)) {
+      homes.set(key, []);
+    }
+    homes.get(key).push(rel);
+  }
+}
+
+let arguedSeen = 0;
+for (const [key, files] of [...homes].sort()) {
+  if (files.length < 2) {
+    continue;
+  }
+  const [pkg, reason] = key.split('|');
+  const argument = arguedHomes.get(key);
+  if (argument === undefined) {
+    errors.push(
+      `${reason} is thrown in ${files.length} files of ${pkg} (${files.join(', ')}). `
+      + 'One rule walked twice inside one package drifts in whichever direction '
+      + 'nobody is looking - fold the walk, or say here which two different '
+      + 'questions share the word.',
+    );
+    continue;
+  }
+  arguedSeen += 1;
+}
+
+// Eine Liste sagt, was erlaubt ist - nie, ob es das noch gibt.
+for (const key of arguedHomes.keys()) {
+  const files = homes.get(key) ?? [];
+  if (files.length < 2) {
+    const [pkg, reason] = key.split('|');
+    errors.push(
+      `${reason} is argued here as sharing a word in ${pkg}, and it no longer `
+      + 'stands in two files there. Take the entry out: an inventory that '
+      + 'describes a tree that is gone describes nothing.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Refusal-reason check failed:');
   for (const error of errors) {
@@ -189,7 +296,9 @@ console.log(
   + `${sourceFiles.length} sources, every one of them producible - ${composed} only `
   + `as a composed string; ${walked} are named by a test`
   + (notYetWalked.size === 0
-    ? ', and none is argued as unwalked).'
+    ? ', and none is argued as unwalked'
     : `, and ${notYetWalked.size} are argued as not yet walked, each with what a `
-      + 'walk would need).'),
+      + 'walk would need')
+  + `; ${homes.size} thrown refusals have one home in their package, `
+  + `${arguedSeen} share a word between two questions and say why).`,
 );

@@ -4,12 +4,13 @@
 import {
   asciiBytes,
   assertAsciiToken,
+  assertExactKeysWithoutFieldOrder,
   bytesToHex,
   canonicalTextEncoder,
   concatCanonicalElements,
   fixedHexBytes,
 } from './canonical-bytes.js';
-import { assertPicoInstant } from './instant.js';
+import { assertPicoInstant, assertPicoValidityBounds } from './instant.js';
 import { assertPicoLifecycleOrder } from './lifecycle-order.js';
 import type {
   PicoIdentityDelegationSignatureInput,
@@ -240,11 +241,7 @@ export function buildPicoHomeDeviceRecoveryPrepareSignatureInput(
   assertAsciiToken(input.preparationId);
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.targetDelegationId);
-  assertPicoInstant(input.createdAt);
-  assertPicoInstant(input.expiresAt);
-  if (Date.parse(input.expiresAt) <= Date.parse(input.createdAt)) {
-    throw new Error('invalid_validity_bounds');
-  }
+  assertPicoValidityBounds(input.createdAt, input.expiresAt);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeDeviceRecoveryCanonicalLabels.prepare),
@@ -477,11 +474,7 @@ export function buildPicoHomeDeviceRecoveryClaimSignatureInput(
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.targetDelegationId);
   assertPicoLifecycleOrder(input.observedLifecycleOrder);
-  assertPicoInstant(input.createdAt);
-  assertPicoInstant(input.expiresAt);
-  if (Date.parse(input.expiresAt) <= Date.parse(input.createdAt)) {
-    throw new Error('invalid_validity_bounds');
-  }
+  assertPicoValidityBounds(input.createdAt, input.expiresAt);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeDeviceRecoveryCanonicalLabels.claim),
@@ -698,9 +691,11 @@ function assertEndpointHint(value: string): void {
 
 
 /**
- * Befund B124. Hiess `assertExactKeys` und ist die reichste der vier: `isRecord`,
- * `fieldOrder`, unerwartet, fehlend - vier Ablehnungen mit eigenen Namen, auf dem
- * Weg, auf dem eine Karte eine Wurzel zurueckbringt.
+ * Befund B124, gefaltet von Befund B145. Die vierte Ablehnung ist die einzige,
+ * die diesem Weg gehoert: eine Karte kommt als geparstes JSON herein, also ist
+ * „das ist gar kein Datensatz" hier ein erreichbarer Zustand und kein
+ * Aufruferfehler. Die drei darunter sind dieselbe Regel wie im Barrel, und
+ * stehen seit B145 nur noch einmal.
  */
 function assertExactRecordShape(
   record: Record<string, unknown>,
@@ -709,16 +704,7 @@ function assertExactRecordShape(
   if (!isRecord(record)) {
     throw new Error('invalid_record');
   }
-  if ('fieldOrder' in record) {
-    throw new Error('field_reordering');
-  }
-  const expected = new Set(expectedKeys);
-  if (Object.keys(record).some((key) => !expected.has(key))) {
-    throw new Error('unexpected_field');
-  }
-  if (expectedKeys.some((key) => !(key in record))) {
-    throw new Error('missing_field');
-  }
+  assertExactKeysWithoutFieldOrder(record, expectedKeys);
 }
 
 function parseCanonicalElements(

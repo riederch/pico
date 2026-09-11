@@ -43,7 +43,12 @@ export interface PicoLinkRelationshipMailbox {
 
 export type PicoLinkMailboxBook = readonly PicoLinkRelationshipMailbox[];
 
-function assertPeerFingerprint(value: unknown): string {
+/**
+ * Befund B145. Das Muster war geteilt, die Wache darueber stand zweimal - hier
+ * und im Austausch daneben. Exportiert, damit auch der Umgang mit der Regel
+ * einmal steht und nicht nur die Regel.
+ */
+export function assertPicoLinkPeerFingerprint(value: unknown): string {
   if (typeof value !== 'string' || !picoLinkPeerFingerprintPattern.test(value)) {
     throw new Error('invalid_pico_link_peer');
   }
@@ -67,7 +72,7 @@ export function parsePicoLinkRelationshipMailbox(
     throw new Error(`pico_link_relationship_mailbox_carries_no:${unexpected}`);
   }
 
-  const peerFingerprintHex = assertPeerFingerprint(record.peerFingerprintHex);
+  const peerFingerprintHex = assertPicoLinkPeerFingerprint(record.peerFingerprintHex);
   if (typeof record.inbound !== 'string') {
     throw new Error('invalid_pico_link_address');
   }
@@ -142,7 +147,7 @@ function entryFor(
   book: PicoLinkMailboxBook,
   peerFingerprintHex: string,
 ): PicoLinkRelationshipMailbox {
-  const peer = assertPeerFingerprint(peerFingerprintHex);
+  const peer = assertPicoLinkPeerFingerprint(peerFingerprintHex);
   const entry = book.find((candidate) => candidate.peerFingerprintHex === peer);
   if (entry === undefined) {
     throw new Error('pico_link_peer_not_in_book');
@@ -187,7 +192,7 @@ export function issuePicoLinkInboundMailbox(
   book: PicoLinkMailboxBook,
   input: { peerFingerprintHex: string; inbound: string },
 ): PicoLinkMailboxBook {
-  const peer = assertPeerFingerprint(input.peerFingerprintHex);
+  const peer = assertPicoLinkPeerFingerprint(input.peerFingerprintHex);
   const existing = book.find((candidate) => candidate.peerFingerprintHex === peer);
   const next = {
     peerFingerprintHex: peer,

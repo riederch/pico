@@ -1,5 +1,5 @@
 import { parsePicoLinkPacketAddress } from './link-packet.js';
-import { picoLinkPeerFingerprintPattern } from './link-mailbox.js';
+import { assertPicoLinkPeerFingerprint } from './link-mailbox.js';
 
 /**
  * ADR 0148 EX1 - what `home.link.mailbox.exchange` carries.
@@ -109,14 +109,10 @@ export function parsePicoLinkMailboxExchangeResponse(
   if (record.schema !== picoLinkMailboxExchangeResponseSchema) {
     throw new Error('unknown_pico_link_mailbox_exchange_schema');
   }
-  if (typeof record.peerFingerprintHex !== 'string'
-    || !picoLinkPeerFingerprintPattern.test(record.peerFingerprintHex)) {
-    throw new Error('invalid_pico_link_peer');
-  }
   return Object.freeze({
     schema: picoLinkMailboxExchangeResponseSchema,
     homeInbound: assertAddress(record.homeInbound, 'invalid_pico_link_address'),
-    peerFingerprintHex: record.peerFingerprintHex,
+    peerFingerprintHex: assertPicoLinkPeerFingerprint(record.peerFingerprintHex),
   });
 }
 
