@@ -912,6 +912,63 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B150 — Die Regel gegen das zweite Wecken war nur gegen ein Modell bewiesen
+(2026-09-11).** Die Frage war eine ganz andere: schreibt oder liest irgendetwas
+jede Spalte, die eine Migration anlegt? Antwort, und ein sauberes
+Negativergebnis: **438 Spalten über 44 Tabellen, alle benannt.** Die einzige
+scheinbare Ausnahme, `schema_migration_audit.error_message`, wird in der
+Migrationsdatei selbst geschrieben, die meine Messung ausgeschlossen hatte.
+
+Die Gegenfrage trug: **33 Stellen erkennen einen Fehler an seinem Meldungstext**,
+und die meisten erkennen eigene Namen — hier die Ablehnungssprache, also in
+Ordnung. Drei gehen auf SQLite. Eine davon, im Push-Hauptbuch, war eine zweite,
+**schwächere** Schreibweise derselben Frage: `'UNIQUE'` statt
+`'UNIQUE constraint failed'`, tausend Zeilen entfernt vom argumentierten Helfer
+`isPicoUniqueConstraintViolation`, den drei andere Stellen benutzen.
+
+**An echtem SQLite nachgemessen**, weil dieser Satz die Grundlage von vier
+Stellen ist und ihn niemand ausgeführt hatte: ein doppelter Primärschlüssel
+meldet `UNIQUE constraint failed` mit dem Code `SQLITE_CONSTRAINT_PRIMARYKEY`,
+ein doppelter UNIQUE-Index dieselbe Meldung mit `SQLITE_CONSTRAINT_UNIQUE`; NOT
+NULL, CHECK und eine fehlende Tabelle fallen nicht hinein. Beide Schreibweisen
+urteilen über alle fünf Fälle gleich. Der Weg über `error.code` wäre präziser
+und wird **begründet nicht genommen**: die Postfachstelle liest ohnehin die
+*Spalte* aus der Meldung, und ein fehlendes `code` liesse eine Verletzung
+ungefangen entkommen, während eine geänderte Meldung sofort einen roten Test
+gäbe.
+
+**Und dann fiel die Pflanzung ins Leere.** `isPicoUniqueConstraintViolation`
+auf `false` gesetzt — **1.153 Prüfungen des Kerns blieben grün.** Vier Stellen
+übersetzen eine Datenbankbedingung in eine benannte Ablehnung, und keine war
+gegangen. Drei davon sind Rennfall-Auffangnetze hinter einer Vorabprüfung, also
+schwer erreichbar. Die vierte hat **keine** Vorabprüfung: ihr eigener Kommentar
+sagt, das Schema allein hält die Regel — und die Regel ist ADR 0150 PU5, die
+verhindert, dass ein Home dasselbe Ereignis wieder und wieder auf das Gerät
+einer Person schiebt. Der Batterieangriff, vom Home selbst ausgeführt. Drei
+Tests halten sie jetzt auf dem laufenden Weg, samt Aufbewahrungsfrist, und die
+Pflanzung trifft sie.
+
+**Wobei ein Test von mir selbst zuerst etwas Falsches behauptete:**
+`prunePicoLinkPushLedger` bekommt den *Stichtag*, nicht die Frist. Er ist jetzt
+mit der Formel geschrieben, die `app.ts` benutzt, und prüft damit auch den
+Ausdruck statt einen daneben.
+
+**Der eigentliche Fund liegt eine Ebene höher.** Warum war das ungetestet? Weil
+`recordPicoLinkPush` **zweimal** existierte: als Methode am Speicher, die das
+Produkt ruft, und als reine Funktion über einem Array, die niemand ruft. Und
+`check-capability-reach.mjs` sah das nicht, weil es nach `\bname\b` sucht —
+ein `store.recordPicoLinkPush(...)` in `app.ts` liess die freie Funktion
+erreicht aussehen. **Ein Name ist keine Regel (B124), eine Ebene über dem
+Code.**
+
+Der Prüfer wird dafür **nicht** verschärft, und das ist gemessen: von 455
+exportierten Funktionen seines Geltungsbereichs ist dies der einzige Fall. Der
+zweite Treffer war ein Fehlalarm meiner Sonde —
+`platformKeystoreModule.createLinuxElectronPlatformSecretPort(...)` ist ein
+echter Aufruf über einen Modul-Namensraum und sieht aus wie ein Methodenaufruf.
+Eine Regel, die beide trennen soll, erzeugt Rauschen für einen Fund. Das tote
+Hauptbuch ist stattdessen weg.
+
 **B149 — Drei Ausnahmelisten sagten nicht, ob es ihren Gegenstand noch gibt
 (2026-09-11).** Der Grundsatz steht seit Befund B115 im Baum: *eine Liste sagt,
 was erlaubt ist — nie, ob es das noch gibt.* `check-capability-reach.mjs` hat

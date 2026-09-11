@@ -15,6 +15,10 @@ import {
 } from '@pico/protocol';
 import { createPicoTestFirstDeviceEvidence } from './test-first-device-evidence.js';
 import { EventStore } from './event-store.js';
+import {
+  decidePicoLinkPush,
+  picoLinkPushLedgerHorizonMs,
+} from './link-push-floor.js';
 import type { MigrationDefinition } from './migrations.js';
 
 const tempDirs: string[] = [];
@@ -831,6 +835,97 @@ function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
     createdAt: foundedAt,
   };
 }
+
+/**
+ * ADR 0150 PU5 auf dem Weg, den das Produkt geht (Befund B150, 2026-09-11).
+ *
+ * **Die Regel gegen das zweite Wecken war nur gegen ein Modell bewiesen.**
+ * `link-push-floor.test.ts` zeigt sie an einer reinen Funktion ueber einem
+ * Array - und die hat keinen Produktaufrufer: das Home haengt an SQLite an und
+ * raeumt getrennt auf. Auf *dieser* Seite hielt sie nichts. Die Pflanzung
+ * „`isPicoUniqueConstraintViolation` erkennt nichts mehr" liess alle 1.153
+ * Pruefungen des Kerns gruen, obwohl damit jede Bedingungsverletzung des
+ * Speichers ungefangen entkommt.
+ *
+ * Was PU5 verhindert, ist ein Home, das dasselbe Ereignis wieder und wieder
+ * auf das Geraet einer Person schiebt - der Batterieangriff, von ihm selbst
+ * ausgefuehrt. Die Regel dagegen haelt allein das Schema.
+ */
+describe('ADR 0150 PU5 - the push ledger the Home actually writes', () => {
+  const device = 'a'.repeat(64);
+  const pushedAt = '2026-09-11T12:00:00.000Z';
+
+  it('refuses a second row for the same device, occasion and event', () => {
+    const store = new EventStore(createDatabasePath());
+    store.recordPicoLinkPush({
+      deviceSigningKeyFingerprintHex: device,
+      occasion: 'device_recovery_pending',
+      eventId: 'recovery-1',
+      pushedAt,
+    });
+    expect(() => store.recordPicoLinkPush({
+      deviceSigningKeyFingerprintHex: device,
+      occasion: 'device_recovery_pending',
+      eventId: 'recovery-1',
+      pushedAt: '2026-09-11T12:30:00.000Z',
+    })).toThrow('pico_link_push_already_recorded');
+    expect(store.picoLinkPushLedger()).toHaveLength(1);
+
+    // Ein anderes Ereignis ist ein anderer Push, und eine andere Gelegenheit
+    // ebenso - die Bedingung ist das Tripel und nicht das Geraet.
+    store.recordPicoLinkPush({
+      deviceSigningKeyFingerprintHex: device,
+      occasion: 'objection_window_closing',
+      eventId: 'recovery-1',
+      pushedAt,
+    });
+    expect(store.picoLinkPushLedger()).toHaveLength(2);
+    store.close();
+  });
+
+  it('keeps the row long enough that the decision still refuses a retry', () => {
+    const store = new EventStore(createDatabasePath());
+    store.recordPicoLinkPush({
+      deviceSigningKeyFingerprintHex: device,
+      occasion: 'device_recovery_pending',
+      eventId: 'recovery-1',
+      pushedAt,
+    });
+    const twelveHoursLater = Date.parse(pushedAt) + 12 * 60 * 60 * 1_000;
+    expect(decidePicoLinkPush({
+      ledger: store.picoLinkPushLedger(),
+      deviceSigningKeyFingerprintHex: device,
+      occasion: 'device_recovery_pending',
+      eventId: 'recovery-1',
+      nowMs: twelveHoursLater,
+    }).reason).toBe('already_pushed_for_this_event');
+    store.close();
+  });
+
+  it('forgets only past the horizon, and the refusal goes with it', () => {
+    const store = new EventStore(createDatabasePath());
+    store.recordPicoLinkPush({
+      deviceSigningKeyFingerprintHex: device,
+      occasion: 'device_recovery_pending',
+      eventId: 'recovery-1',
+      pushedAt,
+    });
+    // Der Stichtag ist der, den `app.ts` rechnet: jetzt minus Horizont. Mit
+    // dieser Formel geschrieben, damit der Test den Ausdruck prueft, den das
+    // Produkt benutzt, und nicht einen daneben.
+    const cutoffAt = (nowMs: number): string =>
+      new Date(nowMs - picoLinkPushLedgerHorizonMs).toISOString();
+
+    const twelveHours = Date.parse(pushedAt) + 12 * 60 * 60 * 1_000;
+    expect(store.prunePicoLinkPushLedger(cutoffAt(twelveHours))).toBe(0);
+    expect(store.picoLinkPushLedger()).toHaveLength(1);
+
+    const pastTheHorizon = Date.parse(pushedAt) + picoLinkPushLedgerHorizonMs + 1_000;
+    expect(store.prunePicoLinkPushLedger(cutoffAt(pastTheHorizon))).toBe(1);
+    expect(store.picoLinkPushLedger()).toEqual([]);
+    store.close();
+  });
+});
 
 function backupAwareTestMigrations(): readonly MigrationDefinition[] {
   return [

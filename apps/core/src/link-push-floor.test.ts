@@ -3,7 +3,6 @@ import {
   decidePicoLinkPush,
   minPicoLinkPushIntervalMs,
   picoLinkPushOccasions,
-  recordPicoLinkPush,
   type PicoLinkPushLedgerEntry,
 } from './link-push-floor.js';
 
@@ -103,30 +102,11 @@ describe('ADR 0150 PU5 - when a Home may push', () => {
   });
 });
 
-describe('ADR 0150 PU5 - the ledger', () => {
-  it('records a push and forgets past the horizon it was given', () => {
-    const old = entry({ eventId: 'recovery-0', atMs: nowMs - 10_000 });
-    const kept = recordPicoLinkPush({
-      ledger: [old], entry: entry(), retentionMs: 60_000,
-    });
-    expect(kept.map((held) => held.eventId)).toEqual(['recovery-0', 'recovery-1']);
+/**
+ * Befund B150. Hier standen zwei Tests der reinen `recordPicoLinkPush`, und
+ * die hatte keinen Produktaufrufer: das Home haengt an SQLite an. Was sie
+ * bewiesen - ein Eintrag ueberlebt lange genug, um eine Wiederholung noch
+ * abzulehnen -, steht jetzt in `event-store.test.ts` gegen den Weg, den das
+ * Produkt geht, samt der Ablehnung, die das Schema selbst ausspricht.
+ */
 
-    const pruned = recordPicoLinkPush({
-      ledger: [old], entry: entry(), retentionMs: 5_000,
-    });
-    expect(pruned.map((held) => held.eventId)).toEqual(['recovery-1']);
-  });
-
-  it('keeps an entry long enough to still refuse a retry', () => {
-    // The no-retry rule outlives the floor, so retention has to cover the
-    // event rather than five minutes.
-    const ledger = recordPicoLinkPush({
-      ledger: [], entry: entry(), retentionMs: 24 * 60 * 60 * 1_000,
-    });
-    expect(decidePicoLinkPush({
-      ledger, deviceSigningKeyFingerprintHex: device,
-      occasion: 'device_recovery_pending', eventId: 'recovery-1',
-      nowMs: nowMs + 12 * 60 * 60 * 1_000,
-    }).reason).toBe('already_pushed_for_this_event');
-  });
-});

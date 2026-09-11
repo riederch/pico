@@ -135,23 +135,27 @@ export function decidePicoLinkPush(input: {
 }
 
 /**
- * Records a push that was sent, and forgets what can no longer refuse
- * anything.
+ * **Hier stand ein zweites Hauptbuch, und das Produkt fuehrte es nie**
+ * (Befund B150, 2026-09-11). `recordPicoLinkPush` haengte einen Eintrag an ein
+ * Array und schnitt dabei nach einer Aufbewahrungsfrist ab. Das Home haengt an
+ * `pico_link_push_ledger` an und raeumt getrennt auf - die Funktion hatte
+ * keinen Aufrufer ausser ihren eigenen Tests.
  *
- * An entry is kept while it could still say `too_soon` **or** name an event
- * already pushed for. The second outlives the first, so entries are pruned by
- * a retention that has to cover the events themselves - a recovery window, not
- * five minutes. Kept simple here: the caller passes the horizon it wants,
- * because how long an event stays the same event is that caller's question.
+ * **Warum sie niemandem auffiel**, und das ist der eigentliche Fund:
+ * `EventStore` hat eine Methode desselben Namens, und
+ * `check-capability-reach.mjs` sucht nach `\bname\b`. Ein
+ * `store.recordPicoLinkPush(...)` in `app.ts` liess die freie Funktion also
+ * erreicht aussehen. Ein Name ist keine Regel (Befund B124), eine Ebene ueber
+ * dem Code.
+ *
+ * **Der Pruefer wird dafuer nicht verschaerft**, gemessen am selben Tag: von
+ * 455 exportierten Funktionen seines Geltungsbereichs war dies der einzige
+ * Fall. Der zweite Treffer der Messung - `createLinuxElectronPlatformSecretPort`
+ * - war ein Fehlalarm der Sonde: ein Aufruf ueber einen Modul-Namensraum sieht
+ * aus wie ein Methodenaufruf und ist keiner. Eine Regel, die beide trennen
+ * soll, erzeugt Rauschen fuer einen Fund.
+ *
+ * Was die Tests der Funktion bewiesen - ein Eintrag ueberlebt lange genug, um
+ * eine Wiederholung noch abzulehnen -, steht jetzt in `event-store.test.ts`
+ * gegen den Weg, den das Produkt geht.
  */
-export function recordPicoLinkPush(input: {
-  ledger: readonly PicoLinkPushLedgerEntry[];
-  entry: PicoLinkPushLedgerEntry;
-  retentionMs: number;
-}): readonly PicoLinkPushLedgerEntry[] {
-  const horizon = input.entry.atMs - input.retentionMs;
-  return Object.freeze([
-    ...input.ledger.filter((entry) => entry.atMs > horizon),
-    Object.freeze({ ...input.entry }),
-  ]);
-}

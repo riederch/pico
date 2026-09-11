@@ -7269,7 +7269,13 @@ export class EventStore {
         `)
         .run(input.deviceSigningKeyFingerprintHex, input.occasion, input.eventId, input.pushedAt);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('UNIQUE')) {
+      // Befund B150. Stand hier als eigene, schwaechere Schreibweise derselben
+      // Frage - `'UNIQUE'` statt `'UNIQUE constraint failed'` -, und sie haengt
+      // an genau der Tatsache, die `isPicoUniqueConstraintViolation` unten
+      // begruendet: der Primaerschluessel dieser Tabelle meldet sich als
+      // UNIQUE-Verletzung. Ein Satz, der auf einer Begruendung ruht, gehoert
+      // neben die Begruendung.
+      if (isPicoUniqueConstraintViolation(error)) {
         throw new Error('pico_link_push_already_recorded');
       }
       throw error;
