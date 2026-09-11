@@ -128,12 +128,11 @@ for (const dockerfilePath of picoDockerfiles(repoRoot)) {
  * nachgebaut, nur Namen verglichen, denn ein Name, der in einer Datei steht
  * und in der anderen fehlt, ist die Frage.
  */
+const exemptSeen = new Set();
 const dockerignoreExempt = new Map([
   ['!.env.example', 'eine Ausnahme *von* einer Ausnahme; sie schliesst nichts aus'],
   ['*.py[cod]', 'Glob-Klassen in eckigen Klammern kennt `.dockerignore` nicht; '
     + '`__pycache__` deckt dieselben Dateien'],
-  ['/.claude/settings.local.json', 'als `.claude/settings.local.json` ohne fuehrenden '
-    + 'Schraegstrich eingetragen - dieselbe Datei, andere Schreibweise'],
 ]);
 {
   const gitignore = readFileSync(join(repoRoot, '.gitignore'), 'utf8');
@@ -151,10 +150,16 @@ const dockerignoreExempt = new Map([
     }
     compared += 1;
     const name = line.replace(/^\*\*\//u, '').replace(/\/$/u, '');
+    // Der fuehrende Schraegstrich ist eine Schreibweise und kein anderer Name:
+    // `.gitignore` verankert damit an der Wurzel, `.dockerignore` tut das
+    // ohnehin. `/.claude/settings.local.json` und `.claude/settings.local.json`
+    // sind dieselbe Datei - was bis zum 2026-09-11 daneben als *begruendete
+    // Ausnahme* stand, obwohl diese Zeile sie laengst deckte (Befund B149).
     if (dockerNames.has(name) || dockerNames.has(name.replace(/^\//u, ''))) {
       continue;
     }
     if (dockerignoreExempt.has(line)) {
+      exemptSeen.add(line);
       continue;
     }
     errors.push(
@@ -166,6 +171,22 @@ const dockerignoreExempt = new Map([
   }
   if (compared === 0) {
     errors.push('.gitignore excluded nothing, so the build-context comparison passed over nothing.');
+  }
+  /**
+   * Befund B149. Eine Liste sagt, was erlaubt ist - nie, ob es das noch gibt.
+   * Verschwindet eine Zeile aus `.gitignore` oder kommt sie in `.dockerignore`
+   * dazu, deckt ihr Eintrag hier nichts mehr und liest sich trotzdem wie ein
+   * Grund, den jemand heute geprueft hat.
+   */
+  for (const line of dockerignoreExempt.keys()) {
+    if (exemptSeen.has(line)) {
+      continue;
+    }
+    errors.push(
+      `.dockerignore: \`${line}\` is argued here as excluded from git and not from the `
+      + 'build context, and that is no longer the case - either .gitignore stopped naming '
+      + 'it or .dockerignore now does. Take the entry out.',
+    );
   }
 }
 

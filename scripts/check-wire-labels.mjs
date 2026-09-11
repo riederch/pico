@@ -160,7 +160,23 @@ for (const root of ['apps', 'modules', 'packages']) {
      * Tests may name a value: pinning the exact bytes is what a test is for,
      * and a fixture that follows a rename would stop noticing it.
      */
-    if (file.endsWith('.test.ts') || allowed.some((entry) => entry.file === file)) {
+    const exemption = allowed.find((entry) => entry.file === file);
+    if (exemption !== undefined) {
+      /**
+       * Was die Ausnahme deckt, wird gezaehlt statt nur uebersprungen: eine
+       * Liste sagt, was erlaubt ist - nie, ob es das noch gibt (Befund B149,
+       * 2026-09-11). Ohne diese Zaehlung bleibt ein Eintrag stehen, wenn die
+       * Datei ihren ausgeschriebenen Label verliert, und liest sich dann wie
+       * ein Urteil ueber heute.
+       */
+      for (const [value] of labels) {
+        if (readFileSync(file, 'utf8').includes(`'${value}'`)) {
+          exemption.covered = (exemption.covered ?? 0) + 1;
+        }
+      }
+      continue;
+    }
+    if (file.endsWith('.test.ts')) {
       continue;
     }
     const source = readFileSync(file, 'utf8');
@@ -194,6 +210,24 @@ for (const root of ['apps', 'modules', 'packages']) {
   }
 }
 
+/**
+ * Befund B149. Eine Liste sagt, was erlaubt ist - nie, ob es das noch gibt.
+ * Deckt ein Eintrag nichts mehr, ist er ein Satz ueber nichts, und das ist
+ * derselbe Fehler eine Ebene hoeher: `check-capability-reach.mjs` hat diese
+ * Haelfte erst bekommen, nachdem eine Pflanzung einen Namen aus dem *Pruefer*
+ * statt aus dem Code entfernt hatte und niemand es merkte.
+ */
+for (const entry of allowed) {
+  if ((entry.covered ?? 0) > 0) {
+    continue;
+  }
+  errors.push(
+    `${relative(repoRoot, entry.file)} is argued here as spelling a protocol label out `
+    + 'anyway, and it spells none. Take the entry out: an exemption that covers nothing '
+    + 'reads like a judgement somebody made about today.',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Wire label check failed:');
   for (const error of errors) {
@@ -205,7 +239,7 @@ if (errors.length > 0) {
 console.log(
   `Wire label check passed (${labels.size} protocol labels spelled once, `
   + `${versions.size} versioned stems held to the versions the protocol exports, `
-  + `${allowed.length} argued exemptions).`,
+  + `${allowed.length} argued exemptions, each still covering something).`,
 );
 
 function sourceFiles(directory) {

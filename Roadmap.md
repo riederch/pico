@@ -912,6 +912,33 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B149 — Drei Ausnahmelisten sagten nicht, ob es ihren Gegenstand noch gibt
+(2026-09-11).** Der Grundsatz steht seit Befund B115 im Baum: *eine Liste sagt,
+was erlaubt ist — nie, ob es das noch gibt.* `check-capability-reach.mjs` hat
+diese zweite Hälfte, und zwar erst, seit eine Pflanzung einen Namen aus dem
+*Prüfer* statt aus dem Code entfernte und niemand es merkte. Am selben Tag hat
+`check-vacuous-gates.mjs` mir dasselbe vorgeführt, als mein eigener neuer
+Eintrag einen zusammengesetzten Schlüssel als Pfad ausgab.
+
+Gemessen über die 63 Prüfer: **sechzehn** führen eine Ausnahmeliste, **zwölf**
+halten sie gegen den Baum, **vier** nicht. Einer der vier war ein Fehlalarm
+meiner Suche — `check-style-names.mjs` baut seine Menge, statt Ausnahmen zu
+führen. Bleiben drei, und alle drei haben die Hälfte jetzt.
+
+**Und einer fand auf seinem ersten Lauf sofort etwas** — dieselbe Art, in der
+`check-fingerprint-display.mjs` seinerzeit seinen zweiten Eintrag fand.
+`check-workflow-pinning.mjs` nahm `/.claude/settings.local.json` als begründete
+Ausnahme, weil `.dockerignore` die Datei ohne führenden Schrägstrich führt. Nur
+**normalisiert die Zeile zwei Stück darüber genau diesen Schrägstrich schon
+weg**, greift also vorher — der Eintrag ist nie befragt worden. Er war von
+Anfang an tot und las sich trotzdem wie ein Grund, den jemand geprüft hat. Das
+Wissen darin stimmt und steht jetzt als Kommentar an der Zeile, die es
+anwendet.
+
+Die anderen beiden Listen decken noch etwas: die zwei ausgeschriebenen
+Wire-Labels und die zwei Fingerabdruck-Ableitungen. Der Preis ist damit wieder
+null, und drei Tore halten, was sie versprechen.
+
 **B148 — Eine Regel namens Trennung trennte nur in eine Richtung
 (2026-09-11).** Auf der Suche nach einem Schnitt für den blinden Fleck aus B145
 fiel ein Paar auf, das zwei Ablehnungsnamen über eine Paketgrenze teilt, ohne

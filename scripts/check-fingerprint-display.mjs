@@ -226,6 +226,35 @@ for (const file of [
   }
 }
 
+/**
+ * Befund B149. Eine Liste sagt, was erlaubt ist - nie, ob es das noch gibt.
+ * Ein Eintrag, dessen Datei nichts mehr verkuerzt, ist ein Satz ueber nichts -
+ * und dieser Pruefer traegt in seinem Kopf schon, dass er den zweiten Eintrag
+ * "auf seinem ersten Lauf" gefunden hat. Ein dritter, der stehen bleibt,
+ * nachdem sein Grund verschwunden ist, waere die Umkehrung davon.
+ */
+for (const path of allowed.keys()) {
+  let file;
+  try {
+    file = readFileSync(join(repoRoot, path), 'utf8');
+  } catch {
+    // Dass es die Datei gibt, haelt `check-vacuous-gates.mjs`; hier geht es nur
+    // darum, ob sie noch etwas deckt.
+    continue;
+  }
+  const code = withoutComments(file);
+  const coversSomething = (printsAnEllipsis.test(code) && shortensSomething.test(code))
+    || [...file.matchAll(ellipsisSlice)].length > 0
+    || [...file.matchAll(fingerprintSlice)].length > 0;
+  if (!coversSomething) {
+    errors.push(
+      `${path} is argued in \`allowed\` as deriving something from a fingerprint, and it `
+      + 'shortens nothing any more. Take the entry out: an exemption that covers nothing '
+      + 'reads like a judgement somebody made about today.',
+    );
+  }
+}
+
 for (const [root, count] of scannedPerRoot) {
   if (count === 0) {
     errors.push(
@@ -246,7 +275,7 @@ if (errors.length > 0) {
 console.log(
   `Fingerprint display check passed (${scanned} source files across `
   + `${scannedPerRoot.size} roots, each of which answered,`
-  + ` ${allowed.size - 1} derivations and ${shortensForTypography.size} width-fit exempt with`
+  + ` ${allowed.size - 1} derivations and ${shortensForTypography.size} width-fit exempt, each still covering something, with`
   + ' reasons, one rule for showing a key'
   + ' to a person - the window included).',
 );
