@@ -1,4 +1,4 @@
-import { bytesToHex } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hexToBytes } from '@pico/protocol/canonical-bytes';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -5178,10 +5178,6 @@ function keyRecordFingerprintHex(keyRecord: PicoIdentityKeyRecordSignatureInput)
     buildPicoIdentityKeyRecordSignatureInput(keyRecord),
     null,
   ));
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  return Uint8Array.from(Buffer.from(hex, 'hex'));
 }
 
 /** Reads an item the way a key-holding reader would, after the app let go of the database. */

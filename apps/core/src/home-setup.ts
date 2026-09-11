@@ -1,4 +1,22 @@
-import { bytesToHex } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hexToBytes } from '@pico/protocol/canonical-bytes';
+
+/**
+ * Dieselbe Regel, eigener Ablehnungssatz - und deshalb ein eigener Name
+ * (Befund B138).
+ *
+ * Die Regel steht im Protokoll und wird von dort geholt; was hier oertlich
+ * bleibt, ist nur die Vorgabe fuer den Satz: hier liest ein Betreiber die
+ * Meldung, und `invalid_hex` sagt ihm nicht, welches Material gemeint war.
+ *
+ * Sie hiess beim Schreiben zuerst auch `hexToBytes`, und `canonical:check` hat
+ * das gemeldet - zu Recht. Ein Name ist keine Regel (Befund B124): wer diesen
+ * Namen ein zweites Mal vergibt, verdeckt genau die Frage, die der Pruefer
+ * stellt.
+ */
+const hostKeyHexToBytes = (
+  hex: string,
+  errorMessage = 'Pico Home host key material must be lowercase hex.',
+): Uint8Array => hexToBytes(hex, errorMessage);
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -213,9 +231,9 @@ export class HomeHostKeyStore {
     label = 'Pico Home sealed payload',
   ): string {
     const keyAgreement = readStoredKeyPair(sodium, this.keyPath(HOST_KEY_AGREEMENT_KEY_FILE), 'home_host_key_agreement');
-    const ciphertext = hexToBytes(sealedPayloadHex, `${label} must be lowercase hex.`);
-    const publicKey = hexToBytes(keyAgreement.publicKeyHex);
-    const privateKey = hexToBytes(keyAgreement.privateKeyHex);
+    const ciphertext = hostKeyHexToBytes(sealedPayloadHex, `${label} must be lowercase hex.`);
+    const publicKey = hostKeyHexToBytes(keyAgreement.publicKeyHex);
+    const privateKey = hostKeyHexToBytes(keyAgreement.privateKeyHex);
 
     try {
       const plaintext = sodium.crypto_box_seal_open(ciphertext, publicKey, privateKey);
@@ -245,7 +263,7 @@ export class HomeHostKeyStore {
     recipientPublicKeyHex: string,
     plaintext: string,
   ): string {
-    const recipient = hexToBytes(recipientPublicKeyHex, 'Reply key must be lowercase hex.');
+    const recipient = hostKeyHexToBytes(recipientPublicKeyHex, 'Reply key must be lowercase hex.');
     const message = new TextEncoder().encode(plaintext);
 
     try {
@@ -295,7 +313,7 @@ export class HomeHostKeyStore {
 
   public signWithStagedSigningKey(sodium: HomeHostKeyStoreSodium, signatureInput: Uint8Array): string {
     const signing = readStoredKeyPair(sodium, this.keyPath(STAGED_HOST_SIGNING_KEY_FILE), 'home_host_signing');
-    const privateKey = hexToBytes(signing.privateKeyHex);
+    const privateKey = hostKeyHexToBytes(signing.privateKeyHex);
     try {
       return bytesToHex(sodium.crypto_sign_detached(signatureInput, privateKey));
     } finally {
@@ -371,7 +389,7 @@ export class HomeHostKeyStore {
 
   public signWithHostSigningKey(sodium: HomeHostKeyStoreSodium, signatureInput: Uint8Array): string {
     const signing = readStoredKeyPair(sodium, this.keyPath(HOST_SIGNING_KEY_FILE), 'home_host_signing');
-    const privateKey = hexToBytes(signing.privateKeyHex);
+    const privateKey = hostKeyHexToBytes(signing.privateKeyHex);
 
     try {
       return bytesToHex(sodium.crypto_sign_detached(signatureInput, privateKey));
@@ -489,8 +507,8 @@ function readStoredKeyPair(
     throw new Error('Pico Home host key file is invalid.');
   }
 
-  const publicKey = hexToBytes(parsed.publicKeyHex);
-  const privateKey = hexToBytes(parsed.privateKeyHex);
+  const publicKey = hostKeyHexToBytes(parsed.publicKeyHex);
+  const privateKey = hostKeyHexToBytes(parsed.privateKeyHex);
   assertExpectedKeyLengths(sodium, expectedRole, publicKey, privateKey);
 
   if (fingerprintKeyRecord(sodium, expectedRole, parsed.publicKeyHex) !== parsed.keyFingerprintHex) {
@@ -547,15 +565,6 @@ function assertExpectedKeyLengths(
     throw new Error('Pico Home host key length is invalid.');
   }
 }
-
-function hexToBytes(hex: string, errorMessage = 'Pico Home host key material must be lowercase hex.'): Uint8Array {
-  if (!/^(?:[0-9a-f]{2})+$/.test(hex)) {
-    throw new Error(errorMessage);
-  }
-
-  return Uint8Array.from(Buffer.from(hex, 'hex'));
-}
-
 
 function isWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child);

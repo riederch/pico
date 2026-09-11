@@ -1,4 +1,4 @@
-import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexToBytes } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoRecoveryCardPayload,
   buildPicoRecoveryCardScanTransport,
@@ -48,12 +48,6 @@ export interface PicoRecoveryCardContent {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hexToBytes(value: string): Uint8Array {
-  return Uint8Array.from(
-    value.match(/../gu)?.map((pair) => Number.parseInt(pair, 16)) ?? [],
-  );
 }
 
 /**

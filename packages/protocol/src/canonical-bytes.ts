@@ -258,6 +258,39 @@ export function assertExactKeys(
  * `Buffer` statt einer Schleife, weil das Protokollpaket ohnehin darauf steht
  * und die Umwandlung damit die des Laufzeitsystems ist statt einer eigenen.
  */
+/**
+ * Hex als Bytes - die Umkehrung von `bytesToHex` darunter, und bis zum
+ * 2026-09-11 achtmal geschrieben (Befund B137 zaehlte sie, B138 mass sie).
+ *
+ * **Befund B125 hat diese acht angesehen und stehen lassen**, mit dem Grund
+ * *„die Pruefungen unterscheiden sich wirklich"*. Ausgefuehrt ueber neun
+ * Eingaben stimmt das nicht: die drei Fassungen, die *pruefen*, urteilen ueber
+ * jede einzelne gleich - leer, ungerade Laenge, Grossbuchstaben, gemischt,
+ * Nicht-Hex, halber Muell, Leerzeichen, `0x`-Praefix. Sie unterscheiden sich
+ * im *Namen* der Ablehnung, und dafuer gibt es einen Parameter.
+ *
+ * **Die fuenf, die nicht pruefen, unterscheiden sich dagegen wirklich - und
+ * zwar voneinander.** `Buffer.from(h, 'hex')` schneidet still ab (`'abc'` gibt
+ * ein Byte), nimmt Grossbuchstaben an und gibt fuer `'zzzz'` nichts zurueck.
+ * Die von Hand geschriebene Paarschleife macht aus demselben `'zzzz'` **zwei
+ * Nullbytes**, aus `'aa bb'` die Bytes `[170, 11]` und aus `'0xaabb'` drei
+ * Bytes. Zwei Wege, die dasselbe heissen und aus derselben kaputten Eingabe
+ * verschiedene Antworten bauen, ohne dass einer davon meldet.
+ *
+ * Gepruefte Laenge, gepruefte Kleinschreibung, und leer ist keine leere Folge
+ * sondern eine Ablehnung - denn `hexToBytes('')` gibt sonst ein Array ohne
+ * Bytes zurueck, und ein Schluessel ohne Bytes ist kein leerer Schluessel.
+ */
+export function hexToBytes(value: unknown, reason = 'invalid_hex'): Uint8Array {
+  if (typeof value !== 'string'
+    || value.length === 0
+    || value.length % 2 !== 0
+    || !canonicalHexPattern.test(value)) {
+    throw new Error(reason);
+  }
+  return Uint8Array.from(Buffer.from(value, 'hex'));
+}
+
 export function bytesToHex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('hex');
 }

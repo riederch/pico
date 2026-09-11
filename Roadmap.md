@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B138 — Eine Entscheidung von B125, nachgemessen und umgekehrt (2026-09-11).**
+`hexToBytes` stand achtmal im Baum über sieben Rümpfen. Befund B125 hat sie
+angesehen und **stehen gelassen**, mit dem Grund *„die sieben sind wirklich
+verschieden, und zwar in der Prüfung"*. Ausgeführt über neun Eingaben stimmt
+das nicht:
+
+**Die drei prüfenden Fassungen urteilen über jede der neun Eingaben gleich** —
+leer, ungerade Länge, Großbuchstaben, gemischt, Nicht-Hex, halber Müll,
+Leerzeichen innen, `0x`-Präfix. Sie unterscheiden sich im *Namen* der
+Ablehnung, und dafür gibt es einen Parameter. Das ist dieselbe Gestalt, die
+B126 beim Zeitpunkt und B136 bei den Schlüsselmengen gefunden hat: verschieden
+im Namen, gleich im Urteil.
+
+**Die fünf ungeprüften unterscheiden sich dagegen wirklich — voneinander.**
+`Buffer.from(h, 'hex')` schneidet still ab (`'abc'` gibt ein Byte), nimmt
+Großbuchstaben an und gibt für `'zzzz'` nichts zurück. Die von Hand
+geschriebene Paarschleife macht aus demselben `'zzzz'` **zwei Nullbytes**, aus
+`'aa bb'` die Bytes 170 und 11, und aus `'0xaabb'` drei Bytes. Zwei Wege unter
+einem Namen, die aus derselben kaputten Eingabe verschiedene Antworten bauen,
+und keiner von beiden meldet etwas.
+
+**Was B125 richtig hatte:** beide Kopien auf dem Recovery-Card-Weg sind vom
+Aufrufer gedeckt. Nachgesehen, diesmal an *beiden* — B125 nannte nur eine:
+`assertPicoRecoveryCard` prüft das Muster und vergleicht den Hexwert gegen die
+Kanonisierung der Nutzlast, bevor er umgewandelt wird.
+
+Gefaltet sind sieben der acht. Die achte bleibt mit Grund, und der Grund ist
+ein anderer als bei B125: `packages/appearance` hat als einziges Paket dieses
+Baums **überhaupt keine Abhängigkeit**, und eine für eine Testvorrichtung
+anzulegen wäre eine Änderung an der Paketgrenze. Sie steht namentlich in der
+Bestandsliste von `canonical:check`, das jetzt elf Regeln hält.
+
+**Und das Tor hat meinen eigenen Griff gefangen.** `home-setup.ts` braucht
+einen eigenen Ablehnungssatz, weil dort ein Betreiber die Meldung liest und
+`invalid_hex` ihm nicht sagt, welches Material gemeint war. Ich habe die
+örtliche Vorgabe zuerst wieder `hexToBytes` genannt, und `canonical:check` hat
+das gemeldet. Sie heisst jetzt `hostKeyHexToBytes` — ein Name ist keine Regel
+(B124), und wer denselben Namen ein zweites Mal vergibt, verdeckt genau die
+Frage, die der Prüfer stellt.
+
 **B137 — Ein Format, zwanzigmal geschrieben, und die Hälfte davon baut es
 (2026-09-11).** Der Namenszähler meldete `assertLifecycleOrder` mit vier
 Fassungen über vier Rümpfen. Nachgemessen ist es viel mehr: **was eine

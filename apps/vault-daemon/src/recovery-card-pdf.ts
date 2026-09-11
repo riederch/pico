@@ -1,3 +1,4 @@
+import { hexToBytes } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoRecoveryCardScanTransport,
   picoRecoveryCardScanPrefix,
@@ -561,12 +562,6 @@ function fitText(
     shortened = shortened.slice(0, -1);
   }
   return `${shortened}…`;
-}
-
-function hexToBytes(value: string): Uint8Array {
-  return Uint8Array.from(
-    value.match(/../gu)?.map((pair) => Number.parseInt(pair, 16)) ?? [],
-  );
 }
 
 function mm(value: number): number {

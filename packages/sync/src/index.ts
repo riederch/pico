@@ -1,4 +1,4 @@
-import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexToBytes } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
 import { assertPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 
@@ -4359,13 +4359,6 @@ function generichashHex(
   return Buffer.from(
     sodium.crypto_generichash(32, input, null),
   ).toString('hex');
-}
-
-function hexToBytes(value: string): Uint8Array {
-  if (!isCanonicalHex(value)) {
-    throw new Error('invalid_hex');
-  }
-  return Buffer.from(value, 'hex');
 }
 
 function isCanonicalHex(value: string): boolean {

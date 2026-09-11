@@ -63,6 +63,15 @@ const singleTruths = [
    */
   'bytesToHex',
   /**
+   * Befund B138. Acht Fassungen, sieben Ruempfe - und Befund B125 hatte sie
+   * angesehen und mit *„die Pruefungen unterscheiden sich wirklich"* stehen
+   * lassen. Ausgefuehrt ueber neun Eingaben urteilen die drei pruefenden
+   * Fassungen ueber jede gleich; verschieden war nur der Name der Ablehnung.
+   * Die fuenf ungepruefteren unterschieden sich dagegen voneinander: aus
+   * `'zzzz'` machte die eine nichts und die andere zwei Nullbytes.
+   */
+  'hexToBytes',
+  /**
    * Befund B136. Acht Fassungen, vier Ruempfe, drei Schreibweisen - und die
    * Regel stand eine Datei weiter schon exportiert: `assertExactKeys` darunter
    * *ist* diese Funktion plus ein Wurf. Sieben der acht stimmten ueber alle
@@ -92,6 +101,17 @@ const singleTruths = [
  * Namen teilen - und die bleiben, weil sie etwas anderes tun.
  */
 const elsewhere = [
+  {
+    where: 'packages/appearance/src/test-fixtures.ts',
+    name: 'hexToBytes',
+    same: false,
+    why: 'Andere Regel unter demselben Namen, und sie bleibt dort mit Absicht (Befund B138): '
+      + 'eine Paarschleife ohne jede Pruefung, die aus `zzzz` zwei Nullbytes macht. Sie steht '
+      + 'in einer Testvorrichtung, und `packages/appearance` hat als einziges Paket dieses '
+      + 'Baums ueberhaupt keine Abhaengigkeit - eine dafuer anzulegen waere eine Aenderung an '
+      + 'der Paketgrenze und keine Aufraeumarbeit. Was sie liest, sind Fixtures aus demselben '
+      + 'Paket.',
+  },
   {
     where: 'apps/core/src/event-store.ts',
     name: 'assertAsciiToken',

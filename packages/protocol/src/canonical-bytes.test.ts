@@ -4,9 +4,11 @@ import {
   PicoCanonicalFieldError,
   assertAsciiToken,
   assertExactKeys,
+  bytesToHex,
   concatCanonicalElements,
   fixedHexBytes,
   hasExactKeys,
+  hexToBytes,
 } from './canonical-bytes.js';
 
 /**
@@ -138,5 +140,40 @@ describe('ob ein Datensatz genau diese Felder traegt (Befund B136)', () => {
     // Praedikat, also koennen die beiden nicht auseinanderlaufen.
     expect(() => assertExactKeys({ a: 1 }, ['a'], 'nope')).not.toThrow();
     expect(() => assertExactKeys({}, ['toString'], 'unexpected_field')).toThrow('unexpected_field');
+  });
+});
+
+describe('Hex als Bytes, und was bei schlechter Eingabe passiert (Befund B138)', () => {
+  it('nimmt kanonisches Hex und gibt genau diese Bytes', () => {
+    expect(Array.from(hexToBytes('00ff10'))).toEqual([0, 255, 16]);
+    expect(Array.from(hexToBytes('aa'))).toEqual([170]);
+    // Und es ist die Umkehrung des Nachbarn darueber.
+    expect(bytesToHex(hexToBytes('deadbeef'))).toBe('deadbeef');
+  });
+
+  it('weist jede Gestalt ab, die eine der acht Fassungen still angenommen hat', () => {
+    /**
+     * Ausgefuehrt ueber diese neun Eingaben unterschieden sich die acht
+     * Fassungen: `Buffer.from` schnitt ab und nahm Grossbuchstaben an, die
+     * Paarschleife machte aus `zzzz` zwei Nullbytes und aus `aa bb` die Bytes
+     * 170 und 11. Zwei Wege unter einem Namen, die aus derselben kaputten
+     * Eingabe verschiedene Antworten bauen und keiner davon meldet.
+     */
+    for (const broken of ['', 'abc', 'ABFF', 'aBfF', 'zzzz', 'aazz', 'aa bb', '0xaabb', 'a']) {
+      expect(() => hexToBytes(broken)).toThrow('invalid_hex');
+    }
+    expect(() => hexToBytes(undefined)).toThrow('invalid_hex');
+    expect(() => hexToBytes(255)).toThrow('invalid_hex');
+  });
+
+  it('weist leer ab, statt keine Bytes zurueckzugeben', () => {
+    // Ein Schluessel ohne Bytes ist kein leerer Schluessel, und ein Aufrufer,
+    // der ein leeres Array bekommt, merkt den Unterschied nicht.
+    expect(() => hexToBytes('')).toThrow('invalid_hex');
+  });
+
+  it('laesst einen Aufrufer seinen eigenen Satz waehlen', () => {
+    expect(() => hexToBytes('zz', 'Pico Home host key material must be lowercase hex.'))
+      .toThrow('Pico Home host key material must be lowercase hex.');
   });
 });
