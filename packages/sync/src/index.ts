@@ -1,3 +1,4 @@
+import { hasExactKeys } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
 import { randomUUID } from 'node:crypto';
 import {
@@ -4370,15 +4371,6 @@ function isCanonicalHex(value: string): boolean {
     && value.length > 0
     && value.length % 2 === 0
     && /^[0-9a-f]+$/.test(value);
-}
-
-function hasExactKeys(
-  record: object,
-  expectedKeys: readonly string[],
-): boolean {
-  const keys = Object.keys(record);
-  return keys.length === expectedKeys.length
-    && keys.every((key) => expectedKeys.includes(key));
 }
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {

@@ -1,3 +1,4 @@
+import { hasExactKeys } from '@pico/protocol/canonical-bytes';
 import {
   verifyPicoIdentityReaderKeyFreshnessSignature,
   type IdentityVerificationSodium,
@@ -288,15 +289,6 @@ function setBounded<TKey, TValue>(
     }
     map.delete(oldestKey);
   }
-}
-
-function hasExactKeys(
-  record: Record<string, unknown>,
-  expectedKeys: readonly string[],
-): boolean {
-  const keys = Object.keys(record);
-  return keys.length === expectedKeys.length
-    && keys.every((key) => expectedKeys.includes(key));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

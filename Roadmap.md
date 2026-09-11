@@ -912,6 +912,45 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B136 — Acht Fassungen, und die Regel stand eine Datei weiter schon
+exportiert (2026-09-11).** `hasExactKeys` — „trägt dieser Datensatz genau diese
+Felder" — stand achtmal im Baum über vier Rümpfen. Gemessen wurde nicht
+gelesen: alle vier über dreizehn Eingaben ausgeführt, darunter die Ränder, die
+ein Leser überspringt.
+
+**Sieben der acht sind eine Regel in drei Schreibweisen.** Längenvergleich mit
+`includes`, Sortieren und elementweise vergleichen, und dasselbe noch einmal mit
+anderen Variablennamen — über alle dreizehn Eingaben identisch. Und die Regel
+stand längst in `packages/protocol/src/canonical-bytes.ts`: `assertExactKeys`
+ist genau dieser Rumpf mit einem Wurf statt einem `false`. Acht Kopien einer
+Funktion, die eine Datei weiter exportiert war.
+
+**Die achte war schwächer, und zwar unsichtbar.** Sie fragte „jeder erwartete
+Schlüssel ist `in` dem Datensatz" statt „die Schlüsselmengen sind gleich". `in`
+fragt die Prototypkette mit, also galt ein Feld als vorhanden, wenn sein Name
+auf `Object.prototype` lebt: ein leerer Datensatz bestand die Prüfung gegen
+`['toString']`, und `{ a: 1 }` bestand sie gegen `['a', 'constructor']`. Zwölf
+solche Namen gibt es, darunter `valueOf`, `hasOwnProperty` und `__proto__`.
+
+Gemessen statt vermutet, bevor daraus ein Alarm wurde: **keiner der
+dreiundzwanzig Aufrufer** in dieser Datei nennt einen davon. Es war eine
+schlummernde Schwäche und kein lebender Fehler — und die Namen, um die es geht,
+sind genau die, die jemand in eine Nutzlast schreibt, der etwas versucht.
+Dieselbe Fassung duldete außerdem eine Erwartungsliste, die einen Namen zweimal
+nennt; die anderen sieben weisen sie ab.
+
+**Die Faltung ist strukturell und nicht bloß nebeneinander:** `assertExactKeys`
+ruft jetzt `hasExactKeys` und wirft, wenn es `false` sagt. Bis hierher stand die
+Regel in beiden ausgeschrieben, also konnten sie auseinanderlaufen; jetzt nicht
+mehr. `canonical:check` hält zehn Regeln statt neun.
+
+Zwei Pflanzungen, beide punktgenau: die alte schwächere Regel zurück lässt drei
+Tests fallen, eine lokale Fassung zurück lässt das Tor fallen. Damit stehen
+noch **48** Namen über verschiedenen Rümpfen; der nächste Spitzenreiter ist
+`hexToBytes` mit sieben Fassungen über sechs Regeln, und der ist in B125
+nachgesehen und mit Grund geblieben — die Prüfungen unterscheiden sich
+wirklich. Danach kommt `assertLifecycleOrder` mit vier über vier.
+
 **B135 — Der Trust-Root lag ausserhalb des Baums (2026-09-10, Paket P2 des
 externen Reviews).** Die Kette kann sich weigern, eine Version zweimal zu
 veröffentlichen, ein angehängtes Artefakt zu ersetzen und einen Tag anzunehmen,

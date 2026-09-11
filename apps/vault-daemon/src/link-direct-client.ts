@@ -1,3 +1,4 @@
+import { hasExactKeys } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoLinkDirectRequestSignatureInput,
@@ -430,13 +431,6 @@ function assertKeyRecordFingerprint(
   if (actual !== expected) {
     throw new Error(reason);
   }
-}
-
-function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  return actual.length === expected.length
-    && actual.every((key, index) => key === expected[index]);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

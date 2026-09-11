@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   PicoCanonicalFieldError,
   assertAsciiToken,
+  assertExactKeys,
   concatCanonicalElements,
   fixedHexBytes,
+  hasExactKeys,
 } from './canonical-bytes.js';
 
 /**
@@ -84,5 +86,57 @@ describe('ADR 0106 R5 eine Ebene tiefer - ein Feld wird zu Bytes', () => {
     expect([...fixedHexBytes('00ff', 2, 'wrong_length')]).toEqual([0, 255]);
     expect(() => fixedHexBytes('00FF', 2, 'wrong_length')).toThrow('invalid_hex');
     expect(() => fixedHexBytes('00', 2, 'wrong_length')).toThrow('wrong_length');
+  });
+});
+
+describe('ob ein Datensatz genau diese Felder traegt (Befund B136)', () => {
+  it('nimmt dieselbe Menge in jeder Reihenfolge und weist jede andere ab', () => {
+    expect(hasExactKeys({ a: 1, b: 2 }, ['a', 'b'])).toBe(true);
+    expect(hasExactKeys({ b: 2, a: 1 }, ['a', 'b'])).toBe(true);
+    expect(hasExactKeys({}, [])).toBe(true);
+    expect(hasExactKeys({ a: 1, b: 2, c: 3 }, ['a', 'b'])).toBe(false);
+    expect(hasExactKeys({ a: 1 }, ['a', 'b'])).toBe(false);
+    expect(hasExactKeys({}, ['a'])).toBe(false);
+  });
+
+  it('zaehlt ein Feld mit dem Wert `undefined` als vorhanden', () => {
+    // `Object.keys` sieht es, also ist es da. Wer etwas anderes will, prueft
+    // den Wert - nicht die Schluesselmenge.
+    expect(hasExactKeys({ a: undefined }, ['a'])).toBe(true);
+  });
+
+  it('haelt einen Namen von `Object.prototype` nicht fuer ein Feld', () => {
+    /**
+     * **Die Schwaeche, die eine der acht Fassungen hatte** (Befund B136). Sie
+     * fragte `key in record` statt die Schluesselmengen zu vergleichen, und
+     * `in` sieht die Prototypkette mit. Ein leerer Datensatz bestand damit die
+     * Pruefung gegen `['toString']`, und `{ a: 1 }` bestand sie gegen
+     * `['a', 'constructor']`.
+     *
+     * Zwoelf solche Namen gibt es - `constructor`, `valueOf`,
+     * `hasOwnProperty`, `__proto__` und die uebrigen -, und es sind genau die,
+     * die jemand in eine Nutzlast schreibt, der etwas versucht.
+     */
+    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
+      expect(hasExactKeys({}, [name])).toBe(false);
+      expect(hasExactKeys({ a: 1 }, ['a', name])).toBe(false);
+    }
+    // Und ein Feld, das wirklich so heisst, zaehlt trotzdem.
+    expect(hasExactKeys(JSON.parse('{"toString":1}'), ['toString'])).toBe(true);
+  });
+
+  it('weist eine doppelt genannte Erwartung ab, statt sie wegzukuerzen', () => {
+    // Eine Liste, die einen Namen zweimal nennt, ist ein Fehler beim Aufrufer.
+    // Ihn stillschweigend zu dulden hiesse, den einen Fall zu verstecken, in
+    // dem die Erwartung selbst kaputt ist.
+    expect(hasExactKeys({ a: 1 }, ['a', 'a'])).toBe(false);
+    expect(hasExactKeys({ a: 1, b: 2 }, ['a', 'a', 'b'])).toBe(false);
+  });
+
+  it('ist die Regel, die `assertExactKeys` wirft', () => {
+    // Strukturell und nicht nebeneinander: die Zusicherung ruft dieses
+    // Praedikat, also koennen die beiden nicht auseinanderlaufen.
+    expect(() => assertExactKeys({ a: 1 }, ['a'], 'nope')).not.toThrow();
+    expect(() => assertExactKeys({}, ['toString'], 'unexpected_field')).toThrow('unexpected_field');
   });
 });

@@ -1,3 +1,4 @@
+import { hasExactKeys } from './canonical-bytes.js';
 import {
   picoConfidenceLevels,
   picoConfidenceRank,
@@ -110,12 +111,6 @@ export interface PicoParkingCandidate {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-function hasExactKeys(record: Record<string, unknown>, expected: readonly string[]): boolean {
-  const keys = Object.keys(record).sort();
-  const wanted = [...expected].sort();
-  return keys.length === wanted.length && keys.every((key, index) => key === wanted[index]);
 }
 
 function asRecord(value: unknown, reason: string): Record<string, unknown> {

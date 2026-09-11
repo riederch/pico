@@ -1,3 +1,4 @@
+import { hasExactKeys } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
@@ -656,16 +657,6 @@ function nextLifecycleOrder(current: string, offset: bigint = 1n): string {
 
 function randomId(sodium: VaultSodium, prefix: string): string {
   return `${prefix}_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`;
-}
-
-function hasExactKeys(
-  value: Record<string, unknown>,
-  keys: readonly string[],
-): boolean {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  return actual.length === expected.length
-    && actual.every((key, index) => key === expected[index]);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

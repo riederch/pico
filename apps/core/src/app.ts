@@ -1,4 +1,4 @@
-import { bytesToHex } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hasExactKeys } from '@pico/protocol/canonical-bytes';
 import { isPicoInstant } from '@pico/protocol/instant';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
@@ -9830,12 +9830,6 @@ function stringField(source: Record<string, unknown>, key: string, error = 'Pico
   }
 
   return value;
-}
-
-function hasExactKeys(source: Record<string, unknown>, expectedKeys: readonly string[]): boolean {
-  const expected = new Set(expectedKeys);
-  return Object.keys(source).every((key) => expected.has(key))
-    && expectedKeys.every((key) => key in source);
 }
 
 function isNonEmptyString(value: unknown, maxLength: number): value is string {

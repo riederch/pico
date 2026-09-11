@@ -197,15 +197,44 @@ export function fixedHexBytes(
  * bekamen: **von einer Stichprobe auf die Menge geschlossen**, und die Tests
  * haben es gefangen, nicht das Nachdenken.
  */
+/**
+ * Ob ein Datensatz genau diese Felder traegt, nicht mehr und nicht weniger.
+ *
+ * **Die Praedikatsform derselben Regel, die `assertExactKeys` darunter wirft**
+ * - und sie stand achtmal im Baum (Befund B136): einmal in `app.ts`, zweimal
+ * als Laengenvergleich, viermal im Vault-Daemon und einmal im Protokoll
+ * selbst, das die Regel eine Datei weiter schon exportierte. Sieben davon
+ * stimmen ueber alle dreizehn gemessenen Eingaben mit dieser hier ueberein;
+ * sie waren dieselbe Regel in drei Schreibweisen.
+ *
+ * **Die achte war schwaecher, und zwar auf eine Art, die man nicht sieht.**
+ * Sie pruefte „jeder erwartete Schluessel ist `in` dem Datensatz" statt „die
+ * Schluesselmengen sind gleich". `in` fragt die Prototypkette mit, also galt
+ * ein Feld als vorhanden, wenn sein Name auf `Object.prototype` lebt: ein
+ * leerer Datensatz bestand die Pruefung gegen `['toString']`, und `{a: 1}`
+ * bestand sie gegen `['a', 'constructor']`. Zwoelf solche Namen gibt es,
+ * darunter `valueOf`, `hasOwnProperty` und `__proto__`. Gemessen: keiner der
+ * dreiundzwanzig Aufrufer nannte einen davon, es war also eine schlummernde
+ * Schwaeche und kein lebender Fehler - aber die Namen, um die es geht, sind
+ * genau die, die ein Angreifer in eine Nutzlast schreibt.
+ *
+ * Dass die Zusicherung darunter diese Funktion *benutzt*, ist der Punkt: sie
+ * ist das Praedikat plus ein Wurf, also koennen die beiden nicht
+ * auseinanderlaufen. Bis hierher stand die Regel in beiden ausgeschrieben.
+ */
+export function hasExactKeys(record: object, keys: readonly string[]): boolean {
+  const actual = Object.keys(record).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
+}
+
 export function assertExactKeys(
   record: Record<string, unknown>,
   keys: readonly string[],
   error: string,
 ): void {
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])) {
+  if (!hasExactKeys(record, keys)) {
     throw new Error(error);
   }
 }

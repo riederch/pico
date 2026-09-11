@@ -62,6 +62,15 @@ const singleTruths = [
    * Zeichenkette Hex bleibt und nur kuerzer wird.
    */
   'bytesToHex',
+  /**
+   * Befund B136. Acht Fassungen, vier Ruempfe, drei Schreibweisen - und die
+   * Regel stand eine Datei weiter schon exportiert: `assertExactKeys` darunter
+   * *ist* diese Funktion plus ein Wurf. Sieben der acht stimmten ueber alle
+   * gemessenen Eingaben ueberein; die achte fragte `in` statt die
+   * Schluesselmengen zu vergleichen und hielt damit jeden Namen fuer
+   * vorhanden, der auf `Object.prototype` lebt.
+   */
+  'hasExactKeys',
   'canonicalTextEncoder',
   'canonicalAsciiTokenPattern',
   'canonicalHexPattern',
