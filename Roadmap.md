@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B139 — Die Namensliste sieht die Hälfte nicht, und die andere Hälfte ist
+gefährlicher (2026-09-11, Messung ohne Änderung).** Vier Befunde hintereinander
+haben mehr Stellen gefunden, als der Namenszähler sah — zwanzig statt vier bei
+der Lebenslaufordnung, acht statt vier bei `hexToBytes`. Der Grund ist immer
+derselbe: eine Regel ohne Namen zählt er nicht. Also ist die Liste diesmal
+zweimal gemessen worden.
+
+**Die Namen:** 1.595 Funktionsnamen im Produktcode, 60 stehen mehr als einmal,
+**46** über verschiedenen Rümpfen (48 vor B137 und B138). Die Spitze ist flach
+geworden — `assertFingerprint` mit 4 Fassungen über 3 Rümpfen ist der grösste
+verbliebene Posten, danach lauter Dreier.
+
+**Und das, was der Namenszähler nicht sieht:** 60 verankerte Muster
+(`/^…$/`) stehen im Produktcode, **20 davon in mehr als einer Datei**. Der
+Spitzenreiter ist keine Randnotiz:
+
+| Muster | Dateien | Was es meint |
+|---|---|---|
+| `/^[0-9a-f]{64}$/` | **26** | zweiunddreissig Bytes als Hex |
+| `/^[A-Za-z0-9._:/+-]{1,1024}$/` | 9 | kanonisches Token mit Längengrenze |
+| `/^[0-9a-f]{128}$/` | 7 | vierundsechzig Bytes als Hex |
+| `/^[0-9a-f]+$/` | 5 | Hex überhaupt |
+| `/^[A-Za-z0-9._:/+-]{1,256}$/` | 5 | dasselbe Token, andere Grenze |
+
+**Zwei davon sind schlichte Kopien einer exportierten Konstante:**
+`canonicalHexPattern` ist `/^[0-9a-f]+$/` und steht in `canonical-bytes.ts`,
+und trotzdem steht dasselbe Muster in vier weiteren Dateien von Hand. Bei den
+Tokenmustern ist es subtiler: die exportierte Konstante trägt **keine**
+Längengrenze — die prüft `assertAsciiToken` daneben —, die neun inline
+geschriebenen verschmelzen beides. Das ist keine Kopie, das ist eine zweite
+Regel, die aussieht wie die erste.
+
+**Aber die 26 sind eine Falle, und deshalb steht hier eine Warnung statt einer
+Empfehlung zum Falten.** Dieselbe Form bewacht mindestens vier verschiedene
+Begriffe: Schlüssel-*Fingerabdrücke*, *öffentliche Schlüssel* (in
+`apps/companion/src/founding.ts` stehen `fingerprintPattern` und
+`publicKeyPattern` direkt untereinander, byte-gleich), *Digests*
+(`claimDigestHex`, `previousDigestHex`, `contentHashPattern`) und in
+`library-pin.ts` einen Zweig der Git-Commit-Form. Nach Form zu falten hiesse,
+vier Begriffe unter eine Regel zu ziehen — genau die Umkehrung von B124.
+**Eine Form ist kein Begriff.**
+
+Was stattdessen trägt: die *syntaktische* Tatsache „so viele Bytes als
+Kleinbuchstaben-Hex" einmal schreiben, und jeder Begriff behält seinen Namen
+und seine Ablehnung darauf — dieselbe Gestalt wie `assertPicoInstant(wert,
+grund)`. Die Dekodierseite gibt es schon: `fixedHexBytes(wert, bytes, grund)`
+in `canonical-bytes.ts`. Was fehlt, ist das Prädikat daneben.
+
+Nichts davon ist in diesem Befund geändert worden; er ist eine Messung, damit
+die nächste Sitzung sie nicht wiederholt.
+
 **B138 — Eine Entscheidung von B125, nachgemessen und umgekehrt (2026-09-11).**
 `hexToBytes` stand achtmal im Baum über sieben Rümpfen. Befund B125 hat sie
 angesehen und **stehen gelassen**, mit dem Grund *„die sieben sind wirklich
