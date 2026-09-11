@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -182,7 +183,7 @@ function publishedHead(
   } catch {
     return {};
   }
-  if (!/^[0-9a-f]{40}$/u.test(published)) {
+  if (!isHexOfBytes(published, 20)) {
     // A remote that answered something that is not a commit has answered
     // nothing this can act on, and guessing would be inventing an offer.
     return {};

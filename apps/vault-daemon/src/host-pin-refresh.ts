@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import {
   picoHomeContinuityChainSchema,
   picoIdentitySuite,
@@ -182,5 +183,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isHex64(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+  return typeof value === 'string' && isHexOfBytes(value, 32);
 }

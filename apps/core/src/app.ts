@@ -1,4 +1,4 @@
-import { bytesToHex, hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hasExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import { isPicoInstant } from '@pico/protocol/instant';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -6278,7 +6278,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               || typeof args.recoveryId !== 'string'
               || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(args.recoveryId)
               || typeof args.claimDigestHex !== 'string'
-              || !/^[0-9a-f]{64}$/u.test(args.claimDigestHex)
+              || !isHexOfBytes(args.claimDigestHex, 32)
               || homeHostKeys === undefined
             ) {
               return { outcome: 'invalid_arguments', result: {} };
@@ -8698,7 +8698,7 @@ function parsePicoHomeMembershipIssuerStatement(source: unknown): PicoHomeMember
   if (source.schema !== picoHomeMembershipCredentialSchema
     || !isRecord(source.membership)
     || !isRecord(source.issuerIdentityKeyRecord)
-    || !/^[0-9a-f]{128}$/.test(stringField(source, 'issuerSignatureHex'))) {
+    || !isHexOfBytes(stringField(source, 'issuerSignatureHex'), 64)) {
     throw new Error('Pico Home membership credential is invalid.');
   }
 
@@ -8718,7 +8718,7 @@ function parsePicoHomeDomainReadGrantStatement(
     || source.schema !== picoHomeDomainReadGrantRecordSchema
     || !isRecord(source.grant)
     || !isRecord(source.issuerIdentityKeyRecord)
-    || !/^[0-9a-f]{128}$/.test(stringField(source, 'issuerSignatureHex'))) {
+    || !isHexOfBytes(stringField(source, 'issuerSignatureHex'), 64)) {
     throw new Error('Pico Home domain read grant is invalid.');
   }
 
@@ -8738,7 +8738,7 @@ function parsePicoHomeDomainReadGrantLifecycleStatement(
     || source.schema !== picoHomeDomainReadGrantLifecycleRecordSchema
     || !isRecord(source.lifecycle)
     || !isRecord(source.issuerIdentityKeyRecord)
-    || !/^[0-9a-f]{128}$/.test(stringField(source, 'issuerSignatureHex'))) {
+    || !isHexOfBytes(stringField(source, 'issuerSignatureHex'), 64)) {
     throw new Error('Pico Home domain read-grant lifecycle statement is invalid.');
   }
 
@@ -8770,7 +8770,7 @@ function parseIdentitySessionRequest(
     || !isRecord(source.delegation)
     || !Array.isArray(source.revocations)
     || source.revocations.length > 128
-    || !/^[0-9a-f]{128}$/.test(stringField(source, 'possessionSignatureHex'))) {
+    || !isHexOfBytes(stringField(source, 'possessionSignatureHex'), 64)) {
     throw new Error('Pico identity session request is invalid.');
   }
 
@@ -8791,7 +8791,7 @@ function parseSignedPicoIdentityDelegation(source: unknown): PicoIdentitySignedD
   if (!isRecord(source)
     || !hasExactKeys(source, ['record', 'signatureHex'])
     || !isRecord(source.record)
-    || !/^[0-9a-f]{128}$/.test(stringField(source, 'signatureHex'))) {
+    || !isHexOfBytes(stringField(source, 'signatureHex'), 64)) {
     throw new Error('Pico identity delegation is invalid.');
   }
 
@@ -8805,7 +8805,7 @@ function parseSignedPicoIdentityRevocation(source: unknown): PicoIdentitySignedR
   if (!isRecord(source)
     || !hasExactKeys(source, ['record', 'signatureHex'])
     || !isRecord(source.record)
-    || !/^[0-9a-f]{128}$/.test(stringField(source, 'signatureHex'))) {
+    || !isHexOfBytes(stringField(source, 'signatureHex'), 64)) {
     throw new Error('Pico identity revocation is invalid.');
   }
 
@@ -9002,7 +9002,7 @@ function parsePicoHomeFoundingAcceptance(source: unknown): PicoHomeFoundingAccep
     acceptance.schema !== picoHomeFoundingAcceptanceSchema
     || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(acceptance.claimId)
     || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(acceptance.foundingId)
-    || !/^[0-9a-f]{128}$/.test(acceptance.claimantFoundingSignatureHex)
+    || !isHexOfBytes(acceptance.claimantFoundingSignatureHex, 64)
   ) {
     throw new Error('Pico Home founding acceptance is invalid.');
   }
@@ -9079,8 +9079,8 @@ function parsePicoHomeSealedClaimPayload(serialized: string): PicoHomeSealedClai
 
   if (payload.schema !== picoHomeSealedClaimPayloadV2Schema
     || payload.firstDeviceRevocations === undefined
-    || !/^[0-9a-f]{128}$/.test(payload.claimantSignatureHex)
-    || !/^[0-9a-f]{128}$/.test(payload.firstDeviceSignatureHex)) {
+    || !isHexOfBytes(payload.claimantSignatureHex, 64)
+    || !isHexOfBytes(payload.firstDeviceSignatureHex, 64)) {
     throw new Error('Pico Home claim payload is invalid.');
   }
 

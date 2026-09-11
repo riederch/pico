@@ -1,4 +1,4 @@
-import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { isPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   verifyPicoIdentityReaderKeyFreshnessSignature,
@@ -299,7 +299,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 
 function isHexFingerprint(value: string): boolean {
-  return /^[0-9a-f]{64}$/.test(value);
+  return isHexOfBytes(value, 32);
 }
 
 function isAsciiReference(value: string): boolean {

@@ -28,6 +28,7 @@
  * - `payload` - what, sealed.
  */
 
+import { hexOfBytesPattern } from './canonical-bytes.js';
 import { assertPicoInstant } from './instant.js';
 
 export const picoLinkPacketSchema = 'pico.link.packet.v1' as const;
@@ -41,7 +42,7 @@ export const picoLinkPacketSchema = 'pico.link.packet.v1' as const;
  * aloud, copied between devices and pasted into a credential ceremony, and the
  * character set that survives that is the boring one.
  */
-export const picoLinkMailboxPattern = /^[0-9a-f]{32}$/u;
+export const picoLinkMailboxPattern = hexOfBytesPattern(16);
 
 /**
  * The operator half of an address. A hostname, because the sender resolves it
@@ -54,7 +55,7 @@ export const picoLinkOperatorPattern =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/u;
 
 /** Fresh per packet, and reused only to retry that same packet. */
-export const picoLinkPacketTagPattern = /^[0-9a-f]{32}$/u;
+export const picoLinkPacketTagPattern = hexOfBytesPattern(16);
 
 /**
  * ADR 0147 RY6. The grid an expiry snaps to.

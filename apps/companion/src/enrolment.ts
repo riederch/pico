@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import {
   assertPicoDeviceEnrolmentGrantIsFor,
   buildPicoDeviceEnrolmentAcceptance,
@@ -481,7 +482,7 @@ export async function acceptPicoCompanionEnrolment(input: {
     });
     if (signed.keyRole !== 'device_signing'
       || signed.keyFingerprintHex !== input.device.signingKeyFingerprintHex
-      || !/^[0-9a-f]{128}$/u.test(signed.signatureHex)) {
+      || !isHexOfBytes(signed.signatureHex, 64)) {
       throw new Error('pico_companion_enrolment_signer_mismatch');
     }
 

@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { randomBytes } from 'node:crypto';
 import {
   buildPicoIdentityPossessionSignatureInput,
@@ -255,7 +256,7 @@ export function verifyIdentitySessionProof(
 }
 
 function assertFingerprint(value: string): void {
-  if (!/^[0-9a-f]{64}$/.test(value)) {
+  if (!isHexOfBytes(value, 32)) {
     throw new Error('invalid_host_signing_key_fingerprint');
   }
 }

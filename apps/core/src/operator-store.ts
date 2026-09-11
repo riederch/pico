@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import type Database from 'better-sqlite3';
 
 /**
@@ -385,7 +386,7 @@ function isAsciiToken(value: unknown): value is string {
 }
 
 function isFingerprint(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+  return typeof value === 'string' && isHexOfBytes(value, 32);
 }
 
 function isPlausiblePassphrase(passphrase: unknown): passphrase is string {

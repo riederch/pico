@@ -1,3 +1,4 @@
+import { hexOfBytesPattern } from './canonical-bytes.js';
 import { parsePicoReaderOutput, type PicoReaderOutput } from './planner-reader.js';
 
 /**
@@ -67,7 +68,7 @@ export const picoModelResultSaysNothingAbout = Object.freeze({
 });
 
 const idPattern = /^[a-z0-9][a-z0-9._:-]{0,127}$/u;
-const digestPattern = /^[0-9a-f]{64}$/u;
+const digestPattern = hexOfBytesPattern(32);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

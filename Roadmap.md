@@ -912,6 +912,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B140 — Dreiundfünfzig Stellen, eine Form, vier Begriffe (2026-09-11).** Die
+Messung aus B139 hatte den Spitzenreiter genannt: `/^[0-9a-f]{64}$/` in 26
+Dateien. Vollständig gezählt sind es **53 Stellen** über vier Bytelängen —
+31 für zweiunddreissig Bytes, 16 für vierundsechzig, 5 für sechzehn, eine für
+zwanzig. Der Namenszähler sah davon fast nichts, weil die meisten mitten in
+einer Bedingung stehen und gar keinen Namen tragen.
+
+**Gefaltet ist die Form, nicht der Begriff — und das ist die ganze Sorgfalt
+dieses Befundes.** Dieselben vierundsechzig Zeichen bewachen im Baum
+Schlüsselfingerabdrücke, öffentliche Schlüssel, Digests und einen Zweig der
+Git-Commit-Form; in `apps/companion/src/founding.ts` standen
+`fingerprintPattern` und `publicKeyPattern` byte-gleich untereinander.
+Dieselben zweiunddreissig bewachen eine Postfachadresse, einen Pakettag, ein
+Betreiberkreditiv und ein Relaiskonto — vier exportierte Konstanten, vier
+Begriffe, die nicht austauschbar sein dürfen. Sie zusammenzuziehen wäre die
+Umkehrung von B124: **eine Form ist kein Begriff.**
+
+Jeder behält Namen, Typ und Export. Was er holt, ist `isHexOfBytes(wert,
+bytes)` für die 36 Stellen, die ein Prädikat wollten, und
+`hexOfBytesPattern(bytes)` für die zwölf, die ein `RegExp` exportieren oder
+weiterreichen. Die zweite gibt es nur deshalb: ein exportiertes Muster zu einem
+Prädikat zu machen hätte die Paketoberfläche geändert, und das ist eine andere
+Entscheidung als diese.
+
+Eine Stelle bleibt und steht benannt in der Ausnahmeliste:
+`packages/appearance` hat als einziges Paket dieses Baums **überhaupt keine
+Abhängigkeit**, und eine für ein Muster anzulegen wäre eine Änderung an der
+Paketgrenze — dieselbe Begründung wie beim `hexToBytes` derselben Wurzel in
+B138. Der Prüfer fällt, wenn diese Datei verschwindet: eine Ausnahme für etwas,
+das es nicht mehr gibt, beschreibt einen Baum, den es nicht gibt.
+
+Zwei Pflanzungen, beide rot. Und zwei eigene Fehler auf dem Weg, beide vom Bau
+gefangen: mein Ersetzungsskript nahm bei zwei mehrzeiligen Aufrufen das
+Schlusskomma mit, und ein Importschritt hängte `canonical-bytes.ts` einen
+Import auf sich selbst an. Der dritte fiel erst später auf — ein Skript brach
+vor dem Speichern ab, sodass der Regelblock nie geschrieben wurde und nur der
+Schlusssatz auf ihn zeigte. Ein `ReferenceError` beim nächsten Lauf sagte es.
+
 **B139 — Die Namensliste sieht die Hälfte nicht, und die andere Hälfte ist
 gefährlicher (2026-09-11, Messung ohne Änderung).** Vier Befunde hintereinander
 haben mehr Stellen gefunden, als der Namenszähler sah — zwanzig statt vier bei

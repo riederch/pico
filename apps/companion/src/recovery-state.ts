@@ -1,4 +1,4 @@
-import { assertExactKeys } from '@pico/protocol/canonical-bytes';
+import { assertExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant, picoInstantToEpochMs } from '@pico/protocol/instant';
 import {
   chmodSync,
@@ -191,7 +191,7 @@ function requireRecord(value: unknown, reason: string): Record<string, unknown> 
 
 
 function assertHex32(value: unknown, reason: string): asserts value is string {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/u.test(value)) {
+  if (typeof value !== 'string' || !isHexOfBytes(value, 32)) {
     throw new Error(reason);
   }
 }

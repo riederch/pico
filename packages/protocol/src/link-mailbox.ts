@@ -1,3 +1,4 @@
+import { hexOfBytesPattern } from './canonical-bytes.js';
 import {
   parsePicoLinkPacketAddress,
   type PicoLinkPacketAddress,
@@ -29,7 +30,7 @@ import {
  */
 
 /** An identity key fingerprint: BLAKE2b-256, the tree's 32-byte form. */
-export const picoLinkPeerFingerprintPattern = /^[0-9a-f]{64}$/u;
+export const picoLinkPeerFingerprintPattern = hexOfBytesPattern(32);
 
 export interface PicoLinkRelationshipMailbox {
   /** Who this relationship is with. Never a name, never an account. */

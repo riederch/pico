@@ -33,6 +33,8 @@
  * for an argument's origin. A supplier asserting that its own content is
  * verified is the laundering step, not a convenience.
  */
+import { hexOfBytesPattern } from './canonical-bytes.js';
+
 export const picoLibraryPinKinds = ['content_hash', 'commit'] as const;
 
 export type PicoLibraryPinKind = typeof picoLibraryPinKinds[number];
@@ -44,7 +46,7 @@ export type PicoLibraryPinKind = typeof picoLibraryPinKinds[number];
  * guessing the kind from the length would silently mistake one for the other on
  * exactly the repositories most likely to be careful.
  */
-const contentHashPattern = /^[0-9a-f]{64}$/u;
+const contentHashPattern = hexOfBytesPattern(32);
 /**
  * What a git commit id looks like, in one place because two things pin one:
  * a tracked library here, and a Pico Depot under ADR 0143 DP1. Two copies of

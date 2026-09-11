@@ -1,10 +1,6 @@
 // Befund B51. Dieselbe Regel wie im Protokoll, nur mit einem Feldnamen -
 // jetzt von dort, wo sie einmal steht.
-import {
-  assertAsciiToken,
-  bytesToHex,
-  fixedHexBytes,
-} from '@pico/protocol/canonical-bytes';
+import { assertAsciiToken, bytesToHex, fixedHexBytes, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
 import {
   picoLifecycleOrderFrom,
@@ -1012,7 +1008,7 @@ function stableJson(value: unknown): string {
 }
 
 function assertFingerprint(value: string): void {
-  if (!/^[0-9a-f]{64}$/.test(value)) {
+  if (!isHexOfBytes(value, 32)) {
     throw new Error('invalid_fingerprint_length');
   }
 }

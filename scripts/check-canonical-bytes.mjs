@@ -300,6 +300,57 @@ for (const entry of elsewhere) {
  * Zaehlung sah: vier `assertLifecycleOrder`. Die uebrigen sechzehn hiessen
  * anders oder gar nichts.
  */
+/**
+ * Und eine dritte Regel derselben Art: so viele Bytes als Hex (Befund B140).
+ *
+ * **Dreiundfuenfzig Stellen am 2026-09-11**, gemessen in B139: einunddreissig
+ * fuer zweiunddreissig Bytes, sechzehn fuer vierundsechzig, fuenf fuer
+ * sechzehn, eine fuer zwanzig. Der Namenszaehler sah davon fast nichts, weil
+ * die meisten Stellen mitten in einer Bedingung stehen und gar keinen Namen
+ * tragen.
+ *
+ * **Was hier gehalten wird, ist die Form und nicht der Begriff.** Dieselben
+ * vierundsechzig Zeichen bewachen Fingerabdruecke, oeffentliche Schluessel,
+ * Digests und einen Zweig der Git-Commit-Form; dieselben zweiunddreissig
+ * bewachen eine Postfachadresse, einen Pakettag, ein Betreiberkreditiv und ein
+ * Relaiskonto. Jeder behaelt seinen Namen und seine Ablehnung - was er holt,
+ * ist `isHexOfBytes` oder `hexOfBytesPattern`. Sie zusammenzuziehen waere die
+ * Umkehrung von Befund B124.
+ */
+const fixedHexShape = /\/\^\[0-9a-f\]\{\d+\}\$\/[u]?/g;
+const fixedHexHome = 'packages/protocol/src/canonical-bytes.ts';
+const fixedHexAllowed = new Set([
+  // `packages/appearance` hat als einziges Paket dieses Baums ueberhaupt keine
+  // Abhaengigkeit; eine fuer ein Muster anzulegen waere eine Aenderung an der
+  // Paketgrenze. Dieselbe Begruendung wie beim `hexToBytes` derselben Wurzel.
+  'packages/appearance/src/official-generator-registry.ts',
+]);
+let fixedHexFilesRead = 0;
+for (const path of files) {
+  const shown = relative(repoRoot, path).split('\\').join('/');
+  if (shown === fixedHexHome || shown.endsWith('.test.ts') || fixedHexAllowed.has(shown)) {
+    continue;
+  }
+  fixedHexFilesRead += 1;
+  const source = readFileSync(path, 'utf8');
+  for (const _ of source.matchAll(fixedHexShape)) {
+    errors.push(
+      `${shown}: writes hex of a fixed byte length by hand. \`isHexOfBytes\` answers it and `
+      + `\`hexOfBytesPattern\` builds the pattern, both in \`${fixedHexHome}\`. The concept keeps `
+      + 'its own name and its own refusal - what it should not keep is its own copy of the '
+      + 'characters.',
+    );
+  }
+}
+for (const allowed of fixedHexAllowed) {
+  if (!files.some((path) => relative(repoRoot, path).split('\\').join('/') === allowed)) {
+    errors.push(
+      `${allowed} is argued as writing the fixed-length hex shape by hand, and this check does `
+      + 'not read it. An exemption for a file that is gone describes a tree that does not exist.',
+    );
+  }
+}
+
 const lifecycleOrderHome = 'packages/protocol/src/lifecycle-order.ts';
 const lifecycleOrderShapes = [
   [/seq:\(?\[0-9\]\{16\}\)?/g, 'the pattern that admits one'],
@@ -357,5 +408,5 @@ console.log(
   + `bytes have exactly one definition each inside the protocol package, all of them in ${home}; `
   + `outside it ${carriedSame + carriedNameOnly} copies are named and dated - ${carriedSame} `
   + `the same rule written twice, ${carriedNameOnly} the same name over a different rule; `
-  + `${files.length} TypeScript sources read; and the lifecycle-order shape - both the pattern that admits one and the expression that builds one - is written only in ${lifecycleOrderHome}, checked across ${lifecycleOrderFilesRead} of them).`,
+  + `${files.length} TypeScript sources read; and the lifecycle-order shape - both the pattern that admits one and the expression that builds one - is written only in ${lifecycleOrderHome}, checked across ${lifecycleOrderFilesRead} of them; and hex of a fixed byte length only in ${fixedHexHome}, checked across ${fixedHexFilesRead} with ${fixedHexAllowed.size} argued exception).`,
 );

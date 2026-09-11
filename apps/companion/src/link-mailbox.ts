@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
@@ -110,7 +111,7 @@ export function parsePicoCompanionLinkMailbox(value: unknown): PicoCompanionLink
     throw new Error('pico_link_mailbox_points_at_itself');
   }
   if (typeof record.deviceSigningKeyFingerprintHex !== 'string'
-    || !/^[0-9a-f]{64}$/u.test(record.deviceSigningKeyFingerprintHex)) {
+    || !isHexOfBytes(record.deviceSigningKeyFingerprintHex, 32)) {
     throw new Error('invalid_pico_link_peer');
   }
   if (typeof record.exchangedAt !== 'string' || record.exchangedAt === '') {

@@ -4,11 +4,14 @@ import {
   PicoCanonicalFieldError,
   assertAsciiToken,
   assertExactKeys,
+  assertHexOfBytes,
   bytesToHex,
   concatCanonicalElements,
   fixedHexBytes,
   hasExactKeys,
+  hexOfBytesPattern,
   hexToBytes,
+  isHexOfBytes,
 } from './canonical-bytes.js';
 
 /**
@@ -175,5 +178,59 @@ describe('Hex als Bytes, und was bei schlechter Eingabe passiert (Befund B138)',
   it('laesst einen Aufrufer seinen eigenen Satz waehlen', () => {
     expect(() => hexToBytes('zz', 'Pico Home host key material must be lowercase hex.'))
       .toThrow('Pico Home host key material must be lowercase hex.');
+  });
+});
+
+describe('so viele Bytes als Hex (Befund B140)', () => {
+  const zweiunddreissig = 'a1'.repeat(32);
+
+  it('nimmt genau die Laenge und nichts daneben', () => {
+    expect(isHexOfBytes(zweiunddreissig, 32)).toBe(true);
+    expect(isHexOfBytes(zweiunddreissig, 31)).toBe(false);
+    expect(isHexOfBytes(zweiunddreissig, 64)).toBe(false);
+    expect(isHexOfBytes('ab', 1)).toBe(true);
+    expect(isHexOfBytes('', 1)).toBe(false);
+  });
+
+  it('besteht auf Kleinschreibung, weil ein Fingerabdruck sonst zwei Schreibweisen hat', () => {
+    expect(isHexOfBytes('AB'.repeat(32), 32)).toBe(false);
+    expect(isHexOfBytes('aB'.repeat(32), 32)).toBe(false);
+  });
+
+  it('nimmt nichts an, was keine Zeichenkette ist', () => {
+    for (const value of [undefined, null, 42, {}, ['ab']]) {
+      expect(isHexOfBytes(value, 1)).toBe(false);
+    }
+  });
+
+  it('weist eine Bytezahl zurueck, die keine ist', () => {
+    // Ein Vertipper hier gaebe sonst ein Praedikat, das die leere Zeichenkette
+    // annimmt - und das liest sich wie eine Pruefung.
+    for (const byteLength of [0, -1, 1.5, Number.NaN]) {
+      expect(() => isHexOfBytes('ab', byteLength))
+        .toThrow(/invalid_hex_byte_length/u);
+      expect(() => hexOfBytesPattern(byteLength))
+        .toThrow(/invalid_hex_byte_length/u);
+    }
+  });
+
+  it('baut ein Muster, das dasselbe sagt wie das Praedikat', () => {
+    /**
+     * Die vier exportierten Muster des Protokolls - Postfachadresse, Pakettag,
+     * Betreiberkreditiv, Relaiskonto - sind alle sechzehn Bytes und alle
+     * verschiedene Begriffe. Sie behalten Namen, Typ und Export und holen nur
+     * die Form; also muss die Form beider Wege dieselbe sein.
+     */
+    const muster = hexOfBytesPattern(16);
+    for (const value of ['ab'.repeat(16), 'ab'.repeat(15), 'AB'.repeat(16), '', 'zz'.repeat(16)]) {
+      expect(muster.test(value)).toBe(isHexOfBytes(value, 16));
+    }
+  });
+
+  it('laesst einen Aufrufer seine eigene Ablehnung waehlen', () => {
+    expect(() => assertHexOfBytes(zweiunddreissig, 32)).not.toThrow();
+    expect(() => assertHexOfBytes('nope', 32)).toThrow('invalid_hex');
+    expect(() => assertHexOfBytes('nope', 32, 'invalid_fingerprint'))
+      .toThrow('invalid_fingerprint');
   });
 });

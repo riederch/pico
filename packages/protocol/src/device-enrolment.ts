@@ -1,4 +1,4 @@
-import { assertExactKeys } from './canonical-bytes.js';
+import { assertExactKeys, hexOfBytesPattern } from './canonical-bytes.js';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceActivationSignatureInput,
@@ -67,8 +67,8 @@ export const maxPicoDeviceEnrolmentTransportLength =
   picoDeviceEnrolmentAcceptancePrefix.length
   + Math.ceil((maxPicoDeviceEnrolmentBytes * 4) / 3);
 
-const hex64 = /^[0-9a-f]{64}$/u;
-const hex128 = /^[0-9a-f]{128}$/u;
+const hex64 = hexOfBytesPattern(32);
+const hex128 = hexOfBytesPattern(64);
 const asciiToken = /^[A-Za-z0-9_.:-]{1,128}$/u;
 
 export interface PicoDeviceEnrolmentDeviceKeys {

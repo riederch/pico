@@ -1,3 +1,4 @@
+import { hexOfBytesPattern } from '@pico/protocol/canonical-bytes';
 import {
   closeSync,
   fsyncSync,
@@ -562,7 +563,7 @@ export function openPicoHomeRecoveryAnchor(
 }
 
 const asciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
-const hexPattern = /^[0-9a-f]{64}$/;
+const hexPattern = hexOfBytesPattern(32);
 
 function parseFloorMs(
   document: PicoHomeRecoveryAnchorDocument,

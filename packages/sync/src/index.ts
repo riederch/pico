@@ -1,4 +1,4 @@
-import { hasExactKeys, hexToBytes } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexToBytes, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
 import { assertPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 
@@ -4293,13 +4293,13 @@ function assertReaderSyncItemToken(value: string): void {
 }
 
 function assertHexFingerprint(value: string): void {
-  if (!/^[0-9a-f]{64}$/.test(value)) {
+  if (!isHexOfBytes(value, 32)) {
     throw new Error('invalid_sync_fingerprint');
   }
 }
 
 function assertDigest(value: string): void {
-  if (!/^[0-9a-f]{64}$/.test(value)) {
+  if (!isHexOfBytes(value, 32)) {
     throw new Error('invalid_sync_digest');
   }
 }

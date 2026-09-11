@@ -1,4 +1,4 @@
-import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexOfBytesPattern } from '@pico/protocol/canonical-bytes';
 import { isPicoLifecycleOrder, nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
@@ -33,8 +33,8 @@ import type {
 } from './protocol.js';
 
 const asciiIdPattern = /^[A-Za-z0-9._:/+-]{1,1024}$/u;
-const fingerprintPattern = /^[0-9a-f]{64}$/u;
-const signaturePattern = /^[0-9a-f]{128}$/u;
+const fingerprintPattern = hexOfBytesPattern(32);
+const signaturePattern = hexOfBytesPattern(64);
 
 const defaultRecoveryScopes: readonly PicoIdentityDelegationScope[] = [
   'surface_session',

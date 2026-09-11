@@ -1,16 +1,7 @@
 // Befund B50. Die kanonischen Bytes-Regeln stehen in `./canonical-bytes.js`
 // und nirgends sonst: sie standen hier und in `recovery.ts` zweimal, mit
 // denselben Bytes und vier verschiedenen Ablehnungen.
-import {
-  asciiBytes,
-  assertAsciiToken,
-  bytesToHex,
-  canonicalAsciiTokenPattern,
-  canonicalHexPattern,
-  canonicalTextEncoder,
-  concatCanonicalElements,
-  fixedHexBytes,
-} from './canonical-bytes.js';
+import { asciiBytes, assertAsciiToken, bytesToHex, canonicalAsciiTokenPattern, canonicalHexPattern, canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isHexOfBytes } from './canonical-bytes.js';
 import { foundationEventTypes, type FoundationEventType } from './foundation-event-type.js';
 // ADR 0116 W2 (Befund B49). Diese Barriere gibt die Herkunftsklasse weiter und
 // benutzt sie auch selbst; `export … from` legt dafuer keinen lokalen Namen an.
@@ -2534,7 +2525,7 @@ export function validateFoundationEventPayload(
     if (!isNonEmptyString(payload.grantId, 256)
       || !isNonEmptyString(payload.privacyDomain, 256)
       || typeof payload.readerKeyFingerprintHex !== 'string'
-      || !/^[0-9a-f]{64}$/.test(payload.readerKeyFingerprintHex)
+      || !isHexOfBytes(payload.readerKeyFingerprintHex, 32)
       || !Number.isSafeInteger(payload.kekVersion)
       || (payload.kekVersion as number) < 1) {
       return {
@@ -3359,7 +3350,7 @@ export function buildPicoHomeAuditRecordDigestInput(
   }
   assertPicoInstant(input.occurredAt);
   if (input.previousDigestHex !== null
-    && !/^[0-9a-f]{64}$/.test(input.previousDigestHex)) {
+    && !isHexOfBytes(input.previousDigestHex, 32)) {
     throw new Error('invalid_audit_previous_digest');
   }
   return concatCanonicalElements([

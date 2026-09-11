@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoHomeMembershipLifecycleSignatureInput,
   buildPicoHomeMembershipSignatureInput,
@@ -258,5 +259,5 @@ function verifyIssuerIdentity(
 }
 
 function issuerIsPlausibleDelegate(issuerFingerprintHex: string): boolean {
-  return /^[0-9a-f]{64}$/.test(issuerFingerprintHex);
+  return isHexOfBytes(issuerFingerprintHex, 32);
 }

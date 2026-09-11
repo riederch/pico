@@ -1,3 +1,4 @@
+import { hexOfBytesPattern, isHexOfBytes } from './canonical-bytes.js';
 import { picoLinkMailboxPattern } from './link-packet.js';
 
 /**
@@ -43,7 +44,7 @@ export type PicoLinkRelayRoute = typeof picoLinkRelayRoutes[keyof typeof picoLin
 export const picoLinkRelayAccountHeader = 'x-pico-relay-account' as const;
 
 /** 128 bits, lowercase hex. See the note above on why the shape carries this. */
-export const picoLinkRelayAccountPattern = /^[0-9a-f]{32}$/u;
+export const picoLinkRelayAccountPattern = hexOfBytesPattern(16);
 
 /**
  * Bounded so a carrier edge stays finite. The packet payload ceiling is 64 KiB
@@ -132,7 +133,7 @@ export function parsePicoLinkRelayAcknowledgeRequest(
   exactly(record, ['mailbox', 'tags']);
   if (!Array.isArray(record.tags)
     || record.tags.length > MAX_PICO_LINK_RELAY_ACKNOWLEDGE_TAGS
-    || record.tags.some((tag) => typeof tag !== 'string' || !/^[0-9a-f]{32}$/u.test(tag))) {
+    || record.tags.some((tag) => typeof tag !== 'string' || !isHexOfBytes(tag, 16))) {
     throw new Error('invalid_pico_link_relay_tags');
   }
   return Object.freeze({

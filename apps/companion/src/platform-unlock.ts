@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import {
   chmodSync,
   closeSync,
@@ -596,7 +597,7 @@ function exactRecord(
 }
 
 function assertFingerprint(value: unknown): void {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/u.test(value)) {
+  if (typeof value !== 'string' || !isHexOfBytes(value, 32)) {
     throw new Error('invalid_platform_unlock_fingerprint');
   }
 }

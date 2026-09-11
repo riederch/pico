@@ -33,7 +33,7 @@
  * have been written down.
  */
 
-import { assertExactKeys } from './canonical-bytes.js';
+import { assertExactKeys, hexOfBytesPattern } from './canonical-bytes.js';
 
 /**
  * ADR 0048's list, closed and ordered as that ADR wrote it, with the sixth
@@ -195,7 +195,7 @@ const entryKeysWithoutCredential = [
 ] as const;
 
 const identifierPattern = /^[a-z0-9][a-z0-9._:-]{0,127}$/u;
-const digestPattern = /^[0-9a-f]{64}$/u;
+const digestPattern = hexOfBytesPattern(32);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

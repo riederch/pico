@@ -15,8 +15,10 @@
  * convenient to break it.
  */
 
+import { hexOfBytesPattern } from './canonical-bytes.js';
+
 /** 128 bits, lowercase hex - the same shape an account credential has. */
-export const picoRelayOperatorCredentialPattern = /^[0-9a-f]{32}$/u;
+export const picoRelayOperatorCredentialPattern = hexOfBytesPattern(16);
 
 /**
  * The claim code, base64url. Wider than a credential because it is read off a

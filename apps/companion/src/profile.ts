@@ -1,5 +1,5 @@
 // Befund B51. Dieselbe Regel, jetzt von dort, wo sie einmal steht.
-import { assertAsciiToken } from '@pico/protocol/canonical-bytes';
+import { assertAsciiToken, hexOfBytesPattern } from '@pico/protocol/canonical-bytes';
 import { assertPicoHomeCoreUrl } from '@pico/protocol/home-address';
 import {
   chmodSync,
@@ -141,7 +141,7 @@ export function writePicoCompanionProfile(
   writePicoCompanionFileAtomically(path, `${JSON.stringify(profile, null, 2)}\n`);
 }
 
-const hexPattern = /^[0-9a-f]{64}$/;
+const hexPattern = hexOfBytesPattern(32);
 
 function assertExactKeys(
   value: unknown,

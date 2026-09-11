@@ -1,3 +1,4 @@
+import { hexOfBytesPattern } from '@pico/protocol/canonical-bytes';
 import { assertPicoHomeCoreUrl } from '@pico/protocol/home-address';
 import type { VaultSodium } from '@pico/vault';
 import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
@@ -54,8 +55,8 @@ export interface PicoHomeSetupAnnouncement {
   hostKeyAgreementPublicKeyHex: string;
 }
 
-const fingerprintPattern = /^[0-9a-f]{64}$/u;
-const publicKeyPattern = /^[0-9a-f]{64}$/u;
+const fingerprintPattern = hexOfBytesPattern(32);
+const publicKeyPattern = hexOfBytesPattern(32);
 
 /**
  * Reads the Home's boot line, which is a log format rather than a protocol

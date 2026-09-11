@@ -137,6 +137,66 @@ export function asciiBytes(value: string): Uint8Array {
   return canonicalTextEncoder.encode(value);
 }
 
+/**
+ * Ob ein Wert genau so viele Bytes als Kleinbuchstaben-Hex traegt.
+ *
+ * **Die syntaktische Haelfte von `fixedHexBytes` darunter, und sie stand
+ * dreiundfuenfzigmal im Baum** (Befund B140, gemessen in B139): einunddreissig
+ * Mal fuer zweiunddreissig Bytes, sechzehn Mal fuer vierundsechzig, fuenf Mal
+ * fuer sechzehn, einmal fuer zwanzig. Der Namenszaehler sah davon fast nichts,
+ * weil die meisten Stellen gar keinen Namen tragen - ein `/^[0-9a-f]{64}$/`
+ * mitten in einer Bedingung heisst nichts.
+ *
+ * **Und was hier ausdruecklich *nicht* passiert, ist das Zusammenlegen der
+ * Begriffe.** Dieselben vierundsechzig Zeichen bewachen im Baum mindestens
+ * vier verschiedene Dinge: Schluesselfingerabdruecke, oeffentliche Schluessel,
+ * Digests und einen Zweig der Git-Commit-Form. In `founding.ts` standen
+ * `fingerprintPattern` und `publicKeyPattern` byte-gleich untereinander. Sie
+ * nach der Form zusammenzuziehen waere die Umkehrung von Befund B124: **eine
+ * Form ist kein Begriff.** Jeder behaelt seinen Namen und seine Ablehnung -
+ * was er von hier holt, ist nur die Frage, ob die Zeichen stimmen.
+ */
+/**
+ * Dieselbe Form als Muster, fuer die Begriffe, die eines exportieren.
+ *
+ * Zwoelf benannte Konstanten schrieben sie aus (Befund B140), und **vier davon
+ * sind Teil der Paketoberflaeche**: `picoLinkMailboxPattern`,
+ * `picoLinkPacketTagPattern`, `picoRelayOperatorCredentialPattern` und
+ * `picoLinkRelayAccountPattern` - eine Postfachadresse, ein Pakettag, ein
+ * Betreiberkreditiv und ein Relaiskonto, alle sechzehn Bytes, alle
+ * verschieden. Sie zu einem Praedikat zu machen haette ihre Signatur
+ * geaendert; sie zu verschmelzen haette vier Begriffe zu einem gemacht. Sie
+ * behalten Namen, Typ und Export, und holen nur die Form von hier.
+ */
+export function hexOfBytesPattern(byteLength: number): RegExp {
+  if (!Number.isInteger(byteLength) || byteLength <= 0) {
+    throw new Error(`invalid_hex_byte_length:${String(byteLength)}`);
+  }
+  return new RegExp(`^[0-9a-f]{${byteLength * 2}}$`, 'u');
+}
+
+export function isHexOfBytes(value: unknown, byteLength: number): value is string {
+  if (!Number.isInteger(byteLength) || byteLength <= 0) {
+    // Ein Aufrufer, der sich hier vertippt, bekaeme sonst ein Praedikat, das
+    // die leere Zeichenkette annimmt - und das liest sich wie eine Pruefung.
+    throw new Error(`invalid_hex_byte_length:${String(byteLength)}`);
+  }
+  return typeof value === 'string'
+    && value.length === byteLength * 2
+    && canonicalHexPattern.test(value);
+}
+
+/** Dieselbe Frage als Zusicherung, mit dem Namen, den der Aufrufer waehlt. */
+export function assertHexOfBytes(
+  value: unknown,
+  byteLength: number,
+  reason = 'invalid_hex',
+): asserts value is string {
+  if (!isHexOfBytes(value, byteLength)) {
+    throw new Error(reason);
+  }
+}
+
 export function fixedHexBytes(
   value: string,
   expectedByteLength: number,

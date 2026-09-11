@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -8591,13 +8592,13 @@ function isCanonicalHex(value: string): boolean {
 
 
 function assertFingerprint(value: string, label: string): void {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
+  if (typeof value !== 'string' || !isHexOfBytes(value, 32)) {
     throw new Error(`Pico Home ${label} must be a lowercase BLAKE2b-256 hex fingerprint.`);
   }
 }
 
 function assertDetachedSignature(value: string, label: string): void {
-  if (typeof value !== 'string' || !/^[0-9a-f]{128}$/.test(value)) {
+  if (typeof value !== 'string' || !isHexOfBytes(value, 64)) {
     throw new Error(`Pico Home ${label} must be a lowercase Ed25519 signature hex value.`);
   }
 }

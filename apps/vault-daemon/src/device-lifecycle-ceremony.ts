@@ -1,4 +1,4 @@
-import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { isPicoLifecycleOrder, nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   picoClockDivergenceKinds,
@@ -441,7 +441,7 @@ async function activateAndSubmit(
    * somebody else produced, and the Home would refuse it later with a message
    * about bytes rather than about the device that did not answer properly.
    */
-  if (!/^[0-9a-f]{128}$/u.test(targetSignatureHex)) {
+  if (!isHexOfBytes(targetSignatureHex, 64)) {
     throw new Error('target_activation_signature_malformed');
   }
   const submission: PicoHomeDeviceLifecycleSubmission = {
@@ -524,7 +524,7 @@ async function signWithExactKey(
   if (
     signed.keyRole !== input.keyRole
     || signed.keyFingerprintHex !== input.keyFingerprintHex
-    || !/^[0-9a-f]{128}$/.test(signed.signatureHex)
+    || !isHexOfBytes(signed.signatureHex, 64)
   ) {
     throw new Error('lifecycle_signer_mismatch');
   }
@@ -614,14 +614,10 @@ function parsePendingRecovery(
   const completionExpiresAt = Date.parse(pending.completionExpiresAt);
   if (
     !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(pending.recoveryId)
-    || !/^[0-9a-f]{64}$/u.test(pending.claimDigestHex)
+    || !isHexOfBytes(pending.claimDigestHex, 32)
     || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(pending.targetDelegationId)
-    || !/^[0-9a-f]{64}$/u.test(
-      pending.targetDeviceSigningKeyFingerprintHex,
-    )
-    || !/^[0-9a-f]{64}$/u.test(
-      pending.targetDeviceKeyAgreementKeyFingerprintHex,
-    )
+    || !isHexOfBytes(pending.targetDeviceSigningKeyFingerprintHex, 32)
+    || !isHexOfBytes(pending.targetDeviceKeyAgreementKeyFingerprintHex, 32)
     || !Number.isFinite(acceptedAt)
     || effectiveAt - acceptedAt !== picoHomeDeviceRecoveryTiming.vetoDelayMs
     || completionExpiresAt - effectiveAt
