@@ -115,7 +115,27 @@ const walk = (directory) => {
 for (const directory of ['apps', 'packages', 'modules', 'scripts']) {
   walk(directory);
 }
-const text = new Map(sources.map((path) => [path, readFileSync(join(repoRoot, path), 'utf8')]));
+/**
+ * Prosa ist kein Aufrufer (Befund B147, 2026-09-11).
+ *
+ * Diese Pruefung sucht `.name(` - und genau so schreibt ein Doc-Kommentar eine
+ * Methode, in Backticks und mit Klammern. Ein einziger Satz ueber eine
+ * Schreibmethode liess sie damit erreichbar aussehen.
+ *
+ * `check-capability-reach.mjs` nennt diese Datei in seinem Kopf als Geschwister
+ * und hat dieselbe Verwechslung am 2026-08-24 gemacht: sein eigener
+ * Kopfkommentar liess eine Faehigkeit erreicht aussehen, und die Pflanzung, die
+ * ihren einzigen echten Aufruf entfernte, ging zweimal durch. Die Lehre stand
+ * seither dort und hier nicht.
+ *
+ * **Gemessen, bevor es geaendert wurde, und es aendert heute nichts:** mit
+ * Kommentarabzug bleiben alle 86 Schreibmethoden erreichbar. Kein Fehlalarm,
+ * kein neuer Befund - das Tor haelt jetzt nur, was es verspricht.
+ */
+const withoutComments = (t) => t
+  .replace(/\/\*[\s\S]*?\*\//gu, '')
+  .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+const text = new Map(sources.map((path) => [path, withoutComments(readFileSync(join(repoRoot, path), 'utf8'))]));
 
 /** A spec, or a helper the repository already names `test-`. */
 const isTestOnly = (path) => /\.test\.ts$/u.test(path) || /\/test-[^/]+$/u.test(path);

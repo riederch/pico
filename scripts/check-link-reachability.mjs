@@ -106,7 +106,25 @@ const walk = (directory) => {
 for (const directory of ['apps', 'packages', 'modules']) {
   walk(directory);
 }
-const text = new Map(sources.map((path) => [path, readFileSync(join(repoRoot, path), 'utf8')]));
+/**
+ * Prosa ist kein Aufrufer (Befund B147, 2026-09-11).
+ *
+ * Diese Pruefung sucht `'operation'` in einfachen Anfuehrungszeichen - und
+ * genau so zitieren die Kommentare dieses Baums eine Link-Operation. Ein Satz
+ * *ueber* eine Operation liess sie damit benannt aussehen.
+ *
+ * Dieselbe Verwechslung, die `check-capability-reach.mjs` am 2026-08-24 an sich
+ * selbst gefunden hat; diese Datei steht dort im Kopf als Geschwister und hatte
+ * die Lehre nicht.
+ *
+ * **Gemessen, bevor es geaendert wurde, und es aendert heute nichts:** mit
+ * Kommentarabzug bleiben alle 55 Operationen und zwoelf Autoritaetsressourcen
+ * benannt.
+ */
+const withoutComments = (t) => t
+  .replace(/\/\*[\s\S]*?\*\//gu, '')
+  .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+const text = new Map(sources.map((path) => [path, withoutComments(readFileSync(join(repoRoot, path), 'utf8'))]));
 
 /** A spec, or a helper the repository already names `test-`. */
 const isTestOnly = (path) => /\.test\.ts$/u.test(path) || /\/test-[^/]+$/u.test(path);

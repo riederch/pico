@@ -97,6 +97,11 @@ function readSurface(html) {
 let surfaces = 0;
 let slots = 0;
 let announced = 0;
+/** Prosa schreibt nichts in eine Flaeche; ein Kommentar nennt ein Feld, er fuellt es nicht. */
+const withoutComments = (text) => text
+  .replace(/\/\*[\s\S]*?\*\//gu, '')
+  .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+
 for (const surface of picoOperatedSurfaces()) {
   const html = readFileSync(join(picoRepoRoot, surface), 'utf8');
   const elements = readSurface(html);
@@ -108,7 +113,7 @@ for (const surface of picoOperatedSurfaces()) {
   surfaces += 1;
 
   const written = new Set();
-  const read = sources.map((path) => readFileSync(join(picoRepoRoot, path), 'utf8'));
+  const read = sources.map((path) => withoutComments(readFileSync(join(picoRepoRoot, path), 'utf8')));
   const named = picoElementNames(read);
   for (const source of read) {
     for (const [, variable] of source.matchAll(

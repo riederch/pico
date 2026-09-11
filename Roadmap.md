@@ -912,6 +912,56 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B147 — Prosa ist kein Gang, und drei Tore glaubten sie (2026-09-11).**
+`check-refusal-reasons.mjs` trägt seinen eigenen Vorbehalt im Kopf: *„Sie
+fragt, ob das Wort in irgendeiner `*.test.ts` vorkommt — nicht, ob ein Test es
+**erwartet**. Ein Wort in einem Kommentar genügt ihr."* Nach zwei Befunden an
+einem Tag, bei denen eine Regel keinen Test hatte (B145, B146), war das die
+naheliegende nächste Frage.
+
+**Die eine Hälfte des Vorbehalts ist geschlossen, die andere gemessen und
+heute nicht ausgenutzt.** Von den 53 erklärten Ablehnungsgründen steht
+**jeder** in einer echten Behauptung — keiner nur genannt, keiner nur in
+Prosa. Die Verschärfung auf „steht in einer `expect`-Nähe" würde also nichts
+fangen und wäre unscharf; sie bleibt ungeschrieben. Was geschlossen ist, ist
+die Kommentarhälfte: der Prüfer las die Testdateien **mit** ihren Kommentaren,
+ein *zitierter* Grund in Prosa galt also als gegangen.
+
+**Und dieselbe Verwechslung stand bei den Geschwistern.**
+`check-capability-reach.mjs` hat sie am 2026-08-24 an sich selbst gefunden —
+sein eigener Kopfkommentar ließ eine Fähigkeit erreicht aussehen — und nennt in
+demselben Kopf zwei Geschwister, die die Erreichbarkeitsfrage eine Ebene tiefer
+stellen. **Keines von beiden hatte die Lehre:**
+
+| Prüfer | Was er sucht | Warum Prosa das trifft |
+|---|---|---|
+| `check-store-writers.mjs` | `.name(` | Genau so schreibt ein Doc-Kommentar eine Methode |
+| `check-link-reachability.mjs` | `'operation'` | Genau so zitieren die Kommentare dieses Baums eine Operation |
+| `check-answer-reach.mjs` | `x.textContent =` | Dieselbe Klasse, unwahrscheinlichere Form |
+
+Gemessen von 63 Prüfern lesen 55 fremden Text und suchen darin; **acht** zogen
+Kommentare ab, 47 nicht. Die meisten der 47 fragen etwas, wo das gleichgültig
+ist — ein verbotener Aufruf, eine Versionszahl. Gefährlich ist allein die
+Erreichbarkeitsfrage, und die stellen genau diese drei.
+
+**Der Preis ist null, gemessen statt vermutet.** Mit Kommentarabzug bleiben
+alle 86 Schreibmethoden erreichbar, alle 55 Operationen und zwölf
+Autoritätsressourcen benannt, alle 22 Antwortfelder geschrieben und alle 53
+Gründe gegangen. Kein Fehlalarm, kein neuer Befund — die drei Tore halten
+jetzt, was sie versprechen, statt mehr.
+
+**Drei Pflanzungen, jede gegen beide Fassungen gefahren:** der einzige Aufruf
+wird zu einem Satz *über* den Aufruf. Neue Fassung Ausgang 1, alte Fassung
+Ausgang 0, zurückgesetzt Ausgang 0 — in allen drei Fällen.
+
+Eine mißlungene Pflanzung ist auch eine Messung: die erste zielte bei
+`check-link-reachability.mjs` auf `packages/protocol/src/index.ts`, und das
+**deklariert** die Operationsliste, statt sie zu rufen. Beide Fassungen fielen,
+mit einer anderen und richtigen Meldung — der Name war aus der Liste
+verschwunden, und der Eintrag, der ihn ausnahm, sagte das sofort. Die zweite
+Hälfte desselben Tores, die eine Bestandsliste gegen den Baum hält, hat dabei
+ungeplant gebissen.
+
 **B146 — Eine Regel, einmal geschrieben und nie gefahren (2026-09-11).** B145
 hatte nebenbei gemessen, dass in `packages/*` genau **zwei** Ausfuhren nirgends
 genannt werden. Eine davon war ein Befund.

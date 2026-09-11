@@ -48,15 +48,28 @@ import { fileURLToPath } from 'node:url';
  * aber den zweitbesten Satz.
  *
  * **Was diese Pruefung nicht kann, und das ist der Preis ihrer Einfachheit.**
- * Sie fragt, ob das Wort in irgendeiner `*.test.ts` vorkommt - nicht, ob ein
- * Test es *erwartet*. Ein Wort in einem Kommentar genuegt ihr. Sie hat damit
- * dieselbe Staerke wie `check-capability-reach.mjs`, die nach einem Aufrufer
- * fragt und nicht nach einem guten: sie faengt das Fehlen, nicht die
- * Schlaefrigkeit. Das steht hier, weil ein Tor, das mehr zu versprechen
- * scheint, als es haelt, schlimmer ist als keines.
+ * Sie fragt, ob das Wort im **Code** einer `*.test.ts` vorkommt - nicht, ob ein
+ * Test es *erwartet*. Sie hat damit dieselbe Staerke wie
+ * `check-capability-reach.mjs`, die nach einem Aufrufer fragt und nicht nach
+ * einem guten: sie faengt das Fehlen, nicht die Schlaefrigkeit. Das steht hier,
+ * weil ein Tor, das mehr zu versprechen scheint, als es haelt, schlimmer ist
+ * als keines.
+ *
+ * **Der Vorbehalt hatte zwei Haelften, und eine ist zu** (2026-09-11, Befund
+ * B147). Bis dahin las diese Pruefung die Testdatei *mit* ihren Kommentaren,
+ * ein zitierter Grund in Prosa genuegte ihr also; das ist unten geschlossen.
+ * Die andere Haelfte - genannt gegen erwartet - steht noch und ist am selben
+ * Tag gemessen: **jeder** der Gruende steht in einer echten Behauptung, keiner
+ * nur genannt. Eine Verschaerfung faenge heute nichts und musste dafuer raten,
+ * wie nah an einem `expect` nah genug ist.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const errors = [];
+
+/** Prosa ist kein Gang; ein Kommentar nennt einen Grund, er geht ihn nicht. */
+const withoutComments = (text) => text
+  .replace(/\/\*[\s\S]*?\*\//gu, '')
+  .replace(/(^|[^:])\/\/.*$/gmu, '$1');
 
 /**
  * Gruende, die ein laufendes Produkt aussprechen kann und die noch niemand
@@ -127,9 +140,23 @@ for (const file of sourceFiles) {
 const byTemplate = (reason) =>
   [...templatePrefixes].some((prefix) => reason.startsWith(prefix));
 
+/**
+ * Prosa ist kein Gang - auch nicht auf der Testseite (2026-09-11, Befund B147).
+ * Bis hierher las diese Schleife die Testdatei **mit** ihren Kommentaren, ein
+ * Grund, der in einem Doc-Kommentar *zitiert* wurde, galt also als gegangen.
+ * Dieselbe Verwechslung, die `check-capability-reach.mjs` auf der Aufruferseite
+ * schon einmal gemacht hat, und dort hat sie eine Faehigkeit erreicht aussehen
+ * lassen, die niemand rief.
+ *
+ * Gemessen, bevor es geaendert wurde: von 2.829 zitierten snake_case-Woertern
+ * in Testdateien stehen 2.825 im Code, und die vier, die nur in Prosa stehen,
+ * sind keine Ablehnungsgruende. Diese Zeile faengt heute also nichts - sie
+ * nimmt dem Tor ein Versprechen ab, das es nicht hielt.
+ */
 const named = new Set();
 for (const file of testFiles) {
-  for (const [, reason] of readFileSync(file, 'utf8').matchAll(/'([a-z0-9_]+)'/gu)) {
+  const code = withoutComments(readFileSync(file, 'utf8'));
+  for (const [, reason] of code.matchAll(/'([a-z0-9_]+)'/gu)) {
     named.add(reason);
   }
 }
