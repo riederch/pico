@@ -1,4 +1,4 @@
-import { bytesToHex, hasExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hasExactKeys, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import { isPicoInstant } from '@pico/protocol/instant';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -6276,7 +6276,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             if (
               !hasExactKeys(args, ['phase', 'recoveryId', 'claimDigestHex'])
               || typeof args.recoveryId !== 'string'
-              || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(args.recoveryId)
+              || !isAsciiToken(args.recoveryId)
               || typeof args.claimDigestHex !== 'string'
               || !isHexOfBytes(args.claimDigestHex, 32)
               || homeHostKeys === undefined
@@ -9000,8 +9000,8 @@ function parsePicoHomeFoundingAcceptance(source: unknown): PicoHomeFoundingAccep
 
   if (
     acceptance.schema !== picoHomeFoundingAcceptanceSchema
-    || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(acceptance.claimId)
-    || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(acceptance.foundingId)
+    || !isAsciiToken(acceptance.claimId, 256)
+    || !isAsciiToken(acceptance.foundingId, 256)
     || !isHexOfBytes(acceptance.claimantFoundingSignatureHex, 64)
   ) {
     throw new Error('Pico Home founding acceptance is invalid.');

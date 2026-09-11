@@ -1,4 +1,4 @@
-import { hexOfBytesPattern } from '@pico/protocol/canonical-bytes';
+import { hexOfBytesPattern, isAsciiToken } from '@pico/protocol/canonical-bytes';
 import {
   closeSync,
   fsyncSync,
@@ -459,7 +459,7 @@ export function openPicoHomeRecoveryAnchor(
     },
     isEmpty: () => document.seededAt === null && document.entries.length === 0,
     recordAuditCheckpoint: (input) => {
-      if (!asciiTokenPattern.test(input.writerId)) {
+      if (!isAsciiToken(input.writerId)) {
         throw new Error('invalid_audit_checkpoint_writer');
       }
       if (!Number.isSafeInteger(input.chainPosition) || input.chainPosition < 1) {
@@ -562,7 +562,6 @@ export function openPicoHomeRecoveryAnchor(
   }
 }
 
-const asciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
 const hexPattern = hexOfBytesPattern(32);
 
 function parseFloorMs(
@@ -587,7 +586,7 @@ function greatestDefined(values: readonly (number | null)[]): number | null {
 }
 
 function assertRecordInput(input: PicoHomeRecoveryAnchorRecordInput): void {
-  if (typeof input.recoveryId !== 'string' || !asciiTokenPattern.test(input.recoveryId)) {
+  if (typeof input.recoveryId !== 'string' || !isAsciiToken(input.recoveryId)) {
     throw new Error('invalid_recovery_anchor_id');
   }
   if (typeof input.claimDigestHex !== 'string' || !hexPattern.test(input.claimDigestHex)) {
@@ -703,7 +702,7 @@ function readAnchorDocument(anchorPath: string): PicoHomeRecoveryAnchorDocument 
   const seenWriters = new Set<string>();
   for (const checkpoint of auditCheckpoints) {
     if (typeof checkpoint !== 'object' || checkpoint === null
-      || !asciiTokenPattern.test(String(checkpoint.writerId))
+      || !isAsciiToken(String(checkpoint.writerId))
       || !Number.isSafeInteger(checkpoint.chainPosition)
       || checkpoint.chainPosition < 1
       || !hexPattern.test(String(checkpoint.headDigestHex))

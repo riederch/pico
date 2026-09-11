@@ -317,6 +317,45 @@ for (const entry of elsewhere) {
  * ist `isHexOfBytes` oder `hexOfBytesPattern`. Sie zusammenzuziehen waere die
  * Umkehrung von Befund B124.
  */
+/**
+ * Und die vierte Form: die kanonische Zeichenmenge mit einer Laengengrenze
+ * (Befund B141).
+ *
+ * `canonicalAsciiTokenPattern` steht seit Langem in dieser Datei und traegt
+ * **keine** Grenze - die prueft `assertAsciiToken` daneben, in Bytes. Wer das
+ * Muster mit `{1,1024}` oder `{1,256}` hinschreibt, schreibt damit nicht eine
+ * Kopie, sondern eine *zweite Regel*, die aussieht wie die erste: Zeichenmenge
+ * und Grenze verschmolzen, und die Grenze in Zeichen statt in Bytes. Beide
+ * Zahlen sind nur dieselbe, solange die Menge ASCII bleibt.
+ *
+ * Einundzwanzig solche Stellen standen am 2026-09-11 im Baum, und zwei davon
+ * hatten das `+` aus der Menge verloren und nahmen `undefined` an. Jetzt gibt
+ * es `isAsciiToken(wert, maxBytes)`.
+ */
+// Genau die kanonische Menge, nicht jede, die ihr aehnelt: `[A-Za-z0-9_.:-]`
+// in `device-enrolment.ts` und `[A-Za-z0-9_-]` im Relais sind andere Regeln,
+// und ein Tor, das sie mitmeldet, erzeugt Rauschen - der Fehler, den Befund
+// B112 an einer mechanischen Regel schon einmal gemessen hat.
+const tokenShape = /\/\^\[A-Za-z0-9\._:\/\+-\]\{\d+,\d+\}\$\//g;
+const tokenHome = 'packages/protocol/src/canonical-bytes.ts';
+let tokenFilesRead = 0;
+for (const path of files) {
+  const shown = relative(repoRoot, path).split('\\').join('/');
+  if (shown === tokenHome || shown.endsWith('.test.ts')) {
+    continue;
+  }
+  tokenFilesRead += 1;
+  const source = readFileSync(path, 'utf8');
+  for (const _ of source.matchAll(tokenShape)) {
+    errors.push(
+      `${shown}: writes the canonical token charset with a length bound by hand. `
+      + '`isAsciiToken(value, maxBytes)` answers it. Written out here it is not a copy but a '
+      + 'second rule wearing the first one\'s face: the charset and the bound fused, and the '
+      + 'bound counted in characters where `assertAsciiToken` counts bytes.',
+    );
+  }
+}
+
 const fixedHexShape = /\/\^\[0-9a-f\]\{\d+\}\$\/[u]?/g;
 const fixedHexHome = 'packages/protocol/src/canonical-bytes.ts';
 const fixedHexAllowed = new Set([
@@ -408,5 +447,5 @@ console.log(
   + `bytes have exactly one definition each inside the protocol package, all of them in ${home}; `
   + `outside it ${carriedSame + carriedNameOnly} copies are named and dated - ${carriedSame} `
   + `the same rule written twice, ${carriedNameOnly} the same name over a different rule; `
-  + `${files.length} TypeScript sources read; and the lifecycle-order shape - both the pattern that admits one and the expression that builds one - is written only in ${lifecycleOrderHome}, checked across ${lifecycleOrderFilesRead} of them; and hex of a fixed byte length only in ${fixedHexHome}, checked across ${fixedHexFilesRead} with ${fixedHexAllowed.size} argued exception).`,
+  + `${files.length} TypeScript sources read; and the lifecycle-order shape - both the pattern that admits one and the expression that builds one - is written only in ${lifecycleOrderHome}, checked across ${lifecycleOrderFilesRead} of them; and hex of a fixed byte length only in ${fixedHexHome}, checked across ${fixedHexFilesRead} with ${fixedHexAllowed.size} argued exception; and the canonical token charset with a length bound only there too, checked across ${tokenFilesRead}).`,
 );

@@ -1,4 +1,4 @@
-import { hasExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { isPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   verifyPicoIdentityReaderKeyFreshnessSignature,
@@ -118,7 +118,7 @@ implements PicoIdentityReaderKeyFreshnessSource {
     }
 
     try {
-      if (!isAsciiReference(lookup.sourceRef)
+      if (!isAsciiToken(lookup.sourceRef, 256)
         || !isStrictCheckpointRecord(lookup.record)) {
         return { status: 'unavailable' };
       }
@@ -252,11 +252,11 @@ function isStrictCheckpointRecord(
 }
 
 function isCanonicalQuery(query: PicoIdentityReaderKeyFreshnessQuery): boolean {
-  return isAsciiReference(query.homeId)
+  return isAsciiToken(query.homeId, 256)
     && isHexFingerprint(query.picoIdentityFingerprintHex)
     && isHexFingerprint(query.deviceSigningKeyFingerprintHex)
     && isHexFingerprint(query.deviceKeyAgreementKeyFingerprintHex)
-    && isAsciiReference(query.delegationId)
+    && isAsciiToken(query.delegationId, 256)
     && isPicoLifecycleOrder(query.locallyObservedThroughLifecycleOrder)
     && isPicoInstant(query.evaluatedAt);
 }
@@ -302,6 +302,3 @@ function isHexFingerprint(value: string): boolean {
   return isHexOfBytes(value, 32);
 }
 
-function isAsciiReference(value: string): boolean {
-  return /^[A-Za-z0-9._:/-]{1,256}$/.test(value);
-}

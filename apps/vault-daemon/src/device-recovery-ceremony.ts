@@ -1,4 +1,4 @@
-import { hasExactKeys, hexOfBytesPattern } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexOfBytesPattern, isAsciiToken } from '@pico/protocol/canonical-bytes';
 import { isPicoLifecycleOrder, nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
@@ -32,7 +32,6 @@ import type {
   PicoVaultDaemonUnlockedSessionDescriptor,
 } from './protocol.js';
 
-const asciiIdPattern = /^[A-Za-z0-9._:/+-]{1,1024}$/u;
 const fingerprintPattern = hexOfBytesPattern(32);
 const signaturePattern = hexOfBytesPattern(64);
 
@@ -362,7 +361,7 @@ export async function completePicoHomeDeviceRecovery(
 export async function vetoPicoHomeDeviceRecovery(
   input: VetoPicoHomeDeviceRecoveryInput,
 ): Promise<{ status: 'vetoed' }> {
-  if (!asciiIdPattern.test(input.recoveryId)) {
+  if (!isAsciiToken(input.recoveryId)) {
     throw new Error('invalid_recovery_id');
   }
   const vetoed = await input.livingDeviceLinkClient.request(
@@ -446,7 +445,7 @@ function parsePreparationView(
       'deviceKeyAgreementKeyFingerprintHex',
     ])
       || typeof candidate.delegationId !== 'string'
-      || !asciiIdPattern.test(candidate.delegationId)
+      || !isAsciiToken(candidate.delegationId)
       || !fingerprintPattern.test(String(
         candidate.deviceSigningKeyFingerprintHex,
       ))
@@ -514,9 +513,9 @@ function parsePendingRecovery(
   const effectiveAt = Date.parse(pending.effectiveAt);
   const completionExpiresAt = Date.parse(pending.completionExpiresAt);
   if (
-    !asciiIdPattern.test(pending.recoveryId)
+    !isAsciiToken(pending.recoveryId)
     || !fingerprintPattern.test(pending.claimDigestHex)
-    || !asciiIdPattern.test(pending.targetDelegationId)
+    || !isAsciiToken(pending.targetDelegationId)
     || !fingerprintPattern.test(
       pending.targetDeviceSigningKeyFingerprintHex,
     )

@@ -1,3 +1,4 @@
+import { isAsciiToken } from '@pico/protocol/canonical-bytes';
 import type { IdentityVerificationSodium } from '@pico/identity';
 import { isPicoInstant, maxPicoIdentityReaderKeyFreshnessMs } from '@pico/protocol';
 import { isPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
@@ -170,7 +171,7 @@ function validateCurrentCheckpoint(
     || freshness.deviceKeyAgreementKeyFingerprintHex
       !== candidate.deviceKeyAgreementKeyFingerprintHex
     || freshness.delegationId !== candidate.delegationId
-    || !isAsciiReference(freshness.sourceRef)
+    || !isAsciiToken(freshness.sourceRef, 256)
     || !isPicoLifecycleOrder(freshness.observedThroughLifecycleOrder)
     || !isPicoInstant(at)
     || !isPicoInstant(freshness.checkedAt)
@@ -196,6 +197,3 @@ function validateCurrentCheckpoint(
 
 
 
-function isAsciiReference(value: string): boolean {
-  return /^[A-Za-z0-9._:/-]{1,256}$/.test(value);
-}

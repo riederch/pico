@@ -11,6 +11,7 @@ import {
   hasExactKeys,
   hexOfBytesPattern,
   hexToBytes,
+  isAsciiToken,
   isHexOfBytes,
 } from './canonical-bytes.js';
 
@@ -232,5 +233,56 @@ describe('so viele Bytes als Hex (Befund B140)', () => {
     expect(() => assertHexOfBytes('nope', 32)).toThrow('invalid_hex');
     expect(() => assertHexOfBytes('nope', 32, 'invalid_fingerprint'))
       .toThrow('invalid_fingerprint');
+  });
+});
+
+describe('ein kanonisches Token, hoechstens so lang (Befund B141)', () => {
+  it('nimmt die kanonische Zeichenmenge und die Grenze', () => {
+    expect(isAsciiToken('home_abc')).toBe(true);
+    expect(isAsciiToken('a+b')).toBe(true);
+    expect(isAsciiToken('x'.repeat(1024))).toBe(true);
+    expect(isAsciiToken('x'.repeat(1025))).toBe(false);
+    expect(isAsciiToken('x'.repeat(256), 256)).toBe(true);
+    expect(isAsciiToken('x'.repeat(257), 256)).toBe(false);
+    expect(isAsciiToken('')).toBe(false);
+    expect(isAsciiToken('a b')).toBe(false);
+    expect(isAsciiToken('ä')).toBe(false);
+  });
+
+  it('haelt `undefined` nicht fuer ein Token, und das war der Fehler', () => {
+    /**
+     * **Die Luecke, die dieser Befund geschlossen hat.** Zwei Fassungen von
+     * `isAsciiReference` riefen `muster.test(wert)` ohne `typeof`-Pruefung, und
+     * `RegExp.test` wandelt sein Argument in eine Zeichenkette um: aus
+     * `undefined` wird `"undefined"`, aus `null` `"null"`, aus `42` `"42"` -
+     * alles Zeichen, die die Menge erlaubt. Die Werte kamen ueber die
+     * Transportnaht aus ADR 0089 herein, und diese Pruefung war ihre einzige.
+     */
+    for (const value of [undefined, null, 42, true, Number.NaN]) {
+      expect(isAsciiToken(value)).toBe(false);
+      // Und der Beleg, warum es passieren konnte:
+      expect(/^[A-Za-z0-9._:/+-]{1,256}$/u.test(value as never)).toBe(true);
+    }
+  });
+
+  it('nimmt das `+`, das zwei Fassungen aus der Menge gelassen hatten', () => {
+    // Strenger als die Regel schliesst zu, ist aber eine Uneinigkeit darueber,
+    // was ein Token ist - und die hatte niemand gewaehlt.
+    expect(isAsciiToken('seq+1')).toBe(true);
+    expect(/^[A-Za-z0-9._:/-]{1,256}$/u.test('seq+1')).toBe(false);
+  });
+
+  it('misst Bytes und nicht Zeichen, so wie die Zusicherung daneben', () => {
+    // Beide Zahlen sind nur dieselbe, solange die Menge ASCII bleibt - das
+    // sagt der Kopf dieser Datei, und hier steht es als Test.
+    expect(isAsciiToken('ä'.repeat(10), 10)).toBe(false);
+    expect(() => assertAsciiToken('x'.repeat(1025))).toThrow('field_too_long');
+    expect(isAsciiToken('x'.repeat(1025))).toBe(false);
+  });
+
+  it('weist eine Grenze zurueck, die keine ist', () => {
+    for (const maxBytes of [0, -1, 2.5, Number.NaN]) {
+      expect(() => isAsciiToken('ab', maxBytes)).toThrow(/invalid_ascii_token_length/u);
+    }
   });
 });

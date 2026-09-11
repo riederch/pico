@@ -357,8 +357,8 @@ function assertOperatorHomeBinding(homeBinding: unknown): asserts homeBinding is
   }
   if (!isRecord(homeBinding)
     || Object.keys(homeBinding).sort().join(',') !== 'foundingId,homeId,hostSigningKeyFingerprintHex'
-    || !isAsciiToken(homeBinding.homeId)
-    || !isAsciiToken(homeBinding.foundingId)
+    || !isPrintableAsciiToken(homeBinding.homeId)
+    || !isPrintableAsciiToken(homeBinding.foundingId)
     || !isFingerprint(homeBinding.hostSigningKeyFingerprintHex)) {
     throw new OperatorRequestError('Foundation operator Home binding is invalid.');
   }
@@ -378,7 +378,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isAsciiToken(value: unknown): value is string {
+/**
+ * **Eine andere Zeichenmenge, also ein anderer Name** (Befund B141).
+ *
+ * Sie hiess bis zum 2026-09-11 `isAsciiToken` wie das kanonische Praedikat im
+ * Protokoll und meint etwas anderes: jedes druckbare ASCII-Zeichen ausser dem
+ * Leerzeichen, nicht die kanonische Menge aus Buchstaben, Ziffern und sechs
+ * Satzzeichen. Hier stehen Betreiberwerte, keine unterschriebenen Felder. Ein
+ * Name ist keine Regel (Befund B124), und dieser hier war zweimal vergeben.
+ */
+function isPrintableAsciiToken(value: unknown): value is string {
   return typeof value === 'string'
     && value.length > 0
     && value.length <= 256

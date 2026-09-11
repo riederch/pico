@@ -1,4 +1,4 @@
-import { assertExactKeys } from '@pico/protocol/canonical-bytes';
+import { assertExactKeys, isAsciiToken } from '@pico/protocol/canonical-bytes';
 import {
   assertPicoInstant,
   picoHomeDeviceLifecycleCanonicalLabels,
@@ -804,7 +804,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       }
       const targetDelegationId = parsed.targetDelegationId;
       if (typeof targetDelegationId !== 'string'
-        || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(targetDelegationId)) {
+        || !isAsciiToken(targetDelegationId)) {
         throw new Error('invalid_request');
       }
       return {
@@ -867,7 +867,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       }
       const targetDelegationId = parsed.targetDelegationId;
       if (typeof targetDelegationId !== 'string'
-        || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(targetDelegationId)) {
+        || !isAsciiToken(targetDelegationId)) {
         throw new Error('invalid_request');
       }
       return {

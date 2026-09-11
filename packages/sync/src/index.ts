@@ -1,4 +1,4 @@
-import { hasExactKeys, hexToBytes, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexToBytes, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
 import { assertPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 
@@ -4281,13 +4281,13 @@ function assertRouteRef(value: string): void {
 }
 
 function assertAsciiReference(value: string): void {
-  if (!/^[A-Za-z0-9._:/+-]{1,256}$/.test(value)) {
+  if (!isAsciiToken(value, 256)) {
     throw new Error('invalid_sync_reference');
   }
 }
 
 function assertReaderSyncItemToken(value: string): void {
-  if (!/^[A-Za-z0-9._:/+-]{1,1024}$/.test(value)) {
+  if (!isAsciiToken(value)) {
     throw new Error('invalid_reader_sync_item_token');
   }
 }

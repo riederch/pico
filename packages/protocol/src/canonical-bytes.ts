@@ -116,6 +116,45 @@ export class PicoCanonicalFieldError extends Error {
  * Zeichenkette ist, ist kein kanonisches Feld, und ohne diese Zeile machte
  * `encode` aus einer Zahl klaglos eine.
  */
+/**
+ * Ob ein Wert ein kanonisches Token ist, hoechstens so viele Bytes lang.
+ *
+ * **Die Praedikatsform der Zusicherung darunter, und sie stand einundzwanzigmal
+ * im Baum** (Befund B141): elfmal mit der Grenze 1024, siebenmal mit 256, und
+ * dreimal unter dem Namen `isAsciiReference` - bei dem die Fassungen
+ * auseinandergelaufen sind.
+ *
+ * **Zwei der drei liessen das `+` aus der Zeichenmenge weg.** Sie pruefen
+ * `homeId`, `delegationId` und `sourceRef` - dieselben Werte, die anderswo
+ * gegen die kanonische Menge gehalten werden. Strenger als die Regel, also
+ * schliesst es zu; aber es ist eine Uneinigkeit darueber, was ein Token ist,
+ * und die hat niemand gewaehlt.
+ *
+ * **Und dieselben zwei nahmen `undefined`, `null`, `42` und `true` an.** Sie
+ * riefen `muster.test(wert)` ohne `typeof`-Pruefung, und `RegExp.test` wandelt
+ * sein Argument in eine Zeichenkette um: aus `undefined` wird `"undefined"`,
+ * und das besteht aus erlaubten Zeichen. Gemessen an der Stelle, an der es
+ * zaehlt: `sourceRef` kommt ueber die Transportnaht von ADR 0089 herein -
+ * *„HTTP, Pico Link or another sync mechanism may implement this lookup"* -,
+ * und diese Pruefung war seine einzige. Die Nachbarn in derselben Bedingung
+ * pruefen alle `typeof`.
+ *
+ * Dass die Zusicherung darunter das Praedikat *nicht* ruft, ist Absicht: sie
+ * unterscheidet drei Ablehnungen - leer, zu lang, falsches Zeichen -, weil ihre
+ * Testvektoren das tun. Was beide teilen, ist das Muster und der Kodierer
+ * darueber, also die Frage selbst.
+ */
+export function isAsciiToken(value: unknown, maxBytes = 1024): value is string {
+  if (!Number.isInteger(maxBytes) || maxBytes <= 0) {
+    throw new Error(`invalid_ascii_token_length:${String(maxBytes)}`);
+  }
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const bytes = canonicalTextEncoder.encode(value);
+  return bytes.length > 0 && bytes.length <= maxBytes && canonicalAsciiTokenPattern.test(value);
+}
+
 export function assertAsciiToken(value: unknown, reason?: string): asserts value is string {
   if (typeof value !== 'string') {
     throw new PicoCanonicalFieldError('invalid_field_charset', reason);

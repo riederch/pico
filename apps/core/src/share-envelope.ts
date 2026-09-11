@@ -1,4 +1,4 @@
-import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { randomUUID } from 'node:crypto';
 import {
   buildPicoShareEnvelopeSignatureInput,
@@ -231,7 +231,7 @@ export class PicoShareEnvelopeIssuer {
     issuerSignatureHex: string,
     now: Date = new Date(),
   ): Promise<PicoShareEnvelopeFinalizeResult> {
-    if (!isAsciiReference(issuanceId) || !isHexOfBytes(issuerSignatureHex, 64)) {
+    if (!isAsciiToken(issuanceId, 256) || !isHexOfBytes(issuerSignatureHex, 64)) {
       return { ok: false, reason: 'invalid_request' };
     }
 
@@ -404,13 +404,10 @@ export class PicoShareEnvelopeIssuer {
 }
 
 function isPrepareInput(input: PicoShareEnvelopePrepareInput): boolean {
-  return isAsciiReference(input.grantId)
-    && isAsciiReference(input.delegationId)
+  return isAsciiToken(input.grantId, 256)
+    && isAsciiToken(input.delegationId, 256)
     && isHexOfBytes(input.readerKeyFingerprintHex, 32)
     && Number.isSafeInteger(input.kekVersion)
     && input.kekVersion >= 1;
 }
 
-function isAsciiReference(value: string): boolean {
-  return typeof value === 'string' && /^[A-Za-z0-9._:/+-]{1,256}$/.test(value);
-}

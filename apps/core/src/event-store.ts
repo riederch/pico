@@ -1,4 +1,4 @@
-import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -5736,8 +5736,8 @@ export class EventStore {
         envelope.grantId,
         at,
       );
-      if (!isAsciiToken(stored.issuanceId)
-        || !isAsciiToken(stored.delegationId)
+      if (!isAsciiToken(stored.issuanceId, 256)
+        || !isAsciiToken(stored.delegationId, 256)
         || record.schema !== picoShareEnvelopeRecordSchema
         || envelope.suite !== picoShareSuite
         || grant === undefined
@@ -8574,13 +8574,9 @@ function assertNonEmptyString(value: string, label: string): void {
 }
 
 function assertAsciiToken(value: string, label: string): void {
-  if (typeof value !== 'string' || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(value)) {
+  if (typeof value !== 'string' || !isAsciiToken(value, 256)) {
     throw new Error(`Pico Home ${label} must be a non-empty ASCII token.`);
   }
-}
-
-function isAsciiToken(value: string): boolean {
-  return typeof value === 'string' && /^[A-Za-z0-9._:/+-]{1,256}$/.test(value);
 }
 
 function isCanonicalHex(value: string): boolean {

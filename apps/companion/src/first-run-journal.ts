@@ -1,4 +1,4 @@
-import { assertExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { assertExactKeys, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant, picoInstantToEpochMs } from '@pico/protocol/instant';
 import {
   chmodSync,
@@ -419,7 +419,7 @@ function assertHex32(value: unknown, reason: string): asserts value is string {
 
 function assertToken(value: unknown, reason: string): asserts value is string {
   if (typeof value !== 'string'
-    || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(value)) {
+    || !isAsciiToken(value)) {
     throw new Error(reason);
   }
 }

@@ -1,4 +1,4 @@
-import { hasExactKeys, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { isPicoLifecycleOrder, nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   picoClockDivergenceKinds,
@@ -613,9 +613,9 @@ function parsePendingRecovery(
   const effectiveAt = Date.parse(pending.effectiveAt);
   const completionExpiresAt = Date.parse(pending.completionExpiresAt);
   if (
-    !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(pending.recoveryId)
+    !isAsciiToken(pending.recoveryId)
     || !isHexOfBytes(pending.claimDigestHex, 32)
-    || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(pending.targetDelegationId)
+    || !isAsciiToken(pending.targetDelegationId)
     || !isHexOfBytes(pending.targetDeviceSigningKeyFingerprintHex, 32)
     || !isHexOfBytes(pending.targetDeviceKeyAgreementKeyFingerprintHex, 32)
     || !Number.isFinite(acceptedAt)

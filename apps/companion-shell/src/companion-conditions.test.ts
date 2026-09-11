@@ -1,4 +1,5 @@
 import { picoOfflineFloorFamilies } from '@pico/protocol/offline-floor';
+import { isAsciiToken } from '@pico/protocol/canonical-bytes';
 import { describe, expect, it } from 'vitest';
 import {
   picoCompanionCondition,
@@ -11,6 +12,7 @@ import {
   picoCompanionFloorAssurance,
   picoCompanionFloorFamilies,
   picoCompanionIdlePresentation,
+  picoCompanionIsCanonicalToken,
 } from './contract.js';
 
 function presentation(conditions?: unknown): Record<string, unknown> {
@@ -119,6 +121,27 @@ describe('ADR 0118 O4 the floor is never rendered as blocked', () => {
     const assurance = picoCompanionFloorAssurance();
     for (const family of picoCompanionFloorFamilies) {
       expect(assurance).toContain(family.replace(/_/gu, ' '));
+    }
+  });
+
+  it('keeps the local token rule bound to the protocol', () => {
+    /**
+     * Dieselbe Bindung wie bei der Bodenfamilienliste darunter, fuer dieselbe
+     * Ursache: der Renderer laedt einfache ES-Module ohne Bundler, also kann
+     * der Vertrag `@pico/protocol/canonical-bytes` nicht importieren und
+     * erklaert die Regel selbst (Befund B141). Der Test ist, was diese Kopie
+     * davon abhaelt, eine zweite Wahrheit zu werden.
+     *
+     * Nicht-ASCII steht ausdruecklich in der Liste: die oertliche Fassung
+     * zaehlt Zeichen, die im Protokoll zaehlt Bytes, und beide Zahlen sind nur
+     * dieselbe, solange die Zeichenmenge ASCII bleibt.
+     */
+    for (const value of [
+      'home_abc', 'a+b', 'a/b', 'a:b', 'a.b', 'a-b', 'a_b',
+      '', 'a b', 'ä', 'ä'.repeat(600), 'x'.repeat(1024), 'x'.repeat(1025),
+      undefined, null, 42, true, {}, ['a'],
+    ]) {
+      expect(picoCompanionIsCanonicalToken(value)).toBe(isAsciiToken(value));
     }
   });
 

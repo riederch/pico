@@ -912,6 +912,60 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B141 — Eine Prüfung, die `undefined` bestand (2026-09-11).** Beim Falten der
+Tokenmuster — 21 Stellen der kanonischen Zeichenmenge mit einer Längengrenze —
+kam ein echter Fehler heraus, und er ist der ernsteste dieser Serie.
+
+`isAsciiReference` stand dreimal im Baum in zwei Fassungen, und **zwei davon
+prüften nicht, ob der Wert überhaupt eine Zeichenkette ist.** Sie riefen
+`muster.test(wert)`, und `RegExp.test` wandelt sein Argument in eine
+Zeichenkette um: aus `undefined` wird `"undefined"`, aus `null` `"null"`, aus
+`42` `"42"` — alles Zeichen, die die Menge erlaubt. Gemessen, nicht gelesen:
+**`undefined`, `null`, `42` und `true` bestehen die Prüfung.**
+
+Wo das zählt: `isAsciiReference` prüft `sourceRef`, `homeId` und
+`delegationId` eines Frischeprüfpunkts, und `sourceRef` kommt über die
+Transportnaht aus ADR 0089 herein — *„HTTP, Pico Link or another sync
+mechanism may implement this lookup"*. Der Parser davor prüft die äussere
+Hülle und lässt das innere `checkpoint`-Objekt ungeprüft; diese Zeile war die
+einzige Prüfung des Feldes. Die Nachbarn in derselben Bedingung —
+`isHexOfBytes`, `isPicoLifecycleOrder`, `isPicoInstant` — prüfen alle `typeof`.
+
+Was dabei herauskommt, ist kein Umgehen einer Vollmacht: der Prüfpunkt selbst
+ist wurzelsigniert und wird verifiziert. Es ist ein Prüfpunkt, der mit einer
+**unbrauchbaren Herkunftsangabe** angenommen und aufgezeichnet wird, und ein
+Feld, das ein begrenztes ASCII-Token sein sollte und `undefined` ist.
+
+**Und dieselben zwei liessen das `+` aus der Zeichenmenge weg.** Strenger als
+die Regel, also schliesst es zu; aber es ist eine Uneinigkeit darüber, was ein
+Token ist, und die hatte niemand gewählt.
+
+21 Stellen sind gefaltet: elf mit der Grenze 1024, sieben mit 256, dazu die
+drei Wrapper. `isAsciiToken(wert, maxBytes)` misst **Bytes**, so wie
+`assertAsciiToken` daneben — beide Zahlen sind nur dieselbe, solange die Menge
+ASCII bleibt, und das steht jetzt als Test. Die Zusicherung ruft das Prädikat
+absichtlich *nicht*: sie unterscheidet drei Ablehnungen, weil ihre Vektoren das
+tun.
+
+**Zwei Namen sind dabei getrennt worden**, nicht zusammengelegt: der
+Betreiberspeicher hatte ein eigenes `isAsciiToken` über der Menge *jedes
+druckbaren ASCII-Zeichens* — eine andere Regel unter demselben Namen. Sie
+heisst jetzt `isPrintableAsciiToken`.
+
+Und das Tor, das die Form hält, war beim ersten Wurf zu weit: es meldete
+`[A-Za-z0-9_.:-]` und `[A-Za-z0-9_-]` mit, zwei andere Zeichenmengen. Genau das
+Rauschen, das Befund B112 an einer mechanischen Regel schon einmal gemessen
+hat — verengt, bevor es stand.
+
+**Eine Stelle darf die Regel behalten, und ein anderes Tor hat das durchgesetzt.**
+`apps/companion-shell/src/contract.ts` erreicht den Browser, und dort löst ein
+blanker Spezifizierer nicht auf; `browser:check` hat meinen Import sofort
+gemeldet. Die Datei erklärt die Regel jetzt selbst — mit `typeof`, also ohne
+die Lücke — und ein Test hält sie über neunzehn Eingaben gegen
+`isAsciiToken`. Dieselbe Bindung, die dort schon die Bodenfamilienliste hält.
+Nicht-ASCII steht ausdrücklich in der Testliste, weil die örtliche Fassung
+Zeichen zählt und die im Protokoll Bytes.
+
 **B140 — Dreiundfünfzig Stellen, eine Form, vier Begriffe (2026-09-11).** Die
 Messung aus B139 hatte den Spitzenreiter genannt: `/^[0-9a-f]{64}$/` in 26
 Dateien. Vollständig gezählt sind es **53 Stellen** über vier Bytelängen —

@@ -7,6 +7,29 @@ import type { PicoModelProviderState } from '@pico/protocol/model-provider-state
 import type { PicoRulesDecisionValue } from '@pico/protocol/pico-rules';
 
 /**
+ * ADR 0113 C2. Was ein kanonisches Token ist - hier noch einmal erklaert, und
+ * das ist erlaubt.
+ *
+ * Der Renderer laedt einfache ES-Module ohne Bundler, ein blanker Spezifizierer
+ * loest dort also nicht auf, und `check-browser-modules.mjs` haelt das fest.
+ * Dieser Vertrag kann das Protokoll nicht importieren und erklaert die Regel
+ * deshalb selbst. Was diese Kopie davon abhaelt, eine zweite Wahrheit zu
+ * werden, ist der Test daneben, der sie ueber eine Reihe von Eingaben gegen
+ * `isAsciiToken` haelt - dasselbe Verfahren wie bei der oertlichen
+ * Bodenfamilienliste.
+ *
+ * Sie zaehlt Zeichen, wo das Protokoll Bytes zaehlt. Beide Zahlen sind nur
+ * dieselbe, solange die Zeichenmenge ASCII bleibt - und genau das erzwingt das
+ * Muster hier, weshalb der Test auch mit Nicht-ASCII fragt.
+ */
+export function picoCompanionIsCanonicalToken(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= 1024
+    && /^[A-Za-z0-9._:/+-]+$/u.test(value);
+}
+
+/**
  * ADR 0113 C2/B3: the complete renderer-facing contract. It contains only
  * already-rendered presentation state. Key material, daemon paths, sockets,
  * signed records and generic IPC payloads have no representation here.
@@ -1010,7 +1033,7 @@ export function parsePicoCompanionRecoveryCardSetupInput(
   assertDisplayText(record.homeNameOrId, 256);
   if (
     typeof record.homeId !== 'string'
-    || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(record.homeId)
+    || !picoCompanionIsCanonicalToken(record.homeId)
   ) {
     throw new Error('invalid_recovery_card_home_id');
   }

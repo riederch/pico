@@ -1,4 +1,4 @@
-import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import {
   chmodSync,
   closeSync,
@@ -433,7 +433,7 @@ function parseBinding(value: unknown): PicoCompanionPlatformUnlockBinding {
     assertFingerprint(binding[field]);
   }
   if (typeof binding.delegationId !== 'string'
-    || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(binding.delegationId)) {
+    || !isAsciiToken(binding.delegationId)) {
     throw new Error('invalid_platform_unlock_delegation');
   }
   // Feld für Feld statt Spread: `exactRecord` hat die Namen schon geprüft,

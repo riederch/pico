@@ -1,7 +1,7 @@
 // Befund B50. Die kanonischen Bytes-Regeln stehen in `./canonical-bytes.js`
 // und nirgends sonst: sie standen hier und in `recovery.ts` zweimal, mit
 // denselben Bytes und vier verschiedenen Ablehnungen.
-import { asciiBytes, assertAsciiToken, bytesToHex, canonicalAsciiTokenPattern, canonicalHexPattern, canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isHexOfBytes } from './canonical-bytes.js';
+import { asciiBytes, assertAsciiToken, bytesToHex, canonicalAsciiTokenPattern, canonicalHexPattern, canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isAsciiToken, isHexOfBytes } from './canonical-bytes.js';
 import { foundationEventTypes, type FoundationEventType } from './foundation-event-type.js';
 // ADR 0116 W2 (Befund B49). Diese Barriere gibt die Herkunftsklasse weiter und
 // benutzt sie auch selbst; `export … from` legt dafuer keinen lokalen Namen an.
@@ -3339,10 +3339,10 @@ export function buildPicoHomeAuditRecordDigestInput(
   if (!Number.isSafeInteger(input.chainPosition) || input.chainPosition < 1) {
     throw new Error('invalid_audit_chain_position');
   }
-  if (!auditWriterPattern.test(input.writerId)) {
+  if (!isAsciiToken(input.writerId, 256)) {
     throw new Error('invalid_audit_writer');
   }
-  if (!auditWriterPattern.test(input.eventId)) {
+  if (!isAsciiToken(input.eventId, 256)) {
     throw new Error('invalid_audit_event_id');
   }
   if (!(foundationEventTypes as readonly string[]).includes(input.eventType)) {
@@ -3381,7 +3381,6 @@ export function picoHomeAuditRecordDigestHex(
   ));
 }
 
-const auditWriterPattern = /^[A-Za-z0-9._:/+-]{1,256}$/;
 
 /**
  * ADR 0121. Which Foundation events are audit records: every `auth.*` and
