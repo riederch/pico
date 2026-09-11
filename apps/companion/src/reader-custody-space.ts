@@ -1,3 +1,4 @@
+import { picoLifecycleOrderFrom } from '@pico/protocol/lifecycle-order';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -404,7 +405,7 @@ export async function rotatePicoCompanionReaderCustodyDomain(input: {
        * Millisekunden erfüllen es, weil die Anlässe vorher entstanden sind.
        * Dieselbe Ordnung wie bei den Mitgliedschaften und den Leserrechten.
        */
-      lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
+      lifecycleOrder: picoLifecycleOrderFrom(BigInt(now.getTime())),
     });
     await submitPicoCompanionKekRotation({
       linkClient,
@@ -446,7 +447,7 @@ export async function rotatePicoCompanionReaderCustodyDomain(input: {
     writerIdentityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
     validFrom: now.toISOString(),
     validUntil: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000).toISOString(),
-    lifecycleOrder: `seq:${String(now.getTime() + 1).padStart(16, '0')}`,
+    lifecycleOrder: picoLifecycleOrderFrom(BigInt(now.getTime() + 1)),
   } as never);
   await submitPicoCompanionAuthorityRecord({
     linkClient,
@@ -571,7 +572,7 @@ export async function letPicoCompanionOtherDeviceRead(input: {
      * das erste, und eine Ordnung, die zweimal vorkommt, ordnet nichts.
      * Sechzehn Stellen sind die Form, die der Daemon verlangt.
      */
-    lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
+    lifecycleOrder: picoLifecycleOrderFrom(BigInt(now.getTime())),
   } as never);
 
   await submitPicoCompanionReaderGrant({ linkClient, record: readerGrantRecord });

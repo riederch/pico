@@ -10,6 +10,7 @@ import {
   fixedHexBytes,
 } from './canonical-bytes.js';
 import { assertPicoInstant } from './instant.js';
+import { assertPicoLifecycleOrder } from './lifecycle-order.js';
 import type {
   PicoIdentityDelegationSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
@@ -475,7 +476,7 @@ export function buildPicoHomeDeviceRecoveryClaimSignatureInput(
   assertAsciiToken(input.recoveryId);
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.targetDelegationId);
-  assertLifecycleOrder(input.observedLifecycleOrder);
+  assertPicoLifecycleOrder(input.observedLifecycleOrder);
   assertPicoInstant(input.createdAt);
   assertPicoInstant(input.expiresAt);
   if (Date.parse(input.expiresAt) <= Date.parse(input.createdAt)) {
@@ -539,8 +540,8 @@ export function buildPicoHomeDeviceRecoveryReceiptSignatureInput(
   assertAsciiToken(input.recoveryId);
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.targetDelegationId);
-  assertLifecycleOrder(input.acceptedLifecycleOrder);
-  assertLifecycleOrder(input.resultingLifecycleOrder);
+  assertPicoLifecycleOrder(input.acceptedLifecycleOrder);
+  assertPicoLifecycleOrder(input.resultingLifecycleOrder);
   for (const instant of [
     input.pendingAcceptedAt,
     input.effectiveAt,
@@ -667,7 +668,6 @@ interface RecoveryHashSodium {
   ): Uint8Array;
 }
 
-const lifecycleOrderPattern = /^seq:[0-9]{16}$/;
 
 function utf8Bytes(value: string): Uint8Array {
   return canonicalTextEncoder.encode(value);
@@ -695,11 +695,7 @@ function assertEndpointHint(value: string): void {
   }
 }
 
-function assertLifecycleOrder(value: string): void {
-  if (typeof value !== 'string' || !lifecycleOrderPattern.test(value)) {
-    throw new Error('invalid_lifecycle_order');
-  }
-}
+
 
 /**
  * Befund B124. Hiess `assertExactKeys` und ist die reichste der vier: `isRecord`,

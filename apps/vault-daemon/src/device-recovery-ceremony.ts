@@ -1,4 +1,5 @@
 import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { isPicoLifecycleOrder, nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
@@ -31,7 +32,6 @@ import type {
   PicoVaultDaemonUnlockedSessionDescriptor,
 } from './protocol.js';
 
-const lifecycleOrderPattern = /^seq:([0-9]{16})$/u;
 const asciiIdPattern = /^[A-Za-z0-9._:/+-]{1,1024}$/u;
 const fingerprintPattern = /^[0-9a-f]{64}$/u;
 const signaturePattern = /^[0-9a-f]{128}$/u;
@@ -213,7 +213,7 @@ export async function initiatePicoHomeDeviceRecovery(
     scopes,
     validFrom,
     validUntil: input.validUntil,
-    lifecycleOrder: nextLifecycleOrder(
+    lifecycleOrder: nextPicoLifecycleOrder(
       preparationView.observedLifecycleOrder,
     ),
   };
@@ -235,7 +235,7 @@ export async function initiatePicoHomeDeviceRecovery(
       subjectRef: device.delegationId,
       reasonCategory: 'lost_device',
       revokedAt: createdAt,
-      lifecycleOrder: nextLifecycleOrder(
+      lifecycleOrder: nextPicoLifecycleOrder(
         preparationView.observedLifecycleOrder,
         BigInt(index + 2),
       ),
@@ -435,7 +435,7 @@ function parsePreparationView(
     || value.homeId !== expected.homeId
     || value.picoIdentityFingerprintHex !== expected.picoIdentityFingerprintHex
     || typeof value.observedLifecycleOrder !== 'string'
-    || !lifecycleOrderPattern.test(value.observedLifecycleOrder)
+    || !isPicoLifecycleOrder(value.observedLifecycleOrder)
     || !Array.isArray(value.activeDevices)) {
     throw new Error('invalid_recovery_preparation_result');
   }
@@ -641,18 +641,6 @@ function normalizeScopes(
     throw new Error('invalid_recovery_delegation_scopes');
   }
   return picoIdentityDelegationScopes.filter((scope) => selected.has(scope));
-}
-
-function nextLifecycleOrder(current: string, offset: bigint = 1n): string {
-  const match = lifecycleOrderPattern.exec(current);
-  if (match === null) {
-    throw new Error('invalid_lifecycle_order');
-  }
-  const next = BigInt(match[1]) + offset;
-  if (next > 9_999_999_999_999_999n) {
-    throw new Error('lifecycle_order_exhausted');
-  }
-  return `seq:${next.toString().padStart(16, '0')}`;
 }
 
 function randomId(sodium: VaultSodium, prefix: string): string {

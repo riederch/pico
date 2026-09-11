@@ -1,3 +1,4 @@
+import { picoLifecycleOrderFrom } from '@pico/protocol/lifecycle-order';
 import {
   buildPicoHomeDomainReadGrantSignatureInput,
   picoHomeDomainReadGrantRecordSchema,
@@ -57,7 +58,7 @@ export interface PicoCompanionDomainReadGrantInput {
  * clock already orders - and two devices keeping one would disagree.
  */
 export function picoCompanionGrantLifecycleOrder(nowMs: number): string {
-  return `seq:${String(nowMs).padStart(16, '0')}`;
+  return picoLifecycleOrderFrom(BigInt(nowMs));
 }
 
 /**

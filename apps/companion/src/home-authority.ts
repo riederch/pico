@@ -1,3 +1,4 @@
+import { picoLifecycleOrderFrom } from '@pico/protocol/lifecycle-order';
 import type { PicoReaderCustodyReaderAccessMode } from '@pico/protocol';
 import type {
   PicoHomeContinuityReasonCategory,
@@ -370,7 +371,7 @@ export async function endPicoCompanionMembership(input: {
      * rise above it, and a device that kept its own counter would be keeping
      * a second record of something the clock already orders.
      */
-    lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
+    lifecycleOrder: picoLifecycleOrderFrom(BigInt(now.getTime())),
   });
 
   return Object.freeze({
@@ -548,7 +549,7 @@ export async function revokePicoCompanionDomainReader(input: {
        * Reihenfolge entscheidet, ist welche von zwei Aussagen über denselben
        * Zugang das Home projiziert.
        */
-      lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
+      lifecycleOrder: picoLifecycleOrderFrom(BigInt(now.getTime())),
     },
   });
 

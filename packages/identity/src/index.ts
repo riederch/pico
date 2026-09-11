@@ -7,6 +7,10 @@ import {
 } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
 import {
+  picoLifecycleOrderFrom,
+  picoLifecycleOrderSequence,
+} from '@pico/protocol/lifecycle-order';
+import {
   buildPicoHomeContinuitySignatureInput,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
@@ -160,7 +164,6 @@ type LifecycleStatement = {
   stableJson: string;
 };
 
-const lifecycleOrderPattern = /^seq:([0-9]{16})$/;
 
 export class PicoIdentityLifecycleIndex {
   readonly #delegationsById: Map<string, PicoIdentityDelegationSignatureInput>;
@@ -797,12 +800,7 @@ export function verifyPicoIdentityReaderKeyFreshnessSignature(
 }
 
 export function parsePicoIdentityLifecycleOrder(value: string): bigint {
-  const match = lifecycleOrderPattern.exec(value);
-  if (match === null) {
-    throw new Error('invalid_lifecycle_order');
-  }
-
-  return BigInt(match[1]);
+  return picoLifecycleOrderSequence(value);
 }
 
 export function comparePicoIdentityLifecycleOrder(left: string, right: string): number {
@@ -837,7 +835,7 @@ function freshestLifecycleOrder(statements: readonly LifecycleStatement[]): stri
     return null;
   }
 
-  return `seq:${freshest.order.toString().padStart(16, '0')}`;
+  return picoLifecycleOrderFrom(freshest.order);
 }
 
 function assertUniqueIssuerLifecycleOrders(statements: readonly LifecycleStatement[]): void {

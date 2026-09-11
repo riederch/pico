@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { narrowToOwner } from './database-file-mode.js';
+import { assertPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   MAX_PICO_LINK_DIRECT_SEEN_REQUESTS,
   PicoLinkDirectSeenRequests,
@@ -8601,12 +8602,6 @@ function assertDetachedSignature(value: string, label: string): void {
   }
 }
 
-function assertLifecycleOrder(value: string, label: string): void {
-  if (typeof value !== 'string' || !/^seq:[0-9]{16}$/.test(value)) {
-    throw new Error(`Pico Home ${label} must be a fixed-width lifecycle order.`);
-  }
-}
-
 function assertPicoHomeMembership(membership: PicoHomeMembership): void {
   assertAsciiToken(membership.membershipId, 'membershipId');
   assertAsciiToken(membership.homeId, 'membership.homeId');
@@ -8672,7 +8667,10 @@ function assertPicoHomeFoundingRecord(record: PicoHomeFoundingRecord, claim: Pic
   assertFingerprint(founding.hostKeyAgreementKeyFingerprintHex, 'founding.hostKeyAgreementKeyFingerprintHex');
   assertFingerprint(founding.homeHostPicoIdentityFingerprintHex, 'founding.homeHostPicoIdentityFingerprintHex');
   assertNonEmptyString(founding.foundedAt, 'foundedAt');
-  assertLifecycleOrder(founding.lifecycleOrder, 'founding.lifecycleOrder');
+  assertPicoLifecycleOrder(
+    founding.lifecycleOrder,
+    'Pico Home founding.lifecycleOrder must be a fixed-width lifecycle order.',
+  );
   assertAsciiToken(claimResponse.claimId, 'claimId');
   assertAsciiToken(claimResponse.homeId, 'claimResponse.homeId');
   assertAsciiToken(claimResponse.foundingRecordId, 'claimResponse.foundingRecordId');

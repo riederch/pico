@@ -1,5 +1,6 @@
 import type { IdentityVerificationSodium } from '@pico/identity';
 import { isPicoInstant, maxPicoIdentityReaderKeyFreshnessMs } from '@pico/protocol';
+import { isPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import type {
   EventStore,
   PicoIdentityReaderKeyCandidate,
@@ -170,7 +171,7 @@ function validateCurrentCheckpoint(
       !== candidate.deviceKeyAgreementKeyFingerprintHex
     || freshness.delegationId !== candidate.delegationId
     || !isAsciiReference(freshness.sourceRef)
-    || !isLifecycleOrder(freshness.observedThroughLifecycleOrder)
+    || !isPicoLifecycleOrder(freshness.observedThroughLifecycleOrder)
     || !isPicoInstant(at)
     || !isPicoInstant(freshness.checkedAt)
     || !isPicoInstant(freshness.freshUntil)) {
@@ -193,9 +194,6 @@ function validateCurrentCheckpoint(
   return undefined;
 }
 
-function isLifecycleOrder(value: string): boolean {
-  return /^seq:[0-9]{16}$/.test(value);
-}
 
 
 function isAsciiReference(value: string): boolean {

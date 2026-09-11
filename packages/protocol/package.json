@@ -99,6 +99,10 @@
       "types": "./dist/when-display.d.ts",
       "import": "./dist/when-display.js"
     },
+    "./lifecycle-order": {
+      "types": "./dist/lifecycle-order.d.ts",
+      "import": "./dist/lifecycle-order.js"
+    },
     "./instant": {
       "types": "./dist/instant.d.ts",
       "import": "./dist/instant.js"

@@ -1,5 +1,11 @@
 import { hasExactKeys } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
+import { assertPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
+
+/** Derselbe Begriff, eigener Ablehnungsname: dieser Weg ist der Sync. */
+const assertSyncLifecycleOrder = (value: string): void => {
+  assertPicoLifecycleOrder(value, 'invalid_sync_lifecycle_order');
+};
 import { randomUUID } from 'node:crypto';
 import {
   closeSync,
@@ -3222,7 +3228,7 @@ function assertSyncFloor(floor: PicoReaderCustodySyncFloor): void {
     throw new Error('invalid_sync_floor');
   }
   assertDigest(floor.manifestDigestHex);
-  assertLifecycleOrder(floor.observedThroughLifecycleOrder);
+  assertSyncLifecycleOrder(floor.observedThroughLifecycleOrder);
   assertCanonicalInstant(floor.createdAt);
 }
 
@@ -4298,11 +4304,7 @@ function assertDigest(value: string): void {
   }
 }
 
-function assertLifecycleOrder(value: string): void {
-  if (!/^seq:[0-9]{16}$/.test(value)) {
-    throw new Error('invalid_sync_lifecycle_order');
-  }
-}
+
 
 function assertCanonicalInstant(value: string): void {
   // Befund B52. Beide Haelften standen hier von Hand, richtig und ein zweites

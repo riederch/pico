@@ -1,4 +1,5 @@
 import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { isPicoLifecycleOrder, nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   picoClockDivergenceKinds,
   picoHomeDeviceLifecycleCanonicalLabels,
@@ -45,7 +46,6 @@ import type {
 } from './link-direct-client.js';
 
 const TARGET_ACTIVATION_LIFETIME_MS = 4 * 60 * 1_000;
-const lifecycleOrderPattern = /^seq:([0-9]{16})$/;
 
 
 export interface PicoHomeDeviceLifecycleView {
@@ -180,7 +180,7 @@ export async function enrollPicoHomeDevice(
     scopes: [...input.scopes],
     validFrom: input.validFrom ?? context.now.toISOString(),
     validUntil: input.validUntil,
-    lifecycleOrder: nextLifecycleOrder(context.view.observedLifecycleOrder),
+    lifecycleOrder: nextPicoLifecycleOrder(context.view.observedLifecycleOrder),
   };
   const delegationSignatureHex = await signWithExactKey(input.rootClient, {
     keyFingerprintHex: context.identity.keyFingerprintHex,
@@ -237,7 +237,7 @@ export async function renewPicoHomeDevice(
     scopes: [...input.scopes],
     validFrom: input.validFrom ?? context.now.toISOString(),
     validUntil: input.validUntil,
-    lifecycleOrder: nextLifecycleOrder(context.view.observedLifecycleOrder),
+    lifecycleOrder: nextPicoLifecycleOrder(context.view.observedLifecycleOrder),
   };
   const revocation: PicoIdentityRevocationSignatureInput = {
     suite: picoIdentitySuite,
@@ -247,7 +247,7 @@ export async function renewPicoHomeDevice(
     subjectRef: input.replacedDelegationId,
     reasonCategory: 'key_rotated',
     revokedAt: context.now.toISOString(),
-    lifecycleOrder: nextLifecycleOrder(context.view.observedLifecycleOrder, 2n),
+    lifecycleOrder: nextPicoLifecycleOrder(context.view.observedLifecycleOrder, 2n),
   };
   const delegationSignatureHex = await signWithExactKey(input.rootClient, {
     keyFingerprintHex: context.identity.keyFingerprintHex,
@@ -313,7 +313,7 @@ export async function revokePicoHomeDevice(
     subjectRef,
     reasonCategory: input.reasonCategory ?? 'device_retired',
     revokedAt: now.toISOString(),
-    lifecycleOrder: nextLifecycleOrder(view.observedLifecycleOrder),
+    lifecycleOrder: nextPicoLifecycleOrder(view.observedLifecycleOrder),
   };
   if (
     (subject === 'delegation' && revocation.subjectKind !== 'delegation')
@@ -536,7 +536,7 @@ function parseLifecycleView(value: Record<string, unknown>): PicoHomeDeviceLifec
     typeof value.homeId !== 'string'
     || typeof value.picoIdentityFingerprintHex !== 'string'
     || typeof value.observedLifecycleOrder !== 'string'
-    || !lifecycleOrderPattern.test(value.observedLifecycleOrder)
+    || !isPicoLifecycleOrder(value.observedLifecycleOrder)
     || !Array.isArray(value.devices)
     || !('pendingRecovery' in value)
   ) {
@@ -657,18 +657,6 @@ function keyRecord(
     keyRole: session.keyRole,
     publicKeyHex: session.publicKeyHex,
   };
-}
-
-function nextLifecycleOrder(current: string, offset: bigint = 1n): string {
-  const match = lifecycleOrderPattern.exec(current);
-  if (match === null) {
-    throw new Error('invalid_lifecycle_order');
-  }
-  const next = BigInt(match[1]) + offset;
-  if (next > 9_999_999_999_999_999n) {
-    throw new Error('lifecycle_order_exhausted');
-  }
-  return `seq:${next.toString().padStart(16, '0')}`;
 }
 
 function randomId(sodium: VaultSodium, prefix: string): string {

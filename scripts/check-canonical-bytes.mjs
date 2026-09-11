@@ -258,6 +258,72 @@ for (const entry of elsewhere) {
   }
 }
 
+/**
+ * Und eine zweite Regel, die keine Namen zaehlt, sondern eine Form (Befund
+ * B137).
+ *
+ * Eine **Lebenslaufordnung** sagt, welcher von zwei Datensaetzen ueber
+ * dasselbe spaeter kam, und sie wird zu unterschriebenen Bytes - also gehoert
+ * sie in dieses Tor. Sie ist `seq:` und **genau sechzehn Ziffern**, und die
+ * feste Breite ist die tragende Haelfte: jeder Vergleich darauf ist ein
+ * Zeichenkettenvergleich. Eine kuerzere sortiert unter alles, eine laengere
+ * nach ihrem ersten Zeichen.
+ *
+ * **Die Form stand am 2026-09-11 zwanzigmal im Baum.** Zehnmal als das Muster,
+ * das eine zulaesst - viermal als `lifecycleOrderPattern` in drei
+ * Schreibweisen, sechsmal als Literal -, und zehnmal als der Ausdruck, der
+ * eine *baut*: `seq:` mit einem `padStart(16, '0')` daneben. Zwei Haelften
+ * eines Formats, an zwanzig Orten getrennt gehalten, und die zweite ist die,
+ * die jemand vergisst - genau wie `padStart(2, '0')` beim Hex in Befund B125.
+ *
+ * Erkannt wird die Form und nicht der Name, weil der Name das war, was die
+ * Zaehlung sah: vier `assertLifecycleOrder`. Die uebrigen sechzehn hiessen
+ * anders oder gar nichts.
+ */
+const lifecycleOrderHome = 'packages/protocol/src/lifecycle-order.ts';
+const lifecycleOrderShapes = [
+  [/seq:\(?\[0-9\]\{16\}\)?/g, 'the pattern that admits one'],
+  [/seq:\(?\\d\{16\}\)?/g, 'the pattern that admits one'],
+  [/`seq:\$\{/g, 'the expression that builds one'],
+];
+let lifecycleOrderSites = 0;
+let lifecycleOrderFilesRead = 0;
+let lifecycleOrderHomeFound = false;
+for (const path of files) {
+  const shown = relative(repoRoot, path).split('\\').join('/');
+  if (shown === lifecycleOrderHome) {
+    lifecycleOrderHomeFound = true;
+    continue;
+  }
+  if (shown.endsWith('.test.ts')) {
+    continue;
+  }
+  lifecycleOrderFilesRead += 1;
+  const source = readFileSync(path, 'utf8');
+  for (const [shape, what] of lifecycleOrderShapes) {
+    for (const _ of source.matchAll(shape)) {
+      lifecycleOrderSites += 1;
+      errors.push(
+        `${shown}: writes ${what} for a lifecycle order by hand. `
+        + `\`${lifecycleOrderHome}\` carries both halves - the width that makes the string `
+        + 'comparison work and the padding that produces it - and they are two halves of one '
+        + 'format, so keeping them apart is how one of them gets forgotten.',
+      );
+    }
+  }
+}
+
+// Ein Tor ohne Gegenstand ist kaputt und nicht sauber: verschwindet die Datei,
+// die die Regel traegt, meldet diese Regel weiter null Fundstellen und meint
+// damit etwas ganz anderes.
+if (!lifecycleOrderHomeFound) {
+  errors.push(
+    `${lifecycleOrderHome} is not among the files this check reads, so the rule that nobody `
+    + 'writes a lifecycle order by hand has no home to point at. Zero findings would then mean '
+    + 'the shape is gone, not that it is kept in one place.',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Canonical-bytes check failed:');
   for (const error of errors) {
@@ -271,5 +337,5 @@ console.log(
   + `bytes have exactly one definition each inside the protocol package, all of them in ${home}; `
   + `outside it ${carriedSame + carriedNameOnly} copies are named and dated - ${carriedSame} `
   + `the same rule written twice, ${carriedNameOnly} the same name over a different rule; `
-  + `${files.length} TypeScript sources read).`,
+  + `${files.length} TypeScript sources read; and the lifecycle-order shape - both the pattern that admits one and the expression that builds one - is written only in ${lifecycleOrderHome}, checked across ${lifecycleOrderFilesRead} of them).`,
 );

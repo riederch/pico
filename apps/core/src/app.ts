@@ -1,4 +1,5 @@
 import { bytesToHex, hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import { isPicoInstant } from '@pico/protocol/instant';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
@@ -6472,7 +6473,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             reasonCategory:
               args.reasonCategory as PicoHomeContinuityReasonCategory,
             changedAt: new Date().toISOString(),
-            lifecycleOrder: nextLifecycleOrder(tailOrder),
+            lifecycleOrder: nextPicoLifecycleOrder(tailOrder),
           };
           const signatureInput =
             buildPicoHomeContinuitySignatureInput(continuity);
@@ -8891,12 +8892,6 @@ function createPendingPicoHomeClaim(params: {
 }
 
 /** ADR 0115 U3. The next chain order after the given one ('seq:%016d'). */
-function nextLifecycleOrder(previous: string): string {
-  const match = /^seq:(\d{16})$/.exec(previous);
-  const next = match === null ? 1 : Number.parseInt(match[1], 10) + 1;
-  return `seq:${String(next).padStart(16, '0')}`;
-}
-
 
 function verifyPicoHomeFoundingEvidence(
   record: PicoHomeFoundingRecord,

@@ -912,6 +912,62 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B137 — Ein Format, zwanzigmal geschrieben, und die Hälfte davon baut es
+(2026-09-11).** Der Namenszähler meldete `assertLifecycleOrder` mit vier
+Fassungen über vier Rümpfen. Nachgemessen ist es viel mehr: **was eine
+Lebenslaufordnung ist, steht zwanzigmal im Baum.**
+
+Zehnmal die Form, die eine *zulässt* — viermal als `lifecycleOrderPattern` in
+drei Schreibweisen (mit Fanggruppe, ohne, mit `/u`), sechsmal als Literal. Und
+zehnmal der Ausdruck, der eine *baut*: `seq:` mit einem `padStart(16, '0')`
+daneben. Zwei Hälften eines Formats, an zwanzig Orten getrennt gehalten — und
+die zweite ist die, die jemand vergisst. Genau wie `padStart(2, '0')` beim Hex
+in B125, und mit derselben Folge: eine Ordnung ohne Auffüllung bleibt
+`seq:`-präfigiert und wird nur kürzer, und **jeder Vergleich darauf ist ein
+Zeichenkettenvergleich.** Eine kürzere sortiert unter alles, eine längere nach
+ihrem ersten Zeichen.
+
+Der Namenszähler konnte das nicht sehen: sechzehn der zwanzig Stellen heissen
+anders oder gar nichts. Ein Name ist kein Gegenstand.
+
+**Drei echte Unterschiede zwischen den Fassungen, jeder gemessen.**
+
+Erstens: eine von drei `nextLifecycleOrder` las `match === null ? 1 : …` und
+begann die Folge bei einem missgebildeten Vorgänger stillschweigend neu bei
+eins — und eins ist der Wert, der unter jedem bereits geschriebenen Datensatz
+sortiert. Nachgesehen, bevor daraus ein Alarm wurde: der Wert kommt aus einer
+gespeicherten Kette, deren Einträge beim Hineinschreiben geprüft wurden, also
+erreichte ihn nichts. Ein Rückfall, den niemand erreicht, ist trotzdem einer,
+den später jemand erreicht, und dieser hatte keine Begründung neben sich.
+
+Zweitens: dieselbe Fassung rechnete mit `Number.parseInt`. Sechzehn Ziffern
+lassen 9.999.999.999.999.999 zu, `Number.MAX_SAFE_INTEGER` endet bei
+9.007.199.254.740.991. Ausgeführt: `Number.parseInt('9999999999999999')`
+kommt als `10000000000000000` zurück — andere Ziffern. Für jede Ordnung, die
+dieser Baum heute schreibt, exakt; für das obere Ende des Formats still
+falsch. Die Regel rechnet jetzt mit `bigint`.
+
+Drittens: eine stellte `assertAsciiToken` davor, dieselbe Gestalt wie in B126.
+Gemessen lehnt der Vorlauf nichts ab, was die Ordnung nicht selbst ablehnt; er
+tauscht nur den spezifischen Namen gegen einen allgemeinen.
+
+`packages/protocol/src/lifecycle-order.ts` trägt jetzt beide Hälften: das
+Muster, das Prädikat, die Ablehnung, die Folge als `bigint` und den Bau mit
+seiner Erschöpfungsgrenze. Eine siebzehnte Ziffer ist eine Ablehnung und keine
+Rundung, denn sie sortiert gegen ihre sechzehnstelligen Nachbarn nach ihrem
+ersten Zeichen.
+
+Gehalten wird es von einer **Formregel** in `canonical:check` statt von einer
+Namensliste — der Name war ja das, was die Zählung sah. Sie liest 259 Quellen
+und meldet, wenn eine von ihnen das Muster oder den Bau von Hand hinschreibt;
+und sie fällt, wenn die Heimatdatei verschwindet, weil null Fundstellen dann
+etwas ganz anderes hiessen. Drei Pflanzungen, drei rot.
+
+Und ein viertes Netz hat ungefragt gesprochen: die Regel aus Befund B119 —
+jeder Pfad, den ein Prüfer nennt, ist eine verfolgte Datei — meldete die neue
+Heimatdatei, weil ich sie noch nicht zu git hinzugefügt hatte. Genau dafür ist
+sie da, und es ist das zweite Mal in dieser Sitzung, dass sie mich erwischt.
+
 **B136 — Acht Fassungen, und die Regel stand eine Datei weiter schon
 exportiert (2026-09-11).** `hasExactKeys` — „trägt dieser Datensatz genau diese
 Felder" — stand achtmal im Baum über vier Rümpfen. Gemessen wurde nicht

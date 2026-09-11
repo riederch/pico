@@ -25,6 +25,7 @@ export {
   picoInstantToEpochMs,
 } from './instant.js';
 import { assertPicoInstant } from './instant.js';
+import { assertPicoLifecycleOrder, picoLifecycleOrderFrom } from './lifecycle-order.js';
 import type { PicoActionRisk, PicoModuleActivationView } from './module.js';
 import type { PicoApprovalOutcome } from './approval.js';
 import type { PicoLibraryPinKind } from './library-pin.js';
@@ -3253,7 +3254,7 @@ export function buildPicoHomeDeviceActivationSignatureInput(
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.sponsorDelegationId);
   assertAsciiToken(input.targetDelegationId);
-  assertLifecycleOrder(input.observedLifecycleOrder);
+  assertPicoLifecycleOrder(input.observedLifecycleOrder);
   assertPicoInstant(input.createdAt);
   assertPicoInstant(input.expiresAt);
   assertValidBounds(input.createdAt, input.expiresAt);
@@ -3366,7 +3367,7 @@ export function buildPicoHomeAuditRecordDigestInput(
     asciiBytes(input.writerId),
     // Fixed width so position 2 and position 20 cannot produce the same bytes
     // under any padding a future writer might choose.
-    asciiBytes(`seq:${String(input.chainPosition).padStart(16, '0')}`),
+    asciiBytes(picoLifecycleOrderFrom(BigInt(input.chainPosition))),
     asciiBytes(input.eventId),
     asciiBytes(input.eventType),
     asciiBytes(input.occurredAt),
@@ -3459,8 +3460,8 @@ export function buildPicoHomeDeviceLifecycleReceiptSignatureInput(
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.sponsorDelegationId);
   assertAsciiToken(input.targetDelegationId);
-  assertLifecycleOrder(input.acceptedLifecycleOrder);
-  assertLifecycleOrder(input.resultingLifecycleOrder);
+  assertPicoLifecycleOrder(input.acceptedLifecycleOrder);
+  assertPicoLifecycleOrder(input.resultingLifecycleOrder);
   assertPicoInstant(input.acceptedAt);
   if (typeof input.leavesNoActiveDevice !== 'boolean') {
     throw new Error('invalid_leaves_no_active_device');
@@ -3506,7 +3507,7 @@ export function buildPicoIdentityDelegationSignatureInput(
   assertAsciiToken(input.delegationId);
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
   assertValidBounds(input.validFrom, input.validUntil);
   const scopes = canonicalScopeSet(input.scopes);
 
@@ -3557,7 +3558,7 @@ export function buildPicoIdentityRotationSignatureInput(
     'invalid_reason_category',
   );
   assertPicoInstant(input.rotatedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
   // A root cannot succeed itself: the record would end the authority it is
   // simultaneously granting, and no relying party could act on it.
   if (
@@ -3606,7 +3607,7 @@ export function buildPicoIdentityRevocationSignatureInput(
   assertAsciiToken(input.subjectRef);
   assertStringMember(input.reasonCategory, picoIdentityRevocationReasonCategories, 'invalid_reason_category');
   assertPicoInstant(input.revokedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoIdentitySignatureInputLabels.revocation),
@@ -3857,7 +3858,7 @@ export function buildPicoIdentityReaderKeyFreshnessSignatureInput(
     picoIdentityReaderKeyFreshnessStatuses,
     'invalid_reader_key_freshness_status',
   );
-  assertLifecycleOrder(input.observedThroughLifecycleOrder);
+  assertPicoLifecycleOrder(input.observedThroughLifecycleOrder);
   assertPicoInstant(input.checkedAt);
   assertPicoInstant(input.freshUntil);
   assertValidBounds(input.checkedAt, input.freshUntil);
@@ -4001,7 +4002,7 @@ export function buildPicoHomeFoundingSignatureInput(
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.firstDeviceDelegationId);
   assertPicoInstant(input.foundedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeV2SignatureInputLabels.founding),
@@ -4041,7 +4042,7 @@ export function buildPicoHomeMembershipSignatureInput(input: PicoHomeMembershipS
   assertStringMember(input.role, picoHomeMembershipRoles, 'invalid_membership_role');
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
   assertValidBounds(input.validFrom, input.validUntil);
   const scopes = canonicalHomeMembershipScopeSet(input.scopes);
 
@@ -4084,7 +4085,7 @@ export function buildPicoHomeMembershipLifecycleSignatureInput(
   assertStringMember(input.status, picoHomeMembershipStatuses, 'invalid_membership_status');
   assertStringMember(input.reasonCategory, picoHomeMembershipLifecycleReasonCategories, 'invalid_reason_category');
   assertPicoInstant(input.changedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeSignatureInputLabels.membershipLifecycle),
@@ -4122,7 +4123,7 @@ export function buildPicoHomeDomainReadGrantSignatureInput(
   assertAsciiToken(input.privacyDomain);
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
   assertValidBounds(input.validFrom, input.validUntil);
 
   return concatCanonicalElements([
@@ -4169,7 +4170,7 @@ export function buildPicoHomeDomainReadGrantLifecycleSignatureInput(
     'invalid_reason_category',
   );
   assertPicoInstant(input.changedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeSignatureInputLabels.domainReadGrantLifecycle),
@@ -4207,7 +4208,7 @@ export function buildPicoHomeContinuitySignatureInput(input: PicoHomeContinuityS
   assertAsciiToken(input.homeId);
   assertStringMember(input.reasonCategory, picoHomeContinuityReasonCategories, 'invalid_reason_category');
   assertPicoInstant(input.changedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoHomeSignatureInputLabels.continuity),
@@ -4349,7 +4350,7 @@ export function buildPicoReaderCustodyDomainSignatureInput(
     throw new Error('invalid_custody_class');
   }
   assertPicoInstant(input.authorizedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoReaderCustodyCanonicalLabels.domain),
@@ -4401,7 +4402,7 @@ export function buildPicoReaderCustodyReaderGrantSignatureInput(
   );
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
   assertValidBounds(input.validFrom, input.validUntil);
 
   return concatCanonicalElements([
@@ -4461,7 +4462,7 @@ export function buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(
     'invalid_reason_category',
   );
   assertPicoInstant(input.changedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoReaderCustodyCanonicalLabels.readerGrantLifecycle),
@@ -4507,7 +4508,7 @@ export function buildPicoReaderCustodyWriterGrantSignatureInput(
   assertAsciiToken(input.domainId);
   assertPicoInstant(input.validFrom);
   assertPicoInstant(input.validUntil);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
   assertValidBounds(input.validFrom, input.validUntil);
 
   return concatCanonicalElements([
@@ -4564,7 +4565,7 @@ export function buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(
     'invalid_reason_category',
   );
   assertPicoInstant(input.changedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoReaderCustodyCanonicalLabels.writerGrantLifecycle),
@@ -4624,7 +4625,7 @@ export function buildPicoReaderCustodyKekRotationSignatureInput(
     throw new Error('invalid_kek_rotation');
   }
   assertPicoInstant(input.rotatedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
     asciiBytes(picoReaderCustodyCanonicalLabels.kekRotation),
@@ -4739,7 +4740,7 @@ export function buildPicoReaderCustodySyncManifestSignatureInput(
   assertAsciiToken(input.domainAuthorityId);
   assertAsciiToken(input.homeId);
   assertAsciiToken(input.domainId);
-  assertLifecycleOrder(input.observedThroughLifecycleOrder);
+  assertPicoLifecycleOrder(input.observedThroughLifecycleOrder);
   assertPicoInstant(input.createdAt);
   assertPicoInstant(input.expiresAt);
   assertValidBounds(input.createdAt, input.expiresAt);
@@ -5026,7 +5027,7 @@ function assertPicoHomeDeviceLifecycleEvidence(
   assertAsciiToken(evidence.targetDelegationId);
   fixedHexBytes(evidence.targetDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length');
   fixedHexBytes(evidence.targetDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length');
-  assertLifecycleOrder(evidence.observedLifecycleOrder);
+  assertPicoLifecycleOrder(evidence.observedLifecycleOrder);
   buildPicoIdentityKeyRecordSignatureInput(evidence.identityKeyRecord);
   if (evidence.identityKeyRecord.keyRole !== 'pico_identity') {
     throw new Error('invalid_identity_key_role');
@@ -5342,12 +5343,5 @@ const snakeCaseOutcomePattern = /^[a-z0-9_]+$/;
 function assertValidBounds(validFrom: string, validUntil: string): void {
   if (validUntil <= validFrom) {
     throw new Error('invalid_validity_bounds');
-  }
-}
-
-function assertLifecycleOrder(value: string): void {
-  assertAsciiToken(value);
-  if (!/^seq:[0-9]{16}$/.test(value)) {
-    throw new Error('invalid_lifecycle_order');
   }
 }

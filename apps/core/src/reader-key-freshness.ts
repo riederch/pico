@@ -1,4 +1,5 @@
 import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { isPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import {
   verifyPicoIdentityReaderKeyFreshnessSignature,
   type IdentityVerificationSodium,
@@ -256,7 +257,7 @@ function isCanonicalQuery(query: PicoIdentityReaderKeyFreshnessQuery): boolean {
     && isHexFingerprint(query.deviceSigningKeyFingerprintHex)
     && isHexFingerprint(query.deviceKeyAgreementKeyFingerprintHex)
     && isAsciiReference(query.delegationId)
-    && isLifecycleOrder(query.locallyObservedThroughLifecycleOrder)
+    && isPicoLifecycleOrder(query.locallyObservedThroughLifecycleOrder)
     && isPicoInstant(query.evaluatedAt);
 }
 
@@ -296,9 +297,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 
-function isLifecycleOrder(value: string): boolean {
-  return /^seq:[0-9]{16}$/.test(value);
-}
 
 function isHexFingerprint(value: string): boolean {
   return /^[0-9a-f]{64}$/.test(value);
