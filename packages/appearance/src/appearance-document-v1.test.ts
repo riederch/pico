@@ -245,6 +245,33 @@ describe('appearance document v1 validation', () => {
     expect(document.compatibilityCore.head.family).toBe('top_structured');
   });
 
+  /**
+   * Befund B146. Die zwei Versionsfelder des Umschlags hielt kein Test: die
+   * Pflanzung „jede Versionsnummer gilt" liess alle 122 Pruefungen des Pakets
+   * gruen. Gehalten war nur der Byteweg im Dekodierer, nicht der Feldweg, auf
+   * dem fremdes JSON hereinkommt.
+   */
+  it('refuses an envelope and a profile version that are not the ones this build speaks', () => {
+    const document = createAppearanceDocumentV1(antennaProfile);
+    for (const wrong of [0, 2, -1]) {
+      expectAppearanceError(
+        () => validateAppearanceDocumentV1({ ...document, appearanceEnvelopeVersion: wrong }),
+        'unsupported_envelope_version',
+      );
+      expectAppearanceError(
+        () => validateAppearanceDocumentV1({
+          ...document,
+          canonicalProfile: { ...document.canonicalProfile, appearanceProfileVersion: wrong },
+        }),
+        'unsupported_profile_version',
+      );
+    }
+    expectAppearanceError(
+      () => validateAppearanceDocumentV1({ ...document, appearanceEnvelopeVersion: 1.5 }),
+      'invalid_integer',
+    );
+  });
+
   it('rejects a caller-supplied core that does not match the projection', () => {
     const document = createAppearanceDocumentV1(antennaProfile);
     expectAppearanceError(

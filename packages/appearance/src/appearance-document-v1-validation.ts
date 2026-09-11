@@ -20,7 +20,12 @@ import {
   type PicoAppearanceDocumentV1,
   type PicoCanonicalAppearanceProfile,
 } from './appearance-document-v1.js';
-import { requireArray, requirePlainObject, requireUint8Array } from './validation-primitives.js';
+import {
+  requireArray,
+  requireExactInteger,
+  requirePlainObject,
+  requireUint8Array,
+} from './validation-primitives.js';
 
 /**
  * Strict validation of a logical appearance document. Beyond field shapes it
@@ -56,12 +61,12 @@ export function validateAppearanceDocumentV1WithOptions(
   const root = requirePlainObject(input, 'document', [
     'appearanceEnvelopeVersion', 'coreModelVersion', 'compatibilityCore', 'canonicalProfile', 'customAssets', 'extensions',
   ]);
-  if (typeof root.appearanceEnvelopeVersion !== 'number' || !Number.isInteger(root.appearanceEnvelopeVersion)) {
-    throw new PicoAppearanceError('invalid_integer', 'document.appearanceEnvelopeVersion must be an integer');
-  }
-  if (root.appearanceEnvelopeVersion !== 1) {
-    throw new PicoAppearanceError('unsupported_envelope_version', 'document.appearanceEnvelopeVersion must be exactly 1');
-  }
+  requireExactInteger(
+    root.appearanceEnvelopeVersion,
+    'document.appearanceEnvelopeVersion',
+    1,
+    'unsupported_envelope_version',
+  );
   if (typeof root.coreModelVersion !== 'number' || !Number.isInteger(root.coreModelVersion)) {
     throw new PicoAppearanceError('invalid_integer', 'document.coreModelVersion must be an integer');
   }
@@ -145,9 +150,12 @@ function validateCanonicalProfile(input: unknown): PicoCanonicalAppearanceProfil
     if (record.profileFamilyId !== picoParametricAppearanceProfileFamilyId) {
       throw new PicoAppearanceError('invalid_shape', 'parametric_v1 profile must carry profileFamilyId 1');
     }
-    if (record.appearanceProfileVersion !== 1) {
-      throw new PicoAppearanceError('unsupported_profile_version', 'parametric_v1 profile must carry appearanceProfileVersion 1');
-    }
+    requireExactInteger(
+      record.appearanceProfileVersion,
+      'parametric_v1 profile appearanceProfileVersion',
+      1,
+      'unsupported_profile_version',
+    );
     return Object.freeze({
       kind: 'parametric_v1' as const,
       profileFamilyId: picoParametricAppearanceProfileFamilyId as 1,

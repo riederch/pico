@@ -41,6 +41,23 @@ export function requireInteger(value: unknown, label: string, minimum: number, m
   return value;
 }
 
+/**
+ * Befund B146 (2026-09-11). Diese Funktion stand hier geschrieben, nannte in
+ * ihrem eigenen Typ die drei Codes, fuer die es sie gibt - und **nichts im
+ * ganzen Baum rief sie auf**, waehrend dieselbe Pruefung fuenfmal von Hand
+ * danebenstand, in zwei Dateien, die beide schon aus dieser importieren.
+ *
+ * Vier der fuenf waren Zeile fuer Zeile das hier. Die fuenfte liess die
+ * Ganzzahlpruefung weg, also bekam `1.5` dort `unsupported_profile_version`
+ * statt `invalid_integer` - dieselbe Annahme, ein anderer Name, was der
+ * Unterschied zwischen "falsche Version" und "gar keine Zahl" ist.
+ *
+ * Und keine der fuenf hielt ein Test: die Pflanzung „jede Versionsnummer gilt"
+ * liess alle 122 Pruefungen des Pakets gruen. Gehalten war der Byteweg im
+ * Kodierer, wo eine Zahl aus einem `Uint8Array` kommt und gar keine andere
+ * sein kann - nicht der Feldweg, fuer den der Absatz oben den strengen Stil
+ * begruendet.
+ */
 export function requireExactInteger<T extends number>(
   value: unknown,
   label: string,

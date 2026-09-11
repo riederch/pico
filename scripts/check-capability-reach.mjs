@@ -56,8 +56,26 @@ import { fileURLToPath } from 'node:url';
  * something to a person that the product never asks for. Every module's `src`
  * is read, so a fifth module is in scope the day it exists.
  *
- * `packages/*` stay out: there an unreached export is module hygiene, not a
- * capability nobody has.
+ * **`packages/*` war der dritte ungemessene Geltungssatz, und er stimmt fast**
+ * (2026-09-11, Befund B145/B146). Er lautete: dort sei eine unerreichte
+ * Ausfuhr Modulhygiene und keine Faehigkeit, die niemand hat. Nachgemessen:
+ * von 381 exportierten Funktionen haben 116 keinen Produktaufrufer, und fuer
+ * 115 davon stimmt der Satz - sie arbeiten paketintern oder fahren ihre
+ * eigenen Tests, und ein Tor darueber verlangte 116 Argumente an einem
+ * Nachmittag. Das waere das mechanische Fuellen, vor dem Befund B95 warnt.
+ *
+ * Was der Satz *nicht* deckt, steht unten als eigener Durchgang: eine Ausfuhr,
+ * die **nirgends genannt wird - auch nicht in ihrer eigenen Datei, auch nicht
+ * von einem Test**. Genau eine gab es im ganzen Baum, `requireExactInteger`,
+ * und sie war ein Befund: die Regel nannte in ihrem Typ die drei
+ * Versionscodes, fuer die es sie gibt, und dieselbe Pruefung stand fuenfmal
+ * von Hand daneben - keine davon von einem Test gehalten. Der Bestand ist
+ * seither leer, und leer ist hier die richtige Zahl.
+ *
+ * Was dieser Durchgang nicht faengt, ist benannt: das Postfachbuch in
+ * `packages/protocol/src/link-mailbox.ts`, dessen sieben Operationen nur ihre
+ * eigenen Tests fahren, waehrend das Home dieselben drei Ablehnungen im
+ * SQLite-Schema durchsetzt. Es hat Tests, also faellt es hier nicht auf.
  *
  * An argument is not a permission. Each entry below says why a capability has
  * no caller *today*, in a form somebody can disagree with.
@@ -362,6 +380,87 @@ for (const entry of sources) {
   }
 }
 
+/**
+ * **Der Paketdurchgang** (Befund B146). Strenger Gegenstand, engere Frage: in
+ * `packages/<paket>/src` faellt nur, was **gar nicht vorkommt** - nicht im Produkt,
+ * nicht in einem Test, nicht in der eigenen Datei. Kommentare zaehlen nicht,
+ * aus demselben Grund wie oben.
+ *
+ * Kein Eintragsformat daneben, und das ist Absicht: fuer eine Ausfuhr, die
+ * niemand nennt, gibt es kein Argument, das eine Zeile lang waere. Entweder
+ * ruft sie jemand, oder sie geht.
+ */
+const packageRoots = readdirSync(join(repoRoot, 'packages'))
+  .filter((entry) => {
+    try {
+      return statSync(join(repoRoot, 'packages', entry, 'src')).isDirectory();
+    } catch {
+      return false;
+    }
+  })
+  .map((entry) => join('packages', entry, 'src'));
+const packageSources = [];
+const collectPackage = (directory) => {
+  for (const entry of readdirSync(directory)) {
+    if (entry === 'node_modules' || entry === 'dist') {
+      continue;
+    }
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) {
+      collectPackage(path);
+    } else if (path.endsWith('.ts') && !path.endsWith('.test.ts')) {
+      packageSources.push(path);
+    }
+  }
+};
+for (const root of packageRoots) {
+  collectPackage(join(repoRoot, root));
+}
+/** Hier zaehlt ein Test als Nennung - die Frage ist "kennt der Baum das". */
+const everyText = [];
+const collectEvery = (directory) => {
+  for (const entry of readdirSync(directory)) {
+    if (entry === 'node_modules' || entry === 'dist' || entry === 'out'
+      || (directory === repoRoot && entry === 'scripts')) {
+      continue;
+    }
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) {
+      collectEvery(path);
+    } else if (/\.(ts|mjs)$/u.test(path)) {
+      everyText.push([path, withoutComments(withoutReExports(readFileSync(path, 'utf8')))]);
+    }
+  }
+};
+collectEvery(repoRoot);
+
+let packageExportsChecked = 0;
+for (const path of packageSources) {
+  const own = readFileSync(path, 'utf8');
+  for (const match of own.matchAll(/^export (?:async )?function (\w+)|^export (?:abstract )?class (\w+)/gmu)) {
+    const name = match[1] ?? match[2];
+    packageExportsChecked += 1;
+    const word = new RegExp(`\\b${name}\\b`, 'gu');
+    let mentions = 0;
+    for (const [, text] of everyText) {
+      mentions += (text.match(word) ?? []).length;
+      if (mentions > 1) {
+        break;
+      }
+    }
+    // Eins ist die Deklaration selbst.
+    if (mentions > 1) {
+      continue;
+    }
+    errors.push(
+      `${relative(repoRoot, path)}: ${name} is exported and named nowhere at all - `
+      + 'not by the product, not by a test, not by its own file. A rule written once and '
+      + 'applied never is how the same rule ends up written by hand beside it: call it, '
+      + 'or take it out.',
+    );
+  }
+}
+
 if (exportsChecked === 0) {
   errors.push(
     `scripts/check-capability-reach.mjs found no exports across ${roots.length} roots, so `
@@ -408,5 +507,6 @@ if (errors.length > 0) {
 console.log(
   `Capability reach check passed (${exportsChecked} exported capabilities across `
   + `${roots.length} roots, ${reachedOnlyByItsOwnFile} exported for their own tests, `
-  + `${argued.length} modules and ${arguedNameSet.size} single names argued unreached).`,
+  + `${argued.length} modules and ${arguedNameSet.size} single names argued unreached; `
+  + `${packageExportsChecked} package exports, every one of them named somewhere).`,
 );

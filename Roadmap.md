@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B146 — Eine Regel, einmal geschrieben und nie gefahren (2026-09-11).** B145
+hatte nebenbei gemessen, dass in `packages/*` genau **zwei** Ausfuhren nirgends
+genannt werden. Eine davon war ein Befund.
+
+`requireExactInteger` steht in `packages/appearance/src/validation-primitives.ts`,
+nennt in seinem eigenen Typ die drei Codes, für die es die Funktion gibt —
+`unsupported_profile_version`, `unsupported_envelope_version`,
+`unsupported_compatibility_core_version` — und **nichts im ganzen Baum rief sie
+auf**. Daneben stand dieselbe Prüfung **fünfmal von Hand**, in zwei Dateien,
+die beide schon aus derselben Datei importieren; nur den Helfer, der genau
+ihren Fall benennt, holten sie nicht.
+
+Vier der fünf sind Zeile für Zeile der Helfer. Die fünfte lässt die
+Ganzzahlprüfung weg: `1.5` bekommt dort `unsupported_profile_version` statt
+`invalid_integer`. Die Annahme ist in allen fünf dieselbe — `!== 1` weist alles
+ab, was nicht genau `1` ist —, verschieden war wieder nur der **Name**. Dieselbe
+Lehre wie B145, ein Paket weiter.
+
+**Keine der fünf hielt ein Test.** Die Pflanzung „jede Versionsnummer gilt"
+ließ alle **122** Prüfungen des Pakets grün. Gehalten war nur der *Byteweg* im
+Kodierer — der Weg, auf dem eine Zahl schon aus einem `Uint8Array` kommt —,
+nicht der **Feldweg**, auf dem fremdes JSON hereinkommt. Also genau der Weg,
+für den der Kommentar der Datei den strengen Stil begründet:
+*„External appearance data is untrusted."* Drei Tests halten ihn jetzt, und
+beide Pflanzungen treffen sie.
+
+**Und daraus der Schnitt, der gemessen ist statt angenommen.**
+`check-capability-reach.mjs` ließ `packages/*` seit dem 2026-08-24 mit dem
+Argument aus, eine unerreichte Ausfuhr sei dort Modulhygiene — der dritte
+ungemessene Geltungssatz derselben Datei, nachdem die ersten beiden am Tag
+ihrer Messung falsch waren. Nachgemessen stimmt er **fast**: von 381
+exportierten Funktionen haben 116 keinen Produktaufrufer, und für 115 stimmt
+er. Ein Tor darüber verlangte 116 Argumente an einem Nachmittag — das
+mechanische Füllen, vor dem B95 warnt. Der Prüfer hat deshalb einen zweiten,
+engeren Durchgang bekommen: in `packages` fällt nur, was **gar nicht vorkommt**
+— nicht im Produkt, nicht in einem Test, nicht in der eigenen Datei. Für so
+etwas gibt es kein Argument, das eine Zeile lang wäre, also hat dieser
+Durchgang auch keine Eintragsliste. Der Bestand ist leer, und leer ist hier die
+richtige Zahl.
+
+Die Gegenprobe ist der Beleg: nimmt man die Faltung zurück, nennt das Tor
+`requireExactInteger` beim Namen.
+
+**Was der Durchgang nicht fängt, steht benannt in seinem Kopf:** das
+Postfachbuch aus B145 hat Tests, fällt hier also nicht auf. Wer den Fall sucht,
+in dem ein Modul eine Regel *modelliert*, die das Produkt daneben selbst
+durchsetzt, braucht eine andere Frage als „hat das einen Aufrufer".
+
 **B145 — Eine geteilte Wahrheit schützt den Gang darüber nicht (2026-09-11).**
 Die Namensliste war leer geworden, also habe ich die Frage gewechselt: nicht
 „welcher Name steht zweimal", sondern **„welche Ablehnung steht zweimal"**.

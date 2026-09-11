@@ -202,3 +202,58 @@ describe('appearance profile v1 validation', () => {
     expectAppearanceError(() => validateAppearanceProfileV1(new Impostor()), 'invalid_shape');
   });
 });
+
+/**
+ * Befund B146. `requireExactInteger` stand in `validation-primitives.ts`
+ * geschrieben, nannte in seinem eigenen Typ die drei Versionscodes, fuer die
+ * es da ist - und **nichts im ganzen Baum rief es auf**. Daneben stand
+ * dieselbe Pruefung fuenfmal von Hand.
+ *
+ * Und keine der fuenf hielt ein Test: die Pflanzung „jede Versionsnummer
+ * gilt" liess alle 122 Pruefungen des Pakets gruen. Gehalten war nur der
+ * Byteweg im Kodierer, nicht der Feldweg, auf dem fremdes JSON hereinkommt -
+ * also genau der untrusted Weg, fuer den der Kommentar der Datei den
+ * strengen Stil begruendet.
+ */
+describe('appearance profile v1 field validation - Befund B146', () => {
+  it('refuses every version field that is not exactly the one it must be', () => {
+    for (const wrong of [0, 2, -1, 1.5, '1', null, true]) {
+      expectAppearanceError(
+        () => validateAppearanceProfileV1({ ...antennaProfile, profileVersion: wrong }),
+        typeof wrong === 'number' && Number.isInteger(wrong)
+          ? 'unsupported_profile_version'
+          : 'invalid_integer',
+      );
+      expectAppearanceError(
+        () => validateAppearanceProfileV1({
+          ...antennaProfile,
+          surface: { ...antennaProfile.surface, surfaceVersion: wrong },
+        }),
+        typeof wrong === 'number' && Number.isInteger(wrong)
+          ? 'unsupported_profile_version'
+          : 'invalid_integer',
+      );
+    }
+  });
+
+  it('refuses a recipe whose generator is not the generator this build speaks', () => {
+    const recipe = (hairProfile.headIdentity as unknown as { recipe: Record<string, unknown> }).recipe;
+    for (const wrong of [1, 3, 0]) {
+      expectAppearanceError(
+        () => validateAppearanceProfileV1({
+          ...hairProfile,
+          headIdentity: { kind: 'procedural_neon_hair', recipe: { ...recipe, generatorVersion: wrong } },
+        }),
+        'unsupported_profile_version',
+      );
+    }
+    // Die Form behaelt ihren eigenen Grund, statt in den Versionsgrund zu fallen.
+    expectAppearanceError(
+      () => validateAppearanceProfileV1({
+        ...hairProfile,
+        headIdentity: { kind: 'procedural_neon_hair', recipe: { ...recipe, generatorVersion: 2.5 } },
+      }),
+      'invalid_integer',
+    );
+  });
+});

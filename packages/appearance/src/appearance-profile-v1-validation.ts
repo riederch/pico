@@ -9,7 +9,7 @@ import type {
   PicoSurfaceAppearanceV1,
   ProceduralHeadRecipeV2,
 } from './appearance-profile-v1.js';
-import { requireInteger, requirePlainObject } from './validation-primitives.js';
+import { requireExactInteger, requireInteger, requirePlainObject } from './validation-primitives.js';
 
 /**
  * Strict validation of an external profile (PAS brief section 13): closed
@@ -26,12 +26,7 @@ function requireIntegerInRange(value: unknown, label: string, range: PicoAppeara
 
 export function validateAppearanceProfileV1(input: unknown): PicoAppearanceProfileV1 {
   const root = requirePlainObject(input, 'profile', ['profileVersion', 'headIdentity', 'surface']);
-  if (typeof root.profileVersion !== 'number' || !Number.isInteger(root.profileVersion)) {
-    throw new PicoAppearanceError('invalid_integer', 'profile.profileVersion must be an integer');
-  }
-  if (root.profileVersion !== 1) {
-    throw new PicoAppearanceError('unsupported_profile_version', 'profile.profileVersion must be exactly 1');
-  }
+  requireExactInteger(root.profileVersion, 'profile.profileVersion', 1, 'unsupported_profile_version');
   const headIdentity = validateHeadIdentity(root.headIdentity);
   const surface = validateSurface(root.surface);
   return freezeProfile({ profileVersion: 1, headIdentity, surface });
@@ -55,12 +50,7 @@ function validateHeadIdentity(input: unknown): PicoHeadIdentityV1 {
 
 function validateRecipe(input: unknown): ProceduralHeadRecipeV2 {
   const record = requirePlainObject(input, 'headIdentity.recipe', ['generatorVersion', 'geometry', 'material']);
-  if (typeof record.generatorVersion !== 'number' || !Number.isInteger(record.generatorVersion)) {
-    throw new PicoAppearanceError('invalid_integer', 'recipe.generatorVersion must be an integer');
-  }
-  if (record.generatorVersion !== 2) {
-    throw new PicoAppearanceError('unsupported_profile_version', 'recipe.generatorVersion must be exactly 2');
-  }
+  requireExactInteger(record.generatorVersion, 'recipe.generatorVersion', 2, 'unsupported_profile_version');
   const geometry = requirePlainObject(record.geometry, 'recipe.geometry', [
     'anchor', 'side', 'length', 'lift', 'sweep', 'curl', 'width', 'taper', 'twist', 'segments',
     'partOffset', 'partDepth', 'crownBias', 'rootSpread',
@@ -94,12 +84,7 @@ function validateRecipe(input: unknown): ProceduralHeadRecipeV2 {
 
 function validateSurface(input: unknown): PicoSurfaceAppearanceV1 {
   const record = requirePlainObject(input, 'profile.surface', ['surfaceVersion', 'shell', 'face', 'trim']);
-  if (typeof record.surfaceVersion !== 'number' || !Number.isInteger(record.surfaceVersion)) {
-    throw new PicoAppearanceError('invalid_integer', 'surface.surfaceVersion must be an integer');
-  }
-  if (record.surfaceVersion !== 1) {
-    throw new PicoAppearanceError('unsupported_profile_version', 'surface.surfaceVersion must be exactly 1');
-  }
+  requireExactInteger(record.surfaceVersion, 'surface.surfaceVersion', 1, 'unsupported_profile_version');
   const shell = requirePlainObject(record.shell, 'surface.shell', ['hue', 'chroma', 'lightness', 'gloss']);
   const face = requirePlainObject(record.face, 'surface.face', ['hue', 'tint', 'blackLevel', 'reflectivity']);
   const trim = requirePlainObject(record.trim, 'surface.trim', ['hue', 'chroma', 'metalness']);
