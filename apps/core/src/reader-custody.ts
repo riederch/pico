@@ -1,4 +1,4 @@
-import { assertExactKeys } from '@pico/protocol/canonical-bytes';
+import { assertExactKeys, isCanonicalHex } from '@pico/protocol/canonical-bytes';
 import type Database from 'better-sqlite3';
 import {
   isPicoInstant,
@@ -2400,10 +2400,4 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
 }
 
 
-function isCanonicalHex(value: string): boolean {
-  return typeof value === 'string'
-    && value.length >= 2
-    && value.length % 2 === 0
-    && /^[0-9a-f]+$/.test(value);
-}
 

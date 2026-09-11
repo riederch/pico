@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import {
   chmodSync,
   closeSync,
@@ -80,8 +81,6 @@ export interface PicoCompanionReplySodium {
 export function defaultPicoCompanionPendingReplyPath(profilePath: string): string {
   return join(dirname(profilePath), 'pending-replies.json');
 }
-
-const hexPattern = /^[0-9a-f]+$/u;
 
 function hex(bytes: Uint8Array): string {
   return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -166,7 +165,7 @@ function parsePendingReply(value: unknown): PicoCompanionPendingReply {
   }
   for (const field of ['replyPublicKeyHex', 'replySecretKeyHex'] as const) {
     const held = record[field] as string;
-    if (held.length !== 64 || !hexPattern.test(held)) {
+    if (!isHexOfBytes(held, 32)) {
       throw new Error('invalid_companion_pending_reply_key');
     }
   }

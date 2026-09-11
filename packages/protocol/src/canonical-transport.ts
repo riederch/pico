@@ -173,16 +173,6 @@ export function decodeCanonicalElements(
   return elements;
 }
 
-export function picoHexToBytes(value: string, reason: string): Uint8Array {
-  if (typeof value !== 'string' || value.length % 2 !== 0 || !/^[0-9a-f]*$/u.test(value)) {
-    throw new Error(reason);
-  }
-  const bytes = new Uint8Array(value.length / 2);
-  for (let index = 0; index < bytes.byteLength; index += 1) {
-    bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
-  }
-  return bytes;
-}
 
 export function picoBytesToHex(bytes: Uint8Array): string {
   let output = '';

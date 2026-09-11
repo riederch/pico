@@ -1,4 +1,4 @@
-import { hasExactKeys, hexToBytes } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexToBytes, isCanonicalHex } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoRecoveryCardPayload,
   buildPicoRecoveryCardScanTransport,
@@ -68,7 +68,7 @@ export function assertPicoRecoveryCard(card: PicoVaultRecoveryCard): void {
     || typeof card.recoveryPhrase !== 'string'
     || card.recoveryPhrase.trim().split(/\s+/u).length !== 24
     || typeof card.canonicalPayloadHex !== 'string'
-    || !/^(?:[0-9a-f]{2})+$/u.test(card.canonicalPayloadHex)
+    || !isCanonicalHex(card.canonicalPayloadHex)
   ) {
     throw new Error('invalid_recovery_card');
   }

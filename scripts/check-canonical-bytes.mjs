@@ -356,13 +356,23 @@ for (const path of files) {
   }
 }
 
-const fixedHexShape = /\/\^\[0-9a-f\]\{\d+\}\$\/[u]?/g;
+// Befund B142. Aus der Laengenregel ist eine Zeichenmengenregel geworden: wer
+// `[0-9a-f]` in einem Muster hinschreibt, schreibt eine Hexregel, gleich in
+// welcher Laenge und Gestalt. Sieben weitere Stellen kamen so heraus, die die
+// Laengenregel nicht sah - drei `isCanonicalHex`, drei `(?:[0-9a-f]{2})+` und
+// zwei mit zur Laufzeit gebauter Laenge.
+const fixedHexShape = /\[0-9a-f\]/g;
 const fixedHexHome = 'packages/protocol/src/canonical-bytes.ts';
 const fixedHexAllowed = new Set([
   // `packages/appearance` hat als einziges Paket dieses Baums ueberhaupt keine
   // Abhaengigkeit; eine fuer ein Muster anzulegen waere eine Aenderung an der
   // Paketgrenze. Dieselbe Begruendung wie beim `hexToBytes` derselben Wurzel.
   'packages/appearance/src/official-generator-registry.ts',
+  // Eine Farbe `#rrggbb`, mit `/i` und drei Fanggruppen. Dieselben Zeichen,
+  // ein anderer Begriff: hier ist Hex eine Schreibweise fuer drei Kanaele und
+  // keine Bytefolge, und Grossbuchstaben sind erlaubt. Eine Form ist kein
+  // Begriff (Befund B140).
+  'apps/vault-daemon/src/recovery-card-pdf.ts',
 ]);
 let fixedHexFilesRead = 0;
 for (const path of files) {
@@ -374,7 +384,7 @@ for (const path of files) {
   const source = readFileSync(path, 'utf8');
   for (const _ of source.matchAll(fixedHexShape)) {
     errors.push(
-      `${shown}: writes hex of a fixed byte length by hand. \`isHexOfBytes\` answers it and `
+      `${shown}: writes the hex charset by hand. \`isHexOfBytes\` answers it and `
       + `\`hexOfBytesPattern\` builds the pattern, both in \`${fixedHexHome}\`. The concept keeps `
       + 'its own name and its own refusal - what it should not keep is its own copy of the '
       + 'characters.',

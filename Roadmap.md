@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B142 — Eine Regel, drei Schreibweisen, und zwei echte Löcher darunter
+(2026-09-11).** Nach B140 blieb `/^[0-9a-f]+$/` in fünf Dateien stehen, und
+`canonicalHexPattern` ist genau das und **exportiert**. Nachgemessen war es
+mehr: „nicht leer, gerade Länge, Kleinbuchstaben-Hex" stand siebenmal in drei
+Schreibweisen — dreimal als `isCanonicalHex` mit ausgeschriebener
+Längenbedingung, dreimal als `/^(?:[0-9a-f]{2})+$/`, einmal als blankes
+Zeichenmuster mit einer Längenzahl daneben. Über zehn Eingaben ausgeführt sind
+alle drei gleichwertig.
+
+**Die gerade Länge ist die Hälfte, die man vergisst.** Null ist durch zwei
+teilbar, also lässt eine Bedingung mit nur `% 2 === 0` die leere Zeichenkette
+durch — und leere Bytes sind kein leerer Schlüssel. Zwei der drei schrieben
+`length > 0` daneben, eine `length >= 2`.
+
+**Zwei Löcher kamen dabei heraus, beide von der Zeichenmengenregel gefunden,
+nicht von der Namensliste.**
+
+Das erste: der Prüfer des Beanspruchungsumschlags las
+`/^[0-9a-f]{1,16384}$/` — **ohne gerade Länge**. Ein Hexwert ungerader Länge
+sind keine Bytes, und er kam bis zum Entsiegeln durch, wo er mit einer Meldung
+über *Schlüsselmaterial* fiel statt über den Umschlag. Fail-closed, aber an der
+falschen Stelle und mit der falschen Auskunft.
+
+Das zweite: im Protokoll stand ein **neunter `hexToBytes` unter anderem
+Namen** — `picoHexToBytes` im Transportcodec, den die Zählung von B138 nicht
+sah. Er benutzt `[0-9a-f]*` statt `+`, nimmt also die leere Zeichenkette an und
+gibt null Bytes zurück. Sein einziger Aufrufer kodiert Fingerabdrücke und
+öffentliche Schlüssel in einen Anmeldecode; keines davon darf leer sein. Der
+Code wäre mit einem leeren Fingerabdruck gebaut worden und erst bei der
+Prüfung gefallen. Das `*` war ein `+`, das jemand nicht geschrieben hat.
+
+Elf Stellen sind gefaltet. Was bleibt, steht benannt: `packages/appearance`
+ohne Abhängigkeit, und eine Farbe `#rrggbb` im PDF-Schreiber — dieselben
+Zeichen, ein anderer Begriff, denn dort ist Hex eine Schreibweise für drei
+Kanäle und Großbuchstaben sind erlaubt. Das Git-Commit-Muster ist aus der einen
+Form zusammengesetzt statt zweimal hingeschrieben; seine Aussage ist, dass
+*beide Längen* gelten, nicht dass es Hex ist.
+
+**Das Tor ist von einer Längenregel zu einer Zeichenmengenregel geworden.** Wer
+`[0-9a-f]` in ein Muster schreibt, schreibt eine Hexregel, gleich in welcher
+Gestalt — und genau die sieben Stellen, die die Längenregel nicht sah, kamen so
+heraus.
+
 **B141 — Eine Prüfung, die `undefined` bestand (2026-09-11).** Beim Falten der
 Tokenmuster — 21 Stellen der kanonischen Zeichenmenge mit einer Längengrenze —
 kam ein echter Fehler heraus, und er ist der ernsteste dieser Serie.

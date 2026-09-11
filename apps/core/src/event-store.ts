@@ -1,4 +1,4 @@
-import { isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { isAsciiToken, isCanonicalHex, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -8579,12 +8579,6 @@ function assertAsciiToken(value: string, label: string): void {
   }
 }
 
-function isCanonicalHex(value: string): boolean {
-  return typeof value === 'string'
-    && value.length > 0
-    && value.length % 2 === 0
-    && /^[0-9a-f]+$/.test(value);
-}
 
 
 function assertFingerprint(value: string, label: string): void {

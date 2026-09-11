@@ -1,4 +1,4 @@
-import { bytesToHex, hasExactKeys, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hasExactKeys, isAsciiToken, isCanonicalHex, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import { isPicoInstant } from '@pico/protocol/instant';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -9025,7 +9025,13 @@ function parsePicoHomeClaimEnvelope(source: unknown): PicoHomeClaimEnvelope {
     sealedClaimPayloadHex: stringField(source, 'sealedClaimPayloadHex', 'Pico Home claim envelope is invalid.'),
   };
 
-  if (envelope.schema !== picoHomeClaimEnvelopeSchema || !/^[0-9a-f]{1,16384}$/.test(envelope.sealedClaimPayloadHex)) {
+  // Befund B142. Bis hierher liess das Muster eine *ungerade* Laenge durch,
+  // und ein Hexwert ungerader Laenge sind keine Bytes. Er fiel erst beim
+  // Entsiegeln, mit einer Meldung ueber Schluesselmaterial statt ueber den
+  // Umschlag. Die Obergrenze bleibt, sie ist die Groesse des Umschlags.
+  if (envelope.schema !== picoHomeClaimEnvelopeSchema
+    || !isCanonicalHex(envelope.sealedClaimPayloadHex)
+    || envelope.sealedClaimPayloadHex.length > 16_384) {
     throw new Error('Pico Home claim envelope is invalid.');
   }
 

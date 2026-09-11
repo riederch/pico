@@ -1,4 +1,4 @@
-import { hasExactKeys } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, isCanonicalHex, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoLinkDirectRequestSignatureInput,
@@ -442,7 +442,7 @@ function toHex(bytes: Uint8Array): string {
 }
 
 function fromHex(value: string, bytes: number | undefined, reason: string): Uint8Array {
-  if (!/^(?:[0-9a-f]{2})+$/.test(value) || (bytes !== undefined && value.length !== bytes * 2)) {
+  if (!isCanonicalHex(value) || (bytes !== undefined && !isHexOfBytes(value, bytes))) {
     throw new Error(reason);
   }
   return Uint8Array.from(Buffer.from(value, 'hex'));

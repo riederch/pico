@@ -15,7 +15,7 @@
  * convenient to break it.
  */
 
-import { hexOfBytesPattern } from './canonical-bytes.js';
+import { hexOfBytesPattern, isHexOfBytes } from './canonical-bytes.js';
 
 /** 128 bits, lowercase hex - the same shape an account credential has. */
 export const picoRelayOperatorCredentialPattern = hexOfBytesPattern(16);
@@ -164,7 +164,7 @@ export function parsePicoRelayAccountRevokeRequest(
   const record = asRecord(value);
   exactly(record, ['accountRef']);
   if (typeof record.accountRef !== 'string'
-    || !new RegExp(`^[0-9a-f]{${picoRelayAccountRefLength}}$`, 'u').test(record.accountRef)) {
+    || !isHexOfBytes(record.accountRef, picoRelayAccountRefLength / 2)) {
     throw new Error('invalid_pico_relay_account_ref');
   }
   return Object.freeze({ accountRef: record.accountRef });

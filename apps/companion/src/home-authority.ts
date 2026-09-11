@@ -1,3 +1,4 @@
+import { isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { picoLifecycleOrderFrom } from '@pico/protocol/lifecycle-order';
 import type { PicoReaderCustodyReaderAccessMode } from '@pico/protocol';
 import type {
@@ -243,8 +244,7 @@ export interface PicoCompanionMembership {
 export const picoCompanionMembershipSubjectLength = 64;
 
 export function isPicoCompanionMembershipSubject(value: unknown): value is string {
-  return typeof value === 'string'
-    && new RegExp(`^[0-9a-f]{${picoCompanionMembershipSubjectLength}}$`, 'u').test(value);
+  return isHexOfBytes(value, picoCompanionMembershipSubjectLength / 2);
 }
 
 export async function issuePicoCompanionMembership(input: {

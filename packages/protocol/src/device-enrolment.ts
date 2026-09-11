@@ -1,4 +1,4 @@
-import { assertExactKeys, hexOfBytesPattern } from './canonical-bytes.js';
+import { assertExactKeys, hexOfBytesPattern, hexToBytes } from './canonical-bytes.js';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceActivationSignatureInput,
@@ -12,7 +12,6 @@ import {
   encodeCanonicalElements,
   picoBase64UrlPattern,
   picoBytesToHex,
-  picoHexToBytes,
 } from './canonical-transport.js';
 
 /**
@@ -300,7 +299,7 @@ function encode(
     if (typeof value !== 'string') {
       throw new Error(reason);
     }
-    return kind === 'text' ? textEncoder.encode(value) : picoHexToBytes(value, reason);
+    return kind === 'text' ? textEncoder.encode(value) : hexToBytes(value, reason);
   });
   const bytes = encodeCanonicalElements(elements);
   if (bytes.byteLength > maxPicoDeviceEnrolmentBytes) {

@@ -52,7 +52,18 @@ const contentHashPattern = hexOfBytesPattern(32);
  * a tracked library here, and a Pico Depot under ADR 0143 DP1. Two copies of
  * this would be two places for it to be wrong about the same fact.
  */
-export const picoGitCommitPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
+/**
+ * ADR 0136. Ein Git-Commit, in beiden Laengen, die Git kennt.
+ *
+ * Zusammengesetzt aus der einen Form statt sie zweimal hinzuschreiben (Befund
+ * B142): zwanzig Bytes fuer SHA-1, zweiunddreissig fuer SHA-256. Dass beide
+ * Laengen gelten, ist die Aussage dieses Musters - dass es Hex ist, ist es
+ * nicht.
+ */
+export const picoGitCommitPattern = new RegExp(
+  `^(?:${hexOfBytesPattern(20).source.slice(1, -1)}|${hexOfBytesPattern(32).source.slice(1, -1)})$`,
+  'u',
+);
 
 export interface PicoLibraryPin {
   kind: PicoLibraryPinKind;

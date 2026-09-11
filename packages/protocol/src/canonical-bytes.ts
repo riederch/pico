@@ -380,11 +380,30 @@ export function assertExactKeys(
  * sondern eine Ablehnung - denn `hexToBytes('')` gibt sonst ein Array ohne
  * Bytes zurueck, und ein Schluessel ohne Bytes ist kein leerer Schluessel.
  */
+/**
+ * Ob ein Wert Hex in Paaren ist: nicht leer, gerade Laenge, Kleinbuchstaben.
+ *
+ * **Die Pruefung, die `hexToBytes` darunter ohnehin macht - und sie stand
+ * siebenmal daneben, in drei Schreibweisen** (Befund B142): dreimal als
+ * `isCanonicalHex` mit einer ausgeschriebenen Laengenbedingung (zweimal
+ * `length > 0`, einmal `length >= 2`, ueber allen gemessenen Eingaben
+ * gleichwertig), dreimal als `/^(?:[0-9a-f]{2})+$/`, und einmal als blankes
+ * Zeichenmuster mit einer Laengenzahl daneben - das war in Wahrheit
+ * `isHexOfBytes(wert, 32)`.
+ *
+ * Die gerade Laenge ist die Haelfte, die man vergisst: `0` ist durch zwei
+ * teilbar, also laesst eine Bedingung, die nur `% 2 === 0` prueft, die leere
+ * Zeichenkette durch - und leere Bytes sind kein leerer Schluessel.
+ */
+export function isCanonicalHex(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length % 2 === 0
+    && canonicalHexPattern.test(value);
+}
+
 export function hexToBytes(value: unknown, reason = 'invalid_hex'): Uint8Array {
-  if (typeof value !== 'string'
-    || value.length === 0
-    || value.length % 2 !== 0
-    || !canonicalHexPattern.test(value)) {
+  if (!isCanonicalHex(value)) {
     throw new Error(reason);
   }
   return Uint8Array.from(Buffer.from(value, 'hex'));

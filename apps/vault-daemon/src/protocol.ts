@@ -1,4 +1,4 @@
-import { assertExactKeys, isAsciiToken } from '@pico/protocol/canonical-bytes';
+import { assertExactKeys, isAsciiToken, isCanonicalHex } from '@pico/protocol/canonical-bytes';
 import {
   assertPicoInstant,
   picoHomeDeviceLifecycleCanonicalLabels,
@@ -172,7 +172,6 @@ export const PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS = 32;
 
 const FRAME_LENGTH_PREFIX_BYTES = 4;
 const requestIdPattern = /^[A-Za-z0-9_-]+$/;
-const lowercaseHexPattern = /^(?:[0-9a-f]{2})+$/;
 const KEY_FINGERPRINT_HEX_CHARS = 64;
 
 export interface PicoVaultDaemonHelloRequest {
@@ -765,7 +764,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       if (
         typeof keyFingerprintHex !== 'string'
         || keyFingerprintHex.length !== KEY_FINGERPRINT_HEX_CHARS
-        || !lowercaseHexPattern.test(keyFingerprintHex)
+        || !isCanonicalHex(keyFingerprintHex)
       ) {
         throw new Error('invalid_request');
       }
@@ -847,7 +846,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       if (typeof canonicalCardPayloadHex !== 'string'
         || canonicalCardPayloadHex.length === 0
         || canonicalCardPayloadHex.length > 8_192
-        || !lowercaseHexPattern.test(canonicalCardPayloadHex)) {
+        || !isCanonicalHex(canonicalCardPayloadHex)) {
         throw new Error('invalid_request');
       }
       // Parsing is the check: a payload that is not this format cannot be
@@ -1216,7 +1215,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       if (
         typeof approvalId !== 'string'
         || approvalId.length !== PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS
-        || !lowercaseHexPattern.test(approvalId)
+        || !isCanonicalHex(approvalId)
       ) {
         throw new Error('invalid_request');
       }
@@ -1317,7 +1316,7 @@ function requireFingerprintHex(parsed: Record<string, unknown>, key: string): st
   if (
     typeof value !== 'string'
     || value.length !== KEY_FINGERPRINT_HEX_CHARS
-    || !lowercaseHexPattern.test(value)
+    || !isCanonicalHex(value)
   ) {
     throw new Error('invalid_request');
   }
@@ -1329,7 +1328,7 @@ function requireLeaseId(parsed: Record<string, unknown>): string {
   if (
     typeof value !== 'string'
     || value.length !== PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS
-    || !lowercaseHexPattern.test(value)
+    || !isCanonicalHex(value)
   ) {
     throw new Error('invalid_request');
   }

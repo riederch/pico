@@ -1,4 +1,4 @@
-import { hasExactKeys, hexToBytes, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { hasExactKeys, hexToBytes, isAsciiToken, isCanonicalHex, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { assertPicoInstant } from '@pico/protocol/instant';
 import { assertPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 
@@ -4361,12 +4361,6 @@ function generichashHex(
   ).toString('hex');
 }
 
-function isCanonicalHex(value: string): boolean {
-  return typeof value === 'string'
-    && value.length > 0
-    && value.length % 2 === 0
-    && /^[0-9a-f]+$/.test(value);
-}
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object'

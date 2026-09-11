@@ -12,6 +12,7 @@ import {
   hexOfBytesPattern,
   hexToBytes,
   isAsciiToken,
+  isCanonicalHex,
   isHexOfBytes,
 } from './canonical-bytes.js';
 
@@ -283,6 +284,51 @@ describe('ein kanonisches Token, hoechstens so lang (Befund B141)', () => {
   it('weist eine Grenze zurueck, die keine ist', () => {
     for (const maxBytes of [0, -1, 2.5, Number.NaN]) {
       expect(() => isAsciiToken('ab', maxBytes)).toThrow(/invalid_ascii_token_length/u);
+    }
+  });
+});
+
+describe('Hex in Paaren (Befund B142)', () => {
+  it('verlangt nicht leer, gerade Laenge und Kleinbuchstaben', () => {
+    expect(isCanonicalHex('ab')).toBe(true);
+    expect(isCanonicalHex('00ff10')).toBe(true);
+    expect(isCanonicalHex('a')).toBe(false);
+    expect(isCanonicalHex('abc')).toBe(false);
+    expect(isCanonicalHex('AB')).toBe(false);
+    expect(isCanonicalHex('zz')).toBe(false);
+    expect(isCanonicalHex(undefined)).toBe(false);
+  });
+
+  it('weist leer ab, obwohl null durch zwei teilbar ist', () => {
+    /**
+     * Die Haelfte, die man vergisst. Eine Bedingung, die nur
+     * `length % 2 === 0` prueft, laesst die leere Zeichenkette durch, und
+     * leere Bytes sind kein leerer Schluessel. Zwei der drei Fassungen, die
+     * dieser Befund ersetzt, schrieben `length > 0` daneben, eine
+     * `length >= 2` - ueber allen gemessenen Eingaben gleichwertig.
+     */
+    expect(''.length % 2).toBe(0);
+    expect(isCanonicalHex('')).toBe(false);
+  });
+
+  it('ist genau die Pruefung, die `hexToBytes` macht', () => {
+    for (const value of ['ab', '', 'a', 'AB', 'zz', '00ff10', 'aa bb']) {
+      const erlaubt = isCanonicalHex(value);
+      let genommen = true;
+      try {
+        hexToBytes(value);
+      } catch {
+        genommen = false;
+      }
+      expect(genommen).toBe(erlaubt);
+    }
+  });
+
+  it('deckt dieselbe Menge ab wie die Paarschreibweise, die sie ersetzt', () => {
+    // Drei Schreibweisen standen im Baum; ueber diese Eingaben sind sie
+    // gleichwertig, und das ist der Grund, aus dem sie eine geworden sind.
+    for (const value of ['', 'a', 'ab', 'abc', 'abcd', 'AB', 'zz', 'a1b2c3']) {
+      expect(isCanonicalHex(value)).toBe(/^(?:[0-9a-f]{2})+$/u.test(value));
     }
   });
 });
