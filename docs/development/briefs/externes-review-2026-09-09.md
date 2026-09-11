@@ -134,11 +134,11 @@ wiederholt werden.
   eines verschlüsselten Items nimmt `my-domain` und `Domain`, weil der Name
   dort ein Schlüsseldateiname wird; die Protokollregel weist beide ab. Heute
   bricht nichts, weil die Parser mit der strengen Regel keinen Produktaufrufer
-  haben. *Empfohlen:* die Zeichenmenge des Schlüsselspeichers als die Regel
-  nehmen und sie im Protokoll aussprechen — sie ist die, die heute wirklich
-  gilt, und sie ist die engste, die ein Dateiname verträgt. *Alternative:* die
-  strenge snake_case-Regel überall durchsetzen; dann ist zu prüfen, ob eine
-  bestehende Domäne einen Bindestrich trägt, denn die verlöre ihren Namen.
+  haben. *Entschieden 2026-09-11:* die Zeichenmenge des Schlüsselspeichers ist
+  die Regel, ausgesprochen in `packages/protocol/src/privacy-domain.ts`
+  (Befund B144). Vier Fundorte sind einer geworden, das Schlüsseldateimuster
+  setzt sich aus ihr zusammen, und der Rest — zwei Schreibweisen sind auf
+  einem Dateisystem ohne Groß-Klein-Unterscheidung eine Datei — steht benannt.
 
 - **E11 — Traegt „Pico Vault" zwei Begriffe?** *Aufgeworfen 2026-09-10 beim
   Umsetzen von P5; das Review hat es in §9.2 benannt.* Gemessen: ADR 0015

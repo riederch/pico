@@ -912,6 +912,38 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B144 — Die durchgesetzte Regel wird die ausgesprochene (2026-09-11,
+Entscheidung E12).** Auf B143 hin hat der Nutzer entschieden: **die
+Zeichenmenge des Schlüsselspeichers ist die Regel.** Der Grund ist kein
+Geschmack — ein Domänenname *wird* ein Schlüsseldateiname (ADR 0072), also ist
+das Dateisystem, was ihn begrenzt, und diese Regel war die einzige, die das
+Produkt je angewandt hat.
+
+Was das weitet, steht namentlich: `my-domain`, `Domain`, `_leading` und `a__b`
+sind jetzt gültige Namen. Was es verengt: ein Name über 128 Zeichen ist keiner,
+und ein Punkt war beim Schlüsselspeicher nie erlaubt, obwohl
+`model-context-ref.ts` einen zuliess — und **dieser Parser hat einen
+Produktaufrufer**, anders als die drei, an denen B143 hing.
+
+Vier Fundorte sind jetzt einer. Der vierte war der, den B143 noch nicht gesehen
+hatte: der Schlüsselspeicher selbst, die Heimat dieser Zeichenmenge. Auch sein
+Dateimuster `domain_….vN.key` ist aus der Regel zusammengesetzt statt sie ein
+zweites Mal zu schreiben — und dabei kam die Grenze mit: es stand dort `+` und
+beim Schreiben eine Grenze von 128, der Leser beschrieb also einen Namen, den
+der Schreiber nie erzeugt hätte.
+
+**Ein Rest ist benannt und nicht neu:** `Domain` und `domain` sind zwei
+Domänen und auf einem Dateisystem ohne Groß-Klein-Unterscheidung eine Datei —
+also zwei Domänen mit einem Schlüssel. Alles, was dieses Repository ausliefert,
+läuft auf Linux; ein Port auf einen anderen Wirt muss das vorher klären, und
+jetzt steht der Satz dafür im Baum.
+
+Das fünfte Formtor hält die Zeichenmenge. Beim ersten Wurf meldete es die
+beiden **Ablehnungssätze**, die einem Menschen erklären, welche Zeichen erlaubt
+sind — ein Satz ist keine zweite Regel. Es verlangt jetzt, dass die Zeichenmenge
+in einem Muster steht. Dasselbe Rauschen wie beim Tokenmuster einen Befund
+zuvor, und dasselbe Mittel.
+
 **B143 — Drei Namen für einen Begriff, und eine Regel, die niemand fährt
 (2026-09-11).** Die Musterzählung zeigte `/^[a-z0-9]+(?:_[a-z0-9]+)*$/` in vier
 Protokolldateien. Drei davon sind **exportierte Konstanten mit verschiedenen

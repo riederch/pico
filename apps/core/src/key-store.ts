@@ -1,3 +1,4 @@
+import { isPicoPrivacyDomain, picoPrivacyDomainPattern } from '@pico/protocol/privacy-domain';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -13,7 +14,21 @@ import type { MemoryDomainCustodyClass } from '@pico/protocol';
  * nothing populates it in production until the ADR 0071 gate is passed.
  */
 const KEK_BYTES = 32;
-const KEY_FILE_PATTERN = /^domain_(?<domainId>[a-zA-Z0-9_-]+)\.v(?<version>[1-9]\d*)\.key$/;
+/**
+ * Der Dateiname einer Domaenenschluesseldatei, aus der Domaenenregel
+ * zusammengesetzt statt ihre Zeichenmenge ein zweites Mal hinzuschreiben
+ * (Befund B143). Die Aussage dieses Musters ist der Rahmen `domain_….vN.key`;
+ * dass der Name dazwischen eine Domaene ist, sagt die Regel.
+ *
+ * Die Grenze kommt damit mit: bis hierher stand hier `+` und beim Schreiben
+ * eine Grenze von 128, also beschrieb der Leser einen Namen, den der Schreiber
+ * nie erzeugt haette.
+ */
+const KEY_FILE_PATTERN = new RegExp(
+  `^domain_(?<domainId>${picoPrivacyDomainPattern.source.slice(1, -1)})`
+  + '\\.v(?<version>[1-9]\\d*)\\.key$',
+  'u',
+);
 
 export interface KeyVersion {
   domainId: string;
@@ -121,7 +136,12 @@ export function assertKeyStoreSeparation(params: {
 }
 
 function assertDomainId(domainId: string): void {
-  if (typeof domainId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(domainId)) {
+  // Befund B143. Hier war diese Zeichenmenge zu Hause - der Domaenenname wird
+  // ein Schluesseldateiname (ADR 0072), und das Dateisystem ist, was ihn
+  // begrenzt. Seit dem 2026-09-11 ist sie deshalb *die* Regel fuer eine
+  // Privatsphaerendomaene im ganzen Produkt und steht einmal im Protokoll.
+  // Gefragt wird sie hier weiterhin, denn hier entsteht die Datei.
+  if (!isPicoPrivacyDomain(domainId)) {
     throw new Error('Key store domainId must match [a-zA-Z0-9_-]{1,128}.');
   }
 }

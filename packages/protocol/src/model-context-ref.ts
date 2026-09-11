@@ -1,3 +1,4 @@
+import { isPicoPrivacyDomain } from './privacy-domain.js';
 import {
   picoEventOriginClasses,
   type PicoEventOriginClass,
@@ -108,7 +109,6 @@ export const picoModelContextRefSaysNothingAbout = Object.freeze({
 });
 
 const idPattern = /^[a-z0-9][a-z0-9._:-]{0,127}$/u;
-const domainPattern = /^[a-z][a-z0-9_.-]{0,63}$/u;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -152,7 +152,7 @@ export function parsePicoModelContextRef(value: unknown, nowMs: number): PicoMod
     || !(picoEventOriginClasses as readonly string[]).includes(value.originClass)) {
     throw new Error('invalid_pico_model_context_ref_origin');
   }
-  if (typeof value.privacyDomain !== 'string' || !domainPattern.test(value.privacyDomain)) {
+  if (!isPicoPrivacyDomain(value.privacyDomain)) {
     throw new Error('invalid_pico_model_context_ref_domain');
   }
   if (typeof value.excerpt !== 'string' || value.excerpt === '') {

@@ -1,6 +1,7 @@
 import { bytesToHex, hasExactKeys, isAsciiToken, isCanonicalHex, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { nextPicoLifecycleOrder } from '@pico/protocol/lifecycle-order';
 import { isPicoInstant } from '@pico/protocol/instant';
+import { isPicoPrivacyDomain } from '@pico/protocol/privacy-domain';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   PicoModelProviderMeasurements,
@@ -8184,9 +8185,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       const request_ = memoryRequest.request;
 
       // A domain_encrypted item's privacy domain becomes a per-domain KEK file
-      // name, so it must satisfy the stricter key-store domain charset (ADR
-      // 0072) on top of the AD charset. Reject at write time (ADR 0073).
-      if (memoryCrypto !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(request_.privacyDomain)) {
+      // name, so it must satisfy the key-store domain charset (ADR 0072) on
+      // top of the AD charset. Reject at write time (ADR 0073).
+      //
+      // Befund B143. Die Zeichenmenge stand hier ausgeschrieben und war die
+      // einzige, die das Produkt wirklich anwandte - das Protokoll sagte
+      // dreimal etwas Engeres, das niemand fuhr. Seit dem 2026-09-11 ist sie
+      // die Regel und steht in `@pico/protocol/privacy-domain`; hier wird sie
+      // nur noch gefragt.
+      if (memoryCrypto !== undefined && !isPicoPrivacyDomain(request_.privacyDomain)) {
         return sendNoStore(reply.code(400), {
           error: 'privacyDomain must match [a-zA-Z0-9_-]{1,128} when memory encryption is enabled.',
         });

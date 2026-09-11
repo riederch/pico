@@ -336,6 +336,41 @@ for (const entry of elsewhere) {
 // in `device-enrolment.ts` und `[A-Za-z0-9_-]` im Relais sind andere Regeln,
 // und ein Tor, das sie mitmeldet, erzeugt Rauschen - der Fehler, den Befund
 // B112 an einer mechanischen Regel schon einmal gemessen hat.
+/**
+ * Und die fuenfte Form: die Zeichenmenge eines Domaenennamens (Befund B143).
+ *
+ * Ein Domaenenname wird ein Schluesseldateiname (ADR 0072), also ist das
+ * Dateisystem, was ihn begrenzt - und genau diese Zeichenmenge war die
+ * einzige, die das Produkt wirklich anwandte, waehrend das Protokoll dreimal
+ * etwas Engeres sagte und niemand es fuhr. Am 2026-09-11 ist sie die Regel
+ * geworden und steht einmal in `privacy-domain.ts`; das Schluesseldateimuster
+ * setzt sich aus ihr zusammen.
+ */
+// Nur in einem Muster, nicht in einem Satz: `app.ts` und `key-store.ts` sagen
+// einem Menschen in ihrer Ablehnung, welche Zeichen erlaubt sind, und ein Satz
+// ist keine zweite Regel. Ohne den Schraegstrich davor meldete diese Regel
+// beim ersten Wurf genau die beiden Meldungen - dasselbe Rauschen wie beim
+// Tokenmuster eine Regel weiter oben.
+const domainShape = /\/\^?\[a-zA-Z0-9_-\]/g;
+const domainHome = 'packages/protocol/src/privacy-domain.ts';
+let domainFilesRead = 0;
+for (const path of files) {
+  const shown = relative(repoRoot, path).split('\\').join('/');
+  if (shown === domainHome || shown.endsWith('.test.ts')) {
+    continue;
+  }
+  domainFilesRead += 1;
+  const source = readFileSync(path, 'utf8');
+  for (const _ of source.matchAll(domainShape)) {
+    errors.push(
+      `${shown}: writes the privacy-domain charset by hand. \`isPicoPrivacyDomain\` answers it `
+      + `and \`picoPrivacyDomainPattern\` is the pattern, both in \`${domainHome}\`. A domain `
+      + 'name becomes a key file name, so this charset is what the file system forces - it is '
+      + 'one rule and it lives in one place.',
+    );
+  }
+}
+
 const tokenShape = /\/\^\[A-Za-z0-9\._:\/\+-\]\{\d+,\d+\}\$\//g;
 const tokenHome = 'packages/protocol/src/canonical-bytes.ts';
 let tokenFilesRead = 0;
@@ -457,5 +492,5 @@ console.log(
   + `bytes have exactly one definition each inside the protocol package, all of them in ${home}; `
   + `outside it ${carriedSame + carriedNameOnly} copies are named and dated - ${carriedSame} `
   + `the same rule written twice, ${carriedNameOnly} the same name over a different rule; `
-  + `${files.length} TypeScript sources read; and the lifecycle-order shape - both the pattern that admits one and the expression that builds one - is written only in ${lifecycleOrderHome}, checked across ${lifecycleOrderFilesRead} of them; and hex of a fixed byte length only in ${fixedHexHome}, checked across ${fixedHexFilesRead} with ${fixedHexAllowed.size} argued exception; and the canonical token charset with a length bound only there too, checked across ${tokenFilesRead}).`,
+  + `${files.length} TypeScript sources read; and the lifecycle-order shape - both the pattern that admits one and the expression that builds one - is written only in ${lifecycleOrderHome}, checked across ${lifecycleOrderFilesRead} of them; and hex of a fixed byte length only in ${fixedHexHome}, checked across ${fixedHexFilesRead} with ${fixedHexAllowed.size} argued exception; and the canonical token charset with a length bound only there too, checked across ${tokenFilesRead}; and the privacy-domain charset only in ${domainHome}, checked across ${domainFilesRead}).`,
 );
