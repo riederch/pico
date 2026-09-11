@@ -1,6 +1,6 @@
 import { chmodSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createConnection, createServer, type Server, type Socket } from 'node:net';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   assertPicoVaultKeyfileMode,
   assertVaultCustodyPathSeparation,
@@ -343,12 +343,6 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       foundationDataPath,
       foundationBackupPath,
     });
-    for (const foundationPath of [foundationDataPath, foundationBackupPath]) {
-      if (isWithinOrEqual(resolve(foundationPath), this.vaultHomePath)) {
-        throw new Error('vault_path_inside_foundation_scope');
-      }
-    }
-
     for (const directory of [this.vaultHomePath, this.keyfilesPath, runPath]) {
       mkdirSync(directory, { recursive: true, mode: 0o700 });
       assertPrivateDirectory(directory);
@@ -2019,14 +2013,6 @@ function assertPrivateDirectory(path: string): void {
   if (!stat.isDirectory() || (stat.mode & 0o777) !== 0o700 || (uid !== null && stat.uid !== uid)) {
     throw new Error('vault_home_permissions');
   }
-}
-
-function isWithinOrEqual(candidate: string, scope: string): boolean {
-  if (candidate === scope) {
-    return true;
-  }
-  const relativePath = relative(scope, candidate);
-  return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath);
 }
 
 /**

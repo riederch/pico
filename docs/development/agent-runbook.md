@@ -21,6 +21,16 @@ Pico ist ein pnpm-/TypeScript-Monorepo. Aktuelle Workspace-Pakete:
 - `packages/identity` - lokale Identity-Verifikation und Lifecycle-Projektion
 - `packages/vault` - minimale verschluesselte Keyfile-/Custody-Runtime
 
+**Eine Aenderung in `packages/*/src` ist fuer die Tests der abhaengigen App
+unsichtbar, bis das Paket gebaut ist.** Die Workspace-Pakete zeigen mit
+`exports` auf ihr `dist`-Verzeichnis, also faehrt `apps/vault-daemon` gegen das
+dort gebaute `index.js` von `packages/vault` und nicht gegen dessen Quelle unter
+`packages/vault/src`. Wer eine
+Bibliotheksregel aendert und dann nur die App-Suite laufen laesst, misst den
+alten Stand - am 2026-09-11 einmal als falsches Rot erlebt, bei Befund B148.
+`pnpm --filter @pico/<paket> build` davor, oder gleich `verify:gates`, das den
+Bau als Schritt enthaelt.
+
 Das Home-Assistant-Add-on-Paket liegt unter `pico_home/` (ADR 0153; frueher `pico_home/`).
 
 ## Paketmanager

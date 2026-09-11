@@ -902,4 +902,42 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       foundationBackupPath: join(root, 'foundation', 'backup'),
     })).not.toThrow();
   });
+
+  /**
+   * Befund B148. Die Regel heisst Trennung und galt nur in eine Richtung: der
+   * Vault durfte nicht in der Foundation liegen, die Foundation aber im Vault.
+   * Die zweite Haelfte stand im Daemon, hinter dem Aufruf dieser Funktion, und
+   * seine beiden CLI-Geschwister bekamen sie nie - ueber sechs gemessene
+   * Aufstellungen urteilten die beiden dreimal verschieden, jedes Mal so, dass
+   * die CLI annahm, was der Daemon ablehnt.
+   */
+  it('keeps Foundation data and backup outside the Vault scope, the other direction', () => {
+    const root = tempDir();
+    const vaultHome = join(root, 'vault');
+    for (const inside of [
+      { foundationDataPath: join(vaultHome, 'data'), foundationBackupPath: join(root, 'backup') },
+      { foundationDataPath: join(root, 'data'), foundationBackupPath: join(vaultHome, 'backup') },
+      { foundationDataPath: join(vaultHome, 'a', 'b'), foundationBackupPath: join(root, 'backup') },
+    ]) {
+      expect(() => assertVaultCustodyPathSeparation({
+        vaultKeyfilePath: vaultHome,
+        ...inside,
+      }), JSON.stringify(inside)).toThrow('foundation_path_inside_vault_scope');
+    }
+
+    // Gleichheit ist beides zugleich, und eine Antwort muss es sein: der
+    // erste Name gewinnt, damit die Auskunft nicht von der Reihenfolge haengt.
+    expect(() => assertVaultCustodyPathSeparation({
+      vaultKeyfilePath: vaultHome,
+      foundationDataPath: vaultHome,
+      foundationBackupPath: join(root, 'backup'),
+    })).toThrow('vault_path_inside_foundation_scope');
+
+    // Und nebeneinander bleibt nebeneinander.
+    expect(() => assertVaultCustodyPathSeparation({
+      vaultKeyfilePath: vaultHome,
+      foundationDataPath: join(root, 'data'),
+      foundationBackupPath: join(root, 'backup'),
+    })).not.toThrow();
+  });
 });

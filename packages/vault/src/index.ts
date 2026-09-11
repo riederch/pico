@@ -2307,12 +2307,42 @@ export function assertPicoVaultKeyfileMode(path: string): void {
   }
 }
 
+/**
+ * Vault-Verwahrung und Foundation-Ablage duerfen einander nicht enthalten -
+ * **in keiner Richtung**, und beide Richtungen stehen seit Befund B148 hier.
+ *
+ * **Der Anlass** (2026-09-11). Diese Funktion prueft nur eine Richtung: liegt
+ * der Vault-Pfad in einer Foundation-Ablage. Die andere - liegt eine
+ * Foundation-Ablage im Vault-Verzeichnis - stand im Daemon, hinter dem Aufruf
+ * dieser Funktion, und der Titel seines Tests sagte die Regel dabei richtig:
+ * *"refuses custody paths that overlap Foundation scopes in either direction"*.
+ * Die Funktion, die die Regel traegt, kannte nur die Haelfte.
+ *
+ * **Was das erreichbar machte.** Drei Aufrufer im Produkt: der Daemon und
+ * zweimal die CLI. Nur der Daemon ergaenzte die zweite Richtung. Ueber sechs
+ * gemessene Aufstellungen urteilten die beiden deshalb **dreimal verschieden**,
+ * und immer in dieselbe Richtung: die CLI nahm an, was der Daemon ablehnt. Ein
+ * Mensch konnte also mit `keyfile create` eine Aufstellung anlegen, mit der
+ * der Daemon danach nicht startet.
+ *
+ * **Zwei Namen, weil es zwei Faelle sind.** Der Daemon warf fuer die
+ * Gegenrichtung denselben Namen, und der sagt dort das Gegenteil dessen, was
+ * geschehen ist. Derselbe Grund, aus dem
+ * `pico_supplier_identifier_is_not_an_address` neben `..._is_not_a_path` steht:
+ * die Auskunft ist der Zweck des Namens.
+ *
+ * Gleichheit faellt unter den ersten Namen, weil beide Richtungen dann wahr
+ * sind und einer die Antwort sein muss.
+ */
 export function assertVaultCustodyPathSeparation(input: PicoVaultPathSeparationInput): void {
   const vaultPath = resolve(input.vaultKeyfilePath);
   for (const forbidden of [input.foundationDataPath, input.foundationBackupPath]) {
     const forbiddenPath = resolve(forbidden);
     if (vaultPath === forbiddenPath || isWithin(vaultPath, forbiddenPath)) {
       throw new Error('vault_path_inside_foundation_scope');
+    }
+    if (isWithin(forbiddenPath, vaultPath)) {
+      throw new Error('foundation_path_inside_vault_scope');
     }
   }
 }

@@ -912,6 +912,62 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B148 — Eine Regel namens Trennung trennte nur in eine Richtung
+(2026-09-11).** Auf der Suche nach einem Schnitt für den blinden Fleck aus B145
+fiel ein Paar auf, das zwei Ablehnungsnamen über eine Paketgrenze teilt, ohne
+dass eine Datei die andere importiert: `apps/vault-daemon/src/daemon.ts` und
+`packages/vault/src/index.ts`.
+
+`assertVaultCustodyPathSeparation` prüft, ob der **Vault-Pfad in einer
+Foundation-Ablage** liegt. Der Daemon ruft sie — und hängt danach eine eigene
+Schleife an, die das Umgekehrte prüft: ob eine **Foundation-Ablage im
+Vault-Verzeichnis** liegt. Der Titel seines Tests sagt die Regel dabei richtig:
+*„refuses custody paths that overlap Foundation scopes **in either
+direction**"*. Die Funktion, die den Namen „Trennung" trägt, kannte nur die
+Hälfte.
+
+**Erreichbar, und immer in dieselbe Richtung.** Drei Produktaufrufer: der
+Daemon und **zweimal die CLI**. Nur der Daemon ergänzte die zweite Richtung.
+Über sechs gemessene Aufstellungen urteilen die beiden **dreimal verschieden**,
+und jedes Mal nimmt die CLI an, was der Daemon ablehnt. Ein Mensch konnte also
+mit `keyfile create` eine Aufstellung anlegen, mit der der Daemon danach nicht
+startet.
+
+**Zwei Namen, weil es zwei Fälle sind.** Der Daemon warf für die Gegenrichtung
+denselben Namen — und der sagt dort das Gegenteil dessen, was geschehen ist.
+Sie heißt jetzt `foundation_path_inside_vault_scope`. Derselbe Grund, aus dem
+`pico_supplier_identifier_is_not_an_address` neben `..._is_not_a_path` steht:
+die Auskunft ist der Zweck des Namens. Gleichheit fällt unter den ersten Namen,
+weil dann beide Richtungen wahr sind und eine Antwort es sein muss.
+
+Der Helfer `isWithinOrEqual` im Daemon war danach tot und ist mitgegangen,
+samt zweier Importe, die nur er brauchte.
+
+**Der Schnitt, der es fand, und warum er taugt.** Nicht „Ablehnung in zwei
+Dateien ohne Importbeziehung" — das sind 21 Paare und überwiegend geteiltes
+Vokabular. Sondern: **zwei Dateien in verschiedenen Paketen teilen sich *zwei
+oder mehr* Ablehnungen, und keine importiert das Modul der anderen.** Das sind
+genau **drei** Paare. Zwei davon sind das Postfachbuch aus B145, das dritte war
+dieser Befund. Eine Anzahl, kein Schwellenwert.
+
+**Drei Schnitte davor haben nicht getaugt, und das steht hier, damit es
+niemand ein zweites Mal versucht.** (1) „Modul, dessen Ausfuhren alle unerreicht
+sind" — verfehlt das Postfachbuch, weil eine einzige Konstante erreicht ist;
+meine eigene B145-Faltung hat es an diesem Rand sogar verschoben. (2) „Modul
+überwiegend unerreicht" — der Anteil ist ein Schwellenwert, und ein
+Schwellenwert ist Rauschen. (3) „Ein Typ, den das Produkt nicht nennt" — 247
+von 494 Typen, und darunter `PicoSupplierManifest`, das `event-store.ts`
+nachweislich benutzt, ohne den Namen je zu schreiben: **ein Typ wird
+hergeleitet, nicht genannt.**
+
+**Und zwei eigene Fehlmessungen auf dem Weg, beide aus demselben Grund.** Ein
+Zeilenfenster von ±3 um einen Vergleich ließ mich zweimal fast einen Defekt
+behaupten, den es nicht gab — die Untergrenze stand jeweils in der Zeile davor
+oder hinter einem Rückgabeblock. Auf ein unscharfes Fenster gehört kein Tor.
+Der Streifzug selbst ist ein sauberes Negativergebnis: über 31 Stellen, an
+denen ein Zeitpunkt gegen ein Fensterende verglichen wird, fehlt **keine**
+Untergrenze, wo eine hingehört.
+
 **B147 — Prosa ist kein Gang, und drei Tore glaubten sie (2026-09-11).**
 `check-refusal-reasons.mjs` trägt seinen eigenen Vorbehalt im Kopf: *„Sie
 fragt, ob das Wort in irgendeiner `*.test.ts` vorkommt — nicht, ob ein Test es

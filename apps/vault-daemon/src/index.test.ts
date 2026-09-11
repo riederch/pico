@@ -341,12 +341,14 @@ describe('Pico Vault daemon custody boundary (ADR 0097 D2)', () => {
       foundationBackupPath: tempDir('pico-fb-'),
     })).rejects.toThrow('vault_path_inside_foundation_scope');
 
+    // Befund B148: die Gegenrichtung heisst seither, was in ihr geschieht.
+    // Vorher trug sie den Namen der anderen und sagte damit das Gegenteil.
     const home = tempDir('pico-vd-');
     await expect(startAt({
       home,
       foundationDataPath: join(home, 'data'),
       foundationBackupPath: tempDir('pico-fb-'),
-    })).rejects.toThrow('vault_path_inside_foundation_scope');
+    })).rejects.toThrow('foundation_path_inside_vault_scope');
   });
 
   it('refuses open home permissions and oversized socket paths', async () => {
