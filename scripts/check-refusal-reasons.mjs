@@ -259,14 +259,20 @@ const arguedHomes = new Map([
 
 const thrownPattern = /throw new Error\(\s*(?:'([a-z][a-z0-9_]{4,})'|`([a-z][a-z0-9_]{4,}):)/gu;
 const homes = new Map();
+/** Quelltext ohne Prosa, je Datei - fuer die Importfrage der dritten Regel. */
+const sourceText = new Map();
+/** Welche Dateien einen Grund werfen - fuer die Querpaketfrage darunter. */
+const thrownBy = new Map();
 for (const file of sourceFiles) {
   const rel = relative(repoRoot, file);
   if (!/^(apps|packages|modules)\/[^/]+\/src\//u.test(rel)) {
     continue;
   }
   const pkg = rel.split('/').slice(0, 2).join('/');
+  const code = withoutComments(readFileSync(file, 'utf8'));
+  sourceText.set(rel, code);
   const seen = new Set();
-  for (const match of readFileSync(file, 'utf8').matchAll(thrownPattern)) {
+  for (const match of code.matchAll(thrownPattern)) {
     seen.add(match[1] ?? match[2]);
   }
   for (const reason of seen) {
@@ -275,6 +281,10 @@ for (const file of sourceFiles) {
       homes.set(key, []);
     }
     homes.get(key).push(rel);
+    if (!thrownBy.has(reason)) {
+      thrownBy.set(reason, []);
+    }
+    thrownBy.get(reason).push(rel);
   }
 }
 
@@ -295,6 +305,120 @@ for (const [key, files] of [...homes].sort()) {
     continue;
   }
   arguedSeen += 1;
+}
+
+/**
+ * **Die dritte Frage, und sie schneidet ueber die Paketgrenze** (2026-09-11,
+ * Befunde B145 und B148). Die Regel darueber laesst einen Weiterwurf zwischen
+ * Paketen zu, und das ist richtig: ein Grund *soll* durch eine Schicht
+ * durchgereicht werden. Was nicht richtig ist, ist eine zweite Fassung
+ * derselben Regel in einem anderen Paket, die von der ersten nichts weiss.
+ *
+ * **Der Schnitt ist eine Anzahl und kein Schwellenwert.** Zwei Dateien in
+ * verschiedenen Paketen, die sich **zwei oder mehr** Ablehnungen teilen, und
+ * keine importiert das Modul der anderen. Gemessen am 2026-09-11: 16 solche
+ * Paare teilen sich *einen* Namen - geteiltes Vokabular, und harmlos -, und
+ * genau drei teilen sich zwei oder mehr. Eines davon war Befund B148, wo die
+ * Vault-Bibliothek eine Richtung der Pfadtrennung prueft und der Daemon die
+ * andere selbst nachbaut; es ist gefaltet und faellt seither heraus.
+ *
+ * **Drei Schnitte davor haben nicht getaugt**, und das steht in der Roadmap
+ * unter B148, damit sie niemand ein zweites Mal versucht - "Modul ganz
+ * unerreicht", "Modul ueberwiegend unerreicht" und "ein Typ, den das Produkt
+ * nicht nennt". Der letzte ist bedeutungslos, weil ein Typ hergeleitet und
+ * nicht genannt wird.
+ *
+ * Die zwei Eintraege unten sind **derselbe** Befund, aus zwei Richtungen
+ * gesehen, und keine Erlaubnis: sie halten ihn sichtbar, bis jemand ihn
+ * entscheidet.
+ */
+const crossKey = (a, b) => [a, b].sort().join('|');
+
+/**
+ * Jeder Pfad steht einzeln, nicht als zusammengesetzter Schluessel: sonst liest
+ * `check-vacuous-gates.mjs` `a|b` als *einen* Pfad, findet ihn nicht und meldet
+ * zu Recht, dass ein Pruefer sich mit einem Pfad erklaert, den es nicht gibt.
+ * Am 2026-09-11 genau so passiert, beim ersten Wurf dieser Regel.
+ */
+const arguedCrossPackage = [
+  {
+    files: ['apps/core/src/event-store.ts', 'packages/protocol/src/link-mailbox.ts'],
+    why: 'Befund B145. Das Protokoll modelliert das Postfachbuch mit drei Ablehnungen, die '
+      + 'sein eigener Kommentar "the security of this whole design" nennt; das Home setzt '
+      + 'alle drei im SQLite-Schema durch - Primaerschluessel plus zwei UNIQUE - und bildet '
+      + 'die Verletzungen auf dieselben Namen ab. Nachgemessen urteilen sie gleich, und die '
+      + 'SQLite-Fassung ist die staerkere: sie durch eine Speicherfassung zu ersetzen waere '
+      + 'ein Rueckschritt. Was fehlt, ist nicht die Faltung, sondern eine Entscheidung '
+      + 'darueber, ob das Buch bleibt - es hat keinen Produktaufrufer',
+  },
+  {
+    files: ['apps/companion/src/link-mailbox.ts', 'packages/protocol/src/link-mailbox.ts'],
+    why: 'Befund B145, dieselbe Sache von der Geraeteseite. Der Companion haelt ein Paar und '
+      + 'kein Buch, und begruendet das ausdruecklich: ein Geraet hat genau ein Home, und ein '
+      + 'nach Peer geschluesseltes Buch mit einem Eintrag waere eine Form, die allgemein tut. '
+      + 'Die geteilten Namen sind daher dieselbe Ablehnung an zwei Orten und keine zweite '
+      + 'Regel',
+  },
+];
+const arguedCrossKeys = new Set(arguedCrossPackage.map(({ files }) => crossKey(...files)));
+
+const importsModuleOf = (from, target) => {
+  const base = target.split('/').pop().replace(/\.ts$/u, '');
+  return [...(sourceText.get(from) ?? '').matchAll(/from '([^']+)'/gu)]
+    .some(([, specifier]) => specifier.replace(/\.js$/u, '').split('/').pop() === base);
+};
+
+const crossPairs = new Map();
+for (const [reason, files] of thrownBy) {
+  if (files.length < 2) {
+    continue;
+  }
+  for (let i = 0; i < files.length; i += 1) {
+    for (let j = i + 1; j < files.length; j += 1) {
+      const [a, b] = [files[i], files[j]];
+      if (a.split('/').slice(0, 2).join('/') === b.split('/').slice(0, 2).join('/')) {
+        continue;
+      }
+      if (importsModuleOf(a, b) || importsModuleOf(b, a)) {
+        continue;
+      }
+      const key = crossKey(a, b);
+      if (!crossPairs.has(key)) {
+        crossPairs.set(key, []);
+      }
+      crossPairs.get(key).push(reason);
+    }
+  }
+}
+
+let arguedCrossSeen = 0;
+for (const [key, reasons] of [...crossPairs].sort()) {
+  if (reasons.length < 2) {
+    continue;
+  }
+  if (!arguedCrossKeys.has(key)) {
+    const [a, b] = key.split('|');
+    errors.push(
+      `${a} and ${b} are in different packages, share ${reasons.length} refusals `
+      + `(${reasons.sort().join(', ')}) and neither imports the other's module. One rule with `
+      + 'two writings on opposite sides of a package boundary drifts with nothing to hold it - '
+      + 'fold it, or say here why the same words answer different questions.',
+    );
+    continue;
+  }
+  arguedCrossSeen += 1;
+}
+
+// Auch diese Liste sagt nur, was erlaubt ist - nie, ob es das noch gibt.
+for (const { files } of arguedCrossPackage) {
+  const key = crossKey(...files);
+  if ((crossPairs.get(key) ?? []).length < 2) {
+    const [a, b] = files;
+    errors.push(
+      `${a} and ${b} are argued here as sharing refusals across a package boundary, and they `
+      + 'no longer share two. Take the entry out.',
+    );
+  }
 }
 
 // Eine Liste sagt, was erlaubt ist - nie, ob es das noch gibt.
@@ -327,5 +451,7 @@ console.log(
     : `, and ${notYetWalked.size} are argued as not yet walked, each with what a `
       + 'walk would need')
   + `; ${homes.size} thrown refusals have one home in their package, `
-  + `${arguedSeen} share a word between two questions and say why).`,
+  + `${arguedSeen} share a word between two questions and say why; `
+  + `${crossPairs.size} file pairs share a refusal across a package boundary, `
+  + `${arguedCrossSeen} of them share two or more and say why).`,
 );

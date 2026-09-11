@@ -960,6 +960,16 @@ von 494 Typen, und darunter `PicoSupplierManifest`, das `event-store.ts`
 nachweislich benutzt, ohne den Namen je zu schreiben: **ein Typ wird
 hergeleitet, nicht genannt.**
 
+**Das Tor trägt den Schnitt jetzt, und damit ist der blinde Fleck aus B145
+wenigstens benannt statt still.** `check-refusal-reasons.mjs` hat die
+Querpaketfrage als dritte Regel über demselben Gegenstand; die Ausnahmeliste
+hat **zwei** Einträge, und beide sind derselbe Befund aus zwei Richtungen: das
+Postfachbuch gegen das Home und gegen den Companion. Sie sind keine Erlaubnis,
+sondern halten die offene Entscheidung sichtbar — bleibt das Buch, oder geht
+es? Die zweite Hälfte des Tores hält die Liste gegen den Baum: wird das Buch
+eines Tages gefaltet oder gelöscht, sagt der Prüfer, dass die Einträge nichts
+mehr beschreiben.
+
 **Und zwei eigene Fehlmessungen auf dem Weg, beide aus demselben Grund.** Ein
 Zeilenfenster von ±3 um einen Vergleich ließ mich zweimal fast einen Defekt
 behaupten, den es nicht gab — die Untergrenze stand jeweils in der Zeile davor
