@@ -124,6 +124,73 @@ describe('identity-bound Foundation sessions (ADR 0082)', () => {
     })).toEqual({ ok: false, reason: 'invalid_device_key_agreement_key' });
   });
 
+  /**
+   * Befund B151/B152. Drei der Ablehnungen dieser Tuer hatte nie jemand
+   * ausgeloest: der Identitaetsschluessel, der Unterschriftsschluessel des
+   * Geraets, und die Lebenszyklus-Evidenz. Geprueft war nur der dritte
+   * Schluessel - der Schluesselaustausch - und der Besitznachweis.
+   *
+   * Was hier faellt, ist die Bindung "dieser Datensatz ist der, den die
+   * Delegation benennt". Ohne sie koennte ein fremder Schluessel unter einer
+   * echten Delegation auftreten.
+   */
+  it('rejects an identity or device-signing record the delegation does not name', () => {
+    const challenge = fixedChallenge();
+
+    const foreignIdentity = signedProof(challenge);
+    foreignIdentity.identityKeyRecord = keyRecord(
+      'pico_identity',
+      sodium.crypto_sign_keypair().publicKey,
+    );
+    expect(verifyIdentitySessionProof(sodium, {
+      proof: foreignIdentity,
+      challenge,
+      at: '2026-07-27T10:00:00.000Z',
+    })).toEqual({ ok: false, reason: 'invalid_identity_key' });
+
+    // Und dieselbe Verwechslung ueber die Rolle statt ueber den Schluessel.
+    const confusedIdentity = signedProof(challenge);
+    confusedIdentity.identityKeyRecord = {
+      ...identityKeyRecord,
+      keyRole: 'device_signing',
+    };
+    expect(verifyIdentitySessionProof(sodium, {
+      proof: confusedIdentity,
+      challenge,
+      at: '2026-07-27T10:00:00.000Z',
+    })).toEqual({ ok: false, reason: 'invalid_identity_key' });
+
+    const foreignDevice = signedProof(challenge);
+    foreignDevice.deviceSigningKeyRecord = keyRecord(
+      'device_signing',
+      sodium.crypto_sign_keypair().publicKey,
+    );
+    expect(verifyIdentitySessionProof(sodium, {
+      proof: foreignDevice,
+      challenge,
+      at: '2026-07-27T10:00:00.000Z',
+    })).toEqual({ ok: false, reason: 'invalid_device_signing_key' });
+  });
+
+  /**
+   * Befund B151. Die Evidenz selbst: eine Delegation, deren Unterschrift nicht
+   * zum Aussteller passt, faellt beim Bau des geprueften Lebenszyklus - und
+   * nicht erst beim Nachschlagen. Der Grund dafuer hatte keinen Test.
+   */
+  it('rejects lifecycle evidence whose delegation signature does not verify', () => {
+    const challenge = fixedChallenge();
+    const tampered = signedProof(challenge);
+    tampered.delegation = {
+      record: tampered.delegation.record,
+      signatureHex: '0'.repeat(128),
+    };
+    expect(verifyIdentitySessionProof(sodium, {
+      proof: tampered,
+      challenge,
+      at: '2026-07-27T10:00:00.000Z',
+    })).toEqual({ ok: false, reason: 'invalid_identity_lifecycle_evidence' });
+  });
+
   it('rejects a valid device signature over a foreign verifier context', () => {
     const challenge = fixedChallenge();
     const proof = signedProof({

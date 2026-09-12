@@ -42,7 +42,6 @@ export type IdentitySessionProofFailure =
   | 'invalid_identity_key'
   | 'invalid_device_signing_key'
   | 'invalid_device_key_agreement_key'
-  | 'delegation_subject_mismatch'
   | 'inactive_surface_session_delegation'
   | 'invalid_identity_lifecycle_evidence'
   | 'invalid_device_possession';
@@ -196,11 +195,22 @@ export function verifyIdentitySessionProof(
       return { ok: false, reason: 'invalid_device_key_agreement_key' };
     }
 
-    if (delegation.issuerIdentityKeyFingerprintHex !== identityFingerprint
-      || delegation.subjectSigningKeyFingerprintHex !== deviceSigningFingerprint
-      || delegation.subjectKeyAgreementKeyFingerprintHex !== deviceKeyAgreementFingerprint) {
-      return { ok: false, reason: 'delegation_subject_mismatch' };
-    }
+    /*
+     * Hier stand eine Wache, die einen Wert mit sich selbst verglich, und der
+     * Grund `delegation_subject_mismatch` konnte deshalb nie ausgesprochen
+     * werden (Befund B152, 2026-09-12). Die drei Konstanten darueber sind
+     * unmittelbar aus genau den drei Feldern gelesen, gegen die sie geprueft
+     * wurden - `x !== x`, dreimal.
+     *
+     * **Sie verdeckte nichts.** Was sie zu sagen scheint, sagen die drei
+     * Pruefungen darueber bereits: jeder Schluesseldatensatz wird gegen das
+     * Feld der Delegation gehalten, das ihn benennt. Die Unterschrift der
+     * Delegation prueft `createVerifiedPicoIdentityLifecycleIndex` darunter,
+     * und den Besitz des Geraeteschluessels der Besitznachweis. Eine zweite
+     * Quelle, gegen die dieser Vergleich haette laufen koennen, gibt es nicht -
+     * der Aufrufer *leitet* die Identitaet aus dem Beweis ab und vergleicht
+     * sie nicht mit einer erwarteten.
+     */
 
     let lifecycle;
     try {

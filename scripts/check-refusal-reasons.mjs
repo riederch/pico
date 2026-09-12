@@ -98,9 +98,6 @@ const derAnspruchsweg = 'Die Gruendungsevidenz wird von `verifyPicoHomeFoundingE
   + 'erreichbar ist. Ein Gang braucht ein beanspruchtes Home, dessen Evidenz mit **einem** '
   + 'verfaelschten Feld neu unterschrieben wird - je Grund ein anderes Feld. Die Fixture dafuer '
   + 'gibt es noch nicht; `test-claimed-home.ts` baut den gelungenen Fall.';
-const derSitzungsweg = 'Braucht eine Identitaetssitzung, deren Lebenszyklus-Evidenz an einer '
-  + 'Stelle verfaelscht ist, waehrend der Rest gueltig bleibt. `identity-session.test.ts` faehrt '
-  + 'heute den gelungenen Fall und die Ablehnungen davor.';
 const derUmschlagweg = 'Braucht eine Ausgabe, bei der sich zwischen Anfrage und Ausstellung '
   + 'etwas bewegt - die Autoritaet wechselt, der Leser passt nicht mehr zum Recht, der '
   + 'Schluesselstand ist weg. `share-envelope.test.ts` hat den Aufbau, nicht aber den Zwischenzug.';
@@ -121,10 +118,6 @@ const notYetWalked = new Map([
   ['invalid_host_claim_response_signature', derAnspruchsweg],
   ['invalid_host_founding_signature', derAnspruchsweg],
   ['malformed_founding_evidence', derAnspruchsweg],
-  ['delegation_subject_mismatch', derSitzungsweg],
-  ['invalid_device_signing_key', derSitzungsweg],
-  ['invalid_identity_key', derSitzungsweg],
-  ['invalid_identity_lifecycle_evidence', derSitzungsweg],
   ['authority_changed', derUmschlagweg],
   ['envelope_issuance_unavailable', derUmschlagweg],
   ['reader_does_not_match_grant', derUmschlagweg],

@@ -912,6 +912,45 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B152 — Eine Wache, die einen Wert mit sich selbst verglich (2026-09-12).**
+Beim Abarbeiten der ersten Schuld aus B151 — der Identitätssitzung — fiel in
+`verifyIdentitySessionProof` eine Prüfung auf:
+
+```
+const identityFingerprint = delegation.issuerIdentityKeyFingerprintHex;
+…
+if (delegation.issuerIdentityKeyFingerprintHex !== identityFingerprint || …)
+  return { ok: false, reason: 'delegation_subject_mismatch' };
+```
+
+Dreimal `x !== x`. Die drei Konstanten sind unmittelbar aus genau den drei
+Feldern gelesen, gegen die sie gehalten werden; `delegation` ist `const` und
+wird dazwischen nicht angefasst. **Diese Ablehnung konnte nie ausgesprochen
+werden** — und dem Tor fiel sie nicht auf, weil sein erster Satz nur fragt, ob
+der Grund *irgendwo* erzeugt wird, und das Literal steht ja da.
+
+**Sie verdeckte nichts, und das ist nachgesehen.** Was sie zu sagen scheint,
+sagen die drei Prüfungen darüber bereits: jeder Schlüsseldatensatz wird gegen
+das Feld der Delegation gehalten, das ihn benennt. Die Unterschrift prüft der
+Lebenszyklusindex, den Besitz der Besitznachweis. Eine zweite Quelle, gegen die
+dieser Vergleich hätte laufen können, gibt es nicht — der Aufrufer *leitet* die
+Identität aus dem Beweis ab, statt sie mit einer erwarteten zu vergleichen.
+Wache und Grund sind weg, die Begründung steht an ihrer Stelle.
+
+**Der Sweep danach ist ein sauberes Negativergebnis.** Über 261 Quelldateien
+gesucht nach `const n = ausdruck` gefolgt von `ausdruck !== n`: zwei weitere
+Treffer, **beide richtig**. In `relay-operator.ts` liegt ein `filter` zwischen
+Zuweisung und Vergleich, in `web/main.ts` ein `await` — ein Vorher/Nachher ist
+genau dann sinnvoll, wenn dazwischen etwas geschieht. Der Unterschied zum Fund
+ist messbar und nicht Geschmack.
+
+**Und die erste Gruppe der B151-Schulden ist gegangen:** ein fremder
+Identitätsschlüssel, eine vertauschte Schlüsselrolle, ein fremder
+Unterschriftsschlüssel und eine Delegation, deren Unterschrift nicht verifiziert
+— die Bindung „dieser Datensatz ist der, den die Delegation benennt". Geprüft
+war vorher nur der dritte Schlüssel und der Besitznachweis. Von 25 Schulden sind
+21 übrig.
+
 **B151 — Das Tor über alle Ablehnungen sah weniger als die Hälfte
 (2026-09-12).** Erst eine Sonde, die nichts fand, und das ist auch ein
 Ergebnis: **alle vierzehn einzelnen Wahrheiten des Protokolls sind gehalten** —
