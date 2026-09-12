@@ -149,6 +149,85 @@ describe('controller-signed share-envelope issuance (ADR 0084)', () => {
     }
   });
 
+  /**
+   * Befund B151/B153. Zwei Ablehnungen dieser Tuer hatte nie jemand ausgeloest.
+   *
+   * `authority_changed` ist die schaerfere: `prepare` liest die Zuteilung ein
+   * **zweites Mal**, nachdem die Leserschluessel-Auswahl `await`-et hat, weil
+   * sie in dieser Luecke enden kann. Dieser Test zieht sie genau dort zurueck -
+   * im Frischeruf, der innerhalb der Auswahl laeuft. Ohne die zweite Lesung
+   * bekaeme jemand einen Umschlag auf eine Vollmacht, die es beim Ausstellen
+   * nicht mehr gab.
+   */
+  it('refuses when the grant ends inside the reader-key selection', async () => {
+    let revoked = false;
+    const fixture = createFixture({
+      freshness(query) {
+        if (!revoked) {
+          revoked = true;
+          fixture.store.recordPicoHomeDomainReadGrantLifecycle({
+            sodium,
+            record: revokeGrant(),
+          });
+        }
+        return currentCheckpoint(query);
+      },
+    });
+    try {
+      await expect(fixture.issuer.prepare(prepareInput(), new Date(AT)))
+        .resolves.toEqual({ ok: false, reason: 'authority_changed' });
+    } finally {
+      fixture.close();
+    }
+  });
+
+  /** Befund B151. Ohne Schluesselspeicher stellt dieses Home nichts aus. */
+  it('refuses to issue at all when there is no key store', async () => {
+    const fixture = createFixture();
+    try {
+      const withoutKeyStore = new PicoShareEnvelopeIssuer(
+        fixture.store,
+        sodium,
+        new PicoIdentityReaderKeySelector(fixture.store, sodium, {
+          check: async (query) => currentCheckpoint(query),
+        }),
+        undefined,
+        2 * 60 * 1_000,
+        128,
+        () => 0,
+      );
+      await expect(withoutKeyStore.prepare(prepareInput(), new Date(AT)))
+        .resolves.toEqual({ ok: false, reason: 'envelope_issuance_unavailable' });
+    } finally {
+      fixture.close();
+    }
+  });
+
+  /**
+   * Befund B153. Die Bindung „dieser Leser ist der der Zuteilung" wird
+   * gehalten - aber unter einem anderen Namen, als `share-envelope.ts` dafuer
+   * fuehrt. Wer eine Delegation nennt, die dem Leser der Zuteilung nicht
+   * gehoert, findet keine Zeile und heisst `reader_key_is_not_locally_eligible`.
+   *
+   * `reader_does_not_match_grant` daneben kann nicht fallen: `prepare` ruft die
+   * Auswahl **mit** dem Fingerabdruck der Zuteilung, die Abfrage filtert danach
+   * und gibt genau ihn zurueck. Dieser Test haelt fest, was wirklich geschieht.
+   */
+  it('refuses a delegation the granted reader does not hold', async () => {
+    const fixture = createFixture();
+    try {
+      await expect(fixture.issuer.prepare({
+        ...prepareInput(),
+        delegationId: 'delegation_someone_else_0001',
+      }, new Date(AT))).resolves.toEqual({
+        ok: false,
+        reason: 'reader_key_is_not_locally_eligible',
+      });
+    } finally {
+      fixture.close();
+    }
+  });
+
   it('fails closed without authenticated freshness and rechecks it before finalization', async () => {
     const unavailable = createFixture({ freshness: 'unavailable' });
     try {

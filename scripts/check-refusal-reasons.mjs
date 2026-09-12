@@ -98,9 +98,6 @@ const derAnspruchsweg = 'Die Gruendungsevidenz wird von `verifyPicoHomeFoundingE
   + 'erreichbar ist. Ein Gang braucht ein beanspruchtes Home, dessen Evidenz mit **einem** '
   + 'verfaelschten Feld neu unterschrieben wird - je Grund ein anderes Feld. Die Fixture dafuer '
   + 'gibt es noch nicht; `test-claimed-home.ts` baut den gelungenen Fall.';
-const derUmschlagweg = 'Braucht eine Ausgabe, bei der sich zwischen Anfrage und Ausstellung '
-  + 'etwas bewegt - die Autoritaet wechselt, der Leser passt nicht mehr zum Recht, der '
-  + 'Schluesselstand ist weg. `share-envelope.test.ts` hat den Aufbau, nicht aber den Zwischenzug.';
 const derUrkundenweg = 'Braucht eine Urkunde - Domaenen-Lesezugang oder Mitgliedschaft -, deren '
   + 'Schema oder Unterschrift verfaelscht ist, gegen einen Speicher, der die echte schon haelt.';
 const derZuliefererweg = 'Braucht einen Zuliefererprozess, der mitten in einer Anfrage schliesst '
@@ -118,9 +115,6 @@ const notYetWalked = new Map([
   ['invalid_host_claim_response_signature', derAnspruchsweg],
   ['invalid_host_founding_signature', derAnspruchsweg],
   ['malformed_founding_evidence', derAnspruchsweg],
-  ['authority_changed', derUmschlagweg],
-  ['envelope_issuance_unavailable', derUmschlagweg],
-  ['reader_does_not_match_grant', derUmschlagweg],
   ['invalid_lifecycle_schema', derUrkundenweg],
   ['malformed_domain_read_grant', derUrkundenweg],
   ['unknown_credential', derUrkundenweg],

@@ -49,7 +49,6 @@ export type PicoShareEnvelopeIssuanceFailure =
   | 'envelope_issuance_unavailable'
   | 'inactive_grant'
   | PicoIdentityReaderKeySelectionFailure
-  | 'reader_does_not_match_grant'
   | 'key_version_unavailable'
   | 'unknown_or_expired_issuance'
   | 'invalid_issuer_signature'
@@ -134,10 +133,21 @@ export class PicoShareEnvelopeIssuer {
     if (!selection.ok) {
       return selection;
     }
-    if (selection.candidate.picoIdentityFingerprintHex
-      !== grant.grant.readerPicoIdentityFingerprintHex) {
-      return { ok: false, reason: 'reader_does_not_match_grant' };
-    }
+    /*
+     * Hier stand `reader_does_not_match_grant`, und der Grund konnte nie
+     * ausgesprochen werden (Befund B153, 2026-09-12). Die Auswahl wird oben
+     * **mit** `grant.grant.readerPicoIdentityFingerprintHex` gerufen; die
+     * Abfrage dahinter filtert `pico_identity_fingerprint_hex = ?` mit genau
+     * diesem Wert und gibt ihn als Feld des Kandidaten zurueck. Der Vergleich
+     * war damit `x !== x` ueber einen Funktionsaufruf und eine SQL-Runde
+     * hinweg - dieselbe Klasse wie Befund B152, nur ausser Sichtweite eines
+     * Textvergleichs.
+     *
+     * **Gehalten wird die Bindung trotzdem, unter einem anderen Namen.** Wer
+     * eine Delegation nennt, die dem Leser der Zuteilung nicht gehoert, findet
+     * keine Zeile: `reader_key_is_not_locally_eligible`. Das steht seit heute
+     * als Test in `share-envelope.test.ts`, ausgefuehrt und nicht gelesen.
+     */
     const currentGrant = this.store.activePicoHomeDomainReadGrantRecord(
       this.sodium,
       input.grantId,

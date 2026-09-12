@@ -912,6 +912,36 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B153 — Derselbe Selbstvergleich, diesmal außer Sichtweite (2026-09-12).**
+Die zweite Schuldengruppe aus B151 — die Umschlagausgabe — brachte B152 ein
+zweites Mal, und zwar in der Form, die mein Textsweep nicht finden konnte.
+
+`share-envelope.ts` ruft die Leserschlüssel-Auswahl **mit**
+`grant.grant.readerPicoIdentityFingerprintHex` und hält den zurückgegebenen
+Kandidaten danach gegen genau diesen Wert. Die Abfrage dahinter filtert
+`pico_identity_fingerprint_hex = ?` mit dem Parameter und gibt die Spalte
+zurück — also `x !== x` über einen Funktionsaufruf und eine SQL-Runde hinweg.
+**`reader_does_not_match_grant` konnte nie fallen.** Der Sweep aus B152 sucht
+`const n = ausdruck` gefolgt von `ausdruck !== n`; hier liegt zwischen beiden
+eine Methode und eine `WHERE`-Klausel. Die Klasse ist also breiter, als ein
+Textvergleich sie sieht.
+
+**Gehalten wird die Bindung trotzdem, unter einem anderen Namen** — und das ist
+jetzt ausgeführt statt gelesen: wer eine Delegation nennt, die dem Leser der
+Zuteilung nicht gehört, findet keine Zeile und bekommt
+`reader_key_is_not_locally_eligible`. Ein Test hält das fest; die unerreichbare
+Wache ist weg.
+
+**Und die zwei erreichbaren Gründe dieser Tür sind gegangen.** Der schärfere
+ist `authority_changed`: `prepare` liest die Zuteilung ein **zweites Mal**,
+nachdem die Auswahl `await`-et hat, weil sie in dieser Lücke enden kann. Der
+Test zieht sie genau dort zurück — im Frischeruf, der innerhalb der Auswahl
+läuft. Ohne die zweite Lesung bekäme jemand einen Umschlag auf eine Vollmacht,
+die es beim Ausstellen nicht mehr gab; die Pflanzung, die sie entfernt, fällt
+jetzt auf.
+
+Von 25 Schulden sind **18** übrig. Das Tor zählt 135 Gründe, 117 gegangen.
+
 **B152 — Eine Wache, die einen Wert mit sich selbst verglich (2026-09-12).**
 Beim Abarbeiten der ersten Schuld aus B151 — der Identitätssitzung — fiel in
 `verifyIdentitySessionProof` eine Prüfung auf:
