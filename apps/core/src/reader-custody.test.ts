@@ -533,6 +533,117 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
 });
 
 /** Die Fabrik liegt seit dem 2026-08-26 in `test-reader-custody-records.ts`. */
+/**
+ * Befund B151. Fuenf Ablehnungen dieses Speichers hat nie jemand ausgeloest.
+ *
+ * Das Tor, das genau das verhindern soll, sah sie nicht: sein Muster verlangte
+ * ein Semikolon unmittelbar hinter der Union, und dieses Repository schreibt
+ * `| { ok: false; reason: 'a' | 'b' };`. Von 113 mit `ok: false`
+ * ausgesprochenen Gruenden zaehlte es 41.
+ *
+ * Was hier faellt, ist die Tuer zur Leserverwahrung: wer eine Domaene nicht
+ * kennt, wer kein aktives Mitglied mehr ist, wessen Leserschluessel nicht der
+ * aktuelle ist. Ein falsches Ja an dieser Stelle oeffnet fremden Inhalt.
+ */
+describe('ReaderCustodyStore - die Ablehnungen, die niemand gegangen ist (B151)', () => {
+  it('refuses a writer grant for a domain it has never seen', () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    // Die Domaene wird bewusst nicht aufgezeichnet.
+    expect(harness.store.recordWriterGrant(records.writerGrant, RECORDED_AT))
+      .toEqual({ ok: false, reason: 'unknown_domain' });
+  });
+
+  it('refuses a writer whose membership has ended', () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    harness.activeMembers.add(
+      records.domain.domain.ownerIdentityKeyFingerprintHex,
+    );
+    // Der Schreiber ist kein aktives Mitglied - und nur das fehlt.
+    expect(harness.store.recordDomain(records.domain, AUTHORIZED_AT).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, RECORDED_AT))
+      .toEqual({ ok: false, reason: 'writer_is_not_active_member' });
+
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    expect(harness.store.recordWriterGrant(records.writerGrant, RECORDED_AT).ok)
+      .toBe(true);
+  });
+
+  it('refuses a lifecycle for a reader grant that was never recorded', async () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    const readerIdentity = 'bb'.repeat(32);
+    const readerSigning = 'cc'.repeat(32);
+    const readerKeyRecord = keyRecord(
+      'device_key_agreement',
+      sodium.crypto_box_keypair().publicKey,
+    );
+    const readerGrant = makeReaderGrant(records, {
+      readerIdentityFingerprintHex: readerIdentity,
+      readerDeviceSigningKeyFingerprintHex: readerSigning,
+      readerKeyRecord,
+    });
+    expect(harness.store.recordReaderGrantLifecycle(
+      makeReaderLifecycle(records, readerGrant),
+      RECORDED_AT,
+    )).toEqual({ ok: false, reason: 'unknown_reader_grant' });
+  });
+
+  it('refuses a reader whose key is not the one the registry holds', async () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    const owner = records.domain.domain.ownerIdentityKeyFingerprintHex;
+    const readerIdentity = 'bb'.repeat(32);
+    const readerSigning = 'cc'.repeat(32);
+    const readerKeyRecord = keyRecord(
+      'device_key_agreement',
+      sodium.crypto_box_keypair().publicKey,
+    );
+    const readerKeyFingerprint = fingerprint(readerKeyRecord);
+    harness.activeMembers.add(owner);
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    harness.activeMembers.add(readerIdentity);
+    // Eingetragen ist ein **anderer** Unterschriftsschluessel als der, auf den
+    // der Zugang lautet. Alles andere stimmt.
+    harness.eligibleReaders.set(readerKeyFingerprint, {
+      identityFingerprintHex: readerIdentity,
+      deviceSigningKeyFingerprintHex: 'dd'.repeat(32),
+      delegationId: 'reader_delegation_0001',
+      keyRecord: readerKeyRecord,
+    });
+    expect(harness.store.recordDomain(records.domain, AUTHORIZED_AT).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, AUTHORIZED_AT).ok)
+      .toBe(true);
+    expect(await harness.store.recordReaderGrant(
+      makeReaderGrant(records, {
+        readerIdentityFingerprintHex: readerIdentity,
+        readerDeviceSigningKeyFingerprintHex: readerSigning,
+        readerKeyRecord,
+      }),
+      '2026-07-27T10:00:30.000Z',
+    )).toEqual({ ok: false, reason: 'reader_key_is_not_current' });
+  });
+
+  it('refuses a domain whose privacy domain is already held under another custody', () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    harness.activeMembers.add(
+      records.domain.domain.ownerIdentityKeyFingerprintHex,
+    );
+    harness.db
+      .prepare(`
+        INSERT INTO memory_domain_custody (
+          privacy_domain, custody_class, created_at, updated_at
+        ) VALUES (?, 'host_custody', ?, ?)
+      `)
+      .run(records.domain.domain.domainId, AUTHORIZED_AT, AUTHORIZED_AT);
+    expect(harness.store.recordDomain(records.domain, AUTHORIZED_AT))
+      .toEqual({ ok: false, reason: 'domain_custody_conflict' });
+  });
+});
+
 const makeReaderGrant = makeReaderCustodyReaderGrant;
 
 function makeReaderLifecycle(

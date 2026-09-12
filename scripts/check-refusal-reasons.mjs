@@ -81,10 +81,60 @@ const withoutComments = (text) => text
  * Bezahltes fuehrt, glaubt bald niemand mehr, und dann verdeckt sie das
  * Unbezahlte daneben.
  */
+/**
+ * Fuenf Gruende hingen an derselben Tuer und sind am 2026-09-12 gegangen
+ * worden (Befund B151, Leserverwahrung). Was hier steht, haengt an einem
+ * Aufbau, den es noch nicht gibt - und der Aufbau steht dabei, nicht ein
+ * "spaeter".
+ *
+ * Die Saetze sind je Gruppe **einmal** geschrieben und angehaengt, weil es je
+ * Gruppe **ein** Hindernis ist. Fuenfundzwanzig verschiedene Saetze zu
+ * erfinden, wo es fuenf Hindernisse gibt, waere das mechanische Fuellen, vor
+ * dem Befund B95 warnt - und der Leser wuerde fuenfundzwanzigmal dasselbe
+ * lesen, ohne es zu merken.
+ */
+const derAnspruchsweg = 'Die Gruendungsevidenz wird von `verifyPicoHomeFoundingEvidence` '
+  + 'geprueft, einer modulprivaten Funktion in `app.ts`, die nur ueber die Anspruchsflaeche '
+  + 'erreichbar ist. Ein Gang braucht ein beanspruchtes Home, dessen Evidenz mit **einem** '
+  + 'verfaelschten Feld neu unterschrieben wird - je Grund ein anderes Feld. Die Fixture dafuer '
+  + 'gibt es noch nicht; `test-claimed-home.ts` baut den gelungenen Fall.';
+const derSitzungsweg = 'Braucht eine Identitaetssitzung, deren Lebenszyklus-Evidenz an einer '
+  + 'Stelle verfaelscht ist, waehrend der Rest gueltig bleibt. `identity-session.test.ts` faehrt '
+  + 'heute den gelungenen Fall und die Ablehnungen davor.';
+const derUmschlagweg = 'Braucht eine Ausgabe, bei der sich zwischen Anfrage und Ausstellung '
+  + 'etwas bewegt - die Autoritaet wechselt, der Leser passt nicht mehr zum Recht, der '
+  + 'Schluesselstand ist weg. `share-envelope.test.ts` hat den Aufbau, nicht aber den Zwischenzug.';
+const derUrkundenweg = 'Braucht eine Urkunde - Domaenen-Lesezugang oder Mitgliedschaft -, deren '
+  + 'Schema oder Unterschrift verfaelscht ist, gegen einen Speicher, der die echte schon haelt.';
+const derZuliefererweg = 'Braucht einen Zuliefererprozess, der mitten in einer Anfrage schliesst '
+  + 'oder endet. Der Prueflauf startet heute keinen echten Kindprozess, der das ueberlebt.';
+
 const notYetWalked = new Map([
-  // Leer, und das ist ein Zustand und kein Zufall: am 2026-09-07 standen hier
-  // vier Gruende, und alle vier sind am selben Tag gegangen worden. Was hier
-  // steht, ist eine Schuld mit einem Grund - nie ein "spaeter".
+  ['claimant_key_fingerprint_mismatch', derAnspruchsweg],
+  ['first_device_agreement_key_mismatch', derAnspruchsweg],
+  ['first_device_delegation_mismatch', derAnspruchsweg],
+  ['first_device_signing_key_mismatch', derAnspruchsweg],
+  ['inactive_first_device_delegation', derAnspruchsweg],
+  ['invalid_claimant_founding_signature', derAnspruchsweg],
+  ['invalid_claimant_key_role', derAnspruchsweg],
+  ['invalid_founding_record_schema', derAnspruchsweg],
+  ['invalid_host_claim_response_signature', derAnspruchsweg],
+  ['invalid_host_founding_signature', derAnspruchsweg],
+  ['malformed_founding_evidence', derAnspruchsweg],
+  ['delegation_subject_mismatch', derSitzungsweg],
+  ['invalid_device_signing_key', derSitzungsweg],
+  ['invalid_identity_key', derSitzungsweg],
+  ['invalid_identity_lifecycle_evidence', derSitzungsweg],
+  ['authority_changed', derUmschlagweg],
+  ['envelope_issuance_unavailable', derUmschlagweg],
+  ['reader_does_not_match_grant', derUmschlagweg],
+  ['invalid_lifecycle_schema', derUrkundenweg],
+  ['malformed_domain_read_grant', derUrkundenweg],
+  ['unknown_credential', derUrkundenweg],
+  ['unknown_grant', derUrkundenweg],
+  ['invalid_host_activation_signature', derUrkundenweg],
+  ['pico_supplier_closed', derZuliefererweg],
+  ['pico_supplier_exited', derZuliefererweg],
 ]);
 
 const sourceFiles = [];
@@ -106,8 +156,43 @@ for (const root of ['apps', 'packages', 'modules']) {
   walk(join(repoRoot, root));
 }
 
-/** `reason: 'a' | 'b';` in einem Typ - das Versprechen. */
-const declaredPattern = /\breason\??:\s*((?:\s*\|?\s*'[a-z0-9_]+')+)\s*;/gu;
+/**
+ * `reason: 'a' | 'b'` - das Versprechen, wo immer es steht.
+ *
+ * **Das Muster verlangte bis zum 2026-09-12 ein Semikolon unmittelbar dahinter**
+ * (Befund B151), und das ist genau die Schreibweise, die dieses Repository am
+ * seltensten benutzt. Verfehlt wurden damit:
+ *
+ * - die Union in einem Inline-Objekttyp - `| { ok: false; reason: 'a' | 'b' };`
+ *   -, weil zwischen Union und Semikolon eine Klammer steht;
+ * - die ueber mehrere Zeilen gesetzte Union, deren `reason:` eine Zeile hoeher
+ *   steht als ihr Ende;
+ * - und damit auch jedes `return { ok: false, reason: '...' }`.
+ *
+ * **Gemessen an dem Tag, an dem es auffiel:** das Tor sah **53** Gruende, und
+ * mit `ok: false` ausgesprochen werden **113**. Ein Tor, das sich vornimmt,
+ * jede Ablehnung dieses Produkts zu zaehlen, mass weniger als die Haelfte -
+ * und seine Gruendungsmessung (Befund B71, "alle 53 sind erzeugbar") stand
+ * ueber derselben zu kleinen Menge.
+ *
+ * `[;}]` statt `;` schliesst das. Die Parameterform - `function f(reason: 'a'
+ * | 'b')` - faellt weiterhin heraus, weil dort eine runde Klammer folgt, und
+ * das ist richtig so: ein Parameter ist kein Versprechen an einen Aufrufer.
+ */
+const declaredPattern = /\breason\??:\s*((?:\s*\|?\s*'[a-z0-9_]+')+)\s*[;}]/gu;
+/**
+ * **Erklaeren und aussprechen sehen gleich aus und sind es nicht**, und die
+ * Weitung oben zwingt, sie zu trennen (Befund B151). Der Unterschied steht im
+ * Abschluss: `;` schliesst eine Typzeile, `}` schliesst ein Objekt - es sei
+ * denn, die Union traegt ein `|`, dann ist sie ein Inline-Objekttyp und wieder
+ * eine Erklaerung.
+ *
+ * Ohne diese Trennung streicht der Erzeugungszaehler unten genau die
+ * `return { ok: false, reason: '...' }` heraus, die er zaehlen soll, und meldet
+ * jeden so ausgesprochenen Grund als unerzeugbar. Beim ersten Wurf der Weitung
+ * genau so passiert.
+ */
+const isDeclaration = (match) => match[0].trimEnd().endsWith(';') || match[1].includes('|');
 const declared = new Map();
 for (const file of sourceFiles) {
   const source = readFileSync(file, 'utf8');
@@ -130,7 +215,11 @@ const producedLiteral = new Set();
 const templatePrefixes = new Set();
 for (const file of sourceFiles) {
   const source = readFileSync(file, 'utf8');
-  for (const [, reason] of source.replace(declaredPattern, '').matchAll(/'([a-z0-9_]+)'/gu)) {
+  const withoutDeclarations = source.replace(
+    declaredPattern,
+    (...args) => (isDeclaration([args[0], args[1]]) ? '' : args[0]),
+  );
+  for (const [, reason] of withoutDeclarations.matchAll(/'([a-z0-9_]+)'/gu)) {
     producedLiteral.add(reason);
   }
   for (const [, prefix] of source.matchAll(/`([a-z0-9_]+_)\$\{/gu)) {

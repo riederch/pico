@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B151 — Das Tor über alle Ablehnungen sah weniger als die Hälfte
+(2026-09-12).** Erst eine Sonde, die nichts fand, und das ist auch ein
+Ergebnis: **alle vierzehn einzelnen Wahrheiten des Protokolls sind gehalten** —
+`isAsciiToken`, `isHexOfBytes`, `hasExactKeys`, die Instant-, Lebenszyklus- und
+Domänenregeln —, jede einzeln entwaffnet, jede von einem Test bemerkt.
+
+Die zweite Sonde traf. `check-refusal-reasons.mjs` erkennt einen erklärten
+Ablehnungsgrund am Muster `reason: 'a' | 'b';` — mit dem Semikolon
+**unmittelbar** dahinter. Genau diese Schreibweise benutzt dieses Repository am
+seltensten. Verfehlt wurden: die Union in einem Inline-Objekttyp
+(`| { ok: false; reason: 'a' | 'b' };`, weil eine Klammer dazwischensteht), die
+über mehrere Zeilen gesetzte Union, und damit **jedes**
+`return { ok: false, reason: '...' }`.
+
+**Gemessen: das Tor sah 53 Gründe; mit `ok: false` ausgesprochen werden 113.**
+Ein Tor, dessen erster Satz lautet *„Jede Ablehnung, die dieses Produkt
+aussprechen kann, ist einmal gegangen worden"*, maß weniger als die Hälfte —
+und seine Gründungsmessung (B71, *„alle 53 sind erzeugbar"*) stand über
+derselben zu kleinen Menge. Nach der Weitung sieht es **137**.
+
+**Dreißig Gründe nannte kein Test, alle im Kern**, und es sind die Türen, an
+denen ein falsches Ja etwas öffnet: Heimanspruch, Identitätssitzung,
+Leserverwahrung, Umschlagausgabe, Urkunden.
+
+Fünf davon sind gegangen — die Leserverwahrung, wo ein Aufbau schon stand:
+eine Domäne, die der Speicher nie gesehen hat; ein Schreiber, dessen
+Mitgliedschaft endete; ein Lebenszyklus für einen Zugang, den es nicht gibt;
+ein Leser, dessen Schlüssel nicht der ist, den die Registratur hält; und eine
+Domäne, die schon unter anderer Verwahrung steht. Fünf Pflanzungen, fünf rote
+Tests.
+
+Die übrigen **25** stehen als Schuld mit ihrem Hindernis, und die Sätze sind je
+Gruppe **einmal** geschrieben: es sind fünf Hindernisse, nicht
+fünfundzwanzig. Fünfundzwanzig verschiedene Sätze zu erfinden wäre das
+mechanische Füllen, vor dem B95 warnt — und der Leser läse fünfundzwanzigmal
+dasselbe, ohne es zu merken.
+
+**Die Weitung hat einen eigenen Fehler eingebaut, und das Tor hat ihn
+gezeigt.** Es streicht die erkannten Stellen, bevor es zählt, was *erzeugt*
+wird — mit dem weiten Muster strich es damit genau die
+`return { ok: false, reason: '...' }` heraus, die es zählen soll, und meldete
+jeden so ausgesprochenen Grund als unerzeugbar. Erklärung und Erzeugung sind
+jetzt getrennt: `;` schließt eine Typzeile, `}` ein Objekt — es sei denn, die
+Union trägt ein `|`, dann ist sie ein Inline-Objekttyp und wieder eine
+Erklärung. Die Parameterform `function f(reason: 'a' | 'b')` fällt heraus, weil
+dort eine runde Klammer folgt, und das ist richtig: ein Parameter ist kein
+Versprechen an einen Aufrufer.
+
 **B150 — Die Regel gegen das zweite Wecken war nur gegen ein Modell bewiesen
 (2026-09-11).** Die Frage war eine ganz andere: schreibt oder liest irgendetwas
 jede Spalte, die eine Migration anlegt? Antwort, und ein sauberes
