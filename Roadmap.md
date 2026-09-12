@@ -912,6 +912,33 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B154 — Die Urkunden sind gegangen (2026-09-12).** Die dritte Schuldengruppe
+aus B151, und die billigste: fünf Ablehnungen über Domänen-Lesezugang und
+Mitgliedschaft, alle hinter exportierten Funktionen, die ihre Testdateien schon
+fahren. Keine neue Erkenntnis über den Code — aber fünf Türen, die jetzt
+jemand aufgestoßen hat.
+
+Gegangen sind: ein Lebenszyklus mit fremdem Schema und einer, der eine andere
+Zuteilung nennt; dieselben beiden für die Mitgliedschaft; und die
+Gegenzeichnung eines fremden Hosts. Dazu die Auffangstelle
+`malformed_domain_read_grant` an allen drei Orten, an denen sie steht — sie
+fängt, was beim Bauen der Signatureingabe oder beim Prüfen des Schlüssels
+überhaupt *wirft*, damit nichts davon ungefangen nach außen dringt. Der Test
+gibt dafür etwas, das gar keine Unterschrift sein kann.
+
+`invalid_host_activation_signature` ist die schärfste der fünf: ADR 0080 H6
+sagt, das Home kann Mitgliedschaft **verweigern**, aber nie prägen. Ohne seine
+Gegenzeichnung gilt keine — und eine Gegenzeichnung von einem fremden
+Hostschlüssel muss hier fallen und nicht erst beim Einlesen.
+
+Eine Pflanzung über alle fünf Namen, vier rote Tests. Von 25 Schulden sind
+**13** übrig; das Tor zählt 135 Gründe, **122** gegangen.
+
+Was bleibt, ist die teure Hälfte: elf Gründe des Anspruchswegs hinter einer
+modulprivaten Funktion in `app.ts`, die nur über die Anspruchsfläche erreichbar
+ist, und zwei, die einen Zuliefererprozess brauchen, der mitten in einer
+Anfrage endet.
+
 **B153 — Derselbe Selbstvergleich, diesmal außer Sichtweite (2026-09-12).**
 Die zweite Schuldengruppe aus B151 — die Umschlagausgabe — brachte B152 ein
 zweites Mal, und zwar in der Form, die mein Textsweep nicht finden konnte.

@@ -218,6 +218,42 @@ describe('Pico Home membership credentials (ADR 0080 H6)', () => {
     })).toEqual({ ok: false, reason: 'subject_mismatch' });
   });
 
+  /**
+   * Befund B151. Zwei Ablehnungen dieser Urkunde hatte nie jemand ausgeloest.
+   *
+   * `invalid_host_activation_signature` ist die Haelfte, die das Home
+   * verweigern kann: es mintet keine Mitgliedschaft (H6), aber ohne seine
+   * Gegenzeichnung gilt keine. Eine Gegenzeichnung, die nicht von diesem Host
+   * stammt, muss deshalb fallen - und zwar hier und nicht erst beim Einlesen.
+   */
+  it('refuses a host countersignature from a different host key', () => {
+    const credential = issueCredential();
+    expect(verifyPicoHomeMembershipActivation(sodium, {
+      credential,
+      hostSigningPublicKeyHex: bytesToHex(strangerPico.publicKey),
+    })).toEqual({ ok: false, reason: 'invalid_host_activation_signature' });
+  });
+
+  it('refuses a lifecycle with a foreign schema or a credential it does not name', () => {
+    const credential = issueCredential();
+    const founding = foundingRecord();
+
+    expect(verifyPicoHomeMembershipLifecycleRecord(sodium, {
+      record: {
+        ...issueLifecycle(credential),
+        schema: 'pico.home.something-else.v1' as never,
+      },
+      credential,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_lifecycle_schema' });
+
+    expect(verifyPicoHomeMembershipLifecycleRecord(sodium, {
+      record: issueLifecycle(credential, { credentialId: 'member_somebody_elses_0001' }),
+      credential,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'unknown_credential' });
+  });
+
   it('projects a verified credential into an active membership and evicts it on the freshest statement', () => {
     const store = openClaimedStore();
     const credential = issueCredential();

@@ -98,8 +98,6 @@ const derAnspruchsweg = 'Die Gruendungsevidenz wird von `verifyPicoHomeFoundingE
   + 'erreichbar ist. Ein Gang braucht ein beanspruchtes Home, dessen Evidenz mit **einem** '
   + 'verfaelschten Feld neu unterschrieben wird - je Grund ein anderes Feld. Die Fixture dafuer '
   + 'gibt es noch nicht; `test-claimed-home.ts` baut den gelungenen Fall.';
-const derUrkundenweg = 'Braucht eine Urkunde - Domaenen-Lesezugang oder Mitgliedschaft -, deren '
-  + 'Schema oder Unterschrift verfaelscht ist, gegen einen Speicher, der die echte schon haelt.';
 const derZuliefererweg = 'Braucht einen Zuliefererprozess, der mitten in einer Anfrage schliesst '
   + 'oder endet. Der Prueflauf startet heute keinen echten Kindprozess, der das ueberlebt.';
 
@@ -115,11 +113,6 @@ const notYetWalked = new Map([
   ['invalid_host_claim_response_signature', derAnspruchsweg],
   ['invalid_host_founding_signature', derAnspruchsweg],
   ['malformed_founding_evidence', derAnspruchsweg],
-  ['invalid_lifecycle_schema', derUrkundenweg],
-  ['malformed_domain_read_grant', derUrkundenweg],
-  ['unknown_credential', derUrkundenweg],
-  ['unknown_grant', derUrkundenweg],
-  ['invalid_host_activation_signature', derUrkundenweg],
   ['pico_supplier_closed', derZuliefererweg],
   ['pico_supplier_exited', derZuliefererweg],
 ]);

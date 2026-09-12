@@ -190,6 +190,60 @@ describe('Home domain read grants (ADR 0082)', () => {
     })).toEqual({ ok: false, reason: 'grant_binding_mismatch' });
   });
 
+  /**
+   * Befund B151. Drei Ablehnungen dieser Urkunde hatte nie jemand ausgeloest.
+   *
+   * Das Schema und die Zuteilungsnummer stehen *vor* der Unterschrift, sind
+   * also das, was ein Aufrufer als erstes falsch machen kann - und
+   * `malformed_domain_read_grant` faengt, was beim Bauen der Signatureingabe
+   * oder beim Pruefen des Schluessels ueberhaupt wirft, damit nichts daraus
+   * ungefangen nach aussen dringt.
+   */
+  it('refuses a lifecycle with a foreign schema or a grant it does not name', () => {
+    const grant = issueGrant();
+    const founding = foundingRecord();
+
+    expect(verifyPicoHomeDomainReadGrantLifecycle(sodium, {
+      record: { ...issueLifecycle(grant), schema: 'pico.home.something-else.v1' as never },
+      grantRecord: grant,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_lifecycle_schema' });
+
+    expect(verifyPicoHomeDomainReadGrantLifecycle(sodium, {
+      record: issueLifecycle(grant, { grantId: 'grant_somebody_elses_0001' }),
+      grantRecord: grant,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'unknown_grant' });
+  });
+
+  it('answers a malformed record with one bounded refusal instead of throwing', () => {
+    const founding = foundingRecord();
+    const signed = issueGrant();
+
+    // Keine Unterschrift, sondern etwas, das gar keine sein kann: die Pruefung
+    // wirft, und der Aufrufer soll davon nichts merken ausser der Ablehnung.
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: { ...signed, issuerSignatureHex: 'nicht-hex' },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'malformed_domain_read_grant' });
+
+    // Und derselbe Satz eine Ebene tiefer, beim Schluesseldatensatz.
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: {
+        ...signed,
+        issuerIdentityKeyRecord: { ...controllerKeyRecord, publicKeyHex: 'nicht-hex' },
+      },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'malformed_domain_read_grant' });
+
+    // Auch auf dem Lebenszyklusweg, der seine eigene Signatureingabe baut.
+    expect(verifyPicoHomeDomainReadGrantLifecycle(sodium, {
+      record: { ...issueLifecycle(signed), issuerSignatureHex: 'nicht-hex' },
+      grantRecord: signed,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'malformed_domain_read_grant' });
+  });
+
   it('authorizes only an active member, existing host-custody domain and unrevoked grant', () => {
     const store = openClaimedStore();
     store.memory().create({
