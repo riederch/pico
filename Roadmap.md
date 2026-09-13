@@ -912,6 +912,34 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B162 — Der Satz stand schon da, dreimal, und einmal gedriftet
+(2026-09-13).** Punkt 4 nannte die dreizehn Aufrufe des Webclients „die
+mildeste Lage von allen — ein Reiter, der sich dreht". Beim Hinsehen war die
+Lage eine andere: **zehn der dreizehn hatten gar keinen Auffangzweig.** Dort
+drang `fetch failed` oder `NetworkError` nach außen — das, was die Plattform
+gerade sagt, und genau das Symptom, für das ADR 0131 A7 einen Satz verlangt.
+
+Und der Satz stand längst da: `loginOperator`, `sendJson` und `fetchJson`
+schrieben ihn je selbst — **und einer war schon gedriftet**, bei ihm fehlte der
+Artikel („Could not reach ${label} endpoint" statt „the ${label}"). Eine
+Wahrheit, dreimal geschrieben, und die Drift hatte schon begonnen.
+
+`reachFoundation` schreibt ihn jetzt einmal, und alle dreizehn Aufrufe gehen
+hindurch. **Die Statusbehandlung bleibt bei den Aufrufern**: ein 401 heißt dort
+etwas anderes als ein 409, und das gehört dorthin, wo der Unterschied etwas
+bedeutet. Gefaltet ist nur, was überall dasselbe war.
+
+**Und die offene Frist hat damit einen Ort.** Punkt 4 des Handoffs wartet noch
+auf eine Zahl für den Browser; ein Signal an dieser *einen* Stelle deckt dann
+alle dreizehn. Aus einer Entscheidung über dreizehn Aufrufe ist eine über eine
+Zeile geworden.
+
+Zwei Gänge über drei verschiedene Wege — die Faltung behauptet ja gerade, dass
+es für alle derselbe Satz ist —, und die Pflanzung nimmt ihn weg: dann steht
+das Symptom wieder draußen. Eine der beiden Erwartungen war dabei von mir
+geraten und nicht nachgesehen: `listRetentionPolicies` heißt „retention
+policies", nicht „policy". Der Test nennt jetzt die echte Benennung.
+
 **B161 — Die Fristen sind gesetzt, und eine eigene Fehlmessung dabei
 (2026-09-13, Entscheidung des Nutzers).** Auf B160 hin hat der Nutzer
 entschieden: **30 Sekunden für die zwei Daemon-Wege, größer für die Messung.**

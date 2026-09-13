@@ -92,17 +92,11 @@ export async function loadDashboardSnapshot(baseUrl: string, options: Foundation
  */
 export async function loginOperator(baseUrl: string, passphrase: string): Promise<string> {
   const url = buildEndpointUrl(baseUrl, '/api/auth/session');
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passphrase }),
-    });
-  } catch (error) {
-    throw new Error(`Could not reach the operator login endpoint at ${url.toString()}: ${formatUnknownError(error)}`);
-  }
+  const response = await reachFoundation(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passphrase }),
+  }, 'operator login');
 
   if (response.status === 401) {
     throw new Error('Operator passphrase is invalid.');
@@ -162,7 +156,7 @@ export async function deleteRetentionPolicy(
   retentionPolicyId: string,
 ): Promise<void> {
   const url = buildEndpointUrl(baseUrl, `/api/memory/retention-policies/${encodeURIComponent(retentionPolicyId)}`);
-  const response = await fetch(url, { method: 'DELETE', headers: buildFoundationHeaders(options) });
+  const response = await reachFoundation(url, { method: 'DELETE', headers: buildFoundationHeaders(options) }, 'retention policy');
 
   if (!response.ok) {
     throw new Error(await describeFailure(response, 'Revoking the retention policy'));
@@ -189,11 +183,11 @@ export async function shredPrivacyDomain(
     body.reason = input.reason.trim();
   }
 
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'POST',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, 'privacy domain shred');
 
   if (!response.ok) {
     throw new Error(await describeFailure(response, 'Shredding the privacy domain'));
@@ -233,11 +227,11 @@ export async function changeOperatorPassphrase(
   input: { currentPassphrase: string; passphrase: string },
 ): Promise<{ revokedSessions: number }> {
   const url = buildEndpointUrl(baseUrl, '/api/auth/credential');
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'PUT',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-  });
+  }, 'operator passphrase');
 
   if (response.status === 401) {
     throw new PicoOperatorPassphraseInvalidError();
@@ -257,10 +251,10 @@ export async function revokeAllSessions(
   options: FoundationAccessOptions,
 ): Promise<{ revokedSessions: number }> {
   const url = buildEndpointUrl(baseUrl, '/api/auth/sessions');
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'DELETE',
     headers: buildFoundationHeaders(options),
-  });
+  }, 'session revocation');
 
   if (!response.ok) {
     throw new Error(await describeFailure(response, 'Ending the sessions'));
@@ -319,11 +313,11 @@ export async function setModuleActivation(
   input: { identifier: string; active: boolean },
 ): Promise<{ modules: readonly PicoModuleView[]; dropped: readonly PicoModuleDroppedStatement[] }> {
   const url = buildEndpointUrl(baseUrl, '/api/home/modules');
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'POST',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-  });
+  }, 'module activation');
 
   if (response.status === 409) {
     const data = (await response.json()) as unknown;
@@ -353,11 +347,11 @@ export async function setModuleCapture(
   input: { identifier: string; capturing: boolean },
 ): Promise<readonly PicoModuleView[]> {
   const url = buildEndpointUrl(baseUrl, '/api/home/modules/capture');
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'POST',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-  });
+  }, 'module recording');
 
   if (!response.ok) {
     throw new Error(await describeFailure(response, 'Switching recording'));
@@ -434,11 +428,11 @@ export async function narrowModelProvider(
     baseUrl,
     `/api/model/providers/${encodeURIComponent(entryId)}/narrowing`,
   );
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'POST',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify(narrowing),
-  });
+  }, 'model provider');
 
   if (response.status === 409) {
     const data = (await response.json()) as unknown;
@@ -489,11 +483,11 @@ export async function decideMemoryEncryption(
   enabled: boolean,
 ): Promise<void> {
   const url = buildEndpointUrl(baseUrl, '/api/memory/encryption');
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'POST',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
-  });
+  }, 'memory encryption decision');
 
   if (!response.ok) {
     throw new Error(await describeFailure(response, 'Recording the encryption decision'));
@@ -546,11 +540,11 @@ export async function decideRelayIdentity(
   input: { operator: string; accountId: string },
 ): Promise<void> {
   const url = buildEndpointUrl(baseUrl, '/api/link/relay-identity');
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'POST',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-  });
+  }, 'relay account decision');
 
   if (response.status === 409) {
     const data = (await response.json()) as unknown;
@@ -585,7 +579,7 @@ export async function createTimeBoundEntry(
   },
 ): Promise<{ memoryItemId: string }> {
   const url = buildEndpointUrl(baseUrl, '/api/events');
-  const response = await fetch(url, {
+  const response = await reachFoundation(url, {
     method: 'POST',
     headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -600,7 +594,7 @@ export async function createTimeBoundEntry(
         dueAt: input.dueAt,
       },
     }),
-  });
+  }, 'time-bound entry');
 
   if (!response.ok) {
     throw new Error(await describeFailure(response, 'Recording the entry'));
@@ -648,17 +642,11 @@ async function sendJson<T>(
   validate: (value: unknown) => value is T,
   label: string,
 ): Promise<T> {
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method,
-      headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch (error) {
-    throw new Error(`Could not reach the ${label} endpoint at ${url.toString()}: ${formatUnknownError(error)}`);
-  }
+  const response = await reachFoundation(url, {
+    method,
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }, label);
 
   if (!response.ok) {
     throw new Error(await describeFailure(response, `Saving the ${label}`));
@@ -770,16 +758,10 @@ async function fetchJson<T>(
   options: FoundationAccessOptions = {},
   init: RequestInit = {},
 ): Promise<T> {
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      ...init,
-      headers: buildFoundationHeaders(options),
-    });
-  } catch (error) {
-    throw new Error(`Could not reach ${label} endpoint at ${url.toString()}: ${formatUnknownError(error)}`);
-  }
+  const response = await reachFoundation(url, {
+    ...init,
+    headers: buildFoundationHeaders(options),
+  }, label);
 
   if (!response.ok) {
     throw new Error(`${label} endpoint returned HTTP ${response.status}.`);
@@ -958,6 +940,42 @@ function defaultBasePath(location: BrowserLocation): string {
 
   const trimmedPathname = pathname.replace(/\/+$/, '');
   return trimmedPathname === '' ? '' : trimmedPathname;
+}
+
+/**
+ * Ein Fehlschlag des Transports bekommt hier einen **Satz** statt eines
+ * Symptoms (Befund B162, 2026-09-13).
+ *
+ * **Der Satz stand schon da - dreimal, und einmal schon gedriftet.**
+ * `loginOperator`, `sendJson` und `fetchJson` schrieben ihn je selbst, und bei
+ * einem fehlte der Artikel. Zehn weitere Aufrufe hatten ihn gar nicht: dort
+ * drang `fetch failed` oder `NetworkError` nach aussen, also das, was die
+ * Plattform gerade sagt. ADR 0131 A7 verlangt fuer genau diese Lage einen
+ * Satz - "nichts wartet" und "niemand hat nachgesehen" sind verschiedene
+ * Auskuenfte -, und was der Link-Klient auf seiner Seite tut, tut diese Flaeche
+ * jetzt auf ihrer.
+ *
+ * **Die Statusbehandlung bleibt bei den Aufrufern.** Ein 401 heisst hier etwas
+ * anderes als ein 409, und das gehoert dorthin, wo der Unterschied etwas
+ * bedeutet. Gefaltet ist nur, was ueberall dasselbe war.
+ *
+ * **Hier gehoert auch die Frist hin**, wenn sie entschieden ist: die dreizehn
+ * Aufrufe dieser Datei haben keine, und ein Browser bricht `fetch` von sich
+ * aus nicht ab (Befund B160, offener Punkt 4 im Handoff). Ein Signal an dieser
+ * einen Stelle deckt sie alle.
+ */
+async function reachFoundation(
+  url: URL,
+  init: RequestInit,
+  label: string,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    throw new Error(
+      `Could not reach the ${label} endpoint at ${url.toString()}: ${formatUnknownError(error)}`,
+    );
+  }
 }
 
 function formatUnknownError(error: unknown): string {

@@ -21,6 +21,45 @@ import {
   shredPrivacyDomain,
 } from './api.js';
 
+/**
+ * Befund B162. Ein Fehlschlag des Transports muss ein **Satz** sein und kein
+ * Symptom (ADR 0131 A7). Bis zum 2026-09-13 schrieben ihn drei Stellen selbst -
+ * und bei einer fehlte schon der Artikel -, waehrend zehn weitere Aufrufe gar
+ * keinen hatten: dort drang `fetch failed` nach aussen, also das, was die
+ * Plattform gerade sagt.
+ *
+ * Geprueft wird ueber drei verschiedene Wege, weil die Faltung genau das
+ * behauptet: dass es fuer alle derselbe Satz ist.
+ */
+describe('ein Fehlschlag des Transports bekommt einen Satz (B162)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('nennt jede Flaeche beim Namen, statt die Plattform durchzureichen', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    }));
+
+    await expect(loginOperator('http://localhost:3100', 'irgendetwas'))
+      .rejects.toThrow('Could not reach the operator login endpoint at');
+    await expect(shredPrivacyDomain('http://localhost:3100', {}, { privacyDomain: 'haushalt', confirm: 'haushalt' }))
+      .rejects.toThrow('Could not reach the privacy domain shred endpoint at');
+    await expect(listRetentionPolicies('http://localhost:3100', {}))
+      .rejects.toThrow('Could not reach the retention policies endpoint at');
+  });
+
+  it('haengt den Grund der Plattform an, statt ihn zu verschlucken', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    }));
+    // Die Diagnose bleibt moeglich: der Satz sagt, was nicht erreichbar war,
+    // und das Symptom steht dahinter.
+    await expect(loginOperator('http://localhost:3100', 'irgendetwas'))
+      .rejects.toThrow('fetch failed');
+  });
+});
+
 describe('foundation URL helpers', () => {
   it('defaults to the same origin for a direct root dashboard', () => {
     expect(defaultPicoHomeUrl(browserLocation('http://localhost:3100/'))).toBe('http://localhost:3100');
