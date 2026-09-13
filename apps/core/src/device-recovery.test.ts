@@ -1743,4 +1743,68 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
       chmodSync(dirname(fixture.anchorPath), 0o700);
     }
   });
+  it('keeps the rollback loud when the quarantine cannot be written', () => {
+    // B164. Der Abgleich war zwei Handlungen, die eine sind: der Ankerlauf
+    // schiebt die zurueckgerollten Zeilen einzeln auf ihren aufgeloesten Stand,
+    // und erst danach raeumt eine eigene Transaktion die Projektionen der
+    // Betroffenen ab.
+    //
+    // Bricht es dazwischen ab, sind die Zeilen geschrieben und die Quarantaene
+    // nicht - und der naechste Start findet nichts mehr zum Zurueckschieben.
+    // Die Quarantaene faellt dann trotzdem, ueber die Pruefung der Beweise.
+    // Verloren geht der *Alarm*: aus "die Daten wurden zurueckgerollt", was ADR
+    // 0110 R6 eine Angriffssignatur nennt, wird eine Warnung ueber Beweise, die
+    // nicht verifizieren. Beide Ankerfehler sollen laut sein.
+    const fixture = createFixture();
+    const { claimDigestHex, sender } = acceptRecovery(fixture, 'recovery_r6_half_reconciled');
+    const restorePreConsumption = snapshotDatabase(fixture);
+
+    expect(fixture.store.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_half_reconciled',
+      claimDigestHex,
+      sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt,
+    }).ok).toBe(true);
+    fixture.store.close();
+
+    restorePreConsumption();
+
+    // Das Hindernis sitzt genau auf der Quarantaene und nicht davor: ein
+    // Ausloeser, der schon das Lesen braeche, machte diesen Test gruen, ohne
+    // den Abgleich je erreicht zu haben.
+    const obstacle = new Database(fixture.databasePath);
+    obstacle.exec(`
+      CREATE TRIGGER planted_quarantine_fails
+      BEFORE DELETE ON pico_identity_delegation
+      BEGIN SELECT RAISE(ABORT, 'planted_quarantine_fails'); END
+    `);
+    obstacle.close();
+
+    const interrupted = reopen(fixture);
+    expect(() => interrupted.reconcilePicoHomeDeviceRecoveries(sodium, completedAt))
+      .toThrow('planted_quarantine_fails');
+    interrupted.close();
+
+    // Die zurueckgerollte Zeile steht noch auf ihrem zurueckgerollten Stand.
+    // Waere sie hier schon `consumed`, haette der Ankerlauf die Spur des
+    // Rueckrolls getilgt, bevor jemand von ihm erfahren hat.
+    const inspect = new Database(fixture.databasePath);
+    expect((inspect
+      .prepare('SELECT status FROM pico_home_device_recovery WHERE recovery_id = ?')
+      .get('recovery_r6_half_reconciled') as { status: string }).status)
+      .toBe('pending');
+    inspect.exec('DROP TRIGGER planted_quarantine_fails');
+    inspect.close();
+
+    // Und der naechste Start sagt weiterhin, was geschehen ist.
+    const resumed = reopen(fixture);
+    const reconciliation = resumed.reconcilePicoHomeDeviceRecoveries(sodium, completedAt);
+    expect(reconciliation.anchorStatus).toBe('rollback_detected');
+    expect(reconciliation.resurrectedRecoveryIds).toEqual(['recovery_r6_half_reconciled']);
+    expect(reconciliation.quarantinedIdentities).toEqual([fixture.identity.fingerprintHex]);
+    resumed.close();
+  });
 });

@@ -4629,159 +4629,184 @@ export class EventStore {
       };
     }
 
-    const anchorReconciliation = this.reconcilePicoHomeRecoveryAnchor(reconciledAt);
+    /*
+     * **In einer Transaktion, seit Befund B164 (2026-09-13).** Zwei Handlungen
+     * standen hier als zwei da: der Ankerabgleich schreibt die zurueckgerollten
+     * Zeilen Stueck fuer Stueck auf ihren aufgeloesten Stand, und *danach*
+     * raeumt eine eigene Transaktion die Projektionen der Betroffenen ab. Der
+     * Kommentar beim Einsammeln sagt es bereits: "Reporting an identity as
+     * quarantined while leaving its delegations and reader keys projected would
+     * be the worst of both worlds."
+     *
+     * Hergestellt, nicht geschlossen: bricht es dazwischen ab, sind die Zeilen
+     * geschrieben und die Quarantaene nicht. Der naechste Start findet dann
+     * nichts mehr zum Zurueckschieben - und meldet `live` statt
+     * `rollback_detected`. Die Quarantaene selbst faellt trotzdem, ueber die
+     * Pruefung der Beweise; **verloren geht der Alarm.** Aus `app.log.error`
+     * ("die Daten wurden zurueckgerollt", laut ADR 0110 R6 eine Angriffssignatur)
+     * wird ein `app.log.warn` ueber Beweise, die nicht verifizieren. Genau das
+     * verbietet der Satz eine Ebene hoeher: beide Ankerfehler sind laut, und
+     * keiner darf von jemandem entdeckt werden, der auf eine Wiederherstellung
+     * wartet.
+     *
+     * Die Ankerdatei bleibt aussen vor - sie wird nur auf dem Zweig
+     * beschrieben, der vor der ersten Zeilenschreibung zurueckkehrt.
+     */
+    return this.db.transaction(() => {
+      const anchorReconciliation = this.reconcilePicoHomeRecoveryAnchor(reconciledAt);
 
-    const lapsedPending = this.db
-      .prepare(`
-        UPDATE pico_home_device_recovery
-        SET status = 'lapsed',
-            resolved_at = ?
-        WHERE status = 'pending'
-          AND completion_expires_at <= ?
-      `)
-      .run(reconciledAt, reconciledAt).changes;
-    const claim = this.picoHomeClaimState();
-    const rows = this.db
-      .prepare(`
-        SELECT recovery_id AS recoveryId,
-               home_id AS homeId,
-               pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
-               status,
-               target_delegation_id AS targetDelegationId,
-               target_device_signing_key_fingerprint_hex
-                 AS targetDeviceSigningKeyFingerprintHex,
-               target_device_key_agreement_key_fingerprint_hex
-                 AS targetDeviceKeyAgreementKeyFingerprintHex,
-               observed_lifecycle_order AS observedLifecycleOrder,
-               evidence_digest_hex AS evidenceDigestHex,
-               claim_digest_hex AS claimDigestHex,
-               submission_json AS submissionJson,
-               accepted_at AS acceptedAt,
-               effective_at AS effectiveAt,
-               completion_expires_at AS completionExpiresAt,
-               resolved_at AS resolvedAt,
-               superseded_by_recovery_id AS supersededByRecoveryId,
-               recovery_record_json AS recoveryRecordJson
-        FROM pico_home_device_recovery
-        WHERE status = 'consumed'
-        ORDER BY resolved_at ASC, recovery_id ASC
-      `)
-      .all() as PicoHomeDeviceRecoveryRow[];
-    const verified: {
-      row: PicoHomeDeviceRecoveryRow;
-      record: PicoHomeDeviceRecoveryRecord;
-    }[] = [];
-    // Seeded from the anchor pass so that the projection-clearing transaction
-    // below actually covers rollback victims. Reporting an identity as
-    // quarantined while leaving its delegations and reader keys projected
-    // would be the worst of both worlds.
-    const quarantined = new Set<string>(anchorReconciliation.quarantinedIdentities);
+      const lapsedPending = this.db
+        .prepare(`
+          UPDATE pico_home_device_recovery
+          SET status = 'lapsed',
+              resolved_at = ?
+          WHERE status = 'pending'
+            AND completion_expires_at <= ?
+        `)
+        .run(reconciledAt, reconciledAt).changes;
+      const claim = this.picoHomeClaimState();
+      const rows = this.db
+        .prepare(`
+          SELECT recovery_id AS recoveryId,
+                 home_id AS homeId,
+                 pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+                 status,
+                 target_delegation_id AS targetDelegationId,
+                 target_device_signing_key_fingerprint_hex
+                   AS targetDeviceSigningKeyFingerprintHex,
+                 target_device_key_agreement_key_fingerprint_hex
+                   AS targetDeviceKeyAgreementKeyFingerprintHex,
+                 observed_lifecycle_order AS observedLifecycleOrder,
+                 evidence_digest_hex AS evidenceDigestHex,
+                 claim_digest_hex AS claimDigestHex,
+                 submission_json AS submissionJson,
+                 accepted_at AS acceptedAt,
+                 effective_at AS effectiveAt,
+                 completion_expires_at AS completionExpiresAt,
+                 resolved_at AS resolvedAt,
+                 superseded_by_recovery_id AS supersededByRecoveryId,
+                 recovery_record_json AS recoveryRecordJson
+          FROM pico_home_device_recovery
+          WHERE status = 'consumed'
+          ORDER BY resolved_at ASC, recovery_id ASC
+        `)
+        .all() as PicoHomeDeviceRecoveryRow[];
+      const verified: {
+        row: PicoHomeDeviceRecoveryRow;
+        record: PicoHomeDeviceRecoveryRecord;
+      }[] = [];
+      // Seeded from the anchor pass so that the projection-clearing transaction
+      // below actually covers rollback victims. Reporting an identity as
+      // quarantined while leaving its delegations and reader keys projected
+      // would be the worst of both worlds.
+      const quarantined = new Set<string>(anchorReconciliation.quarantinedIdentities);
 
-    for (const row of rows) {
-      try {
-        if (row.recoveryRecordJson === null) {
-          throw new Error('missing_recovery_record');
-        }
-        const record =
-          JSON.parse(row.recoveryRecordJson) as PicoHomeDeviceRecoveryRecord;
-        if (!verifyStoredPicoHomeDeviceRecoveryRecord(
-          sodium,
-          claim,
-          row,
-          record,
-        )) {
-          throw new Error('invalid_recovery_record');
-        }
-        verified.push({ row, record });
-      } catch {
-        quarantined.add(row.picoIdentityFingerprintHex);
-      }
-    }
-
-    this.db.transaction(() => {
-      for (const { row, record } of verified) {
-        if (quarantined.has(row.picoIdentityFingerprintHex)) {
-          continue;
-        }
-        const evidence = record.submission.evidence;
-        const lifecycle = this.recordPicoIdentityLifecycleEvidence({
-          identityKeyRecord: evidence.identityKeyRecord,
-          delegation: evidence.delegation,
-          revocations: evidence.revocations,
-          sodium,
-          recordedAt: record.receipt.completedAt,
-        });
-        if (!lifecycle.ok) {
-          quarantined.add(row.picoIdentityFingerprintHex);
-          continue;
-        }
-        const reader = this.registerPicoIdentityReaderKey({
-          picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
-          deviceSigningKeyFingerprintHex:
-            row.targetDeviceSigningKeyFingerprintHex,
-          delegationId: row.targetDelegationId,
-          deviceKeyAgreementKeyRecord:
-            evidence.targetDeviceKeyAgreementKeyRecord,
-          sodium,
-          at: record.receipt.completedAt,
-          registeredAt: record.receipt.completedAt,
-        });
-        if (!reader.ok) {
-          quarantined.add(row.picoIdentityFingerprintHex);
-          continue;
-        }
-        const resulting = this.picoHomeDeviceLifecycleView({
-          picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
-          sodium,
-          at: record.receipt.completedAt,
-        });
-        if (
-          resulting === undefined
-          || resulting.observedLifecycleOrder
-            !== record.receipt.resultingLifecycleOrder
-          || resulting.devices.filter(
-            (device) => device.status === 'active',
-          ).length !== 1
-          || resulting.devices.find(
-            (device) => device.status === 'active',
-          )?.delegationId !== row.targetDelegationId
-        ) {
+      for (const row of rows) {
+        try {
+          if (row.recoveryRecordJson === null) {
+            throw new Error('missing_recovery_record');
+          }
+          const record =
+            JSON.parse(row.recoveryRecordJson) as PicoHomeDeviceRecoveryRecord;
+          if (!verifyStoredPicoHomeDeviceRecoveryRecord(
+            sodium,
+            claim,
+            row,
+            record,
+          )) {
+            throw new Error('invalid_recovery_record');
+          }
+          verified.push({ row, record });
+        } catch {
           quarantined.add(row.picoIdentityFingerprintHex);
         }
       }
 
-      for (const identity of quarantined) {
-        this.db
-          .prepare(`
-            DELETE FROM pico_identity_reader_key
-            WHERE pico_identity_fingerprint_hex = ?
-          `)
-          .run(identity);
-        this.db
-          .prepare(`
-            DELETE FROM pico_identity_revocation
-            WHERE issuer_pico_identity_fingerprint_hex = ?
-          `)
-          .run(identity);
-        this.db
-          .prepare(`
-            DELETE FROM pico_identity_delegation
-            WHERE issuer_pico_identity_fingerprint_hex = ?
-          `)
-          .run(identity);
-      }
+      this.db.transaction(() => {
+        for (const { row, record } of verified) {
+          if (quarantined.has(row.picoIdentityFingerprintHex)) {
+            continue;
+          }
+          const evidence = record.submission.evidence;
+          const lifecycle = this.recordPicoIdentityLifecycleEvidence({
+            identityKeyRecord: evidence.identityKeyRecord,
+            delegation: evidence.delegation,
+            revocations: evidence.revocations,
+            sodium,
+            recordedAt: record.receipt.completedAt,
+          });
+          if (!lifecycle.ok) {
+            quarantined.add(row.picoIdentityFingerprintHex);
+            continue;
+          }
+          const reader = this.registerPicoIdentityReaderKey({
+            picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+            deviceSigningKeyFingerprintHex:
+              row.targetDeviceSigningKeyFingerprintHex,
+            delegationId: row.targetDelegationId,
+            deviceKeyAgreementKeyRecord:
+              evidence.targetDeviceKeyAgreementKeyRecord,
+            sodium,
+            at: record.receipt.completedAt,
+            registeredAt: record.receipt.completedAt,
+          });
+          if (!reader.ok) {
+            quarantined.add(row.picoIdentityFingerprintHex);
+            continue;
+          }
+          const resulting = this.picoHomeDeviceLifecycleView({
+            picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+            sodium,
+            at: record.receipt.completedAt,
+          });
+          if (
+            resulting === undefined
+            || resulting.observedLifecycleOrder
+              !== record.receipt.resultingLifecycleOrder
+            || resulting.devices.filter(
+              (device) => device.status === 'active',
+            ).length !== 1
+            || resulting.devices.find(
+              (device) => device.status === 'active',
+            )?.delegationId !== row.targetDelegationId
+          ) {
+            quarantined.add(row.picoIdentityFingerprintHex);
+          }
+        }
+
+        for (const identity of quarantined) {
+          this.db
+            .prepare(`
+              DELETE FROM pico_identity_reader_key
+              WHERE pico_identity_fingerprint_hex = ?
+            `)
+            .run(identity);
+          this.db
+            .prepare(`
+              DELETE FROM pico_identity_revocation
+              WHERE issuer_pico_identity_fingerprint_hex = ?
+            `)
+            .run(identity);
+          this.db
+            .prepare(`
+              DELETE FROM pico_identity_delegation
+              WHERE issuer_pico_identity_fingerprint_hex = ?
+            `)
+            .run(identity);
+        }
+      })();
+
+      return {
+        verifiedRecoveries: verified.length,
+        reprojectedRecoveries: verified.filter(
+          ({ row }) => !quarantined.has(row.picoIdentityFingerprintHex),
+        ).length,
+        lapsedPending,
+        quarantinedIdentities: [...quarantined].sort(),
+        anchorStatus: anchorReconciliation.anchorStatus,
+        resurrectedRecoveryIds: anchorReconciliation.resurrectedRecoveryIds,
+      };
     })();
-
-    return {
-      verifiedRecoveries: verified.length,
-      reprojectedRecoveries: verified.filter(
-        ({ row }) => !quarantined.has(row.picoIdentityFingerprintHex),
-      ).length,
-      lapsedPending,
-      quarantinedIdentities: [...quarantined].sort(),
-      anchorStatus: anchorReconciliation.anchorStatus,
-      resurrectedRecoveryIds: anchorReconciliation.resurrectedRecoveryIds,
-    };
   }
 
   /**
