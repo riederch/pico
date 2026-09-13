@@ -912,6 +912,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B156 — Die Schwester derselben Frage: geworfene Auffang-Gründe
+(2026-09-13).** B151 hat die `reason:`-Unionen geschlossen. Daneben steht eine
+zweite Vokabelmenge, die das Tor bewusst nicht führt: Gründe, die aus einem
+`catch` **geworfen** werden. B71 hatte das für *alle* Würfe gemessen und
+abgelehnt — 907 Stück, 464 ohne Test —, weil ein Wurf meist eine Zusicherung an
+sich selbst ist. Die Auffangstellen sind aber eine viel engere Menge: **50**,
+und sie sind genau die Naht, an der ein Fehlschlag der Infrastruktur einen
+Namen bekommt.
+
+**Neunzehn davon nannte kein Test.** Der schärfste Haufen sind vier in
+`link-direct-client.ts` — die Tür, an der ein *Gerät* entscheidet, ob die
+Antwort seines Homes echt ist. Jede sagt etwas anderes: der Umschlag ist keiner,
+er lässt sich nicht öffnen, der Inhalt hat die falsche Form, die Unterschrift
+stimmt nicht. Wer sie zusammenwirft, kann einen Angriff nicht von einem
+defekten Home unterscheiden. Alle vier sind gegangen, jede mit einer eigenen
+Attrappe, und die Unterschriftsprüfung ist dabei sauber von der Bindungsprüfung
+getrennt: dieselbe Antwort, nur von einem fremden Schlüssel unterschrieben.
+
+Dazu zwei weitere: ein Handschlag, der die Version nennt und die **Schlitze**
+nicht — ADR 0136 BR1 hält die Liste geschlossen, und ein Zulieferer, der
+offenlässt, welche er füllt, könnte jeden beanspruchen —, und ein
+Geltungsbereich, der leer ist. Der letzte ist die gefährlichste Form von allen:
+ein unterschriebenes Recht, das nicht sagt, wozu, und jede spätere Prüfung
+fragt `requiredScopes` gegen eine leere Menge. Er steht **zweimal** im
+Protokollpaket, für Delegationen und für Mitgliedschaften; der Test deckt
+beide.
+
+Sechs Pflanzungen, sechs rote Tests. Von 19 ungegangenen Auffang-Gründen sind
+**13** übrig, davon fünf in `packages/sync` um die Leserverwahrungs-Synchronisation
+und der Rest einzeln verstreut.
+
 **B155 — Der Anspruchsweg löste sich durch einen Umzug, nicht durch mehr
 Aufbau (2026-09-13).** Die letzten dreizehn Schulden aus B151, und die elf
 teuersten hingen an derselben Sache: `verifyPicoHomeFoundingEvidence` stand

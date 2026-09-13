@@ -190,6 +190,31 @@ describe('ADR 0136 BR2 - what the boundary refuses', () => {
    * gleichsetzt, kann nicht unterscheiden, ob ein Abbruch die eigene
    * Entscheidung war.
    */
+  /**
+   * Befund B156. Ein Handschlag, der die Version nennt und die Schlitze nicht,
+   * ist keiner: ADR 0136 BR1 haelt die Schlitzliste geschlossen, und ein
+   * Zulieferer, der offenlaesst, welche er fuellt, koennte jeden beanspruchen.
+   * Der Prozess wird dabei zugemacht - ein Gegenueber, mit dem dieser Kern
+   * nicht sprechen kann, ist keines, fuer das man einen Prozess offenhaelt.
+   */
+  it('refuses a hello that names no slots, and closes the process', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-slotless-supplier-'));
+    tempDirs.push(dir);
+    writeFileSync(join(dir, 'index.js'), [
+      'export default async function handle(request) {',
+      "  if (request.family === 'pico.supplier.hello.v1') {",
+      '    return { protocolVersion: 1 };',
+      '  }',
+      "  throw new Error('unreachable');",
+      '}',
+      '',
+    ].join('\n'));
+
+    const host = openHost(join(dir, 'index.js'));
+    await expect(host.hello()).rejects.toThrow('invalid_pico_supplier_hello');
+    await expect(host.hello()).rejects.toThrow('pico_supplier_closed');
+  });
+
   it('refuses once it has closed, rather than starting the supplier again', async () => {
     const host = openHost();
     await host.hello();

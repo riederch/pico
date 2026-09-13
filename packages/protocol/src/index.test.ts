@@ -1438,6 +1438,42 @@ describe('Pico protocol types', () => {
       })).toThrow('invalid_instant');
     }
 
+    /*
+     * Befund B156. Eine Delegation ohne Geltungsbereich hatte kein Test
+     * abgelehnt. Sie waere die gefaehrlichste Form von allen: ein
+     * unterschriebenes Recht, das nicht sagt, wozu - und jede spaetere
+     * Pruefung fragt `requiredScopes` gegen eine leere Menge.
+     */
+    for (const scopes of [[], undefined, 'sign_history']) {
+      expect(() => buildPicoIdentityDelegationSignatureInput({
+        suite: picoIdentitySuite,
+        delegationId: 'del_01hzx8m9q4rt5v',
+        issuerIdentityKeyFingerprintHex: '66'.repeat(32),
+        subjectSigningKeyFingerprintHex: '5d'.repeat(32),
+        subjectKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+        scopes: scopes as never,
+        validFrom: '2026-07-18T08:00:00.000Z',
+        validUntil: '2026-10-18T08:00:00.000Z',
+        lifecycleOrder: 'seq:0000000000000001',
+      }), JSON.stringify(scopes)).toThrow('empty_scope_set');
+
+      // Dieselbe Regel fuer die zweite Geltungsbereichsliste des Pakets: eine
+      // Mitgliedschaft ohne Geltungsbereich ist ebenso keine.
+      expect(() => buildPicoHomeMembershipSignatureInput({
+        suite: picoIdentitySuite,
+        credentialId: 'member_20260718_0001',
+        homeId: 'home_20260718_0001',
+        issuerPicoIdentityFingerprintHex: '88'.repeat(32),
+        subjectPicoIdentityFingerprintHex: '99'.repeat(32),
+        hostSigningKeyFingerprintHex: '11'.repeat(32),
+        role: 'home_member',
+        scopes: scopes as never,
+        validFrom: '2026-07-18T08:00:00.000Z',
+        validUntil: '2026-10-18T09:00:00.000Z',
+        lifecycleOrder: 'seq:0000000000000001',
+      }), JSON.stringify(scopes)).toThrow('empty_scope_set');
+    }
+
     // The form the runtime actually produces stays accepted.
     expect(() => buildPicoIdentityDelegationSignatureInput({
       suite: picoIdentitySuite,

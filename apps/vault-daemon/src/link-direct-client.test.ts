@@ -188,6 +188,30 @@ function answeringFetch(input: {
   }) as typeof fetch;
 }
 
+/**
+ * Oeffnet die versiegelte Anfrage so, wie das Home es taete - fuer die Faelle,
+ * in denen die Attrappe den Antwortschluessel braucht, um etwas Falsches
+ * dorthin zu versiegeln.
+ */
+function openSealedRequest(input: {
+  hostAgreement: { publicKey: Uint8Array; privateKey: Uint8Array };
+}, init: RequestInit | undefined): PicoLinkDirectSealedRequest {
+  const envelope = JSON.parse(String(init?.body)) as { sealedRequestHex: string };
+  return JSON.parse(new TextDecoder().decode(sodium.crypto_box_seal_open(
+    unhex(envelope.sealedRequestHex),
+    input.hostAgreement.publicKey,
+    input.hostAgreement.privateKey,
+  ))) as PicoLinkDirectSealedRequest;
+}
+
+/** Eine 200-Antwort mit genau diesem Rumpf. */
+function answering(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
 describe('Pico Link direct client (ADR 0107 D3)', () => {
   it('pins both host keys and verifies a signed response bound to the request', async () => {
     const f = fixture();
@@ -220,6 +244,100 @@ describe('Pico Link direct client (ADR 0107 D3)', () => {
     expect(f.sign).toHaveBeenCalledTimes(2);
     expect(replyKeys).toHaveLength(2);
     expect(replyKeys[0]).not.toBe(replyKeys[1]);
+  });
+
+  /**
+   * Befund B156. Vier Ablehnungen dieser Tuer hatte nie jemand ausgeloest, und
+   * es ist die Tuer, an der ein Geraet entscheidet, ob die Antwort seines
+   * Homes echt ist. Jede von ihnen sagt etwas anderes: der Umschlag ist keiner,
+   * er laesst sich nicht oeffnen, der Inhalt hat die falsche Form, die
+   * Unterschrift stimmt nicht. Wer sie zusammenwirft, kann einen Angriff nicht
+   * von einem defekten Home unterscheiden.
+   */
+  it('refuses an envelope that is not a direct-link response', async () => {
+    const f = fixture();
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid/reachable',
+      host: f.host,
+      sender: f.sender,
+      fetch: (async () => answering({
+        schema: 'pico.link.something-else.v1',
+        sealedResponseHex: '00'.repeat(48),
+      })) as typeof fetch,
+      now: () => new Date('2026-07-29T12:00:00.000Z'),
+    });
+    await expect(client.request('home.authority.list', { resource: 'home_state' }))
+      .rejects.toThrow('link_invalid_response_envelope');
+  });
+
+  it('refuses a sealed response it cannot open', async () => {
+    const f = fixture();
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid/reachable',
+      host: f.host,
+      sender: f.sender,
+      // Richtiger Umschlag, aber versiegelt an jemand anderen.
+      fetch: (async () => answering({
+        schema: picoLinkDirectResponseEnvelopeSchema,
+        sealedResponseHex: hex(sodium.crypto_box_seal(
+          new TextEncoder().encode('{}'),
+          sodium.crypto_box_keypair().publicKey,
+        )),
+      })) as typeof fetch,
+      now: () => new Date('2026-07-29T12:00:00.000Z'),
+    });
+    await expect(client.request('home.authority.list', { resource: 'home_state' }))
+      .rejects.toThrow('link_response_unreadable');
+  });
+
+  it('refuses a payload that opens but is not a response', async () => {
+    const f = fixture();
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid/reachable',
+      host: f.host,
+      sender: f.sender,
+      fetch: (async (_url: URL | RequestInfo, init?: RequestInit) => {
+        const opened = openSealedRequest(f, init);
+        return answering({
+          schema: picoLinkDirectResponseEnvelopeSchema,
+          sealedResponseHex: hex(sodium.crypto_box_seal(
+            // Oeffenbar, aber ohne `result` und ohne Unterschrift.
+            new TextEncoder().encode(JSON.stringify({
+              schema: picoLinkDirectResponseEnvelopeSchema,
+              response: {},
+            })),
+            unhex(opened.request.replyPublicKeyHex),
+          )),
+        });
+      }) as typeof fetch,
+      now: () => new Date('2026-07-29T12:00:00.000Z'),
+    });
+    await expect(client.request('home.authority.list', { resource: 'home_state' }))
+      .rejects.toThrow('link_invalid_response_payload');
+  });
+
+  it('refuses a response signed by a key that is not the pinned host', async () => {
+    const f = fixture();
+    const stranger = sodium.crypto_sign_keypair();
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid/reachable',
+      host: f.host,
+      sender: f.sender,
+      // Alles stimmt - Bindung, Digest, Form -, nur die Unterschrift ist von
+      // jemand anderem. Das trennt diese Ablehnung von der Bindungspruefung.
+      fetch: answeringFetch({ ...f, hostSigning: stranger }),
+      now: () => new Date('2026-07-29T12:00:00.000Z'),
+    });
+    await expect(client.request('home.authority.list', { resource: 'home_state' }))
+      .rejects.toThrow('link_invalid_host_signature');
   });
 
   it('uses a supplied public identity key without requiring the root to be unlocked', async () => {
