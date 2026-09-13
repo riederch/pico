@@ -912,6 +912,56 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B164 — Die Quarantäne überlebte, der Alarm nicht (2026-09-13).** B163 hatte
+eine Frage ausdrücklich offen gelassen: ein Schreibsatz, der in einer *Schleife*
+läuft, ist **ein** Schreibort und nicht zwei, also sieht ihn die erste Frage des
+Tors nicht. Gemessen: **45 solche Stellen im Baum, 41 lagen längst in einer
+Transaktion.** Von den vier übrigen waren drei richtig so — und eine war ein
+Fehler.
+
+`reconcilePicoHomeRecoveryAnchor` schiebt beim Start die zurückgerollten
+Wiederherstellungszeilen **einzeln** auf ihren aufgelösten Stand. Erst *danach*,
+in einer eigenen Transaktion, räumt der Aufrufer die Projektionen der
+Betroffenen ab. Der Kommentar beim Einsammeln sagt selbst, dass beides
+zusammengehört: *„Reporting an identity as quarantined while leaving its
+delegations and reader keys projected would be the worst of both worlds."*
+
+**Hergestellt statt geschlossen — und mein erster Schluss war falsch.** Ich hatte
+erwartet, dass ein Abbruch dazwischen die Quarantäne *verliert*. Die Probe zeigte
+etwas anderes: die Quarantäne fällt trotzdem, über einen zweiten Weg, nämlich die
+Prüfung der Beweise. Was verloren geht, ist der **Alarm**:
+
+| | Zeilenstand nach dem Abbruch | Nächster Start meldet |
+|---|---|---|
+| ohne Transaktion | `consumed` — der Rückroll ist getilgt | `live`, nichts zurückgeschoben |
+| mit Transaktion | `pending` — der Rückroll steht noch da | `rollback_detected` |
+
+Aus `app.log.error` — *„the Foundation data was rolled back"*, was ADR 0110 R6
+eine **Angriffssignatur** nennt — wird ein `app.log.warn` über Beweise, die
+nicht verifizieren. Und genau das verbietet der Satz eine Ebene höher:
+*„Both anchor faults are loud … neither may be discovered by a person waiting
+for recovery."* Der erste halbe Durchlauf tilgt die Spur, die den zweiten
+auslösen würde — dieser Fall heilt sich, anders als die vier aus B163, **nicht**
+von selbst.
+
+Der Fix ist ein Umfassen und kein Umbau: der Rumpf von
+`reconcilePicoHomeDeviceRecoveries` steht in einer Transaktion, die innere
+bleibt als Sicherungspunkt darin. Die Ankerdatei bleibt außen vor — sie wird nur
+auf dem Zweig beschrieben, der vor der ersten Zeilenschreibung zurückkehrt.
+
+**`transaction:check` stellt jetzt zwei Fragen**, und die zweite hält den Fix:
+`reconcilePicoHomeRecoveryAnchor` ist als `wrapped_by_caller` eingetragen, und
+das Tor **rechnet nach**. Nimmt man die Einfassung weg, nennt es die Aufrufstelle
+beim Namen (`event-store.ts:4632`) statt bloß zu schweigen. Die anderen drei
+Schleifen sind begründet: der Kettenabgleich und `pruneExpired` sind Kehrläufe,
+die sich bei jedem Start wiederholen, und `acknowledge` liefert nach ADR 0147
+lieber zweimal aus als einmal zu wenig.
+
+Zwei Pflanzungen: die Einfassung weg → die nachgerechnete Begründung fällt mit
+Aufrufstelle; eine neue nackte Schleife eingesetzt → sofort gemeldet. Der Test
+daneben geht den Weg selbst und fällt ohne die Transaktion mit
+*„expected 'consumed' to be 'pending'"*.
+
 **B163 — Ein Satz, der eine Gefahr nennt, ist kein Schutz vor ihr
 (2026-09-13).** Gefragt: gibt es Methoden, in denen zwei Schreibvorgänge auf
 *einem* Weg liegen und keine Transaktion sie zusammenhält? Ein Absturz

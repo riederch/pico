@@ -153,9 +153,12 @@ Ausloeser, der schon das Lesen davor bricht, macht den Test gruen, ohne die
 Transaktion je erreicht zu haben (`device-recovery.test.ts` haelt diese
 Erfahrung im Kommentar fest).
 
-`pnpm transaction:check` haelt die andere Haelfte: dass zwei Schreibvorgaenge
-auf einem Weg ueberhaupt eine Transaktion haben. Es fragt den Syntaxbaum und
-kein Zeilenfenster - `PICO_WRITE_TRANSACTION_CENSUS=1` zeigt seine Zaehlung.
+`pnpm transaction:check` haelt die andere Haelfte und stellt zwei Fragen: ob
+zwei Schreibvorgaenge auf einem Weg ueberhaupt eine Transaktion haben, und ob
+ein Schreibsatz in einer Schleife eine hat. Es fragt den Syntaxbaum und kein
+Zeilenfenster - `PICO_WRITE_TRANSACTION_CENSUS=1` zeigt seine Zaehlung. Wo ein
+Eintrag `wrapped_by_caller` sagt, rechnet das Tor das nach und nennt sonst die
+Aufrufstelle, die aus der Transaktion gefallen ist.
 
 Code-, Protocol-, Release- und produktbezogene Dokumentationsmilestones muessen
 den vollen Release-Gate bestehen. Bei einer rein internen Agent-Doku-Aenderung
