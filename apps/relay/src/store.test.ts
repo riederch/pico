@@ -282,6 +282,48 @@ describe('ADR 0147 RY4 - deregistration leaves a tombstone', () => {
     store.close();
   });
 
+  it('drops expired packets in mailboxes nobody is touching', () => {
+    // B165. Das Kehren lief bis zum 2026-09-13 je Postfach, und gefahren wird
+    // es nur beim Zustellen und beim Abholen. Ein Postfach, das niemand mehr
+    // anfasst - ein verlorenes Geraet, eine abgeraeumte App, eine Beziehung,
+    // die ohne Abmeldung endete -, behielt seine abgelaufenen Pakete fuer
+    // immer.
+    //
+    // ADR 0147 RY6 sagt, warum das falsch ist: ein abgelaufenes Paket ist
+    // eines, das der Absender nicht mehr gehalten haben wollte, und es
+    // wegzuraeumen ist, einer Anweisung zu folgen. Eine Anweisung, die nur
+    // befolgt wird, wenn zufaellig jemand vorbeikommt, ist keine befolgte.
+    const { store, db } = readyStoreWithDatabase();
+    expect(store.register({
+      accountId: 'account-1', mailbox: mailboxOf('d'), capacity: 4, registeredAt: acceptedAt,
+    }).ok).toBe(true);
+    store.deliver({
+      packet: packet({ mailbox: mailboxOf('d'), tag: mailboxOf('e') }), nowMs, acceptedAt,
+    });
+    store.deliver({ packet: packet(), nowMs, acceptedAt });
+
+    const holds = (mailbox: string) => (db
+      .prepare('SELECT COUNT(*) AS held FROM relay_packet WHERE mailbox = ?')
+      .get(mailbox) as { held: number }).held;
+    expect(holds(mailboxOf('d'))).toBe(1);
+
+    // Eine Stunde nach dem Ablauf beider wird nur das *erste* Postfach
+    // abgeholt. Ueber das zweite laeuft nichts.
+    store.collect({
+      accountId: 'account-1',
+      mailbox: mailboxOf('a'),
+      nowMs: Date.parse(expiresAt) + 60 * 60 * 1_000,
+    });
+
+    // Gezaehlt wird im Speicher und nicht ueber `collect`, weil Abholen selbst
+    // kehren wuerde: die Behauptung ist, dass dieses Relay es nicht mehr
+    // *haelt*, und nicht, dass es niemandem mehr davon erzaehlt.
+    expect(holds(mailboxOf('d'))).toBe(0);
+    expect(holds(mailboxOf('a'))).toBe(0);
+    db.close();
+    store.close();
+  });
+
   it('leaves the mailbox standing when its packets cannot be dropped', () => {
     // B163. The tombstone and the emptying are one act, not two. Revoked with
     // its queue still on disk is the state a relay must never be in: ADR 0147

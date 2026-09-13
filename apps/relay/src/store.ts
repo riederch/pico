@@ -513,7 +513,7 @@ export class PicoRelayStore {
     // Nothing here drops a live packet: that would be the decision ADR 0119 Q5
     // forbids, leaving the sender told `accepted` and the recipient shown
     // nothing, with both right and nobody told.
-    this.pruneExpired(address.mailbox, input.nowMs);
+    this.pruneExpired(input.nowMs);
     return delivery.outcome;
   }
 
@@ -545,7 +545,7 @@ export class PicoRelayStore {
       // mailbox it was asking after.
       return { ok: false, refusal: 'mailbox_not_yours' };
     }
-    this.pruneExpired(input.mailbox, input.nowMs);
+    this.pruneExpired(input.nowMs);
     const rows = this.db
       .prepare(`
         SELECT tag, expires_at AS expiresAt, payload FROM relay_packet
@@ -629,12 +629,33 @@ export class PicoRelayStore {
       .all(mailbox) as PicoLinkQueuedPacket[];
   }
 
-  private pruneExpired(mailbox: string, nowMs: number): void {
-    for (const held of this.queueFor(mailbox)) {
-      if (Date.parse(held.expiresAt) <= nowMs) {
-        this.db.prepare('DELETE FROM relay_packet WHERE mailbox = ? AND tag = ?').run(mailbox, held.tag);
-      }
-    }
+  /**
+   * ADR 0147 RY6. Drops everything the senders instructed this relay to stop
+   * holding - **in every mailbox, not only the one being touched.**
+   *
+   * Befund B165. Bis zum 2026-09-13 lief dies je Postfach, und gefahren wird
+   * es nur beim Zustellen und beim Abholen. Ein Postfach, das niemand mehr
+   * anfasst - ein verlorenes Geraet, eine App, die abgeraeumt wurde, eine
+   * Beziehung, die ohne Abmeldung endete -, behielt seine abgelaufenen Pakete
+   * also fuer immer. Hergestellt: eine Stunde nach dem Ablauf beider Pakete
+   * das eine Postfach abholen, und das andere haelt seines unveraendert.
+   *
+   * RY6 sagt, warum das falsch ist: *"An expired packet is one the sender
+   * instructed the relay to stop holding, so pruning it is following an
+   * instruction."* Eine Anweisung, die nur befolgt wird, wenn zufaellig jemand
+   * vorbeikommt, ist keine befolgte Anweisung - und ADR 0147 nennt das Relay
+   * die erste Stelle im System, die fremden Verkehr haelt.
+   *
+   * Es ist auch *weniger* Arbeit als vorher: ein Satz statt eines Lesens mit
+   * Schleife. Der Vergleich traegt als Zeichenkette, weil jeder Ablauf ein auf
+   * das Raster gerundeter ISO-Zeitpunkt ist (`pico_link_expiry_not_on_bucket`
+   * weist alles andere ab) und `toISOString` fuer alle dieselbe Breite und
+   * dieselbe Zeitzone schreibt.
+   */
+  private pruneExpired(nowMs: number): void {
+    this.db
+      .prepare('DELETE FROM relay_packet WHERE expires_at <= ?')
+      .run(new Date(nowMs).toISOString());
   }
 }
 

@@ -16,6 +16,8 @@
  *    einen Zustand hinterlassen, den es nicht geben soll. Nachgemessen am
  *    2026-09-13 (B164): 45 solche Stellen, 41 lagen schon in einer
  *    Transaktion, und von den vier uebrigen war eine ein echter Fehler.
+ *    Eine weitere - `pruneExpired` - fiel beim *Aufschreiben ihres Grundes*
+ *    auf (B165) und ist keine Schleife mehr.
  *
  * Ein Satz, der eine Gefahr nennt, ist kein Schutz vor ihr.
  *
@@ -135,16 +137,18 @@ const ARGUED = [
       + 'dieses Relay nicht machen darf. Alles-oder-nichts machte die '
       + 'Wiederholung teurer, ohne dass jemandem geholfen waere.',
   },
-  {
-    site: 'apps/relay/src/store.ts#pruneExpired',
-    question: 'in_loop',
-    kind: 'argued',
-    reason:
-      'Raeumt abgelaufene Pakete weg. Was liegen bleibt, ist bereits abgelaufen '
-      + 'und wird beim naechsten Anfassen desselben Postfachs erneut gefunden - '
-      + 'ein Kehren, das sich wiederholt, und kein Zustand, den jemand liest.',
-  },
 ];
+
+/*
+ * **Ein Eintrag ist hier schon wieder verschwunden, und zwar zu Recht.**
+ * `PicoRelayStore.pruneExpired` stand am 2026-09-13 einen Tag lang als
+ * begruendete Schleife hier. Beim Aufschreiben des Grundes - "was liegen
+ * bleibt, wird beim naechsten Anfassen desselben Postfachs wieder gefunden" -
+ * fiel auf, dass der Grund nicht traegt: ein Postfach, das niemand mehr
+ * anfasst, wird nie wieder angefasst. Der Fix (B165) ersetzte die Schleife
+ * durch einen Satz ueber alle Postfaecher, und dieses Tor hat den
+ * gegenstandslosen Eintrag sofort gemeldet.
+ */
 
 /**
  * Wer die Volkszaehlung sehen will, ohne auf einen Fehlschlag zu warten:
