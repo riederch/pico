@@ -15,7 +15,10 @@ import {
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from './client.js';
-import type { PicoLinkDirectClient } from './link-direct-client.js';
+import {
+  PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS,
+  type PicoLinkDirectClient,
+} from './link-direct-client.js';
 
 /** Local to this ceremony, as it was local to the file it came from. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -294,15 +297,57 @@ export async function picoFoundationRequest(
   const headers: Record<string, string> = session === undefined
     ? {}
     : { authorization: `Bearer ${session}` };
-  const response = await fetch(url, body === undefined
-    ? { method: 'GET', headers }
-    : {
-      method: 'POST',
-      headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+  /**
+   * ADR 0131 A7, dieselbe Form wie in `link-direct-client.ts` (Befund
+   * B160/B161, Entscheidung des Nutzers am 2026-09-13).
+   *
+   * **Dies ist der unversiegelte Weg** - der, den ein Companion vor dem
+   * Anspruch geht, wenn es noch keinen Klienten gibt, an den er sich haengen
+   * koennte. Ein Home, das schweigt, liess die Gruendung ohne Ende warten; der
+   * versiegelte Weg eine Funktion weiter oben hatte seine Frist seit dem
+   * 2026-08-22, dieser nicht.
+   *
+   * Eigener Controller, damit der Wecker nach dem Rumpf geloescht wird und
+   * eine gestellte Uhr ihn stellen kann - und **nach** dem Rumpf, weil ein
+   * Home, das Kopfzeilen schickt und dann verstummt, dasselbe Schweigen einen
+   * Schritt spaeter ist.
+   */
+  const silence = new AbortController();
+  const givingUp = setTimeout(() => {
+    silence.abort(Object.assign(
+      new Error('foundation_timed_out'),
+      { name: 'TimeoutError' },
+    ));
+  }, PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS);
 
-  const text = await response.text();
+  let response: Response;
+  let text: string;
+  try {
+    response = await fetch(url, {
+      signal: silence.signal,
+      ...(body === undefined
+        ? { method: 'GET', headers }
+        : {
+          method: 'POST',
+          headers: { ...headers, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+    });
+    text = await response.text();
+  } catch (noAnswer) {
+    // „Es hat zu lange geschwiegen" ist eine andere Auskunft als „es hat
+    // abgelehnt", und beide sind andere als „niemand hat nachgesehen".
+    if (noAnswer instanceof Error && noAnswer.name === 'TimeoutError') {
+      throw new Error('foundation_timed_out');
+    }
+    const cause = noAnswer instanceof Error
+      ? (noAnswer.cause as { code?: string } | undefined)?.code ?? noAnswer.message
+      : String(noAnswer);
+    throw new Error(`foundation_unreachable:${cause}`);
+  } finally {
+    clearTimeout(givingUp);
+  }
+
   let parsed: unknown;
   try {
     parsed = text === '' ? {} : JSON.parse(text);

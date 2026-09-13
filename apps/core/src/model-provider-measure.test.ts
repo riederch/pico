@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   PicoModelProviderMeasurer,
   picoModelProviderEntryFromMeasurement,
@@ -157,6 +157,45 @@ function modelHost(options: {
  * difference between a host that queues and one that does not - which is the
  * whole judgement under test.
  */
+/**
+ * Befund B161. Eine Messung, die haengt, blieb fuer immer auf `running` - und
+ * genau das sollte sie nie: sie misst ja, ob ein Wirt antwortet.
+ *
+ * **Die Frist ist absichtlich gross.** `/api/generate` erzeugt wirklich, und
+ * der erste Aufruf laedt dabei ein Modell von mehreren Gigabyte. Ein Wirt, der
+ * dafuer Minuten braucht, ist langsam und nicht tot - eine Frist auf
+ * Gespraechsmass wuerde jede ehrliche Messung eines langsamen Wirts in einen
+ * Fehlschlag verwandeln. Fuenf Minuten sind daher die Obergrenze fuer „darf
+ * langsam sein", nicht eine erwartete Dauer; mit gestellter Uhr gemessen, weil
+ * ein Test, der fuenf Minuten wartet, keiner ist.
+ */
+describe('ADR 0142 - ein schweigender Wirt (B161)', () => {
+  it('gibt eine Sonde auf, die nicht antwortet, und sagt es', async () => {
+    vi.useFakeTimers();
+    try {
+      const silent = (async (_url: unknown, init: { signal?: AbortSignal }) =>
+        await new Promise<never>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(init.signal?.reason as Error);
+          });
+        })) as unknown as typeof fetch;
+
+      const asked = measurer({ fetch: silent }).measure();
+      const settled = vi.fn();
+      void asked.then(settled, settled);
+
+      // Eine Minute vor der Grenze wartet die Sonde noch.
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1_000);
+      expect(settled).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(60 * 1_000);
+      await expect(asked).rejects.toThrow('pico_model_provider_probe_timed_out');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 function measurer(
   overrides: Record<string, unknown> = {},
   fake = modelHost(),

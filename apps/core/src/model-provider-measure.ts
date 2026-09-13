@@ -273,27 +273,107 @@ export class PicoModelProviderMeasurer {
     };
   }
 
-  private async get(path: string): Promise<unknown> {
-    const response = await this.call(`${this.reach}${path}`, {
-      method: 'GET',
-      headers: this.headers(),
-    });
-    if (!response.ok) {
-      throw new Error(`pico_model_provider_probe_failed:${path}:${response.status}`);
+  /**
+   * ADR 0142. Wie lange eine Sonde schweigen darf, bevor die Messung sie
+   * aufgibt (Befund B160/B161, 2026-09-13).
+   *
+   * **Eine eigene, groessere Zahl als die dreissig Sekunden, mit denen ein
+   * Geraet mit seinem Home spricht** - und der Grund ist die Sache selbst:
+   * `/api/generate` erzeugt wirklich, und der erste Aufruf laedt dabei ein
+   * Modell von mehreren Gigabyte von der Platte. Ein Wirt, der dafuer Minuten
+   * braucht, ist langsam und nicht tot; genau diesen Unterschied misst dieses
+   * Modul. Eine Frist auf Gespraechsmass wuerde jede ehrliche Messung eines
+   * langsamen Wirts in einen Fehlschlag verwandeln - und damit die Zahl
+   * erzeugen, die sie verhindern soll.
+   *
+   * Fuenf Minuten sind daher die Obergrenze fuer „darf langsam sein", nicht
+   * eine erwartete Dauer.
+   *
+   * **Warum nicht `picoModelJobDeadlineMs`**, das die Laufzeit daneben aus
+   * Kapazitaet und Kaltladezeit ableitet: die braucht einen fertigen Eintrag,
+   * und dieses Modul erzeugt ihn erst. Eine Frist aus Zahlen zu rechnen, die
+   * diese Messung gerade misst, waere ein Kreis. Ableiten laesst sie sich nicht: die Messung erzeugt
+   * ja erst die Zahlen, aus denen man ableiten wuerde. Gewaehlt vom Nutzer am
+   * 2026-09-13 als „groesser" zu den dreissig Sekunden der Daemon-Wege.
+   */
+  private static readonly probeBoundMs = 5 * 60 * 1_000;
+
+  /**
+   * Eigener Controller statt `AbortSignal.timeout`, aus denselben zwei
+   * Gruenden wie im Link-Klienten: der Wecker wird nach dem Rumpf geloescht -
+   * sonst haengt an jeder erledigten Sonde noch fuenf Minuten ein Timer -, und
+   * eine gestellte Uhr kann ihn stellen.
+   */
+  private async probe(path: string, init: RequestInit): Promise<unknown> {
+    const silence = new AbortController();
+    const givingUp = setTimeout(() => {
+      silence.abort(Object.assign(
+        new Error('pico_model_provider_probe_timed_out'),
+        { name: 'TimeoutError' },
+      ));
+    }, PicoModelProviderMeasurer.probeBoundMs);
+    let response: Response;
+    let parsed: unknown;
+    try {
+      response = await this.call(`${this.reach}${path}`, {
+        ...init,
+        signal: silence.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`pico_model_provider_probe_failed:${path}:${response.status}`);
+      }
+      parsed = await response.json();
+    } catch (failed) {
+      // Ein schweigender Wirt ist etwas anderes als ein ablehnender: eine
+      // Messung, die haengt, bliebe sonst fuer immer auf `running`.
+      if (failed instanceof Error && failed.name === 'TimeoutError') {
+        throw new Error(`pico_model_provider_probe_timed_out:${path}`);
+      }
+      throw failed;
+    } finally {
+      clearTimeout(givingUp);
     }
-    return await response.json();
+    return parsed;
+  }
+
+  /**
+   * Dieselbe Frist, aber die Antwort bleibt roh: die zwei Sonden, die *ueber*
+   * Zugangsangaben fragen, lesen den Status selbst - ein 401 ist dort die
+   * Auskunft und kein Fehlschlag. Nur das Schweigen wird ihnen abgenommen.
+   */
+  private async probeStatus(path: string, init: RequestInit): Promise<Response> {
+    const silence = new AbortController();
+    const givingUp = setTimeout(() => {
+      silence.abort(Object.assign(
+        new Error('pico_model_provider_probe_timed_out'),
+        { name: 'TimeoutError' },
+      ));
+    }, PicoModelProviderMeasurer.probeBoundMs);
+    try {
+      return await this.call(`${this.reach}${path}`, {
+        ...init,
+        signal: silence.signal,
+      });
+    } catch (failed) {
+      if (failed instanceof Error && failed.name === 'TimeoutError') {
+        throw new Error(`pico_model_provider_probe_timed_out:${path}`);
+      }
+      throw failed;
+    } finally {
+      clearTimeout(givingUp);
+    }
+  }
+
+  private async get(path: string): Promise<unknown> {
+    return await this.probe(path, { method: 'GET', headers: this.headers() });
   }
 
   private async post(path: string, body: unknown): Promise<unknown> {
-    const response = await this.call(`${this.reach}${path}`, {
+    return await this.probe(path, {
       method: 'POST',
       headers: this.headers({ 'content-type': 'application/json' }),
       body: JSON.stringify(body),
     });
-    if (!response.ok) {
-      throw new Error(`pico_model_provider_probe_failed:${path}:${response.status}`);
-    }
-    return await response.json();
   }
 
   private async generate(input: {
@@ -378,7 +458,7 @@ export class PicoModelProviderMeasurer {
   private async answersWithoutACredential(notes: string[]): Promise<boolean | null> {
     let answered: boolean | null;
     try {
-      const probed = await this.call(`${this.reach}/api/version`, { method: 'GET' });
+      const probed = await this.probeStatus('/api/version', { method: 'GET' });
       if (probed.status === 401 || probed.status === 403) {
         answered = false;
       } else if (probed.ok) {
@@ -721,7 +801,7 @@ export class PicoModelProviderMeasurer {
     // have issued, sent to the cheapest endpoint on the host.
     let refusesAWrongCredential: boolean | null = null;
     try {
-      const probed = await this.call(`${this.reach}/api/version`, {
+      const probed = await this.probeStatus('/api/version', {
         method: 'GET',
         headers: { authorization: 'Bearer pico-measurement-probe-not-a-credential' },
       });

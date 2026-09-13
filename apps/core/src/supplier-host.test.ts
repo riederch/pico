@@ -434,11 +434,11 @@ function rogueRuntime(body: string): string {
   return path;
 }
 
-function rogueHost(runtime: string): PicoSupplierHost {
+function rogueHost(runtime: string, requestTimeoutMs = 1_000): PicoSupplierHost {
   const host = new PicoSupplierHost({
     entryPoint: shippedEntryPoint,
     execPath: runtime,
-    requestTimeoutMs: 1_000,
+    requestTimeoutMs,
   });
   hosts.push(host);
   return host;
@@ -503,18 +503,30 @@ describe('ADR 0097 framing - a supplier that speaks out of turn', () => {
   it('ends the connection on a declared body it will not allocate', async () => {
     // Checked before the body is buffered: a supplier that declares four
     // gigabytes must not be able to make this process reserve them.
+    //
+    // **Die Anfragefrist ist hier absichtlich gross** (Befund B161,
+    // 2026-09-13). Die verglichene Eigenschaft ist "es bricht sofort ab statt
+    // erst bei der Frist", und die Vergangene Zeit ist das einzige, was die
+    // beiden trennt - also muss der Abstand unmissverstaendlich sein. Mit den
+    // sonst ueblichen 1.000 ms und einer Schranke bei 900 lagen 100 ms
+    // dazwischen, und darin steckt der Start eines Kindprozesses: am
+    // 2026-09-13 fiel dieser Test in einem vollen Kettenlauf mit 1.037 ms und
+    // allein dreimal hintereinander gruen. Ein Test, dessen Ergebnis von der
+    // Maschinenlast abhaengt, meldet einen Fehler, den niemand gemacht hat -
+    // dieselbe Lehre wie bei der Wanduhr in `reader-custody.test.ts`.
+    const requestTimeoutMs = 30_000;
     const host = rogueHost(rogueRuntime(`
       const frame = Buffer.alloc(4);
       frame.writeUInt32BE(4_000_000_000, 0);
       process.stdout.write(frame);
       setTimeout(() => {}, 5_000);
-    `));
+    `), requestTimeoutMs);
 
-    // It ends the connection rather than waiting for four gigabytes that will
-    // never arrive, so this fails at once instead of at the request timeout -
-    // and the elapsed time is the only way to tell those two apart.
     const startedAt = Date.now();
     await expect(host.hello()).rejects.toThrow();
-    expect(Date.now() - startedAt).toBeLessThan(900);
+    const elapsed = Date.now() - startedAt;
+    // Ein Drittel der Frist ist reichlich fuer einen Prozessstart und weit
+    // entfernt von "es hat die Frist abgewartet".
+    expect(elapsed).toBeLessThan(requestTimeoutMs / 3);
   });
 });

@@ -10,8 +10,9 @@ import {
   type PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
+import { PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS } from './link-direct-client.js';
 import sodium from 'libsodium-wrappers-sumo';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   fetchPicoHomeContinuityChain,
   MAX_PICO_HOME_CONTINUITY_CHAIN_RESPONSE_CHARS,
@@ -296,5 +297,57 @@ describe('ADR 0115 U4 host pin refresh', () => {
       coreUrl: 'http://127.0.0.1:1',
       fetch: serving(corruptHead).fetch,
     })).rejects.toThrow('continuity_read_malformed');
+  });
+
+  /**
+   * Befund B161. Dieser Lesevorgang laeuft im **ersten Lauf** eines
+   * Companions. Ein Home, das schweigt, liess ihn ohne Ende und ohne Satz
+   * warten - waehrend der versiegelte Weg daneben seine Frist seit dem
+   * 2026-08-22 hatte.
+   *
+   * Mit gestellter Uhr gemessen, damit die **Grenze** geprueft wird und nicht
+   * nur, dass irgendwann etwas geschieht: eine Sekunde davor wartet die
+   * Anfrage noch.
+   */
+  it('gibt ein schweigendes Home auf, statt fuer immer zu warten', async () => {
+    vi.useFakeTimers();
+    try {
+      const silent = (async (_url: unknown, init: { signal?: AbortSignal }) =>
+        await new Promise<never>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(init.signal?.reason as Error);
+          });
+        })) as unknown as typeof fetch;
+
+      const asked = fetchPicoHomeContinuityChain({
+        coreUrl: 'http://127.0.0.1:1',
+        fetch: silent,
+      });
+      const settled = vi.fn();
+      void asked.then(settled, settled);
+
+      await vi.advanceTimersByTimeAsync(
+        PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS - 1_000,
+      );
+      expect(settled).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(asked).rejects.toThrow('continuity_read_timed_out');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /** Befund B161. Und wer gar nicht erst hinkommt, heisst auch so. */
+  it('nennt ein Home, das niemand erreicht, unerreichbar und nicht schweigend', async () => {
+    const refused = (async () => {
+      throw Object.assign(new Error('fetch failed'), {
+        cause: { code: 'ECONNREFUSED' },
+      });
+    }) as unknown as typeof fetch;
+    await expect(fetchPicoHomeContinuityChain({
+      coreUrl: 'http://127.0.0.1:1',
+      fetch: refused,
+    })).rejects.toThrow('continuity_read_unreachable:ECONNREFUSED');
   });
 });

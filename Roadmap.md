@@ -912,11 +912,76 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B161 — Die Fristen sind gesetzt, und eine eigene Fehlmessung dabei
+(2026-09-13, Entscheidung des Nutzers).** Auf B160 hin hat der Nutzer
+entschieden: **30 Sekunden für die zwei Daemon-Wege, größer für die Messung.**
+
+Gesetzt ist überall dieselbe **Form**, die `link-direct-client.ts` seit dem
+2026-08-22 trägt: ein eigener `AbortController` statt `AbortSignal.timeout`,
+weil der Wecker nach dem **Rumpf** gelöscht werden muss — nicht nach den
+Kopfzeilen, denn ein Home, das Kopfzeilen schickt und dann verstummt, ist
+dasselbe Schweigen einen Schritt später — und weil eine gestellte Uhr ihn
+stellen können soll. Dazu je ein eigener Grund: `continuity_read_timed_out`,
+`foundation_timed_out`, `pico_model_provider_probe_timed_out`, und daneben ein
+`…_unreachable:<code>` für den Fall, dass niemand hinkommt. „Es hat zu lange
+geschwiegen" ist eine andere Auskunft als „es hat abgelehnt", und beide sind
+andere als „niemand hat nachgesehen".
+
+**Die fünf Minuten der Messung sind begründet und nicht gegriffen.**
+`/api/generate` erzeugt wirklich, und der erste Aufruf lädt dabei ein Modell von
+mehreren Gigabyte. Ein Wirt, der dafür Minuten braucht, ist langsam und nicht
+tot — genau diesen Unterschied misst das Modul, und eine Frist auf
+Gesprächsmaß hätte jede ehrliche Messung eines langsamen Wirts in einen
+Fehlschlag verwandelt. **Nicht** `picoModelJobDeadlineMs` genommen, das die
+Laufzeit daneben ableitet: die braucht einen fertigen Eintrag, und dieses Modul
+erzeugt ihn erst. Eine Frist aus Zahlen zu rechnen, die diese Messung gerade
+misst, wäre ein Kreis.
+
+Fünf Wege sind es am Ende geworden, nicht drei: die zwei Zugangs-Sonden der
+Messung stehen bewusst außerhalb des Helfers, weil ein 401 dort die Auskunft
+ist und kein Fehlschlag — nur das Schweigen wird ihnen abgenommen.
+
+**Und eine eigene Fehlmessung gehört zum Befund.** Die Sonde aus B160 suchte
+`fetch(` und `requestFetch(`; `model-runtime.ts` geht über eine injizierte
+`this.call` und fiel ganz heraus. Die Laufzeit hat ihre Fristen längst, und
+zwar die feinste von allen. Beim Nachzählen hat mich dann ein zu kleines
+Zeilenfenster ein zweites Mal in dieselbe Richtung getäuscht — es meldete die
+Laufzeit als unbefristet, weil `signal:` mehr als zwölf Zeilen hinter dem
+Aufruf steht. **Zum dritten Mal in dieser Sitzung hat ein Fenster falsch
+gemeldet** (B152, B158, hier); auf so etwas gehört kein Tor, und die Zahl in
+B160 ist korrigiert statt stehen gelassen.
+
+Drei Pflanzungen, jede über eine nie gestellte Uhr: alle drei Wege warten dann
+wieder für immer, und alle drei Tests fallen.
+
+**Und der volle Kettenlauf hat dabei etwas gefunden, das nichts damit zu tun
+hat.** `supplier-host.test.ts` prüft, dass ein Zulieferer, der vier Gigabyte
+*ankündigt*, die Verbindung sofort verliert statt erst bei der Anfragefrist —
+und die vergangene Zeit ist das einzige, was die beiden trennt. Der Abstand
+betrug **100 ms**: Frist 1.000, Schranke 900. Darin steckt der Start eines
+Kindprozesses. Unter Volllast der Kette wurden daraus 1.037 ms, allein
+hintereinander dreimal grün.
+
+Ein Test, dessen Ergebnis von der Maschinenlast abhängt, meldet einen Fehler,
+den niemand gemacht hat — dieselbe Lehre, die `reader-custody.test.ts` schon
+für die Wanduhr aufgeschrieben hat. Die Schranke ist deshalb **nicht gelockert**
+worden: die Frist dieses einen Prüfstands steht jetzt auf 30 Sekunden und die
+Schranke auf einem Drittel davon. Der Abstand ist damit unmissverständlich, und
+die Pflanzung — die Rahmengrenze entfernt — lässt den Test weiterhin fallen.
+
 **B160 — Ein Weg hat die Lehre gelernt, vier nicht (2026-09-13).** Der offene
 Punkt „Fristen für ausgehende Anfragen" (B77) stand seit Langem mit der
 Bemerkung, die dreizehn Anfragen des Dashboards lägen in derselben Lage wie
 `model-provider-measure.ts`. Nachgemessen über `apps|packages|modules/*/src`:
 **sechzehn ausgehende HTTP-Aufrufe, genau einer hat eine Frist.**
+
+**Korrektur am 2026-09-13, aus B161 heraus:** diese Sonde suchte `fetch(` und
+`requestFetch(` und hat damit `apps/core/src/model-runtime.ts` ganz übersehen,
+das über eine injizierte `this.call` geht. **Die Laufzeit hat ihre Fristen —
+und die feinste von allen:** `picoModelJobDeadlineMs` rechnet sie aus
+Kaltladezeit, Kontextgröße und erwarteten Antworttoken. Es waren also *zwei*
+Wege mit der Lehre, nicht einer. Der Satz unten bleibt richtig für die drei
+gefundenen Lücken; die Zahl davor war zu klein gezählt.
 
 Der eine ist `link-direct-client.ts`, und er hat sie gründlich: ein eigener
 `AbortController` statt `AbortSignal.timeout`, weil der Wecker nach der Antwort

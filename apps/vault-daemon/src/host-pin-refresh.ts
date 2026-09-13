@@ -13,6 +13,7 @@ import {
 } from '@pico/identity';
 import type { VaultSodium } from '@pico/vault';
 import {
+  PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS,
   readBoundedResponseText,
   type PicoLinkDirectHostPin,
 } from './link-direct-client.js';
@@ -70,6 +71,21 @@ export type PicoHomeHostPinRefreshResult =
  * are availability problems, not verification verdicts; the verification
  * verdicts live in {@link refreshPicoHomeHostPins}.
  */
+/**
+ * „Es hat zu lange geschwiegen" ist eine andere Auskunft als „niemand hat
+ * nachgesehen", und beide sind andere als „es hat abgelehnt". Der Grund reist
+ * mit, damit eine Diagnose moeglich bleibt.
+ */
+function timedOutOr(failed: unknown): Error {
+  if (failed instanceof Error && failed.name === 'TimeoutError') {
+    return new Error('continuity_read_timed_out');
+  }
+  const cause = failed instanceof Error
+    ? (failed.cause as { code?: string } | undefined)?.code ?? failed.message
+    : String(failed);
+  return new Error(`continuity_read_unreachable:${cause}`);
+}
+
 export async function fetchPicoHomeContinuityChain(input: {
   coreUrl: string;
   fetch?: typeof fetch;
@@ -79,11 +95,64 @@ export async function fetchPicoHomeContinuityChain(input: {
     PICO_HOME_CONTINUITY_READ_PATH,
     input.coreUrl.endsWith('/') ? input.coreUrl : `${input.coreUrl}/`,
   );
-  const response = await requestFetch(url);
-  const text = await readBoundedResponseText(
-    response,
-    MAX_PICO_HOME_CONTINUITY_CHAIN_RESPONSE_CHARS,
-  );
+
+  /**
+   * ADR 0131 A7, und die Form ist die von `link-direct-client.ts` (Befund
+   * B160/B161, Entscheidung des Nutzers am 2026-09-13).
+   *
+   * **Warum hier besonders.** Dieser Lesevorgang laeuft ueber
+   * `refreshPicoHomeHostPins` im **ersten Lauf** eines Companions. Ein Home,
+   * das schweigt - angehalten, ueberlastet, hinter einer Bruecke, die annimmt
+   * und nicht weiterreicht -, liess den ersten Lauf ohne Ende und ohne Satz
+   * warten. Das ist der Moment, in dem ein Mensch am wenigsten Zusammenhang
+   * hat, um zu verstehen, was nicht geschieht.
+   *
+   * Ein eigener Controller statt `AbortSignal.timeout`, aus denselben zwei
+   * Gruenden wie dort: der Wecker wird geloescht, sobald der Rumpf gelesen ist
+   * - sonst haengt an jeder erledigten Anfrage noch dreissig Sekunden ein
+   * Timer im Daemon -, und eine gestellte Uhr kann ihn stellen.
+   *
+   * **Erst nach dem Rumpf**, nicht nach den Kopfzeilen: ein Home, das
+   * Kopfzeilen schickt und dann verstummt, ist dasselbe Schweigen einen
+   * Schritt spaeter. Genau daran ist der erste Anlauf desselben Musters in
+   * `link-direct-client.ts` gescheitert.
+   *
+   * Die dreissig Sekunden sind die dortigen: derselbe Gespraechspartner,
+   * derselbe wartende Mensch.
+   */
+  const silence = new AbortController();
+  const givingUp = setTimeout(() => {
+    silence.abort(Object.assign(
+      new Error('continuity_read_timed_out'),
+      { name: 'TimeoutError' },
+    ));
+  }, PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS);
+
+  let response: Response;
+  let text: string;
+  try {
+    try {
+      response = await requestFetch(url, { signal: silence.signal });
+    } catch (noAnswer) {
+      throw timedOutOr(noAnswer);
+    }
+    try {
+      text = await readBoundedResponseText(
+        response,
+        MAX_PICO_HOME_CONTINUITY_CHAIN_RESPONSE_CHARS,
+      );
+    } catch (noAnswer) {
+      // Nur das Schweigen wird umbenannt. Eine zu grosse Antwort ist eine
+      // eigene Auskunft und keine ausbleibende.
+      if (noAnswer instanceof Error && noAnswer.name !== 'TimeoutError') {
+        throw noAnswer;
+      }
+      throw timedOutOr(noAnswer);
+    }
+  } finally {
+    clearTimeout(givingUp);
+  }
+
   if (!response.ok) {
     throw new Error(`continuity_read_rejected:${response.status}`);
   }
