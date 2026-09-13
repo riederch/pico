@@ -487,6 +487,115 @@ for (const key of arguedHomes.keys()) {
   }
 }
 
+/**
+ * **Die vierte Frage, und sie holt herein, was B71 draussen liess**
+ * (2026-09-13, Befunde B150 und B156 bis B158).
+ *
+ * B71 hat gemessen, dass ein Tor ueber *alle* geworfenen Meldungen nicht
+ * taugt: 907 Stueck, 464 ohne Test, und ein Wurf ist meist eine Zusicherung an
+ * sich selbst, die mit gueltiger Eingabe gar nicht erreichbar ist. Der Satz
+ * gilt weiter.
+ *
+ * Er gilt aber **nicht** fuer die Wuerfe aus einem `catch`. Die sind die Naht,
+ * an der ein Fehlschlag von aussen - ein kaputter Rumpf, ein toter Prozess,
+ * eine Bedingung der Datenbank - einen Namen bekommt, den ein Aufrufer lesen
+ * kann. Es sind **50** statt 907, und sie sind Produktverhalten und keine
+ * Selbstzusicherung.
+ *
+ * **Der Anlass.** Befund B150: `isPicoUniqueConstraintViolation` auf `false`
+ * gesetzt, und 1.153 Pruefungen des Kerns blieben gruen - vier Stellen, die
+ * eine Datenbankbedingung in eine benannte Ablehnung uebersetzen, und keine
+ * war gegangen. Gemessen waren es dann 19 ungegangene; zwoelf sind es in
+ * B156 bis B158 geworden, darunter die vier, an denen ein *Geraet* entscheidet,
+ * ob die Antwort seines Homes echt ist.
+ *
+ * **Die Suche ist absichtlich lockerer als oben.** Ein geworfener Grund reist
+ * oft zusammengesetzt - `unreadable_platform_unlock:invalid_platform_unlock_record`
+ * -, und ein Test, der die ganze Meldung erwartet, hat ihn sehr wohl gegangen.
+ * Die Union oben wird dagegen als Wert verglichen und darf eng suchen.
+ */
+const catchThrownPattern = /throw new Error\(\s*'([a-z][a-z0-9_]{4,})'/gu;
+const notYetWalkedCatch = new Map([
+  ['invalid_answered_read',
+    'Haengt an der Electron-Flaeche: der Rumpf einer beantworteten Lesung kommt ueber IPC '
+    + 'herein, und der Pruefstand startet dafuer heute kein Fenster.'],
+  ['invalid_module_consent',
+    'Dieselbe Flaeche, dieselbe Luecke - eine Zustimmung, die ueber IPC hereinkommt und '
+    + 'keine ist.'],
+  ['invalid_reader_sync_item_catalog_evidence',
+    'Braucht einen Katalog, dessen Gegenstand einen Namen oder einen Zeitpunkt traegt, den '
+    + 'die Regel ablehnt - gegen einen Stapel, der sonst stimmt. Der Aufbau dafuer baut '
+    + 'heute nur gueltige Stapel.'],
+  ['invalid_reader_sync_payload',
+    'Der Auffangfall ganz unten: etwas wirft, das *nicht* mit `invalid_reader_sync` '
+    + 'anfaengt. Ein Gang braucht eine versiegelte Nutzlast, die kein JSON ist, mit '
+    + 'passendem Digest - also den Siegelweg des Schreibers mit erfundenem Inhalt.'],
+  ['reader_sync_pending_cleanup_failed',
+    'Das Loeschen einer Zwischendatei muss fehlschlagen, waehrend ihr Verzeichnis '
+    + 'beschreibbar ist - anders entsteht die Zwischendatei gar nicht erst. Ohne Attrappe '
+    + 'fuer `node:fs` ist das von innen nicht herstellbar.'],
+  ['reader_sync_projection_archive_cleanup_failed',
+    'Dieselbe Lage im Archiv der Projektion.'],
+  ['reader_sync_state_cleanup_failed',
+    'Dieselbe Lage im Zustandsspeicher.'],
+]);
+
+const caughtThrows = new Map();
+for (const file of sourceFiles) {
+  const rel = relative(repoRoot, file);
+  if (!/^(apps|packages|modules)\/[^/]+\/src\//u.test(rel)) {
+    continue;
+  }
+  const lines = withoutComments(readFileSync(file, 'utf8')).split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/\} catch/u.test(lines[index])) {
+      continue;
+    }
+    const block = lines.slice(index, index + 14).join('\n');
+    for (const [, reason] of block.matchAll(catchThrownPattern)) {
+      if (!caughtThrows.has(reason)) {
+        caughtThrows.set(reason, new Set());
+      }
+      caughtThrows.get(reason).add(rel);
+    }
+  }
+}
+
+let caughtWalked = 0;
+for (const [reason, where] of [...caughtThrows].sort()) {
+  const named = testFiles.some(
+    (file) => withoutComments(readFileSync(file, 'utf8')).includes(reason),
+  );
+  if (named) {
+    caughtWalked += 1;
+    if (notYetWalkedCatch.has(reason)) {
+      errors.push(
+        `${reason} is listed here as a caught failure nobody has walked, and a test now `
+        + 'names it. Take the entry out.',
+      );
+    }
+    continue;
+  }
+  if (!notYetWalkedCatch.has(reason)) {
+    errors.push(
+      `${reason} turns a failure from outside into a name in ${[...where].join(', ')}, and `
+      + 'no test names it. That is the seam where a broken body, a dead process or a '
+      + 'database constraint becomes something a caller can read - walk it, or say here '
+      + 'what a walk would need.',
+    );
+  }
+}
+
+// Auch diese Liste sagt nur, was erlaubt ist - nie, ob es das noch gibt.
+for (const reason of notYetWalkedCatch.keys()) {
+  if (!caughtThrows.has(reason)) {
+    errors.push(
+      `${reason} is argued here as a caught failure nobody has walked, and nothing throws `
+      + 'it from a catch any more. Take the entry out.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Refusal-reason check failed:');
   for (const error of errors) {
@@ -506,5 +615,7 @@ console.log(
   + `; ${homes.size} thrown refusals have one home in their package, `
   + `${arguedSeen} share a word between two questions and say why; `
   + `${crossPairs.size} file pairs share a refusal across a package boundary, `
-  + `${arguedCrossSeen} of them share two or more and say why).`,
+  + `${arguedCrossSeen} of them share two or more and say why; `
+  + `${caughtThrows.size} failures from outside get a name in a catch, `
+  + `${caughtWalked} of them walked and ${notYetWalkedCatch.size} argued).`,
 );

@@ -912,6 +912,36 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B159 — Was B71 draußen ließ, und warum ein Teil davon hereingehört
+(2026-09-13).** Nach zwölf gegangenen Auffang-Gründen in B156 bis B158 blieben
+sieben, und sie sind der teure Schwanz: drei brauchen einen Dateisystemfehler,
+den ein Test von innen nicht herstellen kann, zwei hängen an der
+Electron-Fläche, zwei an einem Aufbau, der heute nur gültige Stapel baut.
+Dafür brüchige Tests zu schreiben wäre schlechter als keine.
+
+**Also wird die Klasse sichtbar statt erneut gemessen.** B71 hat gemessen, dass
+ein Tor über *alle* geworfenen Meldungen nicht taugt — 907 Stück, 464 ohne
+Test, und ein Wurf ist meist eine Zusicherung an sich selbst, die mit gültiger
+Eingabe gar nicht erreichbar ist. Der Satz gilt weiter. Er gilt **nicht** für
+die Würfe aus einem `catch`: das sind **50** statt 907, und sie sind die Naht,
+an der ein Fehlschlag von außen — ein kaputter Rumpf, ein toter Prozess, eine
+Bedingung der Datenbank — einen Namen bekommt, den ein Aufrufer lesen kann. Das
+ist Produktverhalten und keine Selbstzusicherung.
+
+Der Beleg dafür ist B150: den Helfer auf `false` gesetzt, und 1.153 Prüfungen
+des Kerns blieben grün.
+
+`check-refusal-reasons.mjs` trägt das jetzt als vierte Frage über demselben
+Gegenstand: 43 der 50 gegangen, sieben mit ihrem Hindernis. Die Suche ist dabei
+absichtlich **lockerer** als die der Union oben — ein geworfener Grund reist oft
+zusammengesetzt (`unreadable_platform_unlock:invalid_platform_unlock_record`),
+und ein Test, der die ganze Meldung erwartet, hat ihn sehr wohl gegangen. Genau
+daran hat meine erste Zählung acht statt sieben gemeldet.
+
+Drei Pflanzungen, alle drei Richtungen: ein neuer Auffang-Grund ohne Test
+fällt, eine Schuld, die längst gegangen ist, fällt, und ein Eintrag, den der
+Baum nicht mehr trägt, fällt ebenso.
+
 **B158 — Zwei Nachbarn binden verschieden, und niemand sagt warum
 (2026-09-13).** Drei weitere aus der Liste, und der dritte fiel nur auf, weil
 **meine eigene Attrappe lief, obwohl sie nie laufen durfte**.
