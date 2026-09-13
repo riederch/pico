@@ -912,6 +912,53 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B165 — Eine Anweisung, die nur befolgt wird, wenn jemand vorbeikommt
+(2026-09-13).** Dieser Befund fiel **beim Aufschreiben einer Begründung** an.
+B164 trug `PicoRelayStore.pruneExpired` als begründete Schleife ins Tor ein, mit
+dem Satz: *„was liegen bleibt, wird beim nächsten Anfassen desselben Postfachs
+wieder gefunden"*. Beim Hinschreiben hielt der Satz nicht: **ein Postfach, das
+niemand mehr anfasst, wird nie wieder angefasst.**
+
+Gemessen: `pruneExpired` läuft ausschließlich aus `deliver` und `collect`, und
+im ganzen Relay gibt es keinen Zeitgeber — der einzige `setTimeout` ist die
+Abschaltfrist. Hergestellt: zwei Postfächer, in beiden ein Paket, eine Stunde
+nach dem Ablauf **nur das erste** abgeholt — das zweite hält seines unverändert,
+und nichts wird es je wegräumen.
+
+ADR 0147 RY6 sagt, warum das falsch ist: *„An expired packet is one the sender
+instructed the relay to stop holding, so pruning it is following an
+instruction."* Und die Tabelle desselben ADR nennt den Zweck des Ablaufs in vier
+Worten: *„expiry | Yes, to clear the queue"*. Eine Anweisung, die nur befolgt
+wird, wenn zufällig jemand vorbeikommt, ist keine befolgte Anweisung — in der
+Komponente, die ADR 0147 selbst *„the first component in this system that holds
+a person's traffic"* nennt.
+
+Der Fix ist **weniger** Code, nicht mehr: ein `DELETE FROM relay_packet WHERE
+expires_at <= ?` über alle Postfächer ersetzt ein Lesen mit Schleife. Der
+Vergleich trägt als Zeichenkette, weil jeder Ablauf ein auf das Raster
+gerundeter ISO-Zeitpunkt ist — `pico_link_expiry_not_on_bucket` weist alles
+andere ab, und `toISOString` schreibt für alle dieselbe Breite und Zeitzone.
+Die Kosten ändern sich nicht: das Relay hat keinen Index, das Lesen je Postfach
+war derselbe volle Durchlauf.
+
+**Und das Tor aus B163/B164 hat sich selbst bewährt**, einen Tag nach seinem
+Bau: der Fix nahm die Schleife weg, und `transaction:check` meldete sofort, dass
+die Begründung dazu gegenstandslos geworden ist — *„ein Prüfer ohne Gegenstand
+ist kaputt und nicht sauber"*, diesmal an einer echten Änderung statt an einer
+Pflanzung.
+
+**Gesucht, ob die Form sich wiederholt — sie tut es nicht.** Ein Ablauf, der
+„hör auf, das zu halten" bedeutet, steht im ganzen Baum an genau **zwei**
+Stellen: hier und in `pico_link_direct_seen_request`. Die zweite kehrt bei
+*jeder* Anfrage und hält obendrein nur Anfragekennungen unter einer Decke von
+1.024 — kein fremder Verkehr und nichts Unbegrenztes. Die fünf übrigen
+Zeitspalten (`valid_until` an Mitgliedschaften, Delegationen, Lese- und
+Schreibzuteilungen, `completion_expires_at` an Wiederherstellungen) sind
+**Beweise und keine Vorräte**: sie laufen ab, aber die Zeile bleibt mit Absicht
+stehen, aus demselben Grund wie der zurückgezogene Zustimmungsvermerk in B163 —
+„abgelaufen" und „war nie da" sind verschiedene Tatsachen. Ein Kehrlauf über sie
+wäre der Fehler, nicht sein Fehlen.
+
 **B164 — Die Quarantäne überlebte, der Alarm nicht (2026-09-13).** B163 hatte
 eine Frage ausdrücklich offen gelassen: ein Schreibsatz, der in einer *Schleife*
 läuft, ist **ein** Schreibort und nicht zwei, also sieht ihn die erste Frage des
