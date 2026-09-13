@@ -912,6 +912,90 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B163 — Ein Satz, der eine Gefahr nennt, ist kein Schutz vor ihr
+(2026-09-13).** Gefragt: gibt es Methoden, in denen zwei Schreibvorgänge auf
+*einem* Weg liegen und keine Transaktion sie zusammenhält? Ein Absturz
+dazwischen lässt dann genau den Zustand zurück, den der Code daneben als
+unmöglich beschreibt.
+
+**Vier Fälle, und in dreien stand der Schaden bereits im Kommentar.**
+
+- `presence-registry.ts#forget` löscht das Gerät und dann seine Schalter. Der
+  Kommentar zwischen den beiden Zeilen nennt den Schaden wörtlich: *„a person
+  who removed a phone and later paired a new one under the same id would
+  silently inherit last year's answers"*. Bricht es dazwischen ab, ist die
+  Präsenz fort und ihre Schalter bleiben — und die Zeile, die sie erklären
+  würde, ist die gelöschte.
+- `model-provider-registry.ts#revoke` zieht erst die Zustimmung zurück und
+  löscht dann die Zugangsangabe. Die gefährliche Reihenfolge: hinterher hält
+  dieses Home das Geheimnis von jemandem zu einer Entscheidung, die
+  zurückgenommen wurde — neben einer Zeile, die bereits „zurückgezogen" sagt.
+  Niemand würde dort danach suchen.
+- `relay/store.ts#deregister` ist der schärfste: **dasselbe Schreibpaar steht
+  ein zweites Mal in derselben Datei.** In `revokeAccount` liegt es seit jeher
+  in einer Transaktion, und sein Kommentar zitiert `deregister` *namentlich*
+  für die Begründung — während `deregister` sie nicht einhielt. Ein Nachbar
+  hatte die Lehre, der andere nicht.
+- `link-direct-seen-requests.ts#remember` fiel erst bei der Toranfertigung auf,
+  und bei ihm sagt es der **Kopf der Datei selbst**: *„at capacity the insert
+  evicts before it writes"*. Genau dieser Satz erklärt die zwei Schreibvorgänge
+  zu einer Handlung. Bricht das Einfügen ab, ist die Kennung mit der kürzesten
+  Restgültigkeit verdrängt und keine neue entstanden: zwei Anfragen sind
+  wiederholbar statt einer, in der Tabelle, die Wiederholungen verhindert.
+
+Alle vier sind eingefasst.
+
+**Die Pflanzung zuerst, und sie fand nichts — das war der eigentliche Befund.**
+Mit allen drei Transaktionen weggenommen liefen 120 Tests durch. Eine
+Transaktion ist im Gutfall unsichtbar; sie lässt sich nur über ihren *Zweck*
+gehen. Vier neue Tests tun das: ein Auslöser in SQLite lässt den **zweiten**
+Schreibvorgang scheitern — ein Widerspruch der Datenbank und keine gestellte
+Methode, denn eine gestellte Methode prüft die Einrichtung des Tests und nicht
+das Verhalten des Codes. Jeder der vier fällt ohne seine Transaktion. Die
+Technik gab es im Baum schon, in `device-recovery.test.ts` und
+`identity-root-rotation.test.ts`; sie war nur nie auf die Methoden angewandt
+worden, die keine Transaktion hatten.
+
+**Das Tor: `transaction:check`, und zum ersten Mal über den Syntaxbaum.** Eine
+Sonde aus Zeilenfenstern hat mich bei dieser Messung sechsmal in die Irre
+geführt — sie hielt `if/else` für zwei Schreibvorgänge auf einem Weg, übersah
+eine Transaktion zwei Zeilen weiter, schnitt Methoden an der falschen Klammer
+ab. In dieser Sitzung sind fünf Fehlmessungen aus unscharfen Fenstern
+entstanden; ein Tor darauf zu bauen wäre die sechste gewesen. `typescript` liegt
+ohnehin im Baum, also fragt das Tor den Übersetzer: wo eine Methode aufhört, was
+ein Schreibvorgang ist (auch wenn der Satz erst in einer Variablen liegt und in
+einer Schleife läuft), und ob zwei Schreibvorgänge einander ausschließen — zwei
+Zweige eines `if` sind zwei Wege, und ebenso ein Zweig, der mit `return` endet,
+gegenüber allem danach.
+
+Gemessen: **79 Schreibvorgänge stehen in einer Transaktion, 98 allein; von 85
+Funktionen, die außerhalb einer schreiben, legen 3 zwei oder mehr auf einen
+Weg, und alle 3 sind begründet.** Und die Erkennung ist nicht ungefähr,
+sondern nachgezählt: über 249 Quelldateien stehen 170 Schreibsätze unmittelbar
+in der Kette und 7 in einer Variablen, **0 blieben unerkannt und 0 `.run()`
+hingen an einem nicht schreibenden Satz** — 170 + 7 = 177 = 79 + 98. Ein Tor,
+das nur *fast* alles sieht, meldet Erfolg über dem, was es übersehen hat. Die Begründungen sind zwei Arten:
+`wrapped_by_caller` wird **nachgerechnet** — das Tor zählt die Aufrufstellen und
+besteht darauf, dass jede in einer Transaktion liegt; ein Name ist keine Regel
+(B124). `argued` trägt einen Grund, den kein Skript nachrechnen kann, wie der
+Abgleich beim Start, der ohnehin bei jedem Start vollständig neu läuft.
+
+Drei Pflanzungen gegen das Tor, eine je Frage: Transaktion weg → gefunden;
+begründete Methode umbenannt → *beides* gemeldet, der neue Name als unbegründet
+und der alte Eintrag als gegenstandslos; dem eingefassten Aufrufer seine
+Transaktion genommen → die nachgerechnete Begründung fällt und nennt die
+Aufrufstelle.
+
+**Und das Tor hat sofort meinen eigenen Eintrag verworfen.** Ich hatte
+`PicoRelayStore.acknowledge` als begründet eingetragen — es löscht Pakete
+einzeln in einer Schleife. Das Tor meldete: *„ein Prüfer ohne Gegenstand ist
+kaputt und nicht sauber"*. Es hatte recht: eine Schleife ist **ein** Schreibort
+und nicht zwei, also fragt dieses Tor den Fall gar nicht. Die Frage ist trotzdem
+echt und steht im Skriptkopf gemessen: `deletePicoObservations` fasst seine
+Schleife ein, `acknowledge` tut es nicht, und beides ist richtig — ADR 0147
+liefert lieber zweimal aus als einmal zu wenig. Wer das fragen will, stellt eine
+neue Frage; sie hier mitzuführen hieße, zwei Fragen als eine auszugeben.
+
 **B162 — Der Satz stand schon da, dreimal, und einmal gedriftet
 (2026-09-13).** Punkt 4 nannte die dreizehn Aufrufe des Webclients „die
 mildeste Lage von allen — ein Reiter, der sich dreht". Beim Hinsehen war die

@@ -128,6 +128,35 @@ git diff --check
 git status --short --branch
 ```
 
+### Eine Transaktion geht man ueber ihren Zweck
+
+Eine `db.transaction(...)` ist im Gutfall **unsichtbar**: beide Schreibvorgaenge
+gelingen, und das Ergebnis ist dasselbe wie ohne sie. Am 2026-09-13 sind drei
+Transaktionen weggepflanzt worden, und 120 Tests liefen durch (B163). Wer eine
+Transaktion pruefen will, muss den **zweiten** Schreibvorgang scheitern lassen:
+
+```ts
+db.exec(`
+  CREATE TRIGGER planted_second_write_fails
+  BEFORE DELETE ON die_zweite_tabelle
+  BEGIN SELECT RAISE(ABORT, 'planted_second_write_fails'); END
+`);
+expect(() => subjekt.methode(...)).toThrow('planted_second_write_fails');
+// und dann: der *erste* Schreibvorgang ist zurueckgerollt.
+db.exec('DROP TRIGGER planted_second_write_fails');
+```
+
+Ein Ausloeser und keine gestellte Methode: eine gestellte Methode prueft die
+Einrichtung des Tests, ein Ausloeser einen Widerspruch der Datenbank. Der
+Ausloeser muss auf die Anweisung passen, die *im* Schreibblock steht - ein
+Ausloeser, der schon das Lesen davor bricht, macht den Test gruen, ohne die
+Transaktion je erreicht zu haben (`device-recovery.test.ts` haelt diese
+Erfahrung im Kommentar fest).
+
+`pnpm transaction:check` haelt die andere Haelfte: dass zwei Schreibvorgaenge
+auf einem Weg ueberhaupt eine Transaktion haben. Es fragt den Syntaxbaum und
+kein Zeilenfenster - `PICO_WRITE_TRANSACTION_CENSUS=1` zeigt seine Zaehlung.
+
 Code-, Protocol-, Release- und produktbezogene Dokumentationsmilestones muessen
 den vollen Release-Gate bestehen. Bei einer rein internen Agent-Doku-Aenderung
 sind Struktur-, Link- und Diff-Pruefung ausreichend.
