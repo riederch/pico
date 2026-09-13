@@ -912,6 +912,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B160 — Ein Weg hat die Lehre gelernt, vier nicht (2026-09-13).** Der offene
+Punkt „Fristen für ausgehende Anfragen" (B77) stand seit Langem mit der
+Bemerkung, die dreizehn Anfragen des Dashboards lägen in derselben Lage wie
+`model-provider-measure.ts`. Nachgemessen über `apps|packages|modules/*/src`:
+**sechzehn ausgehende HTTP-Aufrufe, genau einer hat eine Frist.**
+
+Der eine ist `link-direct-client.ts`, und er hat sie gründlich: ein eigener
+`AbortController` statt `AbortSignal.timeout`, weil der Wecker nach der Antwort
+**gelöscht** werden muss und eine gestellte Uhr ihn stellen können soll; die
+Frist ist aus der Lebensdauer des Umschlags abgeleitet statt danebengeschrieben;
+und das Schweigen bekommt einen eigenen Namen, `link_home_timed_out`, den ADR
+0131 A7 verlangt. Sein Kommentar beschreibt dabei genau die Lage, um die es
+geht: *„auf dem Telefon ein Vordergrunddienst, der nicht zurückkommt."*
+
+**Und zwei der unbefristeten Aufrufe stehen in genau dieser Lage.**
+`fetchPicoHomeContinuityChain` wird über `refreshPicoHomeHostPins` aus
+`apps/companion/src/first-run.ts` gerufen — dem **ersten Lauf** eines
+Companions —, und die Anspruchszeremonie aus `founding.ts`. Schweigt das Home,
+wartet beides ohne Ende und ohne Satz. Das ist der Moment, in dem ein Mensch am
+wenigsten Zusammenhang hat, um zu verstehen, was nicht geschieht.
+
+Die dreizehn im Webclient sind die mildere Hälfte derselben Sache: ein Reiter,
+der sich dreht. Browser brechen `fetch` von sich aus nicht ab.
+
+**Die Zahl bleibt eine Wahl und steht deshalb hier und nicht im Code.** Die 30
+Sekunden des einen befristeten Weges sind aus der Umschlag-Lebensdauer
+abgeleitet; ein unversiegelter Kettenlesevorgang hat keinen Umschlag, also
+überträgt sich die Ableitung nicht. Was sich überträgt, ist die **Form**: ein
+eigener Controller, ein gelöschter Wecker, ein benannter Grund. Die Empfehlung
+steht in `.agent-context.md` Punkt 4.
+
 **B159 — Was B71 draußen ließ, und warum ein Teil davon hereingehört
 (2026-09-13).** Nach zwölf gegangenen Auffang-Gründen in B156 bis B158 blieben
 sieben, und sie sind der teure Schwanz: drei brauchen einen Dateisystemfehler,
