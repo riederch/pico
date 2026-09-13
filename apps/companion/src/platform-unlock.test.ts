@@ -1,5 +1,6 @@
 import { tmpdir } from 'node:os';
 import {
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -337,6 +338,36 @@ describe('Android Keystore unlock path (ADR 0131 A3)', () => {
     await automatic.ensureUnlocked();
     expect(daemon.unlocks).toHaveLength(2);
     await automatic.close();
+  });
+
+  /**
+   * Befund B158. Ein Satz, der gar keiner ist, hatte keinen Test - und er steht
+   * vor allen anderen Pruefungen dieser Datei. Ohne ihn liefe der Rest gegen
+   * `null` oder ein Array und faellt dort mit irgendetwas, statt hier mit einer
+   * Auskunft.
+   *
+   * Der Grund reist zusammengesetzt heraus: der Leser sagt, dass er die Datei
+   * nicht lesen konnte, und haengt an, warum. Beides ist eine eigene Auskunft -
+   * "nicht da" und "da, aber keiner" sind verschiedene Lagen.
+   */
+  it('refuses a stored record that is not a record at all', async () => {
+    const secrets = androidPort('vault passphrase');
+    for (const written of ['[]', '42', 'null', '"nope"']) {
+      const path = temporaryPath();
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, written);
+      const daemon = fakeDaemon();
+      const automatic = createPicoCompanionAutomaticVaultUnlock({
+        path,
+        profile: profile(),
+        socketPath: join(tmpdir(), 'fake-vault.sock'),
+        secrets,
+        connect: daemon.connect,
+      });
+      await expect(automatic.ensureUnlocked(), written)
+        .rejects.toThrow('unreadable_platform_unlock:invalid_platform_unlock_record');
+      await automatic.close();
+    }
   });
 
   it('refuses a record whose sealing note was tampered with', async () => {

@@ -3680,6 +3680,61 @@ function runnerBatchSequence(
   return Number.parseInt(match[1], 10);
 }
 
+/**
+ * Befund B158. Die zwei Argumentpruefungen von `access` hatte nie jemand
+ * ausgeloest, und sie stehen **vor** jedem Laden: was danach kommt, oeffnet
+ * eine Projektion und entschluesselt einen Gegenstand, und dahin soll nichts
+ * gelangen, dessen Name oder Verbraucher gar keiner ist.
+ *
+ * Ein Aufbau ist dafuer nicht noetig - genau das ist die Aussage. Die Attrappen
+ * unten werden nie gerufen; wuerde eine von ihnen laufen, waere die Pruefung an
+ * der falschen Stelle.
+ */
+describe('ADR 0086 - was `access` ablehnt, bevor irgendetwas geoeffnet wird (B158)', () => {
+  const nie = () => {
+    throw new Error('diese Attrappe haette nie laufen duerfen');
+  };
+  const access = (): PicoReaderCustodySyncItemAccess => new PicoReaderCustodySyncItemAccess(
+    { restore: nie } as never,
+    readerSyncClientPins(),
+    { load: nie } as never,
+    nie as never,
+    nie as never,
+  );
+
+  /**
+   * Die Laenge ist dabei nachgemessen und nicht geraten: `x`.repeat(300) geht
+   * **durch**. `assertReaderSyncItemToken` nimmt die Vorgabe von
+   * `isAsciiToken` - 1.024 Bytes -, waehrend `assertAsciiReference` eine Zeile
+   * darueber ausdruecklich bei 256 begrenzt. Warum die beiden Nachbarn
+   * verschieden binden, sagt nichts; gefunden habe ich keine Stelle, an der
+   * die Differenz etwas entscheidet (der Name ist ein Nachschlageschluessel
+   * und kein Pfadbestandteil). Der Test haelt deshalb die Grenze fest, die
+   * wirklich gilt.
+   */
+  it('refuses a package id that is not one', () => {
+    for (const packageId of ['', 'hat leerzeichen', 'x'.repeat(1025), 42, null]) {
+      expect(
+        () => access().access(packageId as never, () => undefined, {
+          signal: new AbortController().signal,
+        }),
+        JSON.stringify(packageId),
+      ).toThrow('invalid_reader_sync_item_package_id');
+    }
+  });
+
+  it('refuses a consumer that cannot be called', () => {
+    for (const consumer of [undefined, null, 'nope', {}]) {
+      expect(
+        () => access().access('reader_sync_package_0001', consumer as never, {
+          signal: new AbortController().signal,
+        }),
+        JSON.stringify(consumer),
+      ).toThrow('invalid_reader_sync_item_plaintext_consumer');
+    }
+  });
+});
+
 function readerSyncClientPins(): PicoReaderCustodySyncPins {
   return {
     routeRef: `route_${'A'.repeat(48)}`,

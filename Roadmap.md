@@ -912,6 +912,35 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B158 — Zwei Nachbarn binden verschieden, und niemand sagt warum
+(2026-09-13).** Drei weitere aus der Liste, und der dritte fiel nur auf, weil
+**meine eigene Attrappe lief, obwohl sie nie laufen durfte**.
+
+Gegangen sind: ein gespeicherter Entsperrsatz, der gar kein Datensatz ist — er
+steht vor allen anderen Prüfungen dieser Datei, und ohne ihn liefe der Rest
+gegen `null` oder ein Array —, sowie die zwei Argumentprüfungen von
+`PicoReaderCustodySyncItemAccess.access`. Die stehen **vor** jedem Laden, und
+genau das sagt der Test: seine Attrappen werden nie gerufen. Liefe eine, stünde
+die Prüfung an der falschen Stelle.
+
+**Und eine lief.** Ein Name aus 300 Zeichen ging durch.
+`assertReaderSyncItemToken` nimmt die Vorgabe von `isAsciiToken` — **1.024
+Bytes** —, während `assertAsciiReference` eine Zeile darüber ausdrücklich bei
+**256** begrenzt. Zwei Nachbarn, zwei Grenzen, und nichts sagt warum.
+
+Ich habe die Differenz **nicht** angefasst, und das ist eine Entscheidung:
+gefunden habe ich keine Stelle, an der sie etwas entscheidet — der Name ist ein
+Nachschlageschlüssel und kein Pfadbestandteil, und die Werte kommen aus einem
+unterschriebenen Stapel, also nicht von einem Fremden. Eine Grenze enger zu
+ziehen ist eine Produktentscheidung und keine Aufräumarbeit: sie könnte Daten
+ablehnen, die eine bestehende Aufstellung schon hält. Der Test hält jetzt die
+Grenze fest, die **wirklich** gilt, und der Satz daneben sagt, dass sie von
+ihrer Nachbarin abweicht.
+
+Drei Pflanzungen, drei rote Tests. Von 10 ungegangenen Auffang-Gründen sind
+**7** übrig — darunter die drei `cleanup_failed`-Pfade, die einen
+Dateisystemfehler brauchen.
+
 **B157 — Drei Parserfälle, und ein Zweig, der nichts entscheidet
 (2026-09-13).** Weiter durch die dreizehn aus B156, zuerst die billigen:
 
