@@ -912,6 +912,33 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B157 — Drei Parserfälle, und ein Zweig, der nichts entscheidet
+(2026-09-13).** Weiter durch die dreizehn aus B156, zuerst die billigen:
+
+- **Eine Erreichbarkeit, die gar keine Adresse ist.** Die zwei feineren
+  Unterscheidungen — kein Netztransport, trägt eine Zugangsangabe — waren
+  geprüft, der Grundfall nicht. Ohne den Auffangzweig um `new URL` dränge ein
+  `TypeError` der Plattform nach außen, statt dass die Regel eine Auskunft
+  gibt.
+- **Ein Relay, das ablehnt und keinen Grund nennt.** Eine Ablehnung ist eine
+  *Antwort* — etwas, das der Aufrufer anders tun kann. Ohne Satz ist sie keine,
+  und der Klient wirft. Dieser Unterschied hatte keinen Test.
+- **Ein Betreiberrumpf, der kein JSON ist.** Der erste Grund, den jemand mit
+  einem falsch gebauten Werkzeug trifft; wichtig ist, dass er 400 mit Namen
+  wird und nicht 500.
+
+**Und eine Pflanzung, die nicht feuerte — die interessanteste Zeile des
+Befunds.** `assertReach` weist zuerst `''` ab und parst danach. Nimmt man den
+Leerstring-Zweig weg, bleibt alles grün: `new URL('')` wirft ebenfalls, gemessen
+statt vermutet. Der Zweig ist also **redundant** — aber er ist *kein* Fund wie
+B152 und B153. Dort war ein Grund gar nicht erreichbar; hier wird er
+gesprochen, nur von zwei Stellen. Er bleibt als ausgesprochene Absicht stehen,
+und der Unterschied steht im Test daneben, damit ihn niemand später für
+dieselbe Sache hält.
+
+Drei Pflanzungen, drei rote Tests. Von 13 ungegangenen Auffang-Gründen sind
+**10** übrig.
+
 **B156 — Die Schwester derselben Frage: geworfene Auffang-Gründe
 (2026-09-13).** B151 hat die `reason:`-Unionen geschlossen. Daneben steht eine
 zweite Vokabelmenge, die das Tor bewusst nicht führt: Gründe, die aus einem

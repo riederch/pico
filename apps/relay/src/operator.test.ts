@@ -95,6 +95,33 @@ async function claimed(): Promise<{ relay: Relay; credential: string }> {
   return { relay: opened, credential: answer.body.credential as string };
 }
 
+describe('ADR 0154 - ein Rumpf, der kein JSON ist (B157)', () => {
+  /**
+   * Befund B157. Der Grund hatte keinen Test, und er ist der erste, den ein
+   * Betreiber mit einem falsch gebauten Werkzeug trifft. Wichtig ist, dass er
+   * eine **Auskunft** wird und kein Absturz: 400 mit Namen, nicht 500.
+   */
+  it('answers a malformed body with a named refusal rather than failing', async () => {
+    const opened = await relay();
+    const response = await fetch(`${opened.url}${picoRelayOperatorRoutes.claim}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{ das ist kein json',
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'invalid_pico_relay_operator_json' });
+
+    // Ein leerer Rumpf ist kein kaputter: er heisst "nichts gesagt" und faellt
+    // eine Pruefung weiter.
+    const empty = await fetch(`${opened.url}${picoRelayOperatorRoutes.claim}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '',
+    });
+    expect(empty.status).not.toBe(500);
+  });
+});
+
 describe('ADR 0154 RO2 - claiming is a log line, spent once', () => {
   it('trades the code for a credential and then stops accepting it', async () => {
     const opened = await relay();

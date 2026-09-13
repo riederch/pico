@@ -142,6 +142,42 @@ describe('ADR 0149 - the relay client, against the real relay', () => {
     await expect(inventing.deliver(packet())).rejects.toThrow('unknown_pico_link_delivery_outcome');
   });
 
+  /**
+   * Befund B157. Eine Ablehnung ist eine **Antwort** - etwas, das der Aufrufer
+   * getan hat und anders tun kann. Ein Relay, das ablehnt und dabei keinen Satz
+   * dafuer nennt, hat aber nichts geantwortet, worauf jemand handeln koennte,
+   * und das ist ein Wurf und keine Antwort. Der Unterschied hatte keinen Test.
+   */
+  it('throws when a refusal carries no refusal', async () => {
+    const base = await startRelay();
+    for (const body of [{}, { refusal: 42 }, { error: null }, { refusal: { code: 'x' } }]) {
+      const mute = new PicoLinkRelayClient({
+        baseUrl: base,
+        accountId: account,
+        fetch: async () => new Response(JSON.stringify(body), {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        }),
+      });
+      await expect(
+        mute.register({ mailbox, capacity: 8 }),
+        JSON.stringify(body),
+      ).rejects.toThrow('invalid_pico_link_relay_answer');
+    }
+
+    // Und die Gegenprobe: ein genannter Grund bleibt eine Antwort.
+    const speaking = new PicoLinkRelayClient({
+      baseUrl: base,
+      accountId: account,
+      fetch: async () => new Response(JSON.stringify({ refusal: 'mailbox_not_yours' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+    expect(await speaking.register({ mailbox, capacity: 8 }))
+      .toEqual({ ok: false, refusal: 'mailbox_not_yours' });
+  });
+
   it('refuses a guessable account credential before it reaches the wire', async () => {
     const base = await startRelay();
     for (const bad of ['customer-7', 'a'.repeat(31), 'A'.repeat(32)]) {

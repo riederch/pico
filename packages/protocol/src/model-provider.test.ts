@@ -93,6 +93,25 @@ describe('ADR 0142 - an entry describes one measured deployment', () => {
   });
 
   it('takes a reach as reachability and never as identity', () => {
+    /*
+     * Befund B157. Die zwei Unterscheidungen darunter waren geprueft, der
+     * Grundfall nicht: etwas, das gar keine Adresse ist. Ohne den Auffangzweig
+     * um `new URL` draenge ein `TypeError` der Plattform nach aussen, statt
+     * dass diese Regel eine Auskunft gibt.
+     *
+     * Nachgemessen: der Leerstring-Zweig eine Zeile davor ist damit
+     * **redundant** - `new URL('')` wirft ebenfalls. Er bleibt als Absicht
+     * stehen und ist kein Fund: der Grund wird gesprochen, nur von zwei
+     * Stellen. Das unterscheidet ihn von den Wachen aus B152 und B153, deren
+     * Grund gar nicht erreichbar war.
+     */
+    for (const reach of ['', 'nicht mal eine adresse', 42, null, undefined]) {
+      expect(
+        () => parsePicoModelProviderEntry(entry({ reach: reach as never })),
+        JSON.stringify(reach),
+      ).toThrow('invalid_pico_model_provider_reach');
+    }
+
     expect(() => parsePicoModelProviderEntry(entry({ reach: 'stdio:///usr/bin/server' })))
       .toThrow('pico_model_provider_reach_is_not_a_network_transport');
     expect(() => parsePicoModelProviderEntry(entry({
