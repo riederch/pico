@@ -51,6 +51,7 @@ function entry(overrides: Record<string, unknown> = {}) {
 async function registry(): Promise<{
   registry: PicoModelProviderRegistry;
   consent: PicoModelProviderConsent;
+  db: Database.Database;
   close: () => void;
 }> {
   const dir = mkdtempSync(join(tmpdir(), 'pico-registry-'));
@@ -62,6 +63,10 @@ async function registry(): Promise<{
   return {
     registry: store,
     consent: new PicoModelProviderConsent(db, store),
+    // Handed out so a test can make the *second* write of a two-write method
+    // fail. There is no other way to walk a transaction: in the good case it
+    // is invisible, and every test here is a good case.
+    db,
     close: () => { db.close(); },
   };
 }
@@ -334,6 +339,61 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
         at: '2026-08-14T10:00:00.000Z',
       });
       expect(consent.entryFor('a-measured-host', alice)).toBeDefined();
+    } finally {
+      close();
+    }
+  });
+
+  it('keeps the consent standing when the credential cannot be deleted', async () => {
+    // B163. Revoking is two writes - withdraw the consent, drop the secret -
+    // and the dangerous order is exactly the one it uses. If the second write
+    // fails on its own, this Home is left holding somebody's secret next to a
+    // row that already says they took their permission back: nobody would ever
+    // look for it there.
+    //
+    // The failure is made real rather than mocked: a trigger that aborts the
+    // delete is a second write failing for a reason of the database's own, and
+    // that is the case a transaction exists for.
+    const { registry: store, consent, db, close } = await registry();
+    try {
+      // Over https, because a credential may not ride on plain transport and
+      // the parser is right to refuse it - that rule is walked elsewhere.
+      store.put(entry({ reach: 'https://provider.invalid' }), '2026-08-13T18:00:00.000Z');
+      consent.putCredential({
+        entryId: 'a-measured-host',
+        picoIdentityFingerprintHex: alice,
+        credentialRef: 'a-held-key',
+        seal: { sealed: 'c'.repeat(64) },
+        at: '2026-08-13T18:00:30.000Z',
+      });
+      consent.decide({
+        entryId: 'a-measured-host',
+        picoIdentityFingerprintHex: alice,
+        providerClass: 'declared_own_host',
+        carries: 'live_turn',
+        credentialRef: 'a-held-key',
+        at: '2026-08-13T18:01:00.000Z',
+      });
+
+      db.exec(`
+        CREATE TRIGGER planted_credential_delete_fails
+        BEFORE DELETE ON pico_model_provider_credential
+        BEGIN SELECT RAISE(ABORT, 'planted_credential_delete_fails'); END
+      `);
+      expect(() => consent.revoke('a-measured-host', alice, '2026-08-14T09:00:00.000Z'))
+        .toThrow('planted_credential_delete_fails');
+
+      // Both halves are as they were: the consent still stands, and the secret
+      // it justifies is still held. Half-revoked is the one state that must not
+      // exist.
+      expect(consent.entryFor('a-measured-host', alice)).toBeDefined();
+      expect(consent.credentialSealFor('a-measured-host', alice, 'a-held-key')).toBeDefined();
+
+      // And with the obstacle gone, revoking still takes both.
+      db.exec('DROP TRIGGER planted_credential_delete_fails');
+      consent.revoke('a-measured-host', alice, '2026-08-14T09:00:00.000Z');
+      expect(consent.entryFor('a-measured-host', alice)).toBeUndefined();
+      expect(consent.credentialSealFor('a-measured-host', alice, 'a-held-key')).toBeUndefined();
     } finally {
       close();
     }

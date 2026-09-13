@@ -99,6 +99,44 @@ describe('what the Pico Link replay memory remembers, and what it drops', () => 
     expect(rows).toBe(4);
   });
 
+  it('keeps the evicted id when the insert that justified evicting it fails', () => {
+    // B163. At capacity `remember` is two writes - evict, then insert - and
+    // the head of that file says so in prose. If the insert fails on its own,
+    // the eviction has still happened: the id closest to expiring is gone and
+    // the new one was never written, so two requests are replayable where one
+    // should have been.
+    //
+    // The failure is the database's own, through a trigger, because a stubbed
+    // insert would test the arrangement of this test.
+    const db = new Database(':memory:');
+    openDatabases.push(db);
+    const migration = migrations.find((candidate) => candidate.id === picoLinkDirectSeenRequestMigrationId);
+    runMigrations(db, { migrationDefinitions: [migration as never] });
+    const seen = new PicoLinkDirectSeenRequests(db, 2);
+
+    seen.remember('linkreq_soonest', 10_000);
+    seen.remember('linkreq_later', 60_000);
+
+    db.exec(`
+      CREATE TRIGGER planted_seen_insert_fails
+      BEFORE INSERT ON pico_link_direct_seen_request
+      BEGIN SELECT RAISE(ABORT, 'planted_seen_insert_fails'); END
+    `);
+    expect(() => seen.remember('linkreq_new', 90_000)).toThrow('planted_seen_insert_fails');
+
+    // The one that would have made room is still remembered. A replay guard
+    // that drops an id in exchange for nothing is weaker after the failure
+    // than before it, which is the one direction it must never move.
+    expect(seen.hasSeen('linkreq_soonest', 1)).toBe(true);
+    expect(seen.hasSeen('linkreq_later', 1)).toBe(true);
+    expect(seen.hasSeen('linkreq_new', 1)).toBe(false);
+
+    db.exec('DROP TRIGGER planted_seen_insert_fails');
+    seen.remember('linkreq_new', 90_000);
+    expect(seen.hasSeen('linkreq_soonest', 1)).toBe(false);
+    expect(seen.hasSeen('linkreq_new', 1)).toBe(true);
+  });
+
   it('refuses a ceiling that is not a positive whole number', () => {
     // A ceiling of zero would evict what it just wrote and remember nothing,
     // which reads as a working replay guard and is none.

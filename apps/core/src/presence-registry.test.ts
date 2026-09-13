@@ -8,6 +8,8 @@ import {
   picoPresenceSchema,
 } from '@pico/protocol/presence';
 import { EventStore } from './event-store.js';
+import Database from 'better-sqlite3';
+import { PicoPresenceRegistry } from './presence-registry.js';
 
 /**
  * ADR 0126 P2. The registry half, and the two things it refuses to be: a
@@ -15,10 +17,14 @@ import { EventStore } from './event-store.js';
  */
 const dirs: string[] = [];
 const stores: EventStore[] = [];
+const databases: Database.Database[] = [];
 
 afterEach(() => {
   for (const store of stores.splice(0)) {
     store.close();
+  }
+  for (const db of databases.splice(0)) {
+    db.close();
   }
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -31,6 +37,28 @@ async function registry() {
   const store = await EventStore.open(join(dir, 'pico.sqlite'), {});
   stores.push(store);
   return store.picoPresenceRegistry();
+}
+
+/**
+ * The same registry, with its database in reach.
+ *
+ * Only one test needs this, and it needs it for a reason no other kind of test
+ * has: a transaction is invisible while both of its writes succeed, so walking
+ * one means making the second fail. The obstacle is a trigger - a refusal of
+ * the database's own - rather than a stubbed method, because a stub would
+ * prove the test's arrangement and not the code's.
+ */
+async function registryWithDatabase(): Promise<{
+  presences: PicoPresenceRegistry;
+  db: Database.Database;
+}> {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-presence-'));
+  dirs.push(dir);
+  const path = join(dir, 'pico.sqlite');
+  (await EventStore.open(path, {})).close();
+  const db = new Database(path);
+  databases.push(db);
+  return { presences: new PicoPresenceRegistry(db), db };
 }
 
 const identity = 'a'.repeat(64);
@@ -256,6 +284,57 @@ describe('ADR 0126 - planning asks what a runtime can do, never what it is', () 
     expect(presences.forIdentity(identity, Date.now())).toEqual([]);
     expect(presences.forget({ picoIdentityFingerprintHex: identity, presenceId: 'desktop-01' }))
       .toBe(false);
+  });
+
+  it('keeps the device when its switches cannot be deleted', async () => {
+    // B163. Forgetting is two deletes, and the comment beside them names the
+    // harm of doing only the first: switches that outlive the device they were
+    // about, silently inherited by whatever is paired under that id next.
+    //
+    // A crash between the two writes produces exactly that, so the two are one
+    // operation. Here the second delete is refused by the database itself and
+    // the first has to go back with it.
+    const { presences, db } = await registryWithDatabase();
+    const at = '2026-08-16T12:00:00.000Z';
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['camera'] }),
+      at,
+    });
+    presences.setSwitch({
+      picoIdentityFingerprintHex: identity,
+      presenceId: 'desktop-01',
+      affordance: 'camera',
+      enabled: false,
+      at,
+    });
+
+    db.exec(`
+      CREATE TRIGGER planted_switch_delete_fails
+      BEFORE DELETE ON pico_presence_switch
+      BEGIN SELECT RAISE(ABORT, 'planted_switch_delete_fails'); END
+    `);
+    expect(() => presences.forget({ picoIdentityFingerprintHex: identity, presenceId: 'desktop-01' }))
+      .toThrow('planted_switch_delete_fails');
+
+    // The device is still listed, still carrying the answer the person gave
+    // about it. Gone-with-its-switches-left-behind is the state that must not
+    // exist, because nothing afterwards can tell it from a fresh device.
+    const listed = presences.forIdentity(identity, Date.parse(at) + 1_000);
+    expect(listed.map((entry) => entry.presenceId)).toEqual(['desktop-01']);
+    expect(listed[0]?.withheld).toEqual(['camera']);
+
+    // With the obstacle gone, forgetting still takes both halves.
+    db.exec('DROP TRIGGER planted_switch_delete_fails');
+    expect(presences.forget({ picoIdentityFingerprintHex: identity, presenceId: 'desktop-01' }))
+      .toBe(true);
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['camera'] }),
+      at: '2026-08-16T13:00:00.000Z',
+    });
+    expect(presences.forIdentity(identity, Date.parse('2026-08-16T13:00:01.000Z'))[0]?.withheld)
+      .toEqual([]);
   });
 
   it('keeps one identity\'s devices out of another\'s list', async () => {

@@ -396,23 +396,35 @@ export class PicoModelProviderConsent {
   }
 
   public revoke(entryId: string, picoIdentityFingerprintHex: string, at: string): void {
-    this.db.prepare(`
-      UPDATE pico_model_provider_consent SET revoked_at = ?
-      WHERE entry_id = ? AND pico_identity_fingerprint_hex = ?
-    `).run(at, entryId, picoIdentityFingerprintHex);
-    /**
-     * ADR 0138 CO1. The secret goes with the decision that justified holding
-     * it.
-     *
-     * The row stays and the seal does not, and the two are different facts:
-     * the withdrawal is a thing this Home should remember, the credential is a
-     * thing it now has no reason to hold. Keeping it "in case they come back"
-     * would be a Home storing somebody's secret for a decision they revoked.
+    /*
+     * **In einer Transaktion, seit Befund B163 (2026-09-13).** Die Reihenfolge
+     * war die gefaehrliche: erst die Zustimmung zurueckziehen, dann die
+     * Zugangsangabe loeschen. Ein Absturz dazwischen laesst eine Zugangsangabe
+     * liegen, die niemand mehr erlaubt hat - waehrend die Zeile, die das
+     * erklaeren wuerde, bereits "zurueckgezogen" sagt. Der Kommentar unten
+     * nennt genau diesen Zustand als den, den es nicht geben soll: ein Home,
+     * das das Geheimnis von jemandem zu einer Entscheidung haelt, die
+     * zurueckgenommen wurde.
      */
-    this.db.prepare(`
-      DELETE FROM pico_model_provider_credential
-      WHERE entry_id = ? AND pico_identity_fingerprint_hex = ?
-    `).run(entryId, picoIdentityFingerprintHex);
+    this.db.transaction(() => {
+      this.db.prepare(`
+        UPDATE pico_model_provider_consent SET revoked_at = ?
+        WHERE entry_id = ? AND pico_identity_fingerprint_hex = ?
+      `).run(at, entryId, picoIdentityFingerprintHex);
+      /**
+       * ADR 0138 CO1. The secret goes with the decision that justified holding
+       * it.
+       *
+       * The row stays and the seal does not, and the two are different facts:
+       * the withdrawal is a thing this Home should remember, the credential is a
+       * thing it now has no reason to hold. Keeping it "in case they come back"
+       * would be a Home storing somebody's secret for a decision they revoked.
+       */
+      this.db.prepare(`
+        DELETE FROM pico_model_provider_credential
+        WHERE entry_id = ? AND pico_identity_fingerprint_hex = ?
+      `).run(entryId, picoIdentityFingerprintHex);
+    })();
   }
 
   /**

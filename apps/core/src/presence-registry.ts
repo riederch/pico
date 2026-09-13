@@ -186,19 +186,31 @@ export class PicoPresenceRegistry {
    * that is back.
    */
   public forget(input: { picoIdentityFingerprintHex: string; presenceId: string }): boolean {
-    const gone = this.db
-      .prepare('DELETE FROM pico_presence WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?')
-      .run(input.picoIdentityFingerprintHex, input.presenceId).changes > 0;
-    if (gone) {
-      // The switches go with the device. Keeping them would mean a person who
-      // removed a phone and later paired a new one under the same id would
-      // silently inherit last year's answers - decisions they made about a
-      // device that no longer exists.
-      this.db
-        .prepare('DELETE FROM pico_presence_switch WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?')
-        .run(input.picoIdentityFingerprintHex, input.presenceId);
-    }
-    return gone;
+    /*
+     * **In einer Transaktion, seit Befund B163 (2026-09-13).** Der Kommentar
+     * unten nennt den Schaden, und ein Absturz zwischen den zwei Loeschungen
+     * stellt genau ihn her: die Praesenz ist fort, ihre Schalter bleiben. Wer
+     * danach ein neues Geraet unter derselben Kennung koppelt, erbt sie - und
+     * zwar unsichtbar, weil die Zeile, die sie erklaeren wuerde, geloescht ist.
+     *
+     * Es ist dieselbe Lehre wie ueberall hier: ein Satz, der eine Gefahr
+     * nennt, ist kein Schutz vor ihr.
+     */
+    return this.db.transaction(() => {
+      const gone = this.db
+        .prepare('DELETE FROM pico_presence WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?')
+        .run(input.picoIdentityFingerprintHex, input.presenceId).changes > 0;
+      if (gone) {
+        // The switches go with the device. Keeping them would mean a person who
+        // removed a phone and later paired a new one under the same id would
+        // silently inherit last year's answers - decisions they made about a
+        // device that no longer exists.
+        this.db
+          .prepare('DELETE FROM pico_presence_switch WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?')
+          .run(input.picoIdentityFingerprintHex, input.presenceId);
+      }
+      return gone;
+    })();
   }
 
   /**

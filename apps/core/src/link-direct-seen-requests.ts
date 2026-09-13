@@ -64,26 +64,41 @@ export class PicoLinkDirectSeenRequests {
 
   /** Records an id until its own expiry, evicting first if the table is full. */
   public remember(requestId: string, expiresAtMs: number): void {
-    const { rows } = this.db
-      .prepare('SELECT COUNT(*) AS rows FROM pico_link_direct_seen_request')
-      .get() as { rows: number };
-    if (rows >= this.maxRows) {
+    /*
+     * **In einer Transaktion, seit Befund B163 (2026-09-13).** Der Kopf dieser
+     * Datei sagt es selbst - *"at capacity the insert evicts before it
+     * writes"* -, und genau das ist der Satz, der die zwei Schreibvorgaenge zu
+     * einer Handlung erklaert. Geschrieben war er, eingefasst war er nicht.
+     *
+     * Bricht das Einfuegen fuer sich ab, ist die Verdraengung trotzdem
+     * geschehen: der Eintrag mit der kuerzesten Restgueltigkeit ist fort und
+     * der neue nie entstanden. Zwei Kennungen sind dann wiederholbar statt
+     * einer, in genau der Tabelle, die Wiederholungen verhindern soll. Die
+     * Verdraengung ist allein durch das Einfuegen gerechtfertigt, das ihr
+     * folgt - und darf es deshalb nicht ueberleben.
+     */
+    this.db.transaction(() => {
+      const { rows } = this.db
+        .prepare('SELECT COUNT(*) AS rows FROM pico_link_direct_seen_request')
+        .get() as { rows: number };
+      if (rows >= this.maxRows) {
+        this.db.prepare(`
+          DELETE FROM pico_link_direct_seen_request
+          WHERE request_id = (
+            SELECT request_id FROM pico_link_direct_seen_request
+            ORDER BY expires_at_ms ASC, seq ASC
+            LIMIT 1
+          )
+        `).run();
+      }
+      const { next } = this.db
+        .prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM pico_link_direct_seen_request')
+        .get() as { next: number };
       this.db.prepare(`
-        DELETE FROM pico_link_direct_seen_request
-        WHERE request_id = (
-          SELECT request_id FROM pico_link_direct_seen_request
-          ORDER BY expires_at_ms ASC, seq ASC
-          LIMIT 1
-        )
-      `).run();
-    }
-    const { next } = this.db
-      .prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM pico_link_direct_seen_request')
-      .get() as { next: number };
-    this.db.prepare(`
-      INSERT INTO pico_link_direct_seen_request (request_id, expires_at_ms, seq)
-      VALUES (?, ?, ?)
-      ON CONFLICT(request_id) DO NOTHING
-    `).run(requestId, expiresAtMs, next);
+        INSERT INTO pico_link_direct_seen_request (request_id, expires_at_ms, seq)
+        VALUES (?, ?, ?)
+        ON CONFLICT(request_id) DO NOTHING
+      `).run(requestId, expiresAtMs, next);
+    })();
   }
 }

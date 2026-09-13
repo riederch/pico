@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parsePicoLinkPacket, picoLinkPacketSchema } from '@pico/protocol/link-packet';
 import { afterEach, describe, expect, it } from 'vitest';
+import Database from 'better-sqlite3';
 import { PicoRelayStore } from './store.js';
 
 /**
@@ -41,6 +42,25 @@ function packet(over: { mailbox?: string; tag?: string; expiresAt?: string; payl
     expiresAt: over.expiresAt ?? expiresAt,
     payload: over.payload ?? 'AAAA',
   });
+}
+
+/**
+ * A ready store, plus a second connection to the same file.
+ *
+ * The second connection exists to install an obstacle, not to write data: a
+ * transaction is invisible while both of its writes succeed, so the only way
+ * to walk one is to make the second write fail for a reason of the database's
+ * own. A trigger does that and a stubbed method would not - a stub proves the
+ * arrangement of the test rather than the behaviour of the code.
+ */
+function readyStoreWithDatabase(): { store: PicoRelayStore; db: Database.Database } {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-relay-'));
+  tempDirs.push(dir);
+  const path = join(dir, 'relay.sqlite');
+  const store = new PicoRelayStore(path, operator);
+  store.createAccount({ credential: 'account-1', mailboxQuota: 2, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
+  store.register({ accountId: 'account-1', mailbox: mailboxOf('a'), capacity: 4, registeredAt: acceptedAt });
+  return { store, db: new Database(path) };
 }
 
 function readyStore(capacity = 4): PicoRelayStore {
@@ -259,6 +279,40 @@ describe('ADR 0147 RY4 - deregistration leaves a tombstone', () => {
     expect(store.mailboxFor(mailboxOf('a'))?.status).toBe('revoked');
     const collected = store.collect({ accountId: 'account-1', mailbox: mailboxOf('a'), nowMs });
     expect(collected.ok && collected.packets).toHaveLength(0);
+    store.close();
+  });
+
+  it('leaves the mailbox standing when its packets cannot be dropped', () => {
+    // B163. The tombstone and the emptying are one act, not two. Revoked with
+    // its queue still on disk is the state a relay must never be in: ADR 0147
+    // is a relay holding as little as possible, and this would be it holding
+    // material for a relationship it has already declared over - where no
+    // collector will ever come for it and no expiry sweep will ever run.
+    //
+    // The same pair stands a second time in this file, in `revokeAccount`,
+    // where it has always been transactional and its comment cites this method
+    // by name. One neighbour had the lesson and the other did not.
+    const { store, db } = readyStoreWithDatabase();
+    store.deliver({ packet: packet(), nowMs, acceptedAt });
+
+    db.exec(`
+      CREATE TRIGGER planted_packet_delete_fails
+      BEFORE DELETE ON relay_packet
+      BEGIN SELECT RAISE(ABORT, 'planted_packet_delete_fails'); END
+    `);
+    expect(() => store.deregister({ accountId: 'account-1', mailbox: mailboxOf('a') }))
+      .toThrow('planted_packet_delete_fails');
+
+    // Still open, still holding its packet: the address keeps answering
+    // and its owner can try again. Half-deregistered would be silent.
+    expect(store.mailboxFor(mailboxOf('a'))?.status).toBe('open');
+    const held = store.collect({ accountId: 'account-1', mailbox: mailboxOf('a'), nowMs });
+    expect(held.ok && held.packets).toHaveLength(1);
+
+    db.exec('DROP TRIGGER planted_packet_delete_fails');
+    expect(store.deregister({ accountId: 'account-1', mailbox: mailboxOf('a') })).toEqual({ ok: true });
+    expect(store.mailboxFor(mailboxOf('a'))?.status).toBe('revoked');
+    db.close();
     store.close();
   });
 

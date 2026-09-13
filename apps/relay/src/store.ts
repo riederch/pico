@@ -603,8 +603,23 @@ export class PicoRelayStore {
       // mailbox it was asking after.
       return { ok: false, refusal: 'mailbox_not_yours' };
     }
-    this.db.prepare("UPDATE relay_mailbox SET status = 'revoked' WHERE mailbox = ?").run(input.mailbox);
-    this.db.prepare('DELETE FROM relay_packet WHERE mailbox = ?').run(input.mailbox);
+    /*
+     * **In einer Transaktion, seit Befund B163 (2026-09-13).** Genau dieses
+     * Paar steht in dieser Datei ein zweites Mal - in `revokeAccount`, und
+     * dort ist es seit jeher eingefasst. Hier war es das nicht: ein Absturz
+     * dazwischen liesse ein zurueckgezogenes Postfach mit seinen Paketen
+     * zurueck, auf einem Relay, dessen ganze Haltung ist, so wenig zu halten
+     * wie moeglich (ADR 0147).
+     *
+     * Die Begruendung steht drueben schon geschrieben: "those packets were
+     * addressed to a relationship that has ended". Zurueckziehen und leeren
+     * sind eine Handlung und keine zwei - und dieser Satz zitiert `deregister`
+     * namentlich, waehrend `deregister` ihn nicht einhielt.
+     */
+    this.db.transaction(() => {
+      this.db.prepare("UPDATE relay_mailbox SET status = 'revoked' WHERE mailbox = ?").run(input.mailbox);
+      this.db.prepare('DELETE FROM relay_packet WHERE mailbox = ?').run(input.mailbox);
+    })();
     return { ok: true };
   }
 
