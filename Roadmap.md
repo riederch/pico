@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B155 — Der Anspruchsweg löste sich durch einen Umzug, nicht durch mehr
+Aufbau (2026-09-13).** Die letzten dreizehn Schulden aus B151, und die elf
+teuersten hingen an derselben Sache: `verifyPicoHomeFoundingEvidence` stand
+**modulprivat in `app.ts`** und war nur über die Anspruchsfläche erreichbar —
+tief in einem Startpfad, der ein Home aus einer Sicherung wiederherstellt. Ein
+Gang dorthin hätte ein gebootetes Home mit verfälschter Gründung auf der Platte
+gebraucht.
+
+Die Funktion ist aber **rein**: ein Datensatz, ein Hostschlüssel, ein Urteil.
+Modulprivat war sie nur, weil sie niemand sonst brauchte — und ihre zwei
+Geschwister stehen längst anders: `verifyPicoHomeMembershipAuthority` in
+`home-membership.ts` und `verifyPicoHomeDomainReadGrant` in
+`domain-read-grant.ts`, exportierte reine Prüfer mit eigenen Tests. Der Umzug
+in ein eigenes `founding-evidence.ts` ist also kein neuer Zuschnitt, sondern
+derselbe, den die Nachbarn schon haben; `sodium` kommt als Parameter herein wie
+dort auch. Nebenbei ist es ein kleiner Schritt von P8, das `app.ts` entlang
+seiner Vertrauensgrenzen teilen will.
+
+**Danach waren elf Serverstartfragen elf gewöhnliche Tests**, und alle elf
+gingen beim ersten Lauf: fremdes Schema, falsche Schlüsselrolle, ein Antragsteller,
+den die Gründung nicht nennt, beide Erstgeräteschlüssel, eine Delegation, die
+die Gründung nicht nennt, eine ohne `surface_session`, eine nach der
+Unterschrift bearbeitete Gründung, eine bearbeitete Anspruchsantwort, eine
+Gegenzeichnung von fremdem Hostschlüssel, und etwas, das gar keine Unterschrift
+ist.
+
+Der Aufbau ist dabei eine **echte** Gründung — jede Unterschrift gerechnet, nicht
+gesetzt. Mit erfundenen Unterschriften wäre jeder Fall auf denselben Namen
+gefallen, und der Test hätte elfmal dasselbe bewiesen. Die Pflanzung über alle
+elf Gründe trifft zehn Tests; der elfte ist der Gutfall und bleibt zu Recht
+grün.
+
+**Und die zwei letzten:** `pico_supplier_closed` und `pico_supplier_exited`
+heißen beide „der Zulieferer ist nicht mehr da" und meinen Verschiedenes —
+einmal hat *dieses* Home zugemacht, einmal ist der fremde Prozess gegangen. Wer
+beides gleichsetzt, kann nicht mehr unterscheiden, ob ein Abbruch die eigene
+Entscheidung war. Der zweite Test schreibt dafür einen Zulieferer, der auf eine
+Anfrage nicht antwortet, sondern endet.
+
+**Damit ist B151 geschlossen: 135 von 135 Gründen gegangen, keine Schuld
+übrig** — von dreißig ungegangenen am 2026-09-12 auf null am 2026-09-13, in
+fünf Befunden.
+
 **B154 — Die Urkunden sind gegangen (2026-09-12).** Die dritte Schuldengruppe
 aus B151, und die billigste: fünf Ablehnungen über Domänen-Lesezugang und
 Mitgliedschaft, alle hinter exportierten Funktionen, die ihre Testdateien schon

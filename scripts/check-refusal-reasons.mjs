@@ -82,39 +82,23 @@ const withoutComments = (text) => text
  * Unbezahlte daneben.
  */
 /**
- * Fuenf Gruende hingen an derselben Tuer und sind am 2026-09-12 gegangen
- * worden (Befund B151, Leserverwahrung). Was hier steht, haengt an einem
- * Aufbau, den es noch nicht gibt - und der Aufbau steht dabei, nicht ein
- * "spaeter".
+ * **Leer, und das ist ein Zustand und kein Zufall.** Am 2026-09-12 standen hier
+ * fuenfundzwanzig Gruende, die Befund B151 aufgedeckt hatte, je Gruppe mit
+ * ihrem Hindernis. Am 2026-09-13 sind sie gegangen: die Leserverwahrung, die
+ * Identitaetssitzung, die Umschlagausgabe, die Urkunden, der Anspruchsweg und
+ * zuletzt die zwei Zuliefererabbrueche.
  *
- * Die Saetze sind je Gruppe **einmal** geschrieben und angehaengt, weil es je
- * Gruppe **ein** Hindernis ist. Fuenfundzwanzig verschiedene Saetze zu
- * erfinden, wo es fuenf Hindernisse gibt, waere das mechanische Fuellen, vor
- * dem Befund B95 warnt - und der Leser wuerde fuenfundzwanzigmal dasselbe
- * lesen, ohne es zu merken.
+ * Der Anspruchsweg war das teuerste Stueck und loeste sich nicht durch mehr
+ * Aufbau, sondern durch einen Umzug: `verifyPicoHomeFoundingEvidence` ist ein
+ * reiner Pruefer und stand modulprivat in `app.ts`, also nur ueber die
+ * Anspruchsflaeche erreichbar. Neben seinen zwei Geschwistern in einem eigenen
+ * Modul ist er direkt fahrbar, und elf Ablehnungen wurden aus einer
+ * Serverstartfrage elf gewoehnliche Tests (Befund B155).
+ *
+ * Was hier kuenftig steht, ist eine Schuld mit einem Grund - nie ein
+ * "spaeter".
  */
-const derAnspruchsweg = 'Die Gruendungsevidenz wird von `verifyPicoHomeFoundingEvidence` '
-  + 'geprueft, einer modulprivaten Funktion in `app.ts`, die nur ueber die Anspruchsflaeche '
-  + 'erreichbar ist. Ein Gang braucht ein beanspruchtes Home, dessen Evidenz mit **einem** '
-  + 'verfaelschten Feld neu unterschrieben wird - je Grund ein anderes Feld. Die Fixture dafuer '
-  + 'gibt es noch nicht; `test-claimed-home.ts` baut den gelungenen Fall.';
-const derZuliefererweg = 'Braucht einen Zuliefererprozess, der mitten in einer Anfrage schliesst '
-  + 'oder endet. Der Prueflauf startet heute keinen echten Kindprozess, der das ueberlebt.';
-
 const notYetWalked = new Map([
-  ['claimant_key_fingerprint_mismatch', derAnspruchsweg],
-  ['first_device_agreement_key_mismatch', derAnspruchsweg],
-  ['first_device_delegation_mismatch', derAnspruchsweg],
-  ['first_device_signing_key_mismatch', derAnspruchsweg],
-  ['inactive_first_device_delegation', derAnspruchsweg],
-  ['invalid_claimant_founding_signature', derAnspruchsweg],
-  ['invalid_claimant_key_role', derAnspruchsweg],
-  ['invalid_founding_record_schema', derAnspruchsweg],
-  ['invalid_host_claim_response_signature', derAnspruchsweg],
-  ['invalid_host_founding_signature', derAnspruchsweg],
-  ['malformed_founding_evidence', derAnspruchsweg],
-  ['pico_supplier_closed', derZuliefererweg],
-  ['pico_supplier_exited', derZuliefererweg],
 ]);
 
 const sourceFiles = [];

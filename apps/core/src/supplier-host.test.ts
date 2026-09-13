@@ -183,6 +183,39 @@ describe('ADR 0136 BR2 - what the boundary refuses', () => {
     expect(await host.hello()).toEqual({ protocolVersion: 1, slots: ['memory_item'] });
   });
 
+  /**
+   * Befund B151, die letzten zwei Schulden. Beide Ablehnungen heissen "der
+   * Zulieferer ist nicht mehr da" und meinen Verschiedenes: einmal hat *dieses*
+   * Home zugemacht, einmal ist der fremde Prozess gegangen. Wer beides
+   * gleichsetzt, kann nicht unterscheiden, ob ein Abbruch die eigene
+   * Entscheidung war.
+   */
+  it('refuses once it has closed, rather than starting the supplier again', async () => {
+    const host = openHost();
+    await host.hello();
+    host.close();
+    await expect(host.hello()).rejects.toThrow('pico_supplier_closed');
+  });
+
+  it('refuses a pending request when the supplier process ends under it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-exiting-supplier-'));
+    tempDirs.push(dir);
+    writeFileSync(join(dir, 'index.js'), [
+      'export default async function handle(request) {',
+      "  if (request.family === 'pico.supplier.hello.v1') {",
+      "    return { protocolVersion: 1, slots: ['memory_item'] };",
+      '  }',
+      '  // Keine Antwort, sondern Ende - der Fall, den `exit` auffangen muss.',
+      '  process.exit(0);',
+      '}',
+      '',
+    ].join('\n'));
+
+    const host = openHost(join(dir, 'index.js'));
+    await host.hello();
+    await expect(host.condition()).rejects.toThrow('pico_supplier_exited');
+  });
+
   it('gives the supplier no environment to read', async () => {
     // ADR 0143 DP3. The manifest has no `env` field, and the process it starts
     // has no environment either - otherwise the missing field would be a rule
