@@ -96,7 +96,14 @@ afterEach(() => {
   }
 });
 
-function openHarness(): Harness {
+/**
+ * Befund B171. `selectReaderKey` kann drei Ablehnungen aussprechen, die der
+ * Speicher unverändert durchreicht. Der Harness spricht sie auf Wunsch aus,
+ * damit die Durchreichung gegangen werden kann statt nur benannt zu sein.
+ */
+function openHarness(options: {
+  readerKeyRefusal?: 'freshness_stale' | 'reader_key_revoked';
+} = {}): Harness {
   const dir = mkdtempSync(join(tmpdir(), 'pico-reader-custody-'));
   tempDirs.push(dir);
   const db = new Database(join(dir, 'pico.sqlite'));
@@ -119,6 +126,9 @@ function openHarness(): Harness {
     foundingRecord: () => foundingRecord,
     hasActiveMembership: (fingerprint) => activeMembers.has(fingerprint),
     selectReaderKey: async (input) => {
+      if (options.readerKeyRefusal !== undefined) {
+        return { ok: false, reason: options.readerKeyRefusal };
+      }
       const eligible = eligibleReaders.get(
         input.deviceKeyAgreementKeyFingerprintHex,
       );
@@ -624,6 +634,79 @@ describe('ReaderCustodyStore - die Ablehnungen, die niemand gegangen ist (B151)'
       }),
       '2026-07-27T10:00:30.000Z',
     )).toEqual({ ok: false, reason: 'reader_key_is_not_current' });
+  });
+
+  /**
+   * Befund B171 (2026-09-14). Diese drei Ablehnungen galten als gegangen, weil
+   * dieselben *Wörter* anderswo behauptet werden - `reader_key_revoked` und
+   * `freshness_stale` in `reader-key.test.ts`, `reader_is_not_active_member`
+   * in `domain-read-grant.test.ts`. Das sind andere Erzeuger derselben Worte.
+   *
+   * Gemessen durch Umbenennen: keiner dieser drei Rückgaben ließ einen Test
+   * fallen. Sie sind die Tür, an der ein Leser hereinkommt, und die Frage,
+   * wer sie zuschlägt, ist nicht dieselbe wie in einem Nachbarmodul.
+   */
+  it('refuses a reader whose membership is not active', async () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    const readerIdentity = 'bb'.repeat(32);
+    const readerSigning = 'cc'.repeat(32);
+    const readerKeyRecord = keyRecord(
+      'device_key_agreement',
+      sodium.crypto_box_keypair().publicKey,
+    );
+    harness.activeMembers.add(records.domain.domain.ownerIdentityKeyFingerprintHex);
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    // Der Leser fehlt hier mit Absicht: er hat einen gültigen Satz
+    // Aufzeichnungen und ist trotzdem nicht mehr im Home.
+    harness.eligibleReaders.set(fingerprint(readerKeyRecord), {
+      identityFingerprintHex: readerIdentity,
+      deviceSigningKeyFingerprintHex: readerSigning,
+      delegationId: 'reader_delegation_0001',
+      keyRecord: readerKeyRecord,
+    });
+    expect(harness.store.recordDomain(records.domain, AUTHORIZED_AT).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, AUTHORIZED_AT).ok).toBe(true);
+
+    expect(await harness.store.recordReaderGrant(
+      makeReaderGrant(records, {
+        readerIdentityFingerprintHex: readerIdentity,
+        readerDeviceSigningKeyFingerprintHex: readerSigning,
+        readerKeyRecord,
+      }),
+      '2026-07-27T10:00:30.000Z',
+    )).toEqual({ ok: false, reason: 'reader_is_not_active_member' });
+  });
+
+  it.each([
+    ['freshness_stale' as const],
+    ['reader_key_revoked' as const],
+  ])('passes %s through from the reader registry rather than flattening it', async (refusal) => {
+    // Weitergereicht und nicht eingeebnet: "dein Nachweis ist alt" und "dein
+    // Schlüssel wurde zurückgezogen" sagen einer Person verschiedene Dinge,
+    // und der Sammelgrund `reader_key_is_not_current` sagt keines davon.
+    const harness = openHarness({ readerKeyRefusal: refusal });
+    const records = makeRecords();
+    const readerIdentity = 'bb'.repeat(32);
+    const readerSigning = 'cc'.repeat(32);
+    const readerKeyRecord = keyRecord(
+      'device_key_agreement',
+      sodium.crypto_box_keypair().publicKey,
+    );
+    harness.activeMembers.add(records.domain.domain.ownerIdentityKeyFingerprintHex);
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    harness.activeMembers.add(readerIdentity);
+    expect(harness.store.recordDomain(records.domain, AUTHORIZED_AT).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, AUTHORIZED_AT).ok).toBe(true);
+
+    expect(await harness.store.recordReaderGrant(
+      makeReaderGrant(records, {
+        readerIdentityFingerprintHex: readerIdentity,
+        readerDeviceSigningKeyFingerprintHex: readerSigning,
+        readerKeyRecord,
+      }),
+      '2026-07-27T10:00:30.000Z',
+    )).toEqual({ ok: false, reason: refusal });
   });
 
   it('refuses a domain whose privacy domain is already held under another custody', () => {
