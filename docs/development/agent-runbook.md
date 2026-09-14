@@ -153,6 +153,26 @@ Ausloeser, der schon das Lesen davor bricht, macht den Test gruen, ohne die
 Transaktion je erreicht zu haben (`device-recovery.test.ts` haelt diese
 Erfahrung im Kommentar fest).
 
+### Eine Pflanzsonde, die reihenweise misst
+
+Aus Befund B175, weil sie dort dreimal geschrumpft ist und jedes Mal an derselben
+Art Fehler. Wer eine Regel ueber viele Stellen pruefen will, indem er sie einzeln
+wegpflanzt, braucht drei Vorkehrungen:
+
+1. **Ein Lauf ohne lesbare Zaehlung ist kein Ergebnis, sondern ein Abbruch.**
+   Die Sonde muss ihn melden. Sonst meldet ausgerechnet ein kaputter Lauf die
+   meisten Funde - am 2026-09-14 waren es acht, die in einen eingecheckten
+   Befund gerieten.
+2. **Ein Treffer im Text ist keine Erzeugung.** `reason: 'a' | 'b'` sieht aus
+   wie `reason: 'a'`, und eine Typvereinigung umzubenennen aendert zur Laufzeit
+   nichts.
+3. **Wessen Tests ein gebautes Artefakt fahren, braucht zwischen Pflanzung und
+   Lauf einen Bau.** Das betrifft `@pico/vault-daemon` (die Tests starten
+   `dist/cli.js`) und den Companion-Paketgate.
+
+Und: gegen den **ganzen** Paketlauf pflanzen, nicht gegen die Dateien, die man
+vermutet - der Test zu einer Ablehnung steht oft in einer anderen.
+
 `pnpm transaction:check` haelt die andere Haelfte und stellt zwei Fragen: ob
 zwei Schreibvorgaenge auf einem Weg ueberhaupt eine Transaktion haben, und ob
 ein Schreibsatz in einer Schleife eine hat. Es fragt den Syntaxbaum und kein

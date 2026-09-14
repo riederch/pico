@@ -932,13 +932,33 @@ meisten Funde. Die neue Sonde bricht laut ab, wenn ein Lauf keine Zählung
 liefert; über 43 Paare gab es **null** Abbrüche.
 
 **Die richtige Messung: 43 Paare aus Grund und Erzeuger, 33 behauptet, 10
-gemeldet — davon 8 echt.** Zwei Meldungen sind Artefakte meines
-Auszugsmusters: `reason: '…'` trifft auch eine **Typvereinigung**, und eine
-Vereinigung umzubenennen ändert zur Laufzeit nichts. Das betraf `vault_locked`
-in `companion/first-run.ts` und `companion/recovery-controller.ts` — beide
-deklarieren den Grund, erzeugen ihn aber nicht.
+gemeldet — davon 7 echt.** Drei Meldungen sind Artefakte, und sie stehen hier
+einzeln, weil jede eine eigene Schwäche der Methode zeigt:
 
-Die acht echten, und was aus ihnen wurde:
+- **Zwei sind Typvereinigungen.** `reason: '…'` trifft auch `reason: 'a' | 'b'`,
+  und eine Vereinigung umzubenennen ändert zur Laufzeit nichts. Das betraf
+  `vault_locked` in `companion/first-run.ts` und
+  `companion/recovery-controller.ts` — beide *deklarieren* den Grund, erzeugen
+  ihn aber nicht.
+- **Eine lief gegen das falsche Artefakt.** `vault_locked` in
+  `vault-daemon/daemon.ts` ist sehr wohl behauptet — die Daemon-Tests starten
+  den Daemon aus **`dist/`**, und meine Sonde hat den Quelltext geändert, ohne
+  zu bauen. Mit Bau dazwischen fällt ein Test. Dieselbe Falle wie in B173 und
+  B148, zum dritten Mal.
+
+**Diese Zahl ist dreimal geschrumpft, und das gehört so aufgeschrieben.** Erst
+acht Funde aus abgestürzten Läufen, dann zehn, dann sieben. Jede Korrektur kam
+daher, dass ich einen gemeldeten Fall *einzeln nachgesehen* habe, statt der
+Liste zu glauben — und jedes Mal war der Fehler in meiner Sonde, nie im Produkt.
+Die drei Regeln für die nächste:
+
+1. Ein Lauf ohne lesbare Zählung ist **kein Ergebnis**, sondern ein Abbruch.
+2. Ein Treffer im Text ist **keine Erzeugung** — eine Typvereinigung sieht
+   genauso aus.
+3. Wessen Tests ein **gebautes Artefakt** fahren, braucht zwischen Pflanzung
+   und Lauf einen Bau.
+
+Die sieben echten, und was aus ihnen wurde:
 
 | Grund | Erzeuger | |
 |---|---|---|
@@ -948,11 +968,10 @@ Die acht echten, und was aus ihnen wurde:
 | `unknown_credential` | `core/event-store.ts` | **gegangen** |
 | `unknown_grant` | `core/event-store.ts` | **gegangen** |
 | `invalid_identity_lifecycle_evidence` | `core/event-store.ts` | **gegangen** |
-| `vault_locked` | `vault-daemon/daemon.ts` | offen |
-| `conflicting_record` | `core/reader-custody.ts` | offen |
+| `conflicting_record` | `core/reader-custody.ts` | **gegangen** |
 
-Sechs sind gegangen, jeder fällt bei der Pflanzung, und drei Paare zeigen den
-Zuschnitt besonders deutlich:
+**Alle sieben sind gegangen**, jeder fällt bei seiner Pflanzung, und vier Paare
+zeigen den Zuschnitt besonders deutlich:
 
 - **Die Zwillinge aus B145.** `home-membership.ts` und `domain-read-grant.ts`
   sprechen dieselben zwei Ablehnungen aus — *ist der Aussteller wirklich der
@@ -967,10 +986,19 @@ Zuschnitt besonders deutlich:
   Lebenslauf wäre eine Mitgliedschaft oder ein Lesezugang, der aus nichts
   entsteht.
 
-Die zwei offenen stehen hier mit Namen, damit niemand sie neu sucht.
-`conflicting_record` braucht zwei *gültige* Datensätze mit derselben Kennung und
-verschiedenem Inhalt — verändern genügt nicht, weil die Prüfung der Unterschrift
-vorher greift.
+- **Nochmal dasselbe gegen etwas anderes unter demselben Namen.**
+  `conflicting_record` sah zuerst teuer aus: er braucht zwei *gültige*
+  Datensätze mit derselben Kennung, denn Verändern genügt nicht — die
+  Unterschriftsprüfung greift vorher. Die Testfabrik vergibt die Gebietskennung
+  aber **fest** und das Besitzerschlüsselpaar **frisch**, also liefern zwei
+  Aufrufe genau das. Der Unterschied, den diese Ablehnung trägt: ein
+  Wiederholungsversuch muss durchgehen, ohne eine zweite Zeile anzulegen; eine
+  Verwechslung unter demselben Namen muss beim Namen abgelehnt werden. Wer
+  beides gleich behandelt, überschreibt entweder eine Domäne oder verweigert
+  eine Wiederholung. Der Test geht beide Hälften.
+
+Damit ist die Liste leer. **Von 43 Paaren behaupten jetzt 40 ihre eigene
+Ablehnung; die drei übrigen waren nie welche.**
 
 **B174 — Drei Tabellen, die gemeinsam entscheiden, und niemand hielt sie
 gegeneinander (2026-09-14).** B173 hat gezeigt, *dass*
