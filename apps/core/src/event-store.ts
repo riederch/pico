@@ -4649,8 +4649,24 @@ export class EventStore {
      * keiner darf von jemandem entdeckt werden, der auf eine Wiederherstellung
      * wartet.
      *
-     * Die Ankerdatei bleibt aussen vor - sie wird nur auf dem Zweig
-     * beschrieben, der vor der ersten Zeilenschreibung zurueckkehrt.
+     * **Berichtigung am 2026-09-14 (B166).** Hier stand zuerst, die Ankerdatei
+     * bleibe aussen vor. Das ist falsch: `reconcilePicoHomeRecoveryAnchor`
+     * kehrt zwar nach dem Saeen zurueck, *diese* Methode aber laeuft weiter,
+     * also liegt der Dateischreibvorgang **in** der Transaktion, und ein
+     * Ruecklauf nimmt ihn nicht mit. Der Schluss - harmlos - stimmt trotzdem,
+     * aus zwei nachpruefbaren Gruenden:
+     *
+     * - Gesaeet wird nur, wenn der Anker leer ist *und* keine einzige
+     *   Wiederherstellungszeile existiert. Auf diesem Zweig folgt danach kein
+     *   Schreibvorgang mehr, der scheitern koennte: das Verfallenlassen
+     *   trifft null Zeilen, die Pruefschleife laeuft ueber null Zeilen.
+     * - Und selbst wenn das Festschreiben selbst scheiterte, bliebe ein
+     *   gesaeter Anker ohne Eintraege zurueck, den der naechste Start als
+     *   `live` liest. `'seeded'` wird im ganzen Baum erzeugt und nirgends
+     *   gelesen; `device-recovery.test.ts` geht genau diesen Uebergang.
+     *
+     * Ein Satz, der beruhigt, ist kein Beleg - auch dann nicht, wenn er von
+     * gestern und von mir ist.
      */
     return this.db.transaction(() => {
       const anchorReconciliation = this.reconcilePicoHomeRecoveryAnchor(reconciledAt);

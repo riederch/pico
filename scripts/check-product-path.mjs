@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -168,6 +168,29 @@ for (const file of trackedMarkdown) {
 }
 if (trackedMarkdown.length === 0) {
   errors.push('no tracked markdown was found, so the completeness question passed over nothing.');
+}
+
+/*
+ * Befund B166. Die Liste darueber wird seit jeher darauf geprueft, dass es
+ * ihre Dateien gibt - die Ausnahmeliste nicht, und das ist die gefaehrlichere
+ * Haelfte: sie *unterdrueckt*. Ein Praefix, dessen Verzeichnis umbenannt oder
+ * geloescht wurde, blieb unbemerkt stehen, und kaeme der Name je zurueck,
+ * waere die Ausnahme sofort wieder scharf, ohne dass jemand sie beschlossen
+ * haette. Gemessen: ein erfundenes `docs/geplantes-verzeichnis/` ging durch.
+ *
+ * Von siebzehn Toren mit begruendeten Eintraegen war dies das einzige ohne
+ * diese Probe; die anderen pruefen sie oder lesen ihre Listen aus dem
+ * Quelltext, wo nichts veralten kann.
+ */
+for (const entry of notProductFacing) {
+  if (!trackedMarkdown.some((file) => file.startsWith(entry.prefix))
+    && !existsSync(join(repoRoot, entry.prefix))) {
+    errors.push(
+      `${entry.prefix} is named as deliberately absent ("${entry.why}"), but nothing `
+      + 'tracked is there. A reason for something that is gone outlives what it '
+      + 'explained: take the entry out, or say where it moved.',
+    );
+  }
 }
 
 for (const path of productFacingDocuments) {

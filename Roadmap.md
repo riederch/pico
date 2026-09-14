@@ -912,6 +912,66 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B166 — Was in einer Transaktion steht, das SQLite nicht zurückrollt — und
+eine Berichtigung an mir selbst (2026-09-14).** Die Gegenrichtung zu B163 bis
+B165: nicht *fehlt* eine Transaktion, sondern *steht etwas darin*, das ein
+Rücklauf nicht mitnimmt — eine Datei, ein Netzabruf, ein Prozess.
+
+Gemessen über alle **32 Transaktionen** des Baums: 53 verschiedene Aufrufe
+stehen darin, die nicht SQLite sind. Fast alle sind interne Lesungen und
+Prüfungen (`domainRecord`, `verifyReaderGrant`, `registerPicoIdentityReaderKey`
+…). Nachgeprüft wurden die drei, bei denen es anders sein könnte:
+`migration.up` fasst keine Datei an, `encryptForWrite` ist reine Kryptografie,
+`keyAvailable` ist ein übergebenes Prädikat. **Es bleibt genau einer — und den
+habe ich am Vortag selbst gebaut.**
+
+B164 hat den Rumpf von `reconcilePicoHomeDeviceRecoveries` eingefasst, und darin
+liegt `reconcilePicoHomeRecoveryAnchor`, das auf einem Zweig `anchor.seed()`
+ruft — und das *schreibt eine Datei*. Mein Kommentar dort behauptete, die
+Ankerdatei bleibe außen vor, weil die Ankermethode nach dem Säen zurückkehrt.
+**Das ist falsch:** sie kehrt zurück, die *aufrufende* Methode läuft weiter, und
+der Dateischreibvorgang liegt damit in der offenen Transaktion.
+
+Der Schluss — harmlos — stimmt trotzdem, aber aus zwei anderen und
+nachprüfbaren Gründen, und die stehen jetzt dort:
+
+- Gesät wird nur, wenn der Anker leer ist **und** keine einzige
+  Wiederherstellungszeile existiert. Auf diesem Zweig folgt danach kein
+  Schreibvorgang, der scheitern könnte: das Verfallenlassen trifft null Zeilen,
+  die Prüfschleife läuft über null Zeilen.
+- Und selbst wenn das Festschreiben scheiterte, bliebe ein gesäter Anker ohne
+  Einträge zurück, den der nächste Start als `live` liest. `'seeded'` wird im
+  ganzen Baum **erzeugt und nirgends gelesen**, und `device-recovery.test.ts`
+  geht genau diesen Übergang bereits — *„Seeded, so a normal installation
+  notices nothing on the next boot."*
+
+Kein neues Tor: eine Sonde, die einem Aufruf folgen muss, um den einen Fall zu
+finden, braucht den Typprüfer, und die Fläche ist ein Fall groß. Was bleibt, ist
+die Zahl — 32 Transaktionen, ein nicht rückrollbarer Effekt — und die Lehre, die
+diesmal auf mich selbst zeigt: **ein Satz, der beruhigt, ist kein Beleg, auch
+dann nicht, wenn er von gestern und von mir ist.**
+
+**B167 — Die Hälfte, die unterdrückt, wurde nicht geprüft (2026-09-14).**
+B165 kam daher, dass eine Begründung beim Hinschreiben nicht trug. Daraus die
+allgemeine Frage: prüfen die Tore selbst, ob ihre begründeten Ausnahmen
+überhaupt noch einen Gegenstand haben? Ein toter Eintrag verbirgt heute nichts —
+aber käme der Name zurück, wäre die Ausnahme sofort wieder scharf, ohne dass
+jemand sie beschlossen hätte.
+
+Gemessen: **17 Tore führen begründete Einträge, 16 sind in Ordnung.** Und zwar
+auf zwei Arten, die beide zählen: die meisten prüfen ihre Einträge ausdrücklich
+(`check-refusal-reasons`, `check-constant-copies`, `check-signature-labels` …),
+und einige **lesen ihre Listen aus dem Produktquelltext**, wo nichts veralten
+kann — `check-signature-labels` zieht die Freistellungen mit einem Muster aus
+`approval-policy.ts`, statt sie zu führen. Das ist die bessere Bauart.
+
+Meine Sonde dafür war wieder ein Textmuster und hat wieder gelogen: sie meldete
+fünf Verdächtige, vier davon zu Unrecht. Nur beim Einzelnachsehen blieb einer
+übrig — `check-product-path.mjs`. Dort wird die Liste der produktnahen Dokumente
+seit jeher auf Existenz geprüft, die **Ausnahmeliste nicht**, und das ist die
+gefährlichere Hälfte. Gepflanzt: ein erfundenes `docs/geplantes-verzeichnis/`
+ging unbemerkt durch. Jetzt fällt es.
+
 **B165 — Eine Anweisung, die nur befolgt wird, wenn jemand vorbeikommt
 (2026-09-13).** Dieser Befund fiel **beim Aufschreiben einer Begründung** an.
 B164 trug `PicoRelayStore.pruneExpired` als begründete Schleife ins Tor ein, mit
