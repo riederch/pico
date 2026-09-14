@@ -556,6 +556,37 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
  * aktuelle ist. Ein falsches Ja an dieser Stelle oeffnet fremden Inhalt.
  */
 describe('ReaderCustodyStore - die Ablehnungen, die niemand gegangen ist (B151)', () => {
+  it('refuses a second domain under a name it already holds, and takes the same one twice', () => {
+    // Befund B175, der letzte offene Fall. `conflicting_record` galt als
+    // gegangen, weil sein Wort an anderen Tueren behauptet wird - in
+    // `share-envelope.test.ts` und `device-lifecycle.test.ts`. Hier fiel bei
+    // einer Umbenennung kein Test.
+    //
+    // Der Unterschied, den diese Ablehnung traegt, ist der zwischen
+    // *nochmal dasselbe* und *etwas anderes unter demselben Namen*. Das erste
+    // ist ein Wiederholungsversuch und muss durchgehen, ohne eine zweite Zeile
+    // anzulegen; das zweite ist eine Verwechslung oder ein Angriff und muss
+    // beim Namen abgelehnt werden. Ein Speicher, der beides gleich behandelt,
+    // ueberschreibt entweder eine Domaene oder verweigert eine Wiederholung.
+    const harness = openHarness();
+    const first = makeRecords();
+    // Zweiter Satz unter derselben Kennung: die Fabrik vergibt sie fest, und
+    // der Besitzer ist ein frisches Schluesselpaar - gueltig unterschrieben und
+    // inhaltlich ein anderer.
+    const second = makeRecords();
+    harness.activeMembers.add(first.domain.domain.ownerIdentityKeyFingerprintHex);
+    harness.activeMembers.add(second.domain.domain.ownerIdentityKeyFingerprintHex);
+
+    expect(harness.store.recordDomain(first.domain, AUTHORIZED_AT).ok).toBe(true);
+
+    // Nochmal dasselbe: angenommen, aber nichts angelegt.
+    expect(harness.store.recordDomain(first.domain, AUTHORIZED_AT))
+      .toMatchObject({ ok: true, inserted: false });
+
+    expect(harness.store.recordDomain(second.domain, AUTHORIZED_AT))
+      .toEqual({ ok: false, reason: 'conflicting_record' });
+  });
+
   it('refuses a writer grant for a domain it has never seen', () => {
     const harness = openHarness();
     const records = makeRecords();
