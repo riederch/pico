@@ -153,6 +153,62 @@ describe('reader-key registration and freshness contract (ADR 0083)', () => {
     }
   });
 
+  it('refuses lifecycle evidence that carries nothing, and evidence that does not verify', () => {
+    // Befund B175. Zwei Wege in denselben Grund, und keiner war gegangen: eine
+    // Aufzeichnung ohne Delegation *und* ohne Widerruf sagt nichts, und eine,
+    // deren Unterschrift nicht traegt, sagt etwas Falsches. Beides muss beim
+    // Namen abgelehnt werden - angenommene Beweise sind die Grundlage, auf der
+    // spaeter jemand einen Leserschluessel bekommt.
+    const fixture = registeredFixture();
+    try {
+      expect(fixture.store.recordPicoIdentityLifecycleEvidence({
+        sodium,
+        identityKeyRecord,
+        revocations: [],
+      })).toEqual({ ok: false, reason: 'invalid_identity_lifecycle_evidence' });
+
+      expect(fixture.store.recordPicoIdentityLifecycleEvidence({
+        sodium,
+        identityKeyRecord,
+        delegation: {
+          ...fixture.delegation,
+          signatureHex: 'a'.repeat(128),
+        },
+        revocations: [],
+      })).toEqual({ ok: false, reason: 'invalid_identity_lifecycle_evidence' });
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('refuses a selection for an identity whose membership is not active', async () => {
+    // Befund B175. Dieselben Worte, zwei Tueren: der Test oben prueft das
+    // *Eintragen* eines Leserschluessels (`event-store.ts`), dies hier das
+    // *Auswaehlen* (`reader-key.ts`). Gemessen durch Umbenennen fiel fuer die
+    // Auswahl kein Test - der Grund galt als gegangen, weil sein Wort an der
+    // anderen Tuer behauptet wird.
+    //
+    // Die Auswahl ist die Tuer, die im Betrieb staendig aufgeht: jede
+    // Verwahrungshandlung fragt hier nach einem Schluessel. Wessen
+    // Mitgliedschaft geendet hat, bekommt keinen - und zwar bevor irgendeine
+    // Frischepruefung ihn sonst freundlich beantworten koennte.
+    const fixture = registeredFixture();
+    try {
+      const selector = new PicoIdentityReaderKeySelector(
+        fixture.store,
+        sodium,
+        { check: async (query) => currentCheckpoint(query) },
+      );
+
+      await expect(selector.select({
+        ...selectionInput(fixture.delegationId),
+        picoIdentityFingerprintHex: 'f'.repeat(64),
+      })).resolves.toEqual({ ok: false, reason: 'identity_is_not_active_member' });
+    } finally {
+      fixture.close();
+    }
+  });
+
   it('fails closed when external freshness is missing or older than local evidence', async () => {
     const fixture = registeredFixture();
     try {

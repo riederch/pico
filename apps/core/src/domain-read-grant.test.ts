@@ -344,6 +344,19 @@ describe('Home domain read grants (ADR 0082)', () => {
     });
     const grant = issueGrant();
     expect(store.recordPicoHomeDomainReadGrant({ sodium, record: grant }).ok).toBe(true);
+
+    // Befund B175. Ein Lebenslauf fuer eine Zuteilung, die dieses Home nie
+    // aufgezeichnet hat, wird beim Namen abgelehnt - ein still angenommener
+    // waere ein Lesezugang, der aus nichts endet oder entsteht. Der Grund galt
+    // als gegangen, weil sein Wort an anderen Tueren behauptet wird.
+    expect(store.recordPicoHomeDomainReadGrantLifecycle({
+      sodium,
+      record: issueLifecycle(grant, {
+        lifecycleId: 'grant_lifecycle_orphan',
+        grantId: 'grant_never_recorded',
+      }),
+    })).toEqual({ ok: false, reason: 'unknown_grant' });
+
     expect(store.recordPicoHomeDomainReadGrantLifecycle({
       sodium,
       record: issueLifecycle(grant),

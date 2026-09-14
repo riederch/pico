@@ -326,6 +326,20 @@ describe('Pico Home membership credentials (ADR 0080 H6)', () => {
     })).toMatchObject({ ok: true, membership: { status: 'evicted' } });
 
     expect(store.hasActivePicoHomeMembership(SUBJECT_FINGERPRINT, HOME_ID, '2026-08-01T00:00:00.000Z')).toBe(false);
+
+    // Befund B175. Ein Lebenslauf fuer eine Berechtigung, die dieses Home nie
+    // aufgezeichnet hat, wird beim Namen abgelehnt statt still angenommen - ein
+    // angenommener waere eine Mitgliedschaft, die aus nichts entsteht.
+    //
+    // Der Grund galt als gegangen, weil sein Wort an anderen Tueren behauptet
+    // wird; hier fiel bei einer Umbenennung kein Test.
+    expect(store.recordPicoHomeMembershipLifecycle({
+      sodium,
+      record: issueLifecycle(
+        { ...credential, membership: { ...credential.membership, credentialId: 'member_never_recorded' } },
+        { lifecycleId: 'memberlc_orphan' },
+      ),
+    })).toEqual({ ok: false, reason: 'unknown_credential' });
   });
 
   it('does not count a membership outside its validity window as active', () => {
