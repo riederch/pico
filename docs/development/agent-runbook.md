@@ -170,8 +170,17 @@ wegpflanzt, braucht drei Vorkehrungen:
    Lauf einen Bau.** Das betrifft `@pico/vault-daemon` (die Tests starten
    `dist/cli.js`) und den Companion-Paketgate.
 
+4. **Rate die Grenzen eines Rumpfes nicht - frag den Uebersetzer.** Wer die
+   oeffnende Klammer durch Zaehlen sucht, trifft bei `): { value: string } {`
+   die Klammer des *Typs*. Am 2026-09-14 waren so neun von dreizehn gemeldeten
+   Funden Artefakte (B177). `ts.createSourceFile(...)` und `node.body.getStart()`
+   geben die Stelle genau.
+
 Und: gegen den **ganzen** Paketlauf pflanzen, nicht gegen die Dateien, die man
-vermutet - der Test zu einer Ablehnung steht oft in einer anderen.
+vermutet - der Test zu einer Ablehnung steht oft in einer anderen. Eine
+Uebersetzung als Schranke davorzusetzen ist dagegen **falsch**: ein unbedingter
+`throw` nimmt TypeScript die Verengung (TS18048), und vitest uebersetzt ohnehin
+nicht - die Schranke verwirft dann gueltige Messungen.
 
 `pnpm transaction:check` haelt die andere Haelfte und stellt zwei Fragen: ob
 zwei Schreibvorgaenge auf einem Weg ueberhaupt eine Transaktion haben, und ob

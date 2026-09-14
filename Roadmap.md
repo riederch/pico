@@ -912,6 +912,52 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B177 — Vier Produktwege in `app.ts`, die kein Test betritt (2026-09-14).**
+B169 hat sieben Wächter in `app.ts` gepflanzt. Die Datei hat aber **58
+Funktionen**, und die schärfere Frage an sie ist nicht *„ist der Wächter
+richtig"*, sondern **„erreicht sie überhaupt jemand?"**. Gemessen, indem jede
+einzeln zu einer Ausnahme gemacht und der ganze Kernlauf beobachtet wurde:
+
+**53 von 58 erreicht ein Test. Vier erreicht keiner. Einen kann man so nicht
+messen.**
+
+Die vier haben **Aufrufer in Produktrouten** — es sind keine Leichen wie
+`isFoundationApiPath` aus B169, sondern Wege, die niemand geht:
+
+| Funktion | Was ungegangen bleibt |
+|---|---|
+| `domainReadGrantFailureStatus` | welchen Status der Client bekommt, wenn das Erteilen eines Lesezugangs *scheitert* |
+| `shareEnvelopeFailureStatus` | dasselbe für das Ausstellen eines Umschlags |
+| `publicPicoShareEnvelope` | die **öffentliche Gestalt** eines Umschlags — also was das Home von ihm herausgibt |
+| `parseSignedPicoIdentityRevocation` | Widerrufe, die eine Forderung mitbringt, werden nie gelesen |
+
+Der dritte wiegt am schwersten: er entscheidet, **was einen Umschlag verlässt**,
+und wird sowohl für einen einzelnen als auch für die Liste benutzt. Der vierte
+liegt im Gründungs- und Forderungspfad.
+
+**Der fünfte lässt sich nicht so messen, und das ist selbst eine Auskunft.**
+Wirft `redactTicketQueryValue` — die Funktion, die eine Eintrittskarte aus einer
+protokollierten Adresse schneidet —, dann **hängt der Lauf**, statt zu fallen.
+Sie sitzt im Protokollpfad, und dort verträgt nichts einen Fehlschlag.
+
+**Und die Sonde selbst musste dreimal berichtigt werden, im selben Lauf.** Ihr
+erstes Ergebnis nannte **dreizehn** unerreichte Funktionen. Neun davon waren
+Artefakte: ich habe die öffnende Klammer des Rumpfes *geraten*, indem ich
+Klammern zählte — und traf bei jeder Funktion mit einem Objekttyp als Rückgabe
+(`): { value: string } {`) die Klammer des **Typs** statt die des Rumpfes. Mit
+der exakten Rumpfposition aus dem Syntaxbaum blieben vier.
+
+Dazwischen lag noch eine eigene Fehlleistung: ich hatte eine
+Übersetzungsschranke eingebaut, die fünf gültige Messungen als „Syntaxfehler"
+verwarf. Es waren **TS18048** — der unbedingte `throw` nimmt TypeScript die
+Verengung, und `body` gilt danach als möglicherweise undefiniert. Ein Typfehler,
+kein Syntaxfehler; vitest übersetzt ohnehin nicht. Ohne die Schranke sind vier
+der fünf sehr wohl erreicht.
+
+Damit ist die Liste der Sondenregeln aus B175 um eine vierte länger, und sie
+steht im Runbook: **rate die Grenzen eines Rumpfes nicht — frag den
+Übersetzer.** Ein Zeichen zu früh eingesetzt, und der Fund ist keiner.
+
 **B176 — Das Gedächtnis dieses Projekts nennt nichts, was es nicht gibt
 (2026-09-14, negatives Ergebnis).** Dieser Baum stellt an alles die Frage, ob
 eine Begründung ihren Gegenstand überlebt hat. An seine eigenen Dokumente hatte
