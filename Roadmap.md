@@ -912,6 +912,60 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B173 — Genannt ist nicht behauptet, und ein Rollentor stand in keinem Test
+(2026-09-14).** B171 hat die teure Sonde gefahren — jeden Grund umbenennen und
+den ganzen Lauf beobachten. Hier die billige, die dasselbe für einen Teil der
+Fläche leistet: **steht das Wort im Argument eines Vergleichers oder nur
+irgendwo?** Über den Syntaxbaum ist daran nichts zu raten, und der Kopf des Tors
+nannte genau das als seinen offenen Vorbehalt — *„genannt gegen erwartet steht
+noch"*.
+
+Gemessen in Sekunden: von 146 erzeugten Gründen stehen **142 in einer echten
+Behauptung**, zwei nur genannt, zwei in keinem Test. Und die billige Methode
+findet einen der fünf, die die teure fand — das ist ihre Bestätigung.
+
+Die vier einzeln:
+
+- **`inactive_writer_grant`** — sein Wort steht in `refusal-line.test.ts`, in
+  einer *Liste von Namen*, die prüft, ob jede Ablehnung einen Satz für eine
+  Person hat. Eine andere Frage. Ein Gang ist nicht billig: beide Erzeugerstellen
+  liegen **hinter** der Rotationsschuld, ein beendeter Schreiber bekommt also
+  zuerst `rotation_required`. Er steht jetzt als Schuld **mit seinem Hindernis**
+  im Tor.
+- **`authority`** war ein Fehlalarm meines eigenen Musters: `let reason:
+  'authority' | 'key'` ist eine Typannotation, kein erzeugter Grund.
+- **`unrenderable_signature_input`** ist **unerreichbar**, und der Weg dorthin
+  war lehrreich. Mein erster Vergleich der Bauer- und Zeichnertabellen sagte
+  „51 zu 51, keine Lücke" — ein Regex, der Zeilen zählte statt Eigenschaften.
+  Über den Syntaxbaum: **26 Bauer, 20 Zeichner.** Sechs Etiketten haben keinen
+  Zeichner; fünf davon stehen auf der Freistellungsliste (sie brauchen keinen
+  Satz), und das sechste — die Geräteaktivierung — steht im Rollentor **nur bei
+  `device_signing`**, wo sie freigestellt ist, und ist für die Identitätswurzel
+  gar nicht signierbar. Unerreichbar also nicht wegen der Tabellen, sondern
+  wegen eines Dreiklangs aus Rollentor, Freistellung und Zeichnern.
+- **`reader_access_key_role_mismatch`** ist der echte Fund. Er geht an den
+  Aufrufer *und* ins Prüfprotokoll, steht in **keiner erklärten Vereinigung** —
+  `refusal:check` sieht ihn also gar nicht — und in keinem Test. Er bewacht,
+  womit ein Lesezugang geöffnet wird: **ein Vereinbarungsschlüssel, keine
+  Unterschrift.**
+
+Der Grund, aus dem er ungegangen war, ist konkret: der Daemon dieses Harness
+kannte nur den Leserschlüssel, es gab also gar keinen Schlüssel mit der falschen
+Rolle, den man ihm hätte anbieten können. Jetzt liegt ein zweiter im selben
+Vault — wie in einem echten, in dem Identität, Unterschrift und Vereinbarung
+nebeneinander liegen.
+
+**Und die Pflanzung dazu fiel zuerst nicht.** Der Test fährt den *gebauten*
+Daemon aus `dist/`; mein geänderter Quelltext erreichte ihn nicht. Dieselbe
+Falle, die das Runbook seit B148 nennt, eine Ebene weiter. Mit Bau dazwischen
+beißt sie: ohne die Rollenprüfung **öffnet** sich der Lesezugang für einen
+Unterschriftsschlüssel.
+
+`refusal:check` fragt seither nach der Behauptung statt nach der Nennung. Genau
+ein erklärter Grund fiel dabei durch — die Regel ist scharf und nicht laut.
+Gepflanzt (ein Wort aus allen drei Behauptungen in eine Konstante gehoben) nennt
+sie den Unterschied beim Namen.
+
 **B172 — 2.304 Verzeichnisse im Arbeitsspeicher, wegen einer Testdatei von 123
 (2026-09-14).** Dieser Befund kam nicht aus dem Code, sondern aus der Maschine:
 mitten in einer Messung meldete die Schale *„Der zugewiesene Plattenplatz
