@@ -139,10 +139,40 @@ export class MemoryStore {
     private readonly crypto?: MemoryContentCrypto,
     /** ADR 0119 Q5. The single insert site for `memory_item` reports here. */
     private readonly rowCounter?: PicoStoreRowCounter,
+    /**
+     * ADR 0119 Q5, seit Befund B170. Ob `memory_item` seine Decke erreicht hat.
+     *
+     * Der Speicher, dem eine Decke gilt, setzt sie selbst durch - so wie die
+     * Beobachtungen, die Zulieferer, die Depots und die Postfaecher. Bis zum
+     * 2026-09-14 tat dieser es nicht: gezaehlt wurde, abgelehnt nicht. Die
+     * Frage kommt von aussen herein, weil der Gesamtzustand bei `EventStore`
+     * wohnt und diese Klasse ihn nicht kennen soll.
+     */
+    private readonly memoryItemCeilingReached?: () => boolean,
   ) {}
 
   public create(input: MemoryItemInput): MemoryItem {
     assertMemoryItemInput(input);
+
+    /*
+     * **Befund B170 (2026-09-14).** Vorher zaehlte diese Ablage ihre Zeilen und
+     * lehnte nie ab: an der Decke wurde das naechste Stueck geschrieben, und
+     * abgelehnt wurde nur das *Ereignis*, das es festhaelt - eine Zeile ohne
+     * ihren Eintrag im Protokoll, und eine Ablage, die weiter waechst.
+     *
+     * Hergestellt, nicht geschlossen: mit `memory_item: 2` standen nach dem
+     * dritten Anlegen drei Zeilen da, waehrend `append` bereits
+     * `refused_storage_pressure` sagte. Genau das ist der Zustand, den ADR 0119
+     * Q5 verhindern will - "a personal appliance has a disk" -, und eine Decke,
+     * die ihre eigene Ablage nicht beschraenkt, verschiebt das Problem nur auf
+     * alles andere.
+     *
+     * Abgelehnt und nicht beschnitten, wie ueberall hier: was eine Person
+     * behalten wollte, verschwindet nicht, weil Platz knapp wurde.
+     */
+    if (this.memoryItemCeilingReached?.() === true) {
+      throw new Error('pico_memory_item_ceiling_reached');
+    }
 
     const posture: MemoryContentPosture = input.contentPosture ?? 'plaintext_foundation';
     if (posture === 'domain_encrypted' && this.crypto === undefined) {

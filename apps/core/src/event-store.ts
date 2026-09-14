@@ -5611,6 +5611,19 @@ export class EventStore {
       ) === undefined ? 'inactive_grant' : 'invalid_envelope' };
     }
 
+    /*
+     * ADR 0119 Q5, **Befund B170 (2026-09-14)**. Dieselbe Luecke wie bei den
+     * Erinnerungsstuecken: gezaehlt wurde, abgelehnt nicht. Der Produktweg
+     * (`POST /api/home/share-envelopes`) stellt den Umschlag aus und haengt
+     * *danach* `home.share_envelope_issued` an - ein Anhang, der unter Druck
+     * abgelehnt wird, waehrend der Umschlag schon steht. Geprueft wird darum
+     * hier, vor dem Schreiben und nach der Gueltigkeit, damit ein ungueltiger
+     * Umschlag weiter seinen eigenen Grund bekommt und nicht den der Decke.
+     */
+    if (this.hasReachedStoreCeiling('share_envelope')) {
+      throw new Error('pico_share_envelope_ceiling_reached');
+    }
+
     const envelopeJson = serializePayload(params.record.envelope);
     const issuerKeyJson = serializePayload(params.record.issuerIdentityKeyRecord);
     const existingByIssuance = this.picoShareEnvelope(params.issuanceId);
@@ -6102,7 +6115,8 @@ export class EventStore {
   // read domain_encrypted items.
   public memory(): MemoryStore {
     this.ensureOpen();
-    return new MemoryStore(this.db, this.memoryCrypto, this.rowCounter);
+    return new MemoryStore(this.db, this.memoryCrypto, this.rowCounter,
+      () => this.hasReachedStoreCeiling('memory_item'));
   }
 
   /**
@@ -6375,9 +6389,7 @@ export class EventStore {
       return 0;
     }
 
-    const reached = this.storageCondition().reasons.some(
-      (reason) => reason.cause === 'store_ceiling' && reason.store === 'observation',
-    );
+    const reached = this.hasReachedStoreCeiling('observation');
     if (reached) {
       // Named rather than generic, so a surface can say which store filled.
       // `storageCondition` re-counts a reached ceiling before believing it, so
@@ -6698,10 +6710,7 @@ export class EventStore {
     // refusing that would leave a person unable to correct an attachment at
     // exactly the moment they are trying to make room.
     if (this.picoSupplierAttachment(manifest.identifier) === undefined) {
-      const reached = this.storageCondition().reasons.some(
-        (reason) => reason.cause === 'store_ceiling'
-          && reason.store === 'supplier_attachment',
-      );
+      const reached = this.hasReachedStoreCeiling('supplier_attachment');
       if (reached) {
         // Named rather than generic, so a surface can say which store filled.
         // `storageCondition` re-counts a reached ceiling before believing it,
@@ -6882,9 +6891,7 @@ export class EventStore {
 
     // ADR 0119 Q5. A new store answers the ceiling question like every other.
     if (this.picoDepotAttachment(pin.remote) === undefined) {
-      const reached = this.storageCondition().reasons.some(
-        (reason) => reason.cause === 'store_ceiling' && reason.store === 'depot_attachment',
-      );
+      const reached = this.hasReachedStoreCeiling('depot_attachment');
       if (reached) {
         throw new Error('pico_depot_attachment_ceiling_reached');
       }
@@ -7198,9 +7205,7 @@ export class EventStore {
     // rotate a flooded mailbox at exactly the moment they need to.
     const existing = this.picoLinkMailboxFor(input.principal.deviceSigningKeyFingerprintHex) !== undefined;
     if (!existing) {
-      const reached = this.storageCondition().reasons.some(
-        (reason) => reason.cause === 'store_ceiling' && reason.store === 'link_mailbox',
-      );
+      const reached = this.hasReachedStoreCeiling('link_mailbox');
       if (reached) {
         throw new Error('pico_link_mailbox_store_ceiling_reached');
       }
@@ -7948,6 +7953,26 @@ export class EventStore {
    * on a number that is no longer true. Doing it here means the recount happens
    * only where it can change the answer.
    */
+  /**
+   * ADR 0119 Q5. Hat *diese* Ablage ihre Deckenzahl erreicht?
+   *
+   * **Eine Wahrheit, die bis zum 2026-09-14 viermal geschrieben stand** - bei
+   * den Beobachtungen, den Zulieferern, den Depots und den Postfaechern, jedes
+   * Mal als dieselbe Filterung ueber `storageCondition().reasons`. Seit Befund
+   * B170 kommen zwei Stellen dazu (`memory_item` und `share_envelope`), und
+   * sechsmal dasselbe zu schreiben waere die Drift, die dieser Baum sonst
+   * ueberall entfernt.
+   *
+   * `storageCondition` zaehlt eine erreichte Decke neu, bevor es ihr glaubt -
+   * wer gerade geloescht hat, wird also nicht an einer veralteten Zahl
+   * abgewiesen.
+   */
+  public hasReachedStoreCeiling(store: PicoDurableStore): boolean {
+    return this.storageCondition().reasons.some(
+      (reason) => reason.cause === 'store_ceiling' && reason.store === store,
+    );
+  }
+
   public storageCondition(): PicoStorageCondition {
     const evaluate = (): PicoStorageCondition => evaluatePicoStorageCondition({
       ...(this.availableBytes === undefined
@@ -8051,7 +8076,8 @@ export class EventStore {
       .prepare("SELECT payload_json FROM pico_event WHERE type = 'memory.tombstone'")
       .all() as { payload_json: string }[];
 
-    const memory = new MemoryStore(this.db, undefined, this.rowCounter);
+    const memory = new MemoryStore(this.db, undefined, this.rowCounter,
+      () => this.hasReachedStoreCeiling('memory_item'));
     let enforced = 0;
 
     for (const row of rows) {

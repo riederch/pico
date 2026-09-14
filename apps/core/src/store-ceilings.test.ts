@@ -256,3 +256,64 @@ describe('ADR 0119 Q5 with ADR 0137 IN1 - the attachment ceiling', () => {
       .toBeLessThan(defaultPicoStoreCeilingRows.observation);
   });
 });
+
+describe('ADR 0119 Q5 - die zwei Decken, die ihre eigene Ablage nicht beschraenkten (B170)', () => {
+  const item = (index: number) => ({
+    memoryItemId: `mem-${String(index)}`,
+    privacyDomain: 'domain-private',
+    owner: 'pico-owner',
+    controller: 'pico-owner',
+    contentType: 'text/plain',
+    content: `note ${String(index)}`,
+  });
+
+  it('refuses a memory item at the ceiling instead of writing it anyway', async () => {
+    // B170. Vorher zaehlte diese Ablage nur: mit `memory_item: 2` standen nach
+    // dem dritten Anlegen drei Zeilen da, waehrend `append` bereits
+    // `refused_storage_pressure` sagte. Eine Zeile ohne ihr Ereignis, und eine
+    // Ablage, die weiter waechst - genau der Zustand, den Q5 verhindern soll.
+    const { store } = await openStore({ storeCeilingRows: { memory_item: 2 } });
+
+    try {
+      store.memory().create(item(0));
+      store.memory().create(item(1));
+      expect(store.storageCondition().state).toBe('reserved');
+
+      expect(() => store.memory().create(item(2)))
+        .toThrow('pico_memory_item_ceiling_reached');
+
+      // Abgelehnt, nicht beschnitten: was die Person behalten wollte, bleibt.
+      expect(store.memory().listInDomain('domain-private').map((entry) => entry.memoryItemId))
+        .toEqual(['mem-0', 'mem-1']);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('does not make room when a person deletes, and that is the honest shape', async () => {
+    // **Diese Decke ist eine Einbahn, und das gehoert hingeschrieben.** Loeschen
+    // ist in dieser Ablage ein `UPDATE`: die Zeile bleibt als Grabstein stehen,
+    // damit das Vergessen einen Wiederherstellungslauf ueberlebt, und der
+    // Domaenen-Shred vernichtet Schluessel statt Zeilen. Die Zeilenzahl faellt
+    // also nie.
+    //
+    // Das ist vertretbar, weil diese Decke gegen einen *Amoklauf* gesetzt ist
+    // und nicht gegen normalen Gebrauch - eine Million Erinnerungen erreicht
+    // niemand beim Leben, wohl aber eine Schleife, die sich verlaufen hat. Wer
+    // das je anders entscheidet, muss zuerst hier vorbei.
+    const { store } = await openStore({ storeCeilingRows: { memory_item: 2 } });
+
+    try {
+      store.memory().create(item(0));
+      store.memory().create(item(1));
+      expect(() => store.memory().create(item(2)))
+        .toThrow('pico_memory_item_ceiling_reached');
+
+      expect(store.memory().deleteInDomain('mem-1', 'domain-private')).toBe('deleted');
+      expect(() => store.memory().create(item(2)))
+        .toThrow('pico_memory_item_ceiling_reached');
+    } finally {
+      store.close();
+    }
+  });
+});

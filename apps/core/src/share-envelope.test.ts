@@ -579,6 +579,37 @@ describe('controller-signed share-envelope issuance (ADR 0084)', () => {
       fixture.close();
     }
   });
+
+  it('refuses a new envelope at the ADR 0119 Q5 ceiling', async () => {
+    // B170. Diese Ablage zaehlte ihre Zeilen und lehnte nie ab: der Umschlag
+    // wurde ausgestellt, und abgelehnt wurde nur das Ereignis
+    // `home.share_envelope_issued`, das die Route *danach* anhaengt - ein
+    // Umschlag ohne seinen Eintrag im Protokoll.
+    //
+    // Anders als bei den Erinnerungsstuecken ist der Weg zurueck hier offen:
+    // endet die Zuteilung, raeumt `reconcilePicoShareEnvelopes` den Umschlag
+    // weg, und die Zeilenzahl faellt wieder.
+    const fixture = createFixture({ storeCeilingRows: { share_envelope: 1 } });
+
+    try {
+      await issue(fixture);
+      expect(fixture.store.picoShareEnvelopes()).toHaveLength(1);
+
+      const stored = fixture.store.picoShareEnvelopes()[0]!;
+      expect(() => fixture.store.recordPicoShareEnvelope({
+        sodium,
+        issuanceId: 'issuance_over_the_ceiling',
+        delegationId: stored.delegationId,
+        record: stored.record,
+        at: AT,
+      })).toThrow('pico_share_envelope_ceiling_reached');
+
+      // Abgelehnt, nicht beschnitten: der Umschlag, der schon da war, bleibt.
+      expect(fixture.store.picoShareEnvelopes()).toHaveLength(1);
+    } finally {
+      fixture.close();
+    }
+  });
 });
 
 type FreshnessOption =
@@ -591,12 +622,17 @@ function createFixture(options: {
   monotonicNow?: () => number;
   pendingTtlMs?: number;
   maxPending?: number;
+  /** ADR 0119 Q5, fuer B170: eine Decke, die ein Test wirklich erreichen kann. */
+  storeCeilingRows?: { share_envelope: number };
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'pico-share-envelope-test-'));
   const databasePath = join(dir, 'pico.sqlite');
   const keyStore = new KeyStore(join(dir, 'keys'));
   const store = new EventStore(databasePath, {
     memoryCrypto: new MemoryContentCrypto(sodium, keyStore),
+    ...(options.storeCeilingRows === undefined
+      ? {}
+      : { storeCeilingRows: options.storeCeilingRows }),
   });
   store.claimPicoHome({
     homeId: HOME_ID,

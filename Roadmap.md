@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B170 — Zwei Decken, die ihre eigene Ablage nicht beschränkten
+(2026-09-14).** `ceiling:check` fragte bis dahin *strukturell*: sagt jede
+Tabelle, wie sie aufhört zu wachsen? Das war nie die ganze Frage. Eine Decke,
+die nur **zählt**, ist eine Zahl ohne Wirkung.
+
+Gemessen über die acht ADR-0119-Q5-Ablagen: **fünf Tests stellen eine Decke
+klein** (`event_log`, `observation`, `supplier_attachment`, `depot_attachment`,
+`link_mailbox`), **drei nicht**. Die drei einzeln nachgesehen:
+
+- `audit_record` **greift** — hergestellt mit `audit_record: 2` und echter
+  Prüfkette: der dritte Anhang ist `refused_storage_pressure`. Prüfzeilen
+  entstehen ausschließlich in `append`, also endet ihre Ablage mit ihm.
+- `memory_item` **greift nicht.** Hergestellt mit `memory_item: 2`: nach dem
+  dritten Anlegen stehen **drei Zeilen** da, während `append` bereits
+  `refused_storage_pressure` sagt. Eine Zeile ohne ihren Eintrag im Protokoll,
+  und eine Ablage, die weiter wächst.
+- `share_envelope` **greift nicht**, aus demselben Grund und mit derselben
+  Reihenfolge im Produktweg: `POST /api/home/share-envelopes` stellt den
+  Umschlag aus und hängt `home.share_envelope_issued` *danach* an.
+
+Beide sind jetzt eingefasst, in der Form, die die vier funktionierenden schon
+hatten: vor dem Schreiben prüfen, benannt ablehnen
+(`pico_memory_item_ceiling_reached`, `pico_share_envelope_ceiling_reached`),
+**abgelehnt und nicht beschnitten** — was eine Person behalten wollte,
+verschwindet nicht, weil Platz knapp wurde.
+
+**Und beim Schreiben des Tests fiel eine Eigenschaft auf, die hingehört.** Ich
+wollte zeigen, dass die Decke wieder aufgeht, wenn jemand aufräumt — sie tut es
+nicht: Löschen ist in dieser Ablage ein `UPDATE` (der Grabstein muss eine
+Wiederherstellung überleben), und der Domänen-Shred vernichtet **Schlüssel statt
+Zeilen**. Eine `memory_item`-Zeile verschwindet nie. Die Decke ist also eine
+**Einbahn**. Vertretbar ist sie trotzdem, und der Test sagt jetzt beides: sie ist
+gegen einen *Amoklauf* gesetzt und nicht gegen normalen Gebrauch — eine Million
+Erinnerungen erreicht niemand beim Leben, wohl aber eine Schleife, die sich
+verlaufen hat. Bei den Umschlägen ist der Weg zurück offen, weil
+`reconcilePicoShareEnvelopes` eine beendete Zuteilung wegräumt; deshalb steht der
+Unterschied im Kommentar und nicht nur in meinem Kopf.
+
+**Der Fix faltet nebenbei eine Wahrheit, die viermal geschrieben stand.** „Ist
+diese Ablage an ihrer Decke" war an vier Stellen dieselbe Filterung über
+`storageCondition().reasons`; mit zwei weiteren wären es sechs geworden.
+`hasReachedStoreCeiling(store)` schreibt sie einmal — und macht damit die zweite
+Frage des Tors überhaupt erst billig: **gibt es zu jeder Decke eine
+Ablehnstelle?** Sechs antworten mit einem Aufruf, zwei sind als „durch `append`"
+eingetragen, und ein Eintrag ohne Decke fällt ebenso wie eine Decke ohne
+Ablehnung. Gepflanzt: die Erinnerungsablehnung wieder entfernt → das Tor nennt
+sie beim Namen.
+
 **B169 — Ein Name, der mehr verspricht als sein Körper geht; ein Wächter ohne
 Aufrufer (2026-09-14).** `app.ts` ist **9.758 Zeilen**, davon `buildApp` allein
 **7.845** — eine Funktion, die fast die ganze Datei ist. Unten liegen 59

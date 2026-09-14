@@ -145,6 +145,53 @@ for (const [table] of argued) {
   );
 }
 
+/**
+ * **Zweite Frage, seit Befund B170 (2026-09-14): lehnt jede Decke auch ab?**
+ *
+ * Die Frage oben ist strukturell - *sagt* jede Tabelle, wie sie aufhoert zu
+ * wachsen. Sie war nie die ganze: eine Decke, die nur zaehlt, ist eine Zahl
+ * ohne Wirkung. Gemessen an dem Tag: von den acht Q5-Ablagen lehnten sechs an
+ * ihrer eigenen Schreibstelle ab, **zwei nicht** - `memory_item` und
+ * `share_envelope` schrieben an der Decke weiter, und abgelehnt wurde nur das
+ * *Ereignis*, das den Vorgang festhaelt. Eine Zeile ohne ihren Eintrag im
+ * Protokoll, und eine Ablage, die weiter waechst.
+ *
+ * Seit der Faltung heisst die Frage ueberall gleich: `hasReachedStoreCeiling`.
+ * Zwei Ablagen antworten anders und sind eingetragen - sie werden **nur** von
+ * `append` geschrieben, und `append` faellt unter Druck als Ganzes zu.
+ */
+const refusesThroughAppend = new Map([
+  ['event_log', 'Die Anhaengestelle selbst: `mayAppendUnderPicoStoragePressure` laesst unter '
+    + 'Druck keinen erschaffenden Schreibvorgang mehr durch (ADR 0119 Q1/Q2).'],
+  ['audit_record', 'Wird ausschliesslich innerhalb von `append` gekettet, also endet es mit '
+    + 'ihm. Hergestellt am 2026-09-14: mit `audit_record: 2` ist der dritte Anhang '
+    + '`refused_storage_pressure`.'],
+]);
+
+for (const store of ceilingTables.keys()) {
+  if (refusesThroughAppend.has(store)) {
+    continue;
+  }
+  if (!coreSource.includes(`hasReachedStoreCeiling('${store}')`)) {
+    errors.push(
+      `${store} carries an ADR 0119 Q5 ceiling and nothing refuses at it: no call to `
+      + `\`hasReachedStoreCeiling('${store}')\` stands in apps/core/src. A ceiling that only `
+      + 'counts is a number, not a bound - the row lands and only the event that records it '
+      + 'is refused.',
+    );
+  }
+}
+
+for (const store of refusesThroughAppend.keys()) {
+  if (!ceilingTables.has(store)) {
+    errors.push(
+      `${store} is argued here as refusing through \`append\`, but it no longer carries a `
+      + 'Q5 ceiling at all. An argument outliving its subject reads like a judgement about '
+      + 'today.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Store-ceiling check failed:');
   for (const error of errors) {
@@ -156,5 +203,7 @@ if (errors.length > 0) {
 console.log(
   `Store-ceiling check passed (${tables.length} tables: ${swept} swept, `
   + `${ceilinged.size} under an ADR 0119 Q5 ceiling, ${argued.length} answering by their `
-  + 'shape - one of them answering that it does not).',
+  + 'shape - one of them answering that it does not; of the '
+  + `${ceilingTables.size} ceilings, ${ceilingTables.size - refusesThroughAppend.size} refuse `
+  + `at their own write site and ${refusesThroughAppend.size} through \`append\`).`,
 );
