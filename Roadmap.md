@@ -932,26 +932,45 @@ meisten Funde. Die neue Sonde bricht laut ab, wenn ein Lauf keine Zählung
 liefert; über 43 Paare gab es **null** Abbrüche.
 
 **Die richtige Messung: 43 Paare aus Grund und Erzeuger, 33 behauptet, 10
-nicht.**
+gemeldet — davon 8 echt.** Zwei Meldungen sind Artefakte meines
+Auszugsmusters: `reason: '…'` trifft auch eine **Typvereinigung**, und eine
+Vereinigung umzubenennen ändert zur Laufzeit nichts. Das betraf `vault_locked`
+in `companion/first-run.ts` und `companion/recovery-controller.ts` — beide
+deklarieren den Grund, erzeugen ihn aber nicht.
 
-| Grund | Erzeuger, für den ihn nichts behauptet |
-|---|---|
-| `vault_locked` | `companion/first-run.ts`, `companion/recovery-controller.ts`, `vault-daemon/daemon.ts` |
-| `unknown_credential`, `invalid_identity_lifecycle_evidence`, `unknown_grant` | `core/event-store.ts` |
-| `invalid_issuer_key_role`, `issuer_key_fingerprint_mismatch` | `core/home-membership.ts` |
-| `conflicting_record` | `core/reader-custody.ts` |
-| `identity_is_not_active_member` | `core/reader-key.ts` |
+Die acht echten, und was aus ihnen wurde:
 
-Zwei davon sind gegangen, und es sind die, bei denen der Zuschnitt am schärfsten
-ist: `home-membership.ts` und `domain-read-grant.ts` sind die Zwillinge aus
-B145, sprechen dieselben zwei Ablehnungen aus, und nur der eine hatte einen
-Test. Die Frage — *ist der Aussteller wirklich der Schlüssel, den sein
-Fingerabdruck nennt, und in der Rolle, die für eine Identität unterschreiben
-darf?* — ist dieselbe und muss trotzdem an beiden stehen. Beide fallen jetzt bei
-der Pflanzung.
+| Grund | Erzeuger | |
+|---|---|---|
+| `invalid_issuer_key_role` | `core/home-membership.ts` | **gegangen** |
+| `issuer_key_fingerprint_mismatch` | `core/home-membership.ts` | **gegangen** |
+| `identity_is_not_active_member` | `core/reader-key.ts` | **gegangen** |
+| `unknown_credential` | `core/event-store.ts` | **gegangen** |
+| `unknown_grant` | `core/event-store.ts` | **gegangen** |
+| `invalid_identity_lifecycle_evidence` | `core/event-store.ts` | **gegangen** |
+| `vault_locked` | `vault-daemon/daemon.ts` | offen |
+| `conflicting_record` | `core/reader-custody.ts` | offen |
 
-Die übrigen acht bleiben gemessen und offen; sie stehen hier mit Namen, damit
-niemand sie neu sucht.
+Sechs sind gegangen, jeder fällt bei der Pflanzung, und drei Paare zeigen den
+Zuschnitt besonders deutlich:
+
+- **Die Zwillinge aus B145.** `home-membership.ts` und `domain-read-grant.ts`
+  sprechen dieselben zwei Ablehnungen aus — *ist der Aussteller wirklich der
+  Schlüssel, den sein Fingerabdruck nennt, und in der Rolle, die für eine
+  Identität unterschreiben darf?* — und nur einer hatte einen Test.
+- **Zwei Türen, ein Wort.** `identity_is_not_active_member` war für das
+  *Eintragen* eines Leserschlüssels behauptet, nicht für das **Auswählen** —
+  und das Auswählen ist die Tür, die im Betrieb ständig aufgeht, weil jede
+  Verwahrungshandlung hier nach einem Schlüssel fragt.
+- **Ein Lebenslauf für etwas, das es nie gab.** `unknown_credential` und
+  `unknown_grant` sind derselbe Satz an zwei Stellen: ein still angenommener
+  Lebenslauf wäre eine Mitgliedschaft oder ein Lesezugang, der aus nichts
+  entsteht.
+
+Die zwei offenen stehen hier mit Namen, damit niemand sie neu sucht.
+`conflicting_record` braucht zwei *gültige* Datensätze mit derselben Kennung und
+verschiedenem Inhalt — verändern genügt nicht, weil die Prüfung der Unterschrift
+vorher greift.
 
 **B174 — Drei Tabellen, die gemeinsam entscheiden, und niemand hielt sie
 gegeneinander (2026-09-14).** B173 hat gezeigt, *dass*
