@@ -86,6 +86,40 @@ describe('Pico Home membership credentials (ADR 0080 H6)', () => {
     })).toEqual({ ok: true });
   });
 
+  it('refuses an issuer key that is the wrong role or the wrong key', () => {
+    // Befund B175. Diese zwei Ablehnungen galten als gegangen, weil ihr
+    // Zwilling `domain-read-grant.ts` sie behauptet - dieselben Worte, ein
+    // anderer Erzeuger. Gemessen durch Umbenennen: hier fiel kein Test.
+    //
+    // Die Frage ist dieselbe wie drueben und muss trotzdem hier stehen: der
+    // Aussteller ist ueber seinen Fingerabdruck benannt, und der Datensatz mit
+    // dem oeffentlichen Schluessel muss *dieser* Schluessel sein, in der Rolle,
+    // die fuer eine Identitaet unterschreiben darf.
+    const credential = issueCredential();
+
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: {
+        ...credential,
+        issuerIdentityKeyRecord: {
+          ...credential.issuerIdentityKeyRecord,
+          keyRole: 'device_signing' as never,
+        },
+      },
+      foundingRecord: foundingRecord(),
+    })).toEqual({ ok: false, reason: 'invalid_issuer_key_role' });
+
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: {
+        ...credential,
+        issuerIdentityKeyRecord: {
+          ...credential.issuerIdentityKeyRecord,
+          publicKeyHex: 'a'.repeat(64),
+        },
+      },
+      foundingRecord: foundingRecord(),
+    })).toEqual({ ok: false, reason: 'issuer_key_fingerprint_mismatch' });
+  });
+
   it('rejects credentials that do not reach this founding record', () => {
     const founding = foundingRecord();
 
