@@ -331,6 +331,19 @@ naechste Schritte nur nach direkter Repository-Pruefung aktualisieren.
   `/tmp/pico-bin` bereitgestellt und beiden `PATH` vorangestellt. `/tmp` ist
   tmpfs: nach einem Neustart ist das erneut bereitzustellen, und grosse
   Fixtures gehoeren nicht dorthin.
+- **Nach vielen Kettenlaeufen in `/tmp` nachsehen** (Befund B172). Es liegt hier
+  im Arbeitsspeicher, und liegengebliebene Testverzeichnisse summieren sich
+  lautlos: am 2026-09-14 standen dort **2.367 `pico-*`-Verzeichnisse** und die
+  Schale meldete mitten in einer Messung ein ueberschrittenes Quota. `tests:check`
+  haelt den Fall seitdem fuer Testdateien; der Paketbau laesst aus dem Grund von
+  B114 weiter welche liegen. Aufraeumen, ohne `/tmp/pico-pnpm-store` und
+  `/tmp/pico-bin` anzufassen:
+
+  ```bash
+  find /tmp -maxdepth 1 -mmin +60 -name 'pico-host-options-*' -o \
+       -maxdepth 1 -mmin +60 -name 'pico-companion-*' | xargs -r rm -rf
+  ```
+
 - Sandbox-DNS kann Registry-Aufloesung blockieren; nicht durch unsichere
   Workarounds umgehen.
 - Crypto-Tests verwenden `libsodium-wrappers-sumo`. Externe Prozesse wie

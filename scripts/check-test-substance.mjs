@@ -47,6 +47,7 @@ import { picoRepoRoot } from './operated-surfaces.mjs';
  * echt.
  */
 const errors = [];
+let temporaryRootMakers = 0;
 const tracked = execSync('git ls-files "*.ts"', { cwd: picoRepoRoot, encoding: 'utf8' })
   .split('\n')
   .filter((line) => line !== '');
@@ -171,6 +172,36 @@ if (testFiles.length === 0 || cases === 0 || assertions === 0 || helperNames.len
   process.exit(1);
 }
 
+/**
+ * **Wer ein Temp-Verzeichnis anlegt, raeumt es weg** (Befund B172, 2026-09-14).
+ *
+ * Aufgefallen ist das nicht am Code, sondern an der Maschine: **2.304
+ * liegengebliebene `pico-host-options-*`** in einem `/tmp`, das auf dieser
+ * Maschine im Arbeitsspeicher liegt. Eine einzige Testdatei von 123 legte
+ * Verzeichnisse an und entfernte keines - gemessen: ein Lauf liess **18**
+ * zurueck, die 2.304 entsprechen also rund 128 Laeufen.
+ *
+ * Die Regel ist grob mit Absicht: sie fragt, ob die Datei ueberhaupt ein
+ * Entfernen *nennt*, nicht ob es jeden Pfad trifft. Das ist dieselbe Staerke
+ * wie bei den Nachbarn hier - sie faengt das Fehlen, nicht die Schlaefrigkeit -
+ * und genau dieses Fehlen war der Fall.
+ */
+for (const path of testFiles) {
+  const text = sources.get(path);
+  if (!text.includes('mkdtempSync(') && !text.includes('mkdtemp(')) {
+    continue;
+  }
+  temporaryRootMakers += 1;
+  if (/\brmSync\(|\brm\(|rimraf/u.test(text)) {
+    continue;
+  }
+  errors.push(
+    `${path} creates a temporary directory and never removes one. On a `
+    + 'machine whose `/tmp` is memory this accumulates run by run until somebody notices the '
+    + 'machine rather than the code.',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Test-substance check failed:');
   for (const error of errors) {
@@ -183,5 +214,6 @@ console.log(
   `Test-substance check passed (${testFiles.length} test files, ${cases} cases, each asserting `
   + `something itself or through one of ${helperNames.length} derived helpers; ${assertions} `
   + 'assertions, each with a matcher; no committed `.only`, `.skip` or `.todo`; '
-  + `${balanced} sources whose brackets still balance once strings and comments are blanked).`,
+  + `${balanced} sources whose brackets still balance once strings and comments are blanked; `
+  + `${temporaryRootMakers} test files make a temporary directory and every one removes it).`,
 );

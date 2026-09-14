@@ -1,7 +1,7 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyPicoHomeAssistantAppOptions,
   createPicoHomeAssistantHostAdapter,
@@ -187,8 +187,25 @@ function writeOptions(options: unknown): string {
   return writeRawOptions(JSON.stringify(options));
 }
 
+/**
+ * Befund B172 (2026-09-14). Diese Datei war die einzige von 123, die ein
+ * Temp-Verzeichnis anlegte und keines wegraeumte. Aufgefallen ist es nicht am
+ * Code, sondern an der Maschine: **2.304 liegengebliebene
+ * `pico-host-options-*`** in einem `/tmp`, das hier im Arbeitsspeicher liegt.
+ * Jeder Aufruf legt eines an, jeder Lauf also mehrere, und ueber Wochen summiert
+ * sich das zu Verzeichniseintraegen, die niemand mehr zuordnet.
+ */
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const directory of tempDirs.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 function writeRawOptions(content: string): string {
   const directory = mkdtempSync(join(tmpdir(), 'pico-host-options-'));
+  tempDirs.push(directory);
   const optionsPath = join(directory, 'options.json');
   writeFileSync(optionsPath, content);
   return optionsPath;
