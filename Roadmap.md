@@ -954,6 +954,17 @@ stehen lassen. Der Schutz wurde also ersetzt und verstärkt, nicht verloren; was
 blieb, war ein Rückstand, der aussieht wie eine Regel. Er ist entfernt (wie die
 zwei unerreichbaren Wachen aus B152 und B153).
 
+**Dieselbe Technik auf das schärfste Tor des Baums angewandt — und es hält.**
+`picoVaultDaemonSignatureNeedsApproval` entscheidet, ob eine Signatur die
+Zustimmung der Person braucht: fünf freigestellte Familien, drei rollenabhängige
+Ausnahmen, sonst fragen. Zwei Pflanzungen: *nichts braucht Zustimmung* → 13
+Tests fallen; *die Identitätswurzel ist bei der Wiederherstellungs-Forderung
+mitfreigestellt* (also: ein vollständiger Geräteaustausch ohne Rückfrage) → 1
+Test fällt. Ich hatte vermutet, die dritte Ausnahme sei ungegangen, weil
+`approval.test.ts` nur zwei davon prüft; sie steht in `sign-rendering.test.ts`,
+in beide Richtungen. **Vor dem Aufschreiben nachgesehen — sonst stünde hier ein
+Befund, den es nicht gibt.**
+
 **Warum er zwei Monate stehen konnte, ist die systemische Hälfte:**
 `noUnusedLocals` ist in `tsconfig.base.json` **nicht gesetzt**, also schweigt der
 Übersetzer zu totem Code. Gemessen, was ein Einschalten heute meldete: **70
