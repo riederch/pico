@@ -912,6 +912,55 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B168 — Zehn leere Fänge, alle erklärt, einer nicht gegangen
+(2026-09-14).** Ein `catch {}` ohne Rumpf verschluckt einen Fehlschlag. Gezählt
+über den ganzen Baum: **341 Auffangblöcke** — 17 werfen mit `cause`, 47 nennen
+den Fang im neuen Fehler, 24 werfen einen einzigen Ablehnungsnamen ohne Bezug
+(oft richtig: ein Home, das drei Zustände mit *einer* Antwort beantwortet, darf
+die Ursache nicht durchreichen), und **10 sind leer**.
+
+**Alle zehn tragen einen Kommentar** — hier hat niemand stumm geschluckt. Und
+die Gründe sind spezifisch, nicht beruhigend: `/proc` wird gelesen, während
+Prozesse enden; ein Wanderungsprotokoll darf den ursprünglichen Fehler nicht
+verdecken; eine Kettenlesung endet an ihrem bewiesenen Präfix; ein fälliger Lauf
+wird nach ADR 0143 DP8 dem nächsten überlassen. Zwei Behauptungen habe ich
+nachgeprüft statt geglaubt, und beide tragen: die Wanderungen **gehen** ihren
+verschluckten Fehlschlag (`rolls back migration registry changes when audit
+recording fails`), und `app.ts`' Satz *„Unreadable custody is the custody
+guard's case to report"* stimmt — die Wache läuft zwei Zeilen später und meldet
+mit `log.error`.
+
+**Einer blieb übrig**, und er ist der folgenreichste. `OperatorStore.rehash`
+wertet den Argon2id-Prüfer bei der Anmeldung auf stärkere Parameter auf. Der
+Satz darüber: *„a failed upgrade must never turn a correct passphrase into a
+failed login"*. Der **Gutfall** war gründlich gegangen — schwacher Prüfer, falsche
+Passphrase wertet nicht auf, richtige wertet auf. Der **Satz** war es nicht.
+
+Hergestellt: ein Auslöser bricht das `UPDATE` auf `foundation_operator` ab. Mit
+dem Fang meldet sich die Person an, der alte arbeitende Prüfer bleibt stehen,
+und der nächste Versuch holt die Aufwertung nach. Ohne ihn — gepflanzt — wirft
+eine **richtige Passphrase** `SqliteError: planted_rehash_fails`: eine
+Wartungsarbeit sperrt jemanden aus dem eigenen Home aus.
+
+Nebenbei stand der Aufwertungstest strukturell schief: als frei stehendes `it`
+zwischen zwei `describe`, eingerückt, als gehörte er in die Suite darüber. Er
+lief, aber er hieß nicht, wo er wohnt. Jetzt steht er darin.
+
+**Und eine eigene Fehlmessung gehört dazu.** Ich hatte zuerst gemeldet, *kein
+einziger* Test nenne `rehash` — das war ein `grep` nach Kleinschreibung, das
+`needsRehash` nicht findet. Es gab zwei Fundstellen. Die Zahl hätte einen Befund
+getragen, den es so nicht gibt; gefunden habe ich das nur, weil ich vor dem
+Aufschreiben noch einmal nachgesehen habe.
+
+**Gehalten wird es von einer fünften Frage in `refusal:check`**, kein neues Tor:
+*ein leerer Fang sagt, warum*. Sie hält nur, was schon gilt — zehn von zehn —,
+und genau deshalb ist sie billig. Was sie **nicht** kann, steht in ihrem Kopf:
+sie fragt nach dem Satz und nicht nach dem Gang, hätte also ausgerechnet diesen
+Befund nicht gefunden. Was sie verhindert, ist der stumme Fang, den niemand
+beschlossen hat; gepflanzt fällt sie darauf. Sie ist textuell und nicht über den
+Syntaxbaum, aber nachgerechnet: dieselbe Messung über `typescript` fand genau
+dieselben zehn.
+
 **B166 — Was in einer Transaktion steht, das SQLite nicht zurückrollt — und
 eine Berichtigung an mir selbst (2026-09-14).** Die Gegenrichtung zu B163 bis
 B165: nicht *fehlt* eine Transaktion, sondern *steht etwas darin*, das ein

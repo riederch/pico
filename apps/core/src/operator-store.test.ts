@@ -153,7 +153,6 @@ describe('OperatorStore', () => {
     expect(operators.clear()).toBe(false);
     expect(await operators.verify(PASSPHRASE)).toBe(false);
   });
-});
 
   it('upgrades a verifier made with weaker parameters on the next successful login', async () => {
     const { operators } = openOperators();
@@ -180,6 +179,48 @@ describe('OperatorStore', () => {
     expect(operators.needsRehash()).toBe(false);
     expect(await operators.verify(PASSPHRASE)).toBe(true);
   });
+
+  it('keeps a correct passphrase working when the upgrade itself fails', async () => {
+    // B168. Der Satz neben dem leeren Fang in `rehash` nennt genau diese
+    // Gefahr: *"a failed upgrade must never turn a correct passphrase into a
+    // failed login"*. Der Gutfall darueber war gegangen, dieser Satz nicht -
+    // und ein Satz, der eine Gefahr nennt, ist kein Schutz vor ihr.
+    //
+    // Das Hindernis ist ein Ausloeser und keine gestellte Methode: eine
+    // gestellte Methode pruefte die Einrichtung dieses Tests, ein Ausloeser
+    // einen Widerspruch der Datenbank - und das ist der Fall, fuer den der
+    // Fang da ist.
+    const { operators } = openOperators();
+    await operators.create(PASSPHRASE);
+    const weakVerifier = sodium.crypto_pwhash_str(
+      PASSPHRASE,
+      sodium.crypto_pwhash_OPSLIMIT_MIN,
+      sodium.crypto_pwhash_MEMLIMIT_MIN,
+    );
+    writeVerifier(operators, weakVerifier);
+    expect(operators.needsRehash()).toBe(true);
+
+    operatorDatabase(operators).exec(`
+      CREATE TRIGGER planted_rehash_fails
+      BEFORE UPDATE ON foundation_operator
+      BEGIN SELECT RAISE(ABORT, 'planted_rehash_fails'); END
+    `);
+
+    // Die Anmeldung gelingt, obwohl die Aufwertung scheitert - und der alte,
+    // arbeitende Pruefer steht unveraendert da. Eine Person, die ihre richtige
+    // Passphrase eingibt, darf von einer Wartungsarbeit nicht ausgesperrt
+    // werden.
+    expect(await operators.verify(PASSPHRASE)).toBe(true);
+    expect(readVerifier(operators)).toBe(weakVerifier);
+    expect(operators.needsRehash()).toBe(true);
+
+    // Und beim naechsten Mal wird nachgeholt, was diesmal nicht ging.
+    operatorDatabase(operators).exec('DROP TRIGGER planted_rehash_fails');
+    expect(await operators.verify(PASSPHRASE)).toBe(true);
+    expect(readVerifier(operators)).not.toBe(weakVerifier);
+    expect(operators.needsRehash()).toBe(false);
+  });
+});
 
 describe('OperatorBootstrapCode', () => {
   it('accepts its code exactly once', () => {
@@ -227,6 +268,17 @@ function writeVerifier(operators: OperatorStore, verifier: string): void {
   const db = (operators as unknown as { db: { prepare(sql: string): { run(value: string): void } } }).db;
 
   db.prepare('UPDATE foundation_operator SET credential_verifier = ?').run(verifier);
+}
+
+/**
+ * Die Datenbank hinter dem Speicher, fuer das eine Hindernis, das B168 braucht.
+ *
+ * Derselbe Griff wie bei `writeVerifier` daneben: der Speicher gibt sie nicht
+ * heraus, weil niemand im Produkt sie braucht - ein Test, der einen zweiten
+ * Schreibvorgang scheitern lassen muss, schon.
+ */
+function operatorDatabase(operators: OperatorStore): { exec(sql: string): void } {
+  return (operators as unknown as { db: { exec(sql: string): void } }).db;
 }
 
 function readVerifier(operators: OperatorStore): string {

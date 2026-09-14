@@ -596,6 +596,50 @@ for (const reason of notYetWalkedCatch.keys()) {
   }
 }
 
+/**
+ * Fuenfte Frage, seit Befund B168 (2026-09-14): **ein leerer Fang sagt, warum.**
+ *
+ * `catch {}` ohne Rumpf verschluckt einen Fehlschlag. Manchmal ist das genau
+ * richtig - `/proc` wird gelesen, waehrend Prozesse enden; ein Protokolleintrag
+ * darf den urspruenglichen Fehler nicht verdecken -, aber der Unterschied
+ * zwischen "absichtlich still" und "vergessen" ist von aussen nicht zu sehen.
+ * Ein Grund daneben macht ihn sichtbar.
+ *
+ * Gemessen am 2026-09-14: **341 Auffangbloecke im Baum, zehn davon leer, alle
+ * zehn mit einem Grund.** Dieses Tor haelt nur, was schon gilt - und genau
+ * deshalb ist es billig.
+ *
+ * **Ein Kommentar ist kein Gang**, und das ist hier wichtiger als sonst: der
+ * eine der zehn, dessen Satz eine sicherheitsrelevante Zusage machte
+ * (`OperatorStore.rehash`: eine misslungene Aufwertung darf aus einer richtigen
+ * Passphrase keine gescheiterte Anmeldung machen), war *nicht* gegangen. Dieses
+ * Tor haette ihn nicht gefunden; es fragt nach dem Satz, nicht nach dem Gang.
+ * Was es verhindert, ist der stumme Fang, den niemand beschlossen hat.
+ *
+ * Textuell und nicht ueber den Syntaxbaum - aber nachgerechnet: dieselbe
+ * Messung ueber `typescript` fand genau dieselben zehn. Der Griff ist,
+ * dasselbe Muster zweimal zu zaehlen, einmal im Rohtext und einmal ohne
+ * Kommentare: was nur in der zweiten Zaehlung leer ist, traegt einen Grund.
+ */
+const emptyCatch = /catch\s*(?:\([^)]*\))?\s*\{\s*\}/gu;
+let silentCatches = 0;
+let explainedCatches = 0;
+for (const file of sourceFiles) {
+  const text = readFileSync(file, 'utf8');
+  const silent = (text.match(emptyCatch) ?? []).length;
+  const bare = (withoutComments(text).match(emptyCatch) ?? []).length;
+  silentCatches += silent;
+  explainedCatches += bare - silent;
+  if (silent > 0) {
+    errors.push(
+      `${relative(repoRoot, file)} swallows a failure in an empty \`catch\` without saying `
+      + 'why. Sometimes that is right - a process that ended while /proc was being read, a '
+      + 'log entry that must not hide the failure it is about - but the difference between '
+      + 'deliberate and forgotten is invisible from outside. Say which it is, or handle it.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Refusal-reason check failed:');
   for (const error of errors) {
@@ -617,5 +661,6 @@ console.log(
   + `${crossPairs.size} file pairs share a refusal across a package boundary, `
   + `${arguedCrossSeen} of them share two or more and say why; `
   + `${caughtThrows.size} failures from outside get a name in a catch, `
-  + `${caughtWalked} of them walked and ${notYetWalkedCatch.size} argued).`,
+  + `${caughtWalked} of them walked and ${notYetWalkedCatch.size} argued; `
+  + `${explainedCatches} empty catches swallow a failure and every one says why).`,
 );
