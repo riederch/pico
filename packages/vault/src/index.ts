@@ -549,6 +549,21 @@ const textDecoder = new TextDecoder();
  * predicate rather than the sets themselves: the catalog stays unmodifiable,
  * and `sign` remains the authority that actually enforces it.
  */
+/**
+ * Welche Familien diese Rolle unterschreiben darf.
+ *
+ * Befund B174 (2026-09-14). `picoVaultCanSignLabel` beantwortet die Frage fuer
+ * *ein* Etikett; wer die Tabelle gegen eine andere halten will, braucht sie
+ * ganz. Genau das fehlte: dass ein gefragtes und zugleich bewilligungs-
+ * pflichtiges Etikett auch einen Zeichner hat, rechnete nichts nach - es war
+ * wahr und niemand pruefte es.
+ */
+export function picoVaultSignableLabels(
+  keyRole: PicoVaultPersonKeyRole,
+): ReadonlySet<string> {
+  return signableLabelsByKeyRole[keyRole] ?? new Set<string>();
+}
+
 export function picoVaultCanSignLabel(
   keyRole: PicoVaultPersonKeyRole,
   label: string,

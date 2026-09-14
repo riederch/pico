@@ -18,6 +18,7 @@ import {
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityRevocationSignatureInput,
+  picoVaultPersonKeyRoles,
 } from '@pico/protocol';
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,7 +27,7 @@ import {
 } from './sign-rendering.js';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoDisplayDate } from '@pico/protocol/when-display';
-import { picoVaultCanSignLabel } from '@pico/vault';
+import { picoVaultCanSignLabel, picoVaultSignableLabels } from '@pico/vault';
 import {
   picoVaultDaemonSignatureNeedsApproval,
 } from './protocol.js';
@@ -384,5 +385,86 @@ describe('ADR 0106 - the sentence names the delay the ceremony enforces', () => 
     // And the delay is the one the ceremony holds a person to, not a rounder
     // number that happens to sit near it.
     expect(picoHomeDeviceRecoveryTiming.vetoDelayMs).toBe(48 * 60 * 60 * 1_000);
+  });
+});
+
+describe('ADR 0099 - jedes gefragte Etikett hat auch einen Satz (B174)', () => {
+  /**
+   * Befund B174. Drei Tabellen entscheiden gemeinsam, ob eine Zeremonie
+   * durchgeht, und bis zum 2026-09-14 hielt sie niemand gegeneinander:
+   *
+   * 1. wer welches Etikett unterschreiben darf (`picoVaultSignableLabels`),
+   * 2. was davon die Zustimmung der Person braucht
+   *    (`picoVaultDaemonSignatureNeedsApproval`),
+   * 3. wofuer es Bytes und einen Satz gibt (`sign-rendering.ts`).
+   *
+   * Wer ein Etikett in eine Rollenmenge aufnimmt, ohne beides zu schreiben,
+   * erfaehrt es sonst erst, wenn eine Person vor einer Zeremonie steht, die
+   * sich nicht erklaeren laesst.
+   *
+   * **Eine Vertagung steht hier, statt daneben.** ADR 0114s Wurzelrotation ist
+   * im Protokoll und im Home fertig und im Vault-Daemon nicht (Befund B79); das
+   * Etikett steht bereits in beiden Rollenmengen, Bauer und Zeichner fehlen.
+   * Der Eintrag faellt an dem Tag, an dem das nachgeholt wird - und dann
+   * gehoert er weg, nicht erweitert.
+   */
+  const vertagt = new Map<string, string>([
+    [picoIdentitySignatureInputLabels.rotation,
+      'ADR 0114 mit Befund B79: die Wurzelrotation ist im Vault-Daemon vertagt. Die '
+      + 'Rollenmengen nennen sie bereits, `buildersByLabel` und `renderersByLabel` nicht, '
+      + 'also antwortet der Daemon `unknown_signature_input_label`. Das ist der '
+      + 'eingetragene Stand und keine Ueberraschung.'],
+  ]);
+
+  it('renders a statement for every label a role may sign and approval gates', () => {
+    // Die Felder sind leer, und das genuegt: geprueft wird, ob ein Zeichner
+    // *existiert*, nicht was er schreibt. Ein fehlender antwortet `undefined`,
+    // egal womit man ihn fuettert; einer, der leere Felder ablehnt, wirft - und
+    // ist damit vorhanden.
+    const ohneSatz = new Set<string>();
+    for (const keyRole of picoVaultPersonKeyRoles) {
+      for (const label of picoVaultSignableLabels(keyRole)) {
+        if (!picoVaultDaemonSignatureNeedsApproval(label, keyRole)) {
+          continue;
+        }
+        try {
+          if (renderPicoVaultApprovalStatement(label, {}) === undefined) {
+            ohneSatz.add(label);
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    expect([...ohneSatz].filter((label) => !vertagt.has(label))).toEqual([]);
+    // Und die Vertagung ist noch eine: ein Grund, der seinen Gegenstand
+    // ueberlebt, liest sich wie ein Urteil ueber heute.
+    for (const label of vertagt.keys()) {
+      expect(ohneSatz.has(label)).toBe(true);
+    }
+  });
+
+  it('leaves no signable label without bytes either', () => {
+    // Die andere Haelfte desselben Dreiklangs: ohne Bauer gibt es keine Bytes,
+    // und der Daemon antwortet `unknown_signature_input_label` auf ein Etikett,
+    // das seine Rollenmenge ausdruecklich erlaubt - eine Tuer, die aufgeht und
+    // dahinter eine Wand hat.
+    const ohneBytes = new Set<string>();
+    for (const keyRole of picoVaultPersonKeyRoles) {
+      for (const label of picoVaultSignableLabels(keyRole)) {
+        expect(picoVaultCanSignLabel(keyRole, label)).toBe(true);
+        try {
+          if (buildPicoVaultSignatureInputFromFields(label, {}) === undefined) {
+            ohneBytes.add(label);
+          }
+        } catch {
+          // Ein Bauer, der leere Felder ablehnt, ist ein vorhandener Bauer.
+          continue;
+        }
+      }
+    }
+
+    expect([...ohneBytes].filter((label) => !vertagt.has(label))).toEqual([]);
   });
 });
