@@ -4453,6 +4453,25 @@ describe('Pico Home Core app', () => {
     const anonymous = await app.inject({ method: 'POST', url: '/api/realtime/tickets' });
     expect(anonymous.statusCode).toBe(401);
 
+    // B169. Die zweite Haelfte des Namens - *and drops them when the session
+    // ends* - stand bis zum 2026-09-14 nur im Namen. Gefunden beim Pflanzen:
+    // `purgeSessionRealtimeTickets` zu einer leeren Anweisung gemacht, und kein
+    // Test bemerkte es, obwohl ADR 0076 direkt daneben steht ("A ticket minted
+    // under a session dies with it").
+    //
+    // Eine Karte ist ein zweiter Schluessel zu derselben Sitzung. Wer sich
+    // abmeldet, weil er ein fremdes Geraet verlaesst, muss auch den zweiten
+    // los sein - sonst hat das Abmelden nur den Teil beendet, den die Person
+    // sehen konnte.
+    await app.inject({
+      method: 'DELETE',
+      url: '/api/auth/session',
+      headers: { authorization: `Bearer ${session}` },
+    });
+
+    await expect(app.injectWS(`/ws?ticket=${encodeURIComponent(ticket.json().ticket as string)}`))
+      .rejects.toThrow('Unexpected server response: 401');
+
     await app.close();
   });
 });

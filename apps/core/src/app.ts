@@ -9244,18 +9244,6 @@ function parseHostHeader(hostHeader: string | string[] | undefined): string | nu
   return url.host;
 }
 
-function isFoundationApiPath(requestUrl: string): boolean {
-  let url: URL;
-
-  try {
-    url = new URL(requestUrl, 'http://pico.local');
-  } catch {
-    return false;
-  }
-
-  return url.pathname.startsWith('/api/');
-}
-
 function createRealtimeTicket(
   tickets: Map<string, RealtimeTicketRecord>,
   sessionDigest?: string,

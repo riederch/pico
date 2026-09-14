@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B169 — Ein Name, der mehr verspricht als sein Körper geht; ein Wächter ohne
+Aufrufer (2026-09-14).** `app.ts` ist **9.758 Zeilen**, davon `buildApp` allein
+**7.845** — eine Funktion, die fast die ganze Datei ist. Unten liegen 59
+Helfer, und **56 davon nennt kein Test beim Namen.** Das ist hier aber die
+falsche Frage: private Helfer werden über HTTP erreicht, nicht genannt. Die
+richtige Frage ist Pflanzen.
+
+Sieben Helfer tragen echte Sicherheitszusagen; jeder einzeln geneutert, dann die
+drei Testdateien, die sie erreichen:
+
+| Pflanzung | Ergebnis |
+|---|---|
+| `isWebSocketOriginAllowed` → jede Herkunft erlaubt | fällt (2 Tests) |
+| `isBearerTokenAuthorized` → jedes Zeichen genügt | fällt (7 Tests) |
+| `secureTokenEquals` → alles ist gleich | fällt (2 Tests) |
+| `hasRealtimeTicketElapsed` → nichts läuft ab | fällt (1 Test) |
+| `consumeRealtimeTicket` → die Karte bleibt gültig | fällt (1 Test) |
+| `purgeSessionRealtimeTickets` → überlebt die Sitzung | **niemand bemerkt es** |
+| `isFoundationApiPath` → kein Pfad ist API | **niemand bemerkt es** |
+
+**Der erste: ein Test, dessen Name eine Zusage macht, die sein Körper nicht
+geht.** Er heißt *„mints realtime tickets under an operator session **and drops
+them when the session ends**"* — und meldet sich nie ab. Der Körper prägt eine
+Karte und prüft, dass ein anonymer Aufrufer keine bekommt. Die zweite Hälfte des
+Namens stand nur im Namen, obwohl ADR 0076 direkt neben dem Code steht: *„A
+ticket minted under a session dies with it."*
+
+Eine Karte ist ein **zweiter Schlüssel zu derselben Sitzung**. Wer sich abmeldet,
+weil er ein fremdes Gerät verlässt, muss auch den zweiten los sein — sonst hat
+das Abmelden nur den Teil beendet, den die Person sehen konnte. Der Körper geht
+das jetzt: abmelden, dann die Karte einlösen wollen. Mit der Pflanzung
+**verbindet** sich der Socket danach, statt abgewiesen zu werden.
+
+**Der zweite ist gar kein Wächter mehr.** `isFoundationApiPath` hat **im ganzen
+Baum keinen Aufrufer**. Die Geschichte sagt genau, wann er ihn verlor: am
+2026-07-17 hat der Commit *„operator credential, sessions and access classes
+(ADR 0075 Gate A)"* die einzige Aufrufstelle ersetzt — `isFoundationApiRoute`
+über das Routenmuster plus eine Zugangsklassen-Prüfung — und die alte Funktion
+stehen lassen. Der Schutz wurde also ersetzt und verstärkt, nicht verloren; was
+blieb, war ein Rückstand, der aussieht wie eine Regel. Er ist entfernt (wie die
+zwei unerreichbaren Wachen aus B152 und B153).
+
+**Warum er zwei Monate stehen konnte, ist die systemische Hälfte:**
+`noUnusedLocals` ist in `tsconfig.base.json` **nicht gesetzt**, also schweigt der
+Übersetzer zu totem Code. Gemessen, was ein Einschalten heute meldete: **70
+Stellen** — 42 im Produktcode, 28 in Tests, überwiegend ungenutzte Importe und
+Typen. Das ist keine Aufräumarbeit für nebenbei und berührt Dateien, an denen
+parallel gearbeitet wird. *Empfohlen:* einschalten, wenn ein ruhiger Tag da ist —
+in genau diesem Rauschen hat sich ein Wächter versteckt. *Alternative:* so
+lassen; die Zahl steht hier mit Datum und lässt sich jederzeit neu messen.
+
 **B168 — Zehn leere Fänge, alle erklärt, einer nicht gegangen
 (2026-09-14).** Ein `catch {}` ohne Rumpf verschluckt einen Fehlschlag. Gezählt
 über den ganzen Baum: **341 Auffangblöcke** — 17 werfen mit `cause`, 47 nennen
