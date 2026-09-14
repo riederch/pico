@@ -912,6 +912,72 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B172 — 2.304 Verzeichnisse im Arbeitsspeicher, wegen einer Testdatei von 123
+(2026-09-14).** Dieser Befund kam nicht aus dem Code, sondern aus der Maschine:
+mitten in einer Messung meldete die Schale *„Der zugewiesene Plattenplatz
+(Quota) ist überschritten"*. `/tmp` liegt hier **im RAM** einer 16-GB-Maschine
+und war zu 80 % voll.
+
+Gezählt: **2.367 liegengebliebene `pico-*`-Verzeichnisse**, davon 2.304 unter
+einem Namen. Der Erzeuger ist `host-adapter.test.ts`, und er ist **die einzige
+von 123 Testdateien, die ein Temp-Verzeichnis anlegt und keines entfernt** —
+122 räumen weg. Gemessen statt geschätzt: ein einzelner Lauf dieser Datei ließ
+**18** zurück, die 2.304 entsprechen also rund 128 Läufen. Das ist meine eigene
+Spur: diese Sitzung hat die Kette sehr oft gefahren.
+
+Aufgeräumt (1,7 GB frei, pnpm-Store und die Statusdateien der Parallelsitzung
+unberührt), das Leck geschlossen, und die Regel steht jetzt in
+`tests:check`: **wer ein Temp-Verzeichnis anlegt, räumt es weg.** Grob mit
+Absicht — sie fragt, ob die Datei ein Entfernen überhaupt *nennt*, nicht ob es
+jeden Pfad trifft; dieselbe Stärke wie ihre Nachbarn, und genau dieses Fehlen
+war der Fall. Gepflanzt fällt sie.
+
+Nebenbei gemessen und **nicht** behoben: 32 `pico-companion-*`-Verzeichnisse aus
+dem Paketbau bleiben ebenfalls liegen. Das ist kein neuer Befund, sondern der
+bekannte B114 — ein per Bus aktivierter Portaldienst überlebt den Begleiter und
+schreibt in das Verzeichnis zurück, während es entfernt wird. Der Kommentar dort
+sagt, warum nicht aufgezählt und beendet wird: welche Dienste ein Bus aktiviert,
+entscheidet der Bus.
+
+**B171 — Ein Grund gilt als gegangen, weil ein anderes Modul dasselbe Wort sagt
+(2026-09-14).** `check-refusal-reasons.mjs` schreibt über sich selbst, es frage,
+ob ein Grund im **Code** einer Testdatei *vorkommt* — nicht, ob ein Test ihn
+*erwartet*: *„sie fängt das Fehlen, nicht die Schläfrigkeit"*. Diese Sitzung hat
+gemessen, was dahinter liegt, mit einer Sonde, die das Tor nicht sein kann: den
+erzeugten Grund umbenennen und sehen, ob ein Test fällt.
+
+Drei Flächen, von außen nach innen:
+
+- **`link-direct.ts`, die Fläche für fremde Anfragen: alle 14 Ablehnungen werden
+  behauptet.**
+- **`relay/store.ts`: alle 6.**
+- **`reader-custody.ts`, die Tür zu den Erinnerungen: 10 von 15 — fünf nicht.**
+
+Und der Grund dafür ist der Kern des Befunds: die fünf sind im Tor als gegangen
+gezählt, weil **dieselben Wörter anderswo behauptet werden** —
+`reader_key_revoked` und `freshness_stale` in `reader-key.test.ts`,
+`reader_is_not_active_member` in `domain-read-grant.test.ts`,
+`conflicting_record` in `share-envelope.test.ts`. Das sind **andere Erzeuger
+derselben Worte**. Gemessen über den ganzen Baum: von 146 erzeugten Gründen
+entstehen **19 in mehr als einer Datei**, und je Erzeuger einzeln gepflanzt
+fallen dort acht Paare durch — darunter `vault_locked` an drei Stellen und
+`invalid_issuer_signature` an zweien.
+
+Drei der fünf sind jetzt gegangen: ein Leser ohne aktive Mitgliedschaft, und die
+zwei Ablehnungen, die aus der Leserregistrierung **durchgereicht** statt
+eingeebnet werden — *„dein Nachweis ist alt"* und *„dein Schlüssel wurde
+zurückgezogen"* sagen einer Person verschiedene Dinge, und der Sammelgrund
+`reader_key_is_not_current` sagt keines davon. Alle drei fallen ohne ihre
+Ablehnung.
+
+**Und eine Fehlmessung gehört zum Befund.** Der erste Durchgang meldete
+`quota_exceeded` als unbehauptet — ein Artefakt meiner Dateiauswahl: sein Test
+steht in `link-intake-quota.test.ts` und prüft über die HTTP-Antwort. Die Lehre
+ist methodisch und steht hier, damit sie niemand neu lernt: **eine Pflanzsonde
+muss gegen den ganzen Lauf gehen, nicht gegen die Dateien, die man vermutet.**
+Es war das dritte Mal an diesem Tag, dass Nachsehen vor dem Aufschreiben einen
+Fehlbefund verhindert hat.
+
 **B170 — Zwei Decken, die ihre eigene Ablage nicht beschränkten
 (2026-09-14).** `ceiling:check` fragte bis dahin *strukturell*: sagt jede
 Tabelle, wie sie aufhört zu wachsen? Das war nie die ganze Frage. Eine Decke,
