@@ -912,6 +912,41 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B176 — Das Gedächtnis dieses Projekts nennt nichts, was es nicht gibt
+(2026-09-14, negatives Ergebnis).** Dieser Baum stellt an alles die Frage, ob
+eine Begründung ihren Gegenstand überlebt hat. An seine eigenen Dokumente hatte
+sie nie jemand gestellt.
+
+Gemessen über alle Rückstrich-Bezeichner in camelCase, gegen **1.420 Dateien**
+des ganzen Repositories einschließlich der Android-Quellen:
+
+| Dokument | Bezeichner | nicht mehr im Baum |
+|---|---|---|
+| `Roadmap.md` | 254 | 9 |
+| `.agent-context.md` | 7 | 2 |
+| `progress.md` | 5 | 0 |
+| `docs/development/agent-runbook.md` | 3 | 0 |
+| `AGENTS.md` | 0 | 0 |
+
+**Und alle elf sind mit Absicht dort.** In der Roadmap: fünf gefaltete Fassungen
+(ein Befund über dreizehn Kopien *muss* die dreizehn nennen), ein ausdrücklich
+gelöschter Export, zwei Feldnamen einer Messung — keine Symbole, sondern
+JSON-Schlüssel —, und ein Name, den ich selbst zum Pflanzen erfunden habe. Im
+Handoff: `isFoundationApiPath` im **Präteritum** als festgehaltene Entfernung
+(B169) und `rotationBootstrap` als *vorgeschlagener* Name in einer Empfehlung
+(B79).
+
+**Der Grund dafür ist die Zeitform, und der ist tragfähiger als ein Tor.** Die
+Roadmap hält Befunde — Aussagen über einen Moment, die nur dann veralten, wenn
+man sie ins Präsens setzt. `progress.md` behauptet die Gegenwart und wird von
+`progress:walk` und `docs:check` daran gehalten. Der Handoff mischt beides und
+markiert, was welches ist. Ein Tor dafür müsste die Zeitform lesen, und es hätte
+heute nichts zu fangen.
+
+Aufgeschrieben, damit es niemand ein zweites Mal misst. Erstes Muster gemessen:
+es meldete 22 Fehltreffer, weil mein Dateiscan die Android-Quellen und die
+Plattformnamen nicht sah — dieselbe Lehre wie in B175, eine Stelle weiter.
+
 **B175 — Zehn Erzeuger, deren Ablehnung nur ein Nachbar behauptet, und eine
 Sonde, die einen Abbruch für einen Fund hielt (2026-09-14).** B171 stellte die
 Frage: gilt eine Ablehnung als gegangen, weil ein *anderes Modul* dasselbe Wort
