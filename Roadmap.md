@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B174 — Drei Tabellen, die gemeinsam entscheiden, und niemand hielt sie
+gegeneinander (2026-09-14).** B173 hat gezeigt, *dass*
+`unrenderable_signature_input` unerreichbar ist. Es blieb die unangenehme
+Hälfte: unerreichbar **aus einem Zufall**, den nichts nachrechnet. Ob eine
+Zeremonie durchgeht, entscheiden drei Tabellen zusammen —
+
+1. wer welches Etikett unterschreiben darf (`signableLabelsByKeyRole`),
+2. was davon die Zustimmung der Person braucht
+   (`picoVaultDaemonSignatureNeedsApproval`),
+3. wofür es Bytes und einen Satz gibt (`buildersByLabel`, `renderersByLabel`) —
+
+und sie lagen in drei Paketen, ohne dass eine Prüfung sie je nebeneinander legte.
+Wer ein Etikett in eine Rollenmenge aufnimmt und Bauer oder Zeichner vergisst,
+erfährt es heute erst, **wenn eine Person vor einer Zeremonie steht, die sich
+nicht erklären lässt.**
+
+Der Test rechnet es jetzt nach, und weil die Rollentabelle nur über ein
+Ja-Nein-Orakel lesbar war, gibt `picoVaultSignableLabels` sie ganz heraus. Kein
+Tor, sondern ein Test: `label:check` läuft **vor** `build`, könnte die gebauten
+Werte also gar nicht fragen — ein Test kann es.
+
+**Und er fand sofort etwas, das kein Fehler ist und trotzdem hierher gehört:**
+`pico.identity.rotation.v1` steht in **beiden** Rollenmengen, ist
+bewilligungspflichtig und hat **weder Bauer noch Zeichner**. Das ist ADR 0114s
+Wurzelrotation, deren Daemon-Seite Befund B79 ausdrücklich vertagt — der Daemon
+antwortet `unknown_signature_input_label` auf ein Etikett, das seine eigene
+Rollenmenge erlaubt. Eine Tür, die aufgeht und dahinter eine Wand hat.
+
+Die Vertagung steht jetzt **im Test** statt nur daneben, mit ihrem Grund. Und sie
+ist so eingetragen, dass sie an dem Tag fällt, an dem jemand die Rotation
+nachholt: der Test besteht darauf, dass der vertagte Fall *noch* einer ist. Ein
+Grund, der seinen Gegenstand überlebt, liest sich wie ein Urteil über heute.
+
+Gepflanzt: ein erfundenes Etikett in die Rollenmenge der Identitätswurzel, ohne
+Bauer und ohne Zeichner — beide Hälften des Tests fallen und nennen es.
+
+**Und die Kette riss dabei an mir selbst.** Der erste Lauf brach im Bau ab:
+`Map(['pico.identity.rotation.v1', …])` leitet seinen Schlüsseltyp als
+*Literal* ab, und `has(label: string)` passt darauf nicht. Gefahren hatte ich
+vorher nur vitest — und **vitest übersetzt nicht, nur `build` tut es.** Dieselbe
+Falle steht seit dieser Sitzung im Runbook, und sie hat mich trotzdem erwischt:
+sie greift genau dann, wenn eine Änderung nur noch „ein Wort" groß aussieht.
+
 **B173 — Genannt ist nicht behauptet, und ein Rollentor stand in keinem Test
 (2026-09-14).** B171 hat die teure Sonde gefahren — jeden Grund umbenennen und
 den ganzen Lauf beobachten. Hier die billige, die dasselbe für einen Teil der
