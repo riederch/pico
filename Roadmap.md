@@ -912,6 +912,47 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B175 — Zehn Erzeuger, deren Ablehnung nur ein Nachbar behauptet, und eine
+Sonde, die einen Abbruch für einen Fund hielt (2026-09-14).** B171 stellte die
+Frage: gilt eine Ablehnung als gegangen, weil ein *anderes Modul* dasselbe Wort
+behauptet? Die Antwort steht jetzt vollständig — und die Zahl, die B171 nannte,
+war falsch.
+
+**Zuerst der Fehler, weil er die Lehre trägt.** Die erste Sonde lief, während
+`/tmp` volllief (B172). Abgebrochene Testläufe geben keine lesbare Zählung aus,
+und mein Skript las „keine Zählung" als „nichts ist gefallen". **Ein Abbruch sah
+aus wie ein Fund** — und zwar so überzeugend, dass acht davon in einen
+eingecheckten Befund gerieten. Von Hand nachgeprüft fiel ausgerechnet der erste
+gemeldete Fall (`foreign_host_key` in `domain-read-grant.ts`) mit zwei Tests.
+
+Die Lehre ist die zweite methodische aus diesem Ast, und sie ist unangenehmer
+als die erste: **eine Sonde muss den Unterschied zwischen „nichts gefunden" und
+„nicht gelaufen" kennen.** Ohne ihn meldet ausgerechnet ein kaputter Lauf die
+meisten Funde. Die neue Sonde bricht laut ab, wenn ein Lauf keine Zählung
+liefert; über 43 Paare gab es **null** Abbrüche.
+
+**Die richtige Messung: 43 Paare aus Grund und Erzeuger, 33 behauptet, 10
+nicht.**
+
+| Grund | Erzeuger, für den ihn nichts behauptet |
+|---|---|
+| `vault_locked` | `companion/first-run.ts`, `companion/recovery-controller.ts`, `vault-daemon/daemon.ts` |
+| `unknown_credential`, `invalid_identity_lifecycle_evidence`, `unknown_grant` | `core/event-store.ts` |
+| `invalid_issuer_key_role`, `issuer_key_fingerprint_mismatch` | `core/home-membership.ts` |
+| `conflicting_record` | `core/reader-custody.ts` |
+| `identity_is_not_active_member` | `core/reader-key.ts` |
+
+Zwei davon sind gegangen, und es sind die, bei denen der Zuschnitt am schärfsten
+ist: `home-membership.ts` und `domain-read-grant.ts` sind die Zwillinge aus
+B145, sprechen dieselben zwei Ablehnungen aus, und nur der eine hatte einen
+Test. Die Frage — *ist der Aussteller wirklich der Schlüssel, den sein
+Fingerabdruck nennt, und in der Rolle, die für eine Identität unterschreiben
+darf?* — ist dieselbe und muss trotzdem an beiden stehen. Beide fallen jetzt bei
+der Pflanzung.
+
+Die übrigen acht bleiben gemessen und offen; sie stehen hier mit Namen, damit
+niemand sie neu sucht.
+
 **B174 — Drei Tabellen, die gemeinsam entscheiden, und niemand hielt sie
 gegeneinander (2026-09-14).** B173 hat gezeigt, *dass*
 `unrenderable_signature_input` unerreichbar ist. Es blieb die unangenehme
@@ -1056,9 +1097,25 @@ gezählt, weil **dieselben Wörter anderswo behauptet werden** —
 `reader_is_not_active_member` in `domain-read-grant.test.ts`,
 `conflicting_record` in `share-envelope.test.ts`. Das sind **andere Erzeuger
 derselben Worte**. Gemessen über den ganzen Baum: von 146 erzeugten Gründen
-entstehen **19 in mehr als einer Datei**, und je Erzeuger einzeln gepflanzt
-fallen dort acht Paare durch — darunter `vault_locked` an drei Stellen und
-`invalid_issuer_signature` an zweien.
+entstehen **19 in mehr als einer Datei**, und das sind 43 Paare aus Grund und
+Erzeuger.
+
+> **Berichtigung am 2026-09-14.** Hier stand zuerst, je Erzeuger gepflanzt
+> fielen *acht* Paare durch, „darunter `vault_locked` an drei Stellen und
+> `invalid_issuer_signature` an zweien". **Diese Zahl war falsch, und die Liste
+> auch.** Die Sonde lief, während `/tmp` volllief (Befund B172): abgebrochene
+> Testläufe erzeugen keine lesbare Zählung, und mein Skript las „keine Zählung"
+> als „nichts ist gefallen". Ein Abbruch sah aus wie ein Fund.
+>
+> Nachgemessen mit einer Sonde, die einen Abbruch **meldet** statt ihn als
+> Ergebnis auszugeben: **43 Paare, 0 Abbrüche, 10 nicht behauptet** — und die
+> Liste ist eine andere. `foreign_host_key` und `invalid_issuer_signature` sind
+> sehr wohl behauptet; von Hand nachgeprüft fällt `foreign_host_key` in
+> `domain-read-grant.ts` mit zwei Tests. Die richtige Liste steht in B175.
+>
+> Die Lehre steht in B175 und ist die zweite methodische aus diesem Ast: **eine
+> Sonde muss den Unterschied zwischen „nichts gefunden" und „nicht gelaufen"
+> kennen.** Ohne ihn meldet ausgerechnet ein kaputter Lauf die meisten Funde.
 
 Drei der fünf sind jetzt gegangen: ein Leser ohne aktive Mitgliedschaft, und die
 zwei Ablehnungen, die aus der Leserregistrierung **durchgereicht** statt
