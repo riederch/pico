@@ -45,6 +45,12 @@ const clients: PicoVaultDaemonClient[] = [];
 
 interface ReaderFixture {
   readerKeyfile: ReturnType<typeof createPicoVaultKeyfile>;
+  /**
+   * Befund B173. Ein zweiter Schluessel mit der *falschen* Rolle, damit die
+   * Rollenpruefung des Lesezugangs gegangen werden kann - sie lag bis zum
+   * 2026-09-14 in keinem Test, weil der Daemon nur den Leserschluessel kannte.
+   */
+  writerKeyfile: ReturnType<typeof createPicoVaultKeyfile>;
   pins: {
     routeRef: string;
     domainAuthorityId: string;
@@ -268,7 +274,13 @@ function buildReaderFixture(): ReaderFixture {
     session.lock();
   }
 
-  return { readerKeyfile: readerAgreement, pins, archiveStore, stateStore };
+  return {
+    readerKeyfile: readerAgreement,
+    writerKeyfile: writerSigning,
+    pins,
+    archiveStore,
+    stateStore,
+  };
 }
 
 interface RunningDaemon {
@@ -285,6 +297,17 @@ async function startDaemonProcess(): Promise<RunningDaemon> {
       `device_key_agreement-${fixture.readerKeyfile.keyFingerprintHex}.json`,
     ),
     fixture.readerKeyfile.keyfile,
+  );
+  // B173. Derselbe Vault haelt einen Schluessel mit einer anderen Rolle - so
+  // wie ein echter, in dem Identitaet, Unterschrift und Vereinbarung
+  // nebeneinander liegen.
+  writePicoVaultKeyfile(
+    join(
+      home,
+      'keyfiles',
+      `device_signing-${fixture.writerKeyfile.keyFingerprintHex}.json`,
+    ),
+    fixture.writerKeyfile.keyfile,
   );
 
   const child = spawn(process.execPath, [
@@ -448,6 +471,33 @@ describe('Reader access over the Vault daemon (ADR 0098 S17.5/S17.6)', () => {
       } as never,
       evaluatedAt: '2026-07-27T10:11:00.000Z',
     })).toThrow('reader_access_lease_required');
+  }, 60_000);
+
+  it('refuses a key whose role is not device key agreement', async () => {
+    // B173. Der Lesezugang wird mit einem *Vereinbarungsschluessel* geoeffnet;
+    // eine Unterschrift ist keine Vereinbarung. Diese Rollenpruefung lag in
+    // keinem Test, weil der Daemon dieses Harness nur den Leserschluessel
+    // kannte - es gab schlicht keinen Schluessel mit der falschen Rolle, den
+    // man ihm haette anbieten koennen.
+    //
+    // Gefunden wurde sie nicht am Code, sondern an einer Zaehlung: der Grund
+    // steht in keiner erklaerten Vereinigung und in keinem Test, also sieht ihn
+    // `refusal:check` gar nicht.
+    const daemon = await startDaemonProcess();
+    const client = await connectPicoVaultDaemonClient({ socketPath: daemon.socketPath });
+    clients.push(client);
+    await client.hello();
+    await client.unlock({
+      keyRole: 'device_signing',
+      keyFingerprintHex: fixture.writerKeyfile.keyFingerprintHex,
+      passphrase: 'writer signing passphrase',
+    });
+
+    const transport = openTransport(daemon.socketPath);
+    expect(() => openPicoVaultDaemonReaderAccessSession(transport, {
+      readerKeyFingerprintHex: fixture.writerKeyfile.keyFingerprintHex,
+      maxDurationMs: 60_000,
+    })).toThrow('reader_access_key_role_mismatch');
   }, 60_000);
 
   it('refuses a wrong reader fingerprint, a second lease and a foreign lease id', async () => {

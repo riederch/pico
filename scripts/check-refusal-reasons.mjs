@@ -1,6 +1,9 @@
+import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const ts = createRequire(import.meta.url)('typescript');
 
 /**
  * Jede Ablehnung, die dieses Produkt aussprechen kann, ist einmal gegangen
@@ -99,6 +102,18 @@ const withoutComments = (text) => text
  * "spaeter".
  */
 const notYetWalked = new Map([
+  ['inactive_writer_grant', 'Befund B173 (2026-09-14). Der Grund stand bis dahin als '
+    + 'gegangen, weil sein Wort in `refusal-line.test.ts` vorkommt - in einer *Liste von '
+    + 'Namen*, die prueft, ob jede Ablehnung einen Satz fuer eine Person hat. Das ist eine '
+    + 'andere Frage.\n'
+    + 'Was ein Gang braeuchte: `reader-custody.ts` spricht ihn an zwei Stellen aus, und '
+    + 'beide liegen *hinter* der Rotationsschuld. Ein Schreiber, dessen Zuteilung beendet '
+    + 'ist, bekommt heute zuerst `rotation_required` - richtig so, aber es verdeckt diesen '
+    + 'Grund. Ein Gang muss also erst die Schuld schliessen (eine Schluesselrotation '
+    + 'aufzeichnen) und *dann* mit der beendeten Zuteilung schreiben. Die zweite Stelle '
+    + 'verlangt einen Eintrag mit einer anderen Schluesselversion als der aktuellen, und '
+    + 'weil der Eintrag unterschrieben ist, muss er echt gebaut und nicht veraendert '
+    + 'werden.'],
 ]);
 
 const sourceFiles = [];
@@ -207,11 +222,43 @@ const byTemplate = (reason) =>
  * nimmt dem Tor ein Versprechen ab, das es nicht hielt.
  */
 const named = new Set();
+const asserted = new Set();
+const matcherNames = new Set([
+  'toBe', 'toEqual', 'toStrictEqual', 'toMatchObject', 'toThrow', 'toThrowError',
+  'toContain', 'toContainEqual', 'toHaveProperty', 'toMatch',
+]);
 for (const file of testFiles) {
-  const code = withoutComments(readFileSync(file, 'utf8'));
-  for (const [, reason] of code.matchAll(/'([a-z0-9_]+)'/gu)) {
+  const text = readFileSync(file, 'utf8');
+  for (const [, reason] of withoutComments(text).matchAll(/'([a-z0-9_]+)'/gu)) {
     named.add(reason);
   }
+  /*
+   * **Genannt ist nicht behauptet** (Befund B173, 2026-09-14). Bis dahin
+   * genuegte diesem Tor, dass das Wort irgendwo im Code einer Testdatei
+   * vorkam - auch in einer Liste von Namen, die etwas ganz anderes prueft. Der
+   * Kopf sagte das ehrlich ("genannt gegen erwartet steht noch"), und eine
+   * Verschaerfung schien zu raten, wie nah an einem `expect` nah genug ist.
+   *
+   * Ueber den Syntaxbaum ist daran nichts zu raten: entweder das Wort steht im
+   * Argument eines Vergleichers, oder nicht. Gemessen, bevor es eingebaut
+   * wurde: von 146 erzeugten Gruenden stehen 142 in einer solchen Behauptung,
+   * und der eine erklaerte, der es nicht tat, stand in einer Namensliste.
+   */
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
+  const visit = (node) => {
+    if (ts.isStringLiteralLike(node)) {
+      for (let parent = node.parent; parent !== undefined; parent = parent.parent) {
+        if (ts.isCallExpression(parent)
+          && ts.isPropertyAccessExpression(parent.expression)
+          && matcherNames.has(parent.expression.name.text)) {
+          asserted.add(node.text);
+          break;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
 }
 
 // Ein Tor ueber nichts sagt "sauber" und meint "ich habe nicht nachgesehen".
@@ -235,11 +282,11 @@ for (const [reason, files] of [...declared].sort()) {
     }
     composed += 1;
   }
-  if (named.has(reason)) {
+  if (asserted.has(reason)) {
     walked += 1;
     if (notYetWalked.has(reason)) {
       errors.push(
-        `${reason} is listed here as not yet walked, and a test now names it. `
+        `${reason} is listed here as not yet walked, and a test now asserts it. `
         + 'Take the entry out: a list that keeps a debt already paid is a list '
         + 'nobody believes.',
       );
@@ -249,9 +296,12 @@ for (const [reason, files] of [...declared].sort()) {
   const excuse = notYetWalked.get(reason);
   if (excuse === undefined) {
     errors.push(
-      `${reason} is declared in ${where} and no test names it. `
-      + 'A running product can answer with it and nothing has ever been '
-      + 'through it. Walk it, or say here what a walk would need.',
+      `${reason} is declared in ${where} and no test ${named.has(reason) ? 'asserts' : 'names'} it. `
+      + (named.has(reason)
+        ? 'The word stands in a test file, but never inside a matcher - a name in a list is '
+          + 'not a walk (B173). '
+        : 'A running product can answer with it and nothing has ever been through it. ')
+      + 'Walk it, or say here what a walk would need.',
     );
   }
 }
@@ -651,11 +701,12 @@ if (errors.length > 0) {
 console.log(
   `Refusal-reason check passed (${declared.size} refusal reasons declared across `
   + `${sourceFiles.length} sources, every one of them producible - ${composed} only `
-  + `as a composed string; ${walked} are named by a test`
+  + `as a composed string; ${walked} stand inside a test's matcher`
   + (notYetWalked.size === 0
     ? ', and none is argued as unwalked'
-    : `, and ${notYetWalked.size} are argued as not yet walked, each with what a `
-      + 'walk would need')
+    : `, and ${notYetWalked.size} ${notYetWalked.size === 1 ? 'is' : 'are'} argued as not `
+      + 'yet walked, each with what a '
+      + "walk would need")
   + `; ${homes.size} thrown refusals have one home in their package, `
   + `${arguedSeen} share a word between two questions and say why; `
   + `${crossPairs.size} file pairs share a refusal across a package boundary, `
