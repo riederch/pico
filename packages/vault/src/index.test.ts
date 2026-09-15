@@ -421,6 +421,28 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       authorizedAt: '2026-07-27T10:00:00.000Z',
       lifecycleOrder: 'seq:0000000000000001',
     });
+    /**
+     * The key record's own suite and role were unwalked until 2026-09-15
+     * (B181). The record describes the key the owner is binding the domain
+     * to; a suite this build does not know means a key from another
+     * cryptographic generation, and admitting it would bind the domain to
+     * something the reader cannot open.
+     */
+    expect(() => createPicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession: identitySession,
+      ownerReaderKeyRecord: {
+        suite: 'pico.suite.id.v2' as never,
+        keyRole: 'device_key_agreement',
+        publicKeyHex: agreement.publicKeyHex,
+      },
+      domainAuthorityId: 'reader_domain_auth_0002',
+      homeId: 'home_vault_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      domainId: 'domain_reader_other_suite',
+      authorizedAt: '2026-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    })).toThrow('invalid_key_record');
+
     const writerGrantRecord = createPicoReaderCustodyWriterGrant(sodium, {
       ownerIdentitySession: identitySession,
       domainRecord,
@@ -690,6 +712,41 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       rotatedAt: '2026-07-27T10:07:00.000Z',
       lifecycleOrder: 'seq:0000000000000009',
     });
+    /**
+     * Both lifecycle schema words were unwalked until 2026-09-15 (B181). A
+     * lifecycle record travels: the owner signs it, and a rotation reads it
+     * back to learn which grants caused it. The case the word exists for is a
+     * record from a build that named the lifecycle differently - a rotation
+     * that silently ignored it would rotate without the cause it claims.
+     */
+    const otherReaderLifecycle = structuredClone(readerRevoked);
+    (otherReaderLifecycle as { schema: string }).schema
+      = 'pico.reader-custody.reader-grant-lifecycle.v2';
+    expect(() => rotatePicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      readerGrantLifecycleRecords: [otherReaderLifecycle],
+      writerGrantLifecycleRecords: [writerV2Revoked],
+      rotationId: 'reader_rotation_other_reader_lifecycle',
+      rotatedAt: '2026-07-27T10:07:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
+    })).toThrow('invalid_reader_custody_reader_lifecycle');
+
+    const otherWriterLifecycle = structuredClone(writerV2Revoked);
+    (otherWriterLifecycle as { schema: string }).schema
+      = 'pico.reader-custody.writer-grant-lifecycle.v2';
+    expect(() => rotatePicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      readerGrantLifecycleRecords: [readerRevoked],
+      writerGrantLifecycleRecords: [otherWriterLifecycle],
+      rotationId: 'reader_rotation_other_writer_lifecycle',
+      rotatedAt: '2026-07-27T10:07:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
+    })).toThrow('invalid_reader_custody_writer_lifecycle');
+
     const rotationsV3 = [rotationV2, rotationV3];
     const writerV3 = createPicoReaderCustodyWriterGrant(sodium, {
       ownerIdentitySession: identitySession,

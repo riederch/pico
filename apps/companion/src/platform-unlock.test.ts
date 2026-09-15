@@ -107,6 +107,73 @@ describe('Linux Platform Keystore unlock path (ADR 0081 P3)', () => {
   });
 });
 
+describe('an unlock file of ours from a version this build does not have', () => {
+  /**
+   * The header word was unwalked on both paths until 2026-09-15 (B181).
+   * `exactRecord` above refuses a *foreign* file first, so this guard only
+   * ever sees one of ours from a build that named the record differently -
+   * and this is the file that stands between a person and their own Vault on
+   * every start.
+   */
+  it('refuses a Linux record whose schema names another version', async () => {
+    const path = temporaryPath();
+    const secrets = secretPort('vault passphrase');
+    await writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets,
+    });
+    const persisted = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    writeFileSync(path, JSON.stringify({
+      ...persisted,
+      schema: 'pico.companion.platform-unlock.v2',
+    }));
+
+    const daemon = fakeDaemon();
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      secrets,
+      connect: daemon.connect,
+    });
+    await expect(automatic.ensureUnlocked())
+      .rejects.toThrow('invalid_platform_unlock_header');
+    expect(daemon.unlocks).toHaveLength(0);
+    await automatic.close();
+  });
+
+  it('refuses an Android record whose schema names another version', async () => {
+    const path = temporaryPath();
+    const secrets = androidPort('vault passphrase');
+    await writePicoCompanionPlatformUnlock({
+      path,
+      profile: profile(),
+      passphrase: 'vault passphrase',
+      secrets,
+    });
+    const persisted = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    expect(persisted.platform).toBe('android');
+    writeFileSync(path, JSON.stringify({
+      ...persisted,
+      schema: 'pico.companion.platform-unlock.v2',
+    }));
+
+    const daemon = fakeDaemon();
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path,
+      profile: profile(),
+      socketPath: join(tmpdir(), 'fake-vault.sock'),
+      secrets,
+      connect: daemon.connect,
+    });
+    await expect(automatic.ensureUnlocked())
+      .rejects.toThrow('invalid_platform_unlock_header');
+    await automatic.close();
+  });
+});
+
 /**
  * ADR 0131 A3 / ADR 0081 P3. Dieselbe Maschine, anderer Anschluss.
  *
