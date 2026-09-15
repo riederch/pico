@@ -188,6 +188,20 @@ wegpflanzt, braucht drei Vorkehrungen:
 7. **Eine Baum-weite Aussage wird ueber die Liste der Konfigurationen
    gefuehrt.** `grep -l tsconfig.base */*/tsconfig.json` nennt siebzehn Pakete;
    eine Liste im Kopf nannte neun (B180).
+8. **„Genannt" ist nicht „gehalten", und zwar in beide Richtungen.** Ein Test
+   kann einen Waechter halten, ohne seine Meldung je zu nennen - ein
+   Byte-Vektor-Test tut das. Und ein Wort kann dreimal behauptet werden,
+   waehrend der gemeinte Zweig **nie** faellt: wo ein `throw` an einer
+   Oder-Kette haengt, trifft ein Test irgendein Glied, und das Wort sieht
+   gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
+   Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
+   wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+9. **Eine Sonde, die Quellen aendert, misst nur Pakete, deren Tests aus den
+   Quellen fahren.** Wer ohne Bau pflanzt, misst jedes abhaengige Paket gegen
+   ein sauberes `dist` und bekommt eine Null, die nichts bedeutet. Am
+   2026-09-15 meldete derselbe Sondenlauf dem Core zweimal verschiedene
+   Zahlen, je nachdem ob ein Bau dazwischen lag. Entweder bauen, oder die
+   Aussage auf das Paket beschraenken, in dem die Pflanzung liegt.
 
 Und: gegen den **ganzen** Paketlauf pflanzen, nicht gegen die Dateien, die man
 vermutet - der Test zu einer Ablehnung steht oft in einer anderen. Eine

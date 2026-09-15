@@ -912,6 +912,105 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B181 — Die Tests füttern ein kaputtes Dokument, nie ein fremdes
+(2026-09-15).** B180 endete mit dem Satz, dass ein Fossil zwei Seiten hat.
+Dieselbe Frage eine Ebene höher: **hat jeder Schemaname eine Erzeuger- *und*
+eine Leserseite?** Der Weg dorthin ging über zwei ehrliche Fehlschläge und
+endete an einer Zahl, die ich nicht erwartet hatte.
+
+**Erster Fehlschlag, und er war ein sauberes Nein.** 84 Schemakonstanten, davon
+**16 außerhalb von `packages/protocol/src`** — und `check-wire-labels.mjs`,
+das Tor über einmal buchstabierte Etiketten, sucht nur dort. Ein blinder
+Fleck also. Er ist **leer**: von den 16 wird genau *eine* anderswo
+ausgeschrieben, und die steht in einem Feld vom Typ
+`typeof picoCompanionProfileSchema` — der Übersetzer vergleicht die Kopie.
+**Fünfzehn der sechzehn hängen an einer Typstellung, und jede hat genau einen
+Vergleich**, also genau einen Leser, der ein falsches Schema ablehnt. Die
+sechzehnte ist die beste Gestalt von allen: `picoVaultPrivateKeyPayloadLabel`
+steht in Bauer und Leser derselben Datei, sechzehn Zeilen auseinander, beide
+mit demselben Namen. Aufgeschrieben, damit es niemand ein zweites Mal misst.
+
+**Zweiter Fehlschlag: meine Messung war das falsche Gerät.** Die
+Regelmäßigkeit — „jede Konstante hat genau einen Vergleich" — führte zur
+richtigen Frage: *wird dieser eine Vergleich gegangen?* Über den ganzen Baum
+vergleichen **61 Stellen** ein Feld gegen eine Schemakonstante und werfen dann.
+Ich habe gezählt, welche davon ein Test **in einem Matcher nennt**: 25 ja, 36
+nein. Und die Nachbartabelle war eindeutig — bei **allen vierzehn** Lesern, die
+überhaupt eine gegangene Ablehnung haben, fehlt der Schemawächter:
+`parsePicoSupplierAnswer` geht drei von vier Wörtern, der
+Postfach-Leser fünf von sieben, `parsePicoModelJob` sechs von fünfzehn, und
+ausgelassen ist jedes Mal dasselbe.
+
+**Der Grund dafür steht in der Reihenfolge, und er ist die eigentliche
+Auskunft.** Gestalt- und Schlüsselprüfungen stehen *vor* dem Schemawächter.
+Ein **fremdes** Dokument fällt also schon dort. Der Schemawächter sieht in
+seinem Leben genau einen Fall: **unser eigenes Dokument aus einer Fassung, die
+es nicht mehr gibt.** Das ist kein exotischer Zustand — das ist der erste Lauf
+nach einem Aufstieg. ADR 0134 F2 hat so eine Umbenennung schon einmal gemacht,
+und vierzehn Tage später verlangte der Kartencode immer noch den alten Namen.
+
+**Und dann die Korrektur, die das Ganze erst wahr macht — in beide
+Richtungen.** „Genannt" ist nicht „gehalten", und beide Abweichungen kamen vor:
+
+- **Gehalten, ohne genannt zu sein.** Der `wrong_keyfile_label` des
+  Schlüsseldatei-*Kopfes* fiel beim Pflanzen einem **Byte-Vektor-Test** auf,
+  der die Meldung nirgends ausspricht. Meine Zählung hatte ihn als offen
+  gemeldet.
+- **Genannt, ohne gehalten zu sein — und das ist der lehrreichere Fall.**
+  `unreadable_recovery_anchor` im Core wird von drei Tests behauptet, und der
+  Wächter ist eine **Oder-Kette**: kein Objekt, kein Array, falsches Schema.
+  Die drei Tests treffen die anderen Glieder. Gemessen am 2026-09-15, isoliert
+  und ohne andere Pflanzung: **den Schemavergleich entfernt, und alle 1200
+  Tests des Core bleiben grün.** Ein geteiltes Ablehnungswort lässt einen
+  ungegangenen Wächter gegangen aussehen.
+
+Das richtige Gerät ist also das Ausbauen, nicht das Zählen von Namen. Im
+Protokoll, dessen Tests aus den Quellen fahren und deshalb sauber messbar sind:
+**alle Schemawächter ausgebaut, und von 663 Tests fielen 8.** Nach dieser
+Arbeit sind es 16 von 670.
+
+**Gegangen sind jetzt 21 davon**, jeder mit einer Pflanzung gegen den ganzen
+Paketlauf, die zugleich misst, dass vorher niemand ihn hielt. Die
+Zusammenstellung, weil sie zeigt, was für ein Ding ein Schemawächter ist:
+
+- **Die Schlüsseldatei**, gleich dreifach — Umschlagfassung, Schemanummer und
+  Formatetikett. Und das Format steht **zweimal**: einmal auf dem Umschlag,
+  einmal im Kopf, wo es Teil der zugeordneten Daten der AEAD ist. Nur der erste
+  Platz war gedeckt; der zweite fällt erst im AAD-Bauer, und an ihm hängt,
+  wogegen die Entschlüsselung bindet.
+- **Die Entsperrdatei der Companion**, Linux und Android — die Datei, die bei
+  jedem Start zwischen einer Person und ihrem eigenen Vault steht.
+- **Die Recovery Card**: sie trägt ihre Suite *in der Karte*, nicht aus einer
+  Konstante des Lesers. Eine Karte aus einer anderen kryptographischen
+  Generation erreicht den Wächter wirklich — gedruckt von einem Pico, das es
+  vor dem Aufstieg gab.
+- **Die Lebensläufe der Reader-Custody**, die reisen: der Eigentümer
+  unterschreibt sie, eine Rotation liest sie zurück, um zu erfahren, welche
+  Erteilungen sie ausgelöst haben. Eine Rotation, die einen unbekannten
+  Lebenslauf still überginge, rotierte ohne die Ursache, die sie behauptet.
+
+**Ein Wächter, den ich fast falsch abgelegt hätte.** Der Suite-Wächter in
+`buildPicoHomeDeviceRecovery…SignatureInput` sieht aus wie eine Zusicherung an
+sich selbst — ein Bauer, der sein eigenes Argument prüft. Ist er nicht:
+`buildersByLabel` im Vault-Daemon **gießt die Felder, die über den Socket
+kamen**, und reicht sie unverändert hinein. Die Ablehnung dort ist es, die den
+Daemon davon abhält, Bytes zu rendern und danach eine Person um Zustimmung für
+sie zu bitten.
+
+**Zwei sind dagegen wirklich unerreichbar**, und das gehört genauso
+aufgeschrieben: `assertGrant` und `assertAcceptance` in `device-enrolment.ts`.
+**Jede** ihrer Aufrufstellen setzt `schema:` selbst aus der Konstante, und die
+Transportform trägt das Feld überhaupt nicht. Über den Leseweg kann der
+Vergleich nie falsch werden.
+
+**Und was hinter einer AEAD liegt, ist nur mit einem alten Schreiber
+erreichbar.** `invalid_share_wrap` und `invalid_private_key_payload` lesen
+Etiketten aus *entschlüsselten* Bytes. Ein verfälschtes Byte fällt vorher an
+der Authentifizierung; feuern können sie nur für ein Format, das ein anderer
+Bau geschrieben hat. Sie zu gehen hieße, den Schreiber der Vorfassung im Test
+nachzubauen. Das ist ein Preis, keine Nachlässigkeit — hier genannt, damit die
+Entscheidung sichtbar bleibt.
+
 **B180 — Ein Fossil stirbt auf beiden Seiten der Grenze (2026-09-15).** B179
 endete mit einer verkleinerten Entscheidung: *soll `noUnusedLocals` auch für
 Tests gelten?* Diese Frage ist nicht zu beantworten, solange ihr Preis
