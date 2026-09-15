@@ -175,6 +175,19 @@ wegpflanzt, braucht drei Vorkehrungen:
    die Klammer des *Typs*. Am 2026-09-14 waren so neun von dreizehn gemeldeten
    Funden Artefakte (B177). `ts.createSourceFile(...)` und `node.body.getStart()`
    geben die Stelle genau.
+5. **Eine Pflanzung, die nicht stattfand, sieht aus wie Entwarnung.** Bricht
+   das Pflanzskript ab, laeuft die Pruefung danach gegen die *unveraenderte*
+   Datei und findet nichts - und das liest sich wie „beisst nicht". Am
+   2026-09-15 zweimal an einem Nachmittag (B180). Die Sonde muss zeigen, *was*
+   sie gepflanzt hat, bevor sie prueft.
+6. **Eine mechanische Ersetzung ist keine Messung.** Der Uebersetzer nennt eine
+   *Stelle*; `replace` sucht einen *Namen*. Am 2026-09-15 nahm eine Ersetzung
+   drei `const domain` weg, wo nur eines tot war - die anderen zwei lasen es
+   sechs Zeilen spaeter (B180). Wo eine Zeilennummer vorliegt, wird gegen sie
+   geschnitten (`sed -i '<n>s/.../.../'`), nicht gegen den Text.
+7. **Eine Baum-weite Aussage wird ueber die Liste der Konfigurationen
+   gefuehrt.** `grep -l tsconfig.base */*/tsconfig.json` nennt siebzehn Pakete;
+   eine Liste im Kopf nannte neun (B180).
 
 Und: gegen den **ganzen** Paketlauf pflanzen, nicht gegen die Dateien, die man
 vermutet - der Test zu einer Ablehnung steht oft in einer anderen. Eine

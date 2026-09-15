@@ -912,6 +912,71 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B180 — Ein Fossil stirbt auf beiden Seiten der Grenze (2026-09-15).** B179
+endete mit einer verkleinerten Entscheidung: *soll `noUnusedLocals` auch für
+Tests gelten?* Diese Frage ist nicht zu beantworten, solange ihr Preis
+unbekannt ist. Also erst der Preis, dann die Frage — und der Preis war
+**siebenundzwanzig mechanische Streichungen und zwei Urteile**.
+
+Die 29 Meldungen in Testdateien waren keine 29 Importe. **Drei waren
+Definitionen ohne Leser**, und eine davon ist die eigentliche Auskunft dieses
+Befunds:
+
+- `apps/vault-daemon/src/index.test.ts#canonicalElement` baute ein
+  längenpräfigiertes Element aus einem Etikett. Das ist der **Zwilling** von
+  `daemon.ts#firstCanonicalElementAscii`, der toten Daemon-Funktion aus B179 —
+  dieselbe abgelöste Anordnung, einmal im Produkt, einmal im Test, und beide
+  starben durch denselben Umbau.
+- `approval.test.ts#exemptInputHex` und die zwei Importe, die nur sie trug.
+- `reader-custody.test.ts` hielt in **einer von drei** Fabriken ein
+  `const domain`, das ihr Rumpf nie las.
+
+**Das ist die Lehre.** Ein Fossil hat zwei Seiten: die Funktion und das, was sie
+prüfte. Wer nur eine entfernt, lässt die andere stehen — und die sieht dann
+**lebendig aus**, weil sie sich selbst genügt. `canonicalElement` wäre als
+Testhelfer nicht aufgefallen; erst die Flagge hat gesagt, dass sie niemand
+aufruft. Beim Löschen einer Produktdefinition gehört deshalb die Frage dazu:
+*wer hat sie geprüft, und lebt der noch?*
+
+**Und ein Fehler im Messen, der beinahe drei Tests genommen hätte.** Ich habe
+`const domain = records.domain.domain;` mit einer Ersetzung über die ganze
+Datei entfernt — drei Treffer, aber nur **einer** war tot. Die anderen zwei
+standen in Fabriken, die `domain` sechs Zeilen später lesen. Der Compiler hatte
+**eine** Stelle genannt, nicht drei; die Ersetzung hat einen *Namen* gesucht,
+wo eine *Stelle* gemeint war. Aufgefallen beim Lesen der Umgebung, nicht beim
+Lauf. **Eine mechanische Ersetzung ist keine Messung** — sie beantwortet, wo
+ein Text steht, nie, was er tut.
+
+**Dann die Zählung selbst, und auch die war zu klein.** Ich zählte über neun
+Pakete. Der Baum hat **siebzehn** tsconfigs, und alle siebzehn erben von
+`tsconfig.base.json`: die vier `modules/*` und `packages/sync`, `gesture`,
+`link-relay-client`, `identity` hatte ich nie befragt. Sie meldeten am Ende
+null — das Ergebnis stimmte also, aber aus Glück und nicht aus Methode. Eine
+Baum-weite Aussage wird über die Liste der Konfigurationen geführt, nicht über
+eine Liste, die man im Kopf hat.
+
+**Der Stand ist jetzt null über alle siebzehn Pakete, und die Flagge steht.**
+`noUnusedLocals` ist in `tsconfig.base.json` gesetzt, und weil eine Eigenschaft
+ohne Gang keine ist, geht sie durch `pnpm build`. Gepflanzt: ein toter Import in
+`reader-custody.test.ts` — gemeldet. Die offene Entscheidung aus B178/B179 ist
+damit **keine Entscheidung mehr**, sondern kostenlos beantwortet.
+
+**Eine zweite Flagge kam gratis dazu.** `noUnusedParameters` kostete über alle
+siebzehn Pakete **eine einzige Stelle**: in `canonical-transport.test.ts` hält
+`label` die erste Position vor `options` — der Parameter *soll* ungelesen sein,
+und genau dafür gibt es den Unterstrich. Auch sie steht jetzt, und auch sie
+beißt: ein toter Parameter an `hasReachedStoreCeiling` wurde gemeldet. Zwei
+Flaggen für einen Unterstrich ist ein guter Preis.
+
+**Zweimal habe ich in diesem Lauf einen Abbruch beinahe als Ergebnis
+genommen.** Zwei Pflanzungen meldeten „beißt nicht" — beide hatten *nie
+gepflanzt*: einmal traf eine Regex keine Methode, einmal hieß die Methode
+`public` statt `private`. Das Skript brach ab, und die Prüfung danach lief
+gegen die **unveränderte** Datei und fand erwartungsgemäß nichts. Regel 1 des
+Runbooks, zweimal an einem Nachmittag: *ein Lauf ohne lesbare Zahl ist ein
+Abbruch, kein Ergebnis* — und eine Pflanzung, die nicht stattfand, ist die
+teuerste Form davon, weil ihr Ausbleiben wie Entwarnung aussieht.
+
 **B179 — Eine Importliste ist eine Aussage darüber, was eine Datei tut
 (2026-09-15).** B178 hat aus der offenen `noUnusedLocals`-Entscheidung die
 Teilmenge genommen, die keine Entscheidung ist. Hier die nächste Frage an
