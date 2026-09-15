@@ -154,3 +154,22 @@ describe('ADR 0059 - a result claims nothing about itself', () => {
       .toBe('from_other_weights');
   });
 });
+
+describe('a record of ours from a version this build does not have', () => {
+/**
+ * The schema word is the one refusal in this parser that no test walked until
+ * 2026-09-15 (B181). It cannot fire for a *foreign* document - the shape and
+ * key checks above refuse that first - so the only value it ever sees is one
+ * of our own records carrying a version this build does not have, which is
+ * exactly what an upgrade reads back off disk or off the wire.
+ */
+  it('refuses a result whose schema names another version', () => {
+    expect(() => parsePicoModelResult(result({ schema: 'pico.model.result.v2' })))
+      .toThrow('invalid_pico_model_result_schema');
+  });
+
+  it('refuses a context reference whose schema names another version', () => {
+    expect(() => parsePicoModelContextRef(reference({ schema: 'pico.model.context.ref.v2' }), nowMs))
+      .toThrow('invalid_pico_model_context_ref_schema');
+  });
+});

@@ -232,3 +232,19 @@ describe('ADR 0149 - the book on disk', () => {
     })).toThrow('invalid_companion_pending_reply_book');
   });
 });
+
+describe('a book of ours from a version this build does not have', () => {
+  it('refuses a book whose schema names another version', () => {
+    /**
+     * The schema word is the one refusal in this parser that no test walked
+     * until 2026-09-15 (B181). It cannot fire for a *foreign* document - the
+     * key checks above refuse that first - so the only value it ever sees is
+     * one of our own files carrying a version this build does not have, which
+     * is what the first read after an upgrade hands it.
+     */
+    expect(() => parsePicoCompanionPendingReplyBook({
+      schema: 'pico.companion.pending-reply.v2',
+      pending: [],
+    })).toThrow('invalid_companion_pending_reply_schema');
+  });
+});

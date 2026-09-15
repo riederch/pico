@@ -113,3 +113,17 @@ describe('ADR 0136 BR4 - a supplier cannot claim a person confirmed it', () => {
       .toThrow('invalid_pico_supplier_answer_shape');
   });
 });
+
+describe('a record of ours from a version this build does not have', () => {
+/**
+ * The schema word is the one refusal in this parser that no test walked until
+ * 2026-09-15 (B181). It cannot fire for a *foreign* document - the shape and
+ * key checks above refuse that first - so the only value it ever sees is one
+ * of our own records carrying a version this build does not have, which is
+ * exactly what an upgrade reads back off disk or off the wire.
+ */
+  it('refuses an answer whose schema names another version', () => {
+    expect(() => parsePicoSupplierAnswer({ ...bridge(), schema: 'pico.supplier.answer.v2' }))
+      .toThrow('invalid_pico_supplier_answer_schema');
+  });
+});

@@ -94,3 +94,19 @@ function completedState(): Extract<PicoCompanionRecoveryState, { status: 'comple
     },
   };
 }
+
+describe('a state file of ours from a version this build does not have', () => {
+  it('refuses a state whose schema names another version', () => {
+    /**
+     * The schema word is the one refusal in this parser that no test walked
+     * until 2026-09-15 (B181). It cannot fire for a *foreign* document - the
+     * key checks above refuse that first - so the only value it ever sees is
+     * one of our own files carrying a version this build does not have, which
+     * is what the first read after an upgrade hands it.
+     */
+    expect(() => parsePicoCompanionRecoveryState({
+      ...pendingState(),
+      schema: 'pico.companion.recovery-state.v2',
+    })).toThrow('invalid_companion_recovery_state_schema');
+  });
+});

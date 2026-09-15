@@ -187,6 +187,18 @@ describe('ADR 0148 - the device-local record', () => {
     expect(() => clearPicoCompanionLinkMailbox(path)).not.toThrow();
   });
 
+  it('refuses a record whose schema names a version this build does not have', () => {
+    /**
+     * The schema word is the one refusal in this parser that no test walked
+     * until 2026-09-15 (B181). It cannot fire for a *foreign* document - the
+     * key checks above refuse that first - so the only value it ever sees is
+     * one of our own files carrying a version this build does not have, which
+     * is what the first read after an upgrade hands it.
+     */
+    expect(() => parsePicoCompanionLinkMailbox({ ...record, schema: 'pico.companion.link-mailbox.v2' }))
+      .toThrow('invalid_companion_link_mailbox_schema');
+  });
+
   it('refuses a record whose two addresses are the same', () => {
     expect(() => parsePicoCompanionLinkMailbox({ ...record, outbound: record.inbound }))
       .toThrow('pico_link_mailbox_points_at_itself');
