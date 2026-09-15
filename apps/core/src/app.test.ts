@@ -3240,6 +3240,41 @@ describe('Pico Home Core app', () => {
       `pico.home.surface-session.v1:${sealedClaim.claim.hostSigningKeyFingerprintHex}`,
     );
 
+    /*
+     * Befund B177. `parseSignedPicoIdentityRevocation` war von keinem Test
+     * betreten: die Aufrufe hier schicken eine **leere** Widerrufsliste, und
+     * `.map` laeuft dann nullmal.
+     *
+     * Ein missgebildeter Widerruf muss vor jeder Kryptografie abgewiesen
+     * werden - der Auffangzweig dieser Route beantwortet ihn mit 400 und einem
+     * Satz, statt ihn als Datensatz weiterzureichen. Die Herausforderung ist
+     * dabei absichtlich noch nicht verbraucht: das Abweisen einer kaputten
+     * Anfrage darf keinen Versuch kosten.
+     */
+    const withBrokenRevocation = await app.inject({
+      method: 'POST',
+      url: '/api/auth/identity-session',
+      payload: {
+        challengeId: challenge.challengeId,
+        identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        deviceSigningKeyRecord,
+        deviceKeyAgreementKeyRecord: deviceAgreementKeyRecord,
+        delegation: signedDelegation,
+        revocations: [{ record: {}, signatureHex: 'nicht hex' }],
+        possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityPossessionSignatureInput({
+            suite: picoIdentitySuite,
+            subjectKeyFingerprintHex: deviceSigningFingerprint,
+            verifierNonceHex: challenge.verifierNonceHex,
+            verifierContext: challenge.verifierContext,
+          }),
+          deviceSigning.privateKey,
+        )),
+      },
+    });
+    expect(withBrokenRevocation.statusCode).toBe(400);
+    expect(withBrokenRevocation.json().error).toBe('Pico identity revocation is invalid.');
+
     const identitySessionRequest = {
       challengeId: challenge.challengeId,
       identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
@@ -3846,6 +3881,85 @@ describe('Pico Home Core app', () => {
     });
     expect(revoked.statusCode).toBe(201);
     expect(revoked.json().grant.status).toBe('revoked');
+
+    /*
+     * Befund B177. `domainReadGrantFailureStatus` bildet eine Ablehnung auf
+     * einen Status ab, und **kein Test betrat diese Funktion** - gemessen,
+     * indem sie zu einer Ausnahme gemacht wurde und der ganze Kernlauf
+     * trotzdem gruen blieb. Beide Zweige gehen hier:
+     *
+     * Ein Datensatz mit falscher Unterschrift ist **401** und nicht 400: der
+     * Client hat sich nicht vertan, er hat keine Vollmacht. Und ein Lebenslauf
+     * fuer eine Zuteilung, die dieses Home nie aufgezeichnet hat, ist **409** -
+     * ein Widerspruch zum Bestand, keine kaputte Anfrage.
+     */
+    const forged = await app.inject({
+      method: 'POST',
+      url: '/api/home/domain-read-grants',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeDomainReadGrantRecordSchema,
+        grant,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: 'a'.repeat(128),
+      },
+    });
+    expect(forged.statusCode).toBe(401);
+    expect(forged.json().error).toBe('invalid_issuer_signature');
+
+    const orphanLifecycle = {
+      ...lifecycle,
+      lifecycleId: 'grant_lifecycle_app_orphan',
+      grantId: 'grant_never_recorded',
+    };
+    const orphan = await app.inject({
+      method: 'POST',
+      url: '/api/home/domain-read-grant-lifecycle',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeDomainReadGrantLifecycleRecordSchema,
+        lifecycle: orphanLifecycle,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeDomainReadGrantLifecycleSignatureInput(orphanLifecycle),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    });
+    expect(orphan.statusCode).toBe(409);
+    expect(orphan.json().error).toBe('unknown_grant');
+
+    /*
+     * Befund B177, zweite Haelfte. Die **Umschlagrouten fuhr kein Test** -
+     * `share-envelope.test.ts` prueft die Klasse, nicht die Flaeche, und
+     * `shareEnvelopeFailureStatus` war damit nie betreten.
+     *
+     * Zwei Zweige, zwei verschiedene Saetze an den Client: eine Anfrage ohne
+     * brauchbare Felder ist **400** - der Client hat sich vertan. Eine
+     * Ausstellung, die es nicht (mehr) gibt, ist **404** - er fragt nach etwas,
+     * das dieses Home nicht kennt. Beides als 409 zu beantworten waere
+     * bequemer und saegte dem Client die Auskunft ab.
+     */
+    const malformedIssuance = await app.inject({
+      method: 'POST',
+      url: '/api/home/share-envelopes',
+      headers: operatorAuth,
+      payload: {},
+    });
+    expect(malformedIssuance.statusCode).toBe(400);
+    expect(malformedIssuance.json().error).toBe('invalid_request');
+
+    const unknownIssuance = await app.inject({
+      method: 'POST',
+      url: '/api/home/share-envelopes',
+      headers: operatorAuth,
+      payload: {
+        issuanceId: 'issuance_never_prepared',
+        issuerSignatureHex: 'b'.repeat(128),
+      },
+    });
+    expect(unknownIssuance.statusCode).toBe(404);
+    expect(unknownIssuance.json().error).toBe('unknown_or_expired_issuance');
     expect((await app.inject({
       method: 'GET',
       url: `/api/memory/domains/domain-journal/items/${memoryItemId}`,
