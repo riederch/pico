@@ -912,6 +912,39 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B178 — Zwei Klassen hoben auf, was niemand liest (2026-09-15).** B169 hat
+gemessen, dass `noUnusedLocals` nicht gesetzt ist und ein Einschalten heute **70
+Stellen** meldete — überwiegend ungenutzte Importe, und deshalb eine
+Entscheidung für den Nutzer. Darin steckt aber eine schärfere Teilmenge, die
+keine Aufräumarbeit ist: **`TS6138`, eine Eigenschaft, die gespeichert und nie
+gelesen wird.**
+
+Über alle elf Pakete gemessen: **genau zwei**, beide in `@pico/core` und beide
+derselben Gestalt — der Konstruktor überführt seinen Parameter in abgeleitete
+Felder, und das Original bleibt als `private readonly` daneben liegen:
+
+- `PicoDepotWorkspace` hielt neben dem **aufgelösten** Wurzelpfad den
+  ungelösten. Wer ihn später für die Wurzel gehalten hätte, hätte einen
+  relativen bekommen — und ein relativer Pfad ist genau das, wogegen der
+  Kommentar zwei Zeilen darüber argumentiert.
+- `PicoModelRuntime` hielt neben `call`, `now` und `log` das **ganze
+  Portbündel**, in dem `fetch` fehlen darf. Die drei Zeilen darunter sind der
+  Punkt: jede nimmt entweder das Gereichte *oder* den Vorgabewert. Wer statt
+  dessen `this.ports.fetch` benutzt, umgeht die Vorgabe daneben.
+
+Das ist kein toter Code im üblichen Sinn, sondern **eine zweite Kopie einer
+Wahrheit** — und zwar jedes Mal die Fassung, die nichts aktuell hält. Der Spruch
+dieses Baums gilt auch innerhalb einer Klasse.
+
+**Gehalten wird es von einer zweiten Frage in `capability:check`**, kein neuer
+Kettenschritt: das Tor fragt bisher, ob ein *Export* jemanden erreicht; jetzt
+auch, ob ein Konstruktorparameter, der zum Feld wird, je gelesen wird. Es
+bewacht damit **62 Parameter** und nicht nur die zwei. `tsc --noUnusedLocals`
+fände dasselbe, brächte aber siebzig andere Meldungen mit und nähme damit eine
+Entscheidung vorweg, die dem Nutzer gehört — der Syntaxbaum beantwortet die eine
+Frage sofort und ohne sie. Gepflanzt (ein `private readonly` zurück) nennt das
+Tor die Stelle beim Namen.
+
 **B177 — Vier Produktwege in `app.ts`, die kein Test betritt (2026-09-14).**
 B169 hat sieben Wächter in `app.ts` gepflanzt. Die Datei hat aber **58
 Funktionen**, und die schärfere Frage an sie ist nicht *„ist der Wächter

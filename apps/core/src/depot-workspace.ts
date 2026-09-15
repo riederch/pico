@@ -35,7 +35,14 @@ import { dirname, join, resolve } from 'node:path';
 export class PicoDepotWorkspace {
   private readonly resolvedRoot: string;
 
-  public constructor(private readonly root: string) {
+  /*
+   * Befund B178. `root` war bis zum 2026-09-15 ein Feld und wurde nie gelesen -
+   * eine **zweite Kopie** neben `resolvedRoot`, und zwar die ungeloeste. Wer
+   * sie spaeter fuer den Wurzelpfad gehalten haette, haette einen relativen
+   * bekommen. Der Parameter reicht: gepruefft wird er hier, aufgehoben wird
+   * nur, was aufgeloest ist.
+   */
+  public constructor(root: string) {
     if (typeof root !== 'string' || root.trim() === '') {
       throw new Error('invalid_pico_depot_workspace_root');
     }

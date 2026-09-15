@@ -1,6 +1,9 @@
+import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const ts = createRequire(import.meta.url)('typescript');
 
 /**
  * A capability that nothing calls is a capability nobody has.
@@ -496,6 +499,70 @@ for (const entry of argued) {
   }
 }
 
+/**
+ * **Zweite Frage, seit Befund B178 (2026-09-15): eine Klasse hebt nichts auf,
+ * was niemand liest.**
+ *
+ * Die Frage oben gilt Exporten - erreicht sie jemand von aussen. Diese gilt dem
+ * Inneren: ein Konstruktorparameter mit `private readonly` wird zu einem *Feld*,
+ * und wenn es danach nie gelesen wird, haelt die Klasse eine zweite Kopie einer
+ * Wahrheit, die woanders schon steht.
+ *
+ * Gemessen am 2026-09-15 gab es genau zwei, beide derselben Gestalt: der
+ * Konstruktor ueberfuehrt den Parameter in abgeleitete Felder und das Original
+ * bleibt daneben liegen. `PicoDepotWorkspace` hielt neben dem *aufgeloesten*
+ * Wurzelpfad den ungeloesten - wer ihn spaeter fuer die Wurzel gehalten haette,
+ * haette einen relativen bekommen. `PicoModelRuntime` hielt neben `call`, `now`
+ * und `log` das ganze Portbuendel, in dem `fetch` fehlen darf; wer es benutzt,
+ * umgeht die Vorgabe daneben.
+ *
+ * `tsc --noUnusedLocals` faende dasselbe (TS6138), ist aber im Baum nicht
+ * gesetzt und haette heute siebzig andere Meldungen dabei (B169). Der
+ * Syntaxbaum beantwortet die eine Frage sofort und ohne diese Entscheidung
+ * vorwegzunehmen.
+ */
+let parameterProperties = 0;
+for (const relativePath of sources) {
+  {
+    const file = join(repoRoot, relativePath);
+    const text = readFileSync(file, 'utf8');
+    if (!text.includes('private readonly')) {
+      continue;
+    }
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
+    const visit = (node) => {
+      if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+        const body = node.getText(source);
+        for (const member of node.members) {
+          if (!ts.isConstructorDeclaration(member)) {
+            continue;
+          }
+          for (const parameter of member.parameters) {
+            const isProperty = (parameter.modifiers ?? []).some(
+              (modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword,
+            );
+            if (!isProperty || !ts.isIdentifier(parameter.name)) {
+              continue;
+            }
+            parameterProperties += 1;
+            const reads = body.match(new RegExp(`this\\.${parameter.name.text}\\b`, 'gu')) ?? [];
+            if (reads.length === 0) {
+              errors.push(
+                `${relativePath} keeps \`${parameter.name.text}\` as a private field `
+                + 'and never reads it. A constructor parameter that becomes a field nobody reads '
+                + 'is a second copy of a truth that already lives in a derived one - and the copy '
+                + 'is the version nothing keeps current.',
+              );
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
 if (errors.length > 0) {
   console.error('Capability reach check failed:');
   for (const error of errors) {
@@ -508,5 +575,6 @@ console.log(
   `Capability reach check passed (${exportsChecked} exported capabilities across `
   + `${roots.length} roots, ${reachedOnlyByItsOwnFile} exported for their own tests, `
   + `${argued.length} modules and ${arguedNameSet.size} single names argued unreached; `
-  + `${packageExportsChecked} package exports, every one of them named somewhere).`,
+  + `${packageExportsChecked} package exports, every one of them named somewhere; `
+  + `${parameterProperties} constructor parameters become private fields and every one is read).`,
 );

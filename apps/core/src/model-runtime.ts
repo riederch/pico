@@ -238,7 +238,14 @@ export class PicoModelRuntime {
 
   private readonly log: (line: string, detail?: Record<string, unknown>) => void;
 
-  public constructor(private readonly ports: PicoModelRuntimePorts = {}) {
+  /*
+   * Befund B178. `ports` war bis zum 2026-09-15 ein Feld und wurde nie gelesen.
+   * Die drei Zeilen darunter sind der Punkt: jede nimmt entweder das Gereichte
+   * *oder* den Vorgabewert. Das ganze Buendel daneben aufzuheben hiesse, eine
+   * zweite Fassung zu halten, in der `fetch` fehlen darf - und wer sie benutzt,
+   * umgeht genau diese Vorgabe.
+   */
+  public constructor(ports: PicoModelRuntimePorts = {}) {
     this.call = ports.fetch ?? globalThis.fetch;
     this.now = ports.now ?? (() => Date.now());
     this.log = ports.log ?? (() => {});
