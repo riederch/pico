@@ -4,38 +4,28 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
-  buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
   buildPicoReaderCustodyKekRotationSignatureInput,
   buildPicoReaderCustodyReaderGrantLifecycleSignatureInput,
-  buildPicoReaderCustodyReaderGrantSignatureInput,
   buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
-  buildPicoShareEnvelopeSignatureInput,
-  buildPicoShareWrapPayload,
   picoIdentitySuite,
   picoMemoryContentSuite,
-  picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
   picoReaderCustodyKekRotationRecordSchema,
   picoReaderCustodyReaderGrantLifecycleRecordSchema,
-  picoReaderCustodyReaderGrantRecordSchema,
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
-  picoShareEnvelopeRecordSchema,
-  picoShareSuite,
 } from '@pico/protocol';
 import type {
   PicoHomeFoundingRecord,
   PicoIdentityKeyRecordSignatureInput,
-  PicoReaderCustodyDomainRecord,
   PicoReaderCustodyItemRecord,
   PicoReaderCustodyKekRotationRecord,
   PicoReaderCustodyReaderGrantLifecycleRecord,
   PicoReaderCustodyReaderGrantRecord,
   PicoReaderCustodyWriterGrantLifecycleRecord,
   PicoReaderCustodyWriterGrantRecord,
-  PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -861,7 +851,6 @@ function makeWriterVersion(
     validFrom: string;
   },
 ): PicoReaderCustodyWriterGrantRecord {
-  const domain = records.domain.domain;
   const grant = {
     ...records.writerGrant.grant,
     writerGrantId: input.writerGrantId,

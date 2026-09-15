@@ -40,7 +40,8 @@ describe('ADR 0131 A1 - canonical text decodes without ICU', () => {
      */
     const full = globalThis.TextDecoder;
     class WithoutIcu {
-      constructor(label?: string, options?: unknown) {
+      // `label` holds the first position: `options` is what this probe reads.
+      constructor(_label?: string, options?: unknown) {
         if (options !== undefined) {
           const error = new Error('ERR_NO_ICU') as Error & { code?: string };
           error.code = 'ERR_NO_ICU';

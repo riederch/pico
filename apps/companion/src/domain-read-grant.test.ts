@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import sodium from 'libsodium-wrappers-sumo';
 import {
   buildPicoHomeDomainReadGrantSignatureInput,
-  picoIdentitySuite,
 } from '@pico/protocol';
 import {
   grantPicoCompanionDomainRead,

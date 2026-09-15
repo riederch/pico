@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
-  buildPicoIdentityPossessionSignatureInput,
   picoHomeDeviceLifecycleCanonicalLabels,
   picoIdentitySuite,
 } from '@pico/protocol';
@@ -149,10 +148,6 @@ function exemptFields(): Record<string, unknown> {
 
 function exemptSign(): { label: string; fields: Record<string, unknown> } {
   return { label: 'pico.id.possession.v1', fields: exemptFields() };
-}
-
-function exemptInputHex(): string {
-  return Buffer.from(buildPicoIdentityPossessionSignatureInput(exemptFields() as never)).toString('hex');
 }
 
 function digestOfHex(inputHex: string): string {

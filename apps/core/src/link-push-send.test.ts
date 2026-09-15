@@ -1,5 +1,5 @@
 import sodium from 'libsodium-wrappers-sumo';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { parsePicoLinkSealedPush, buildPicoLinkPushSignatureInput } from '@pico/protocol';
 import { parsePicoLinkPacketAddress } from '@pico/protocol/link-packet';
 import type { PicoLinkDeliveryOutcome } from '@pico/protocol/link-delivery';

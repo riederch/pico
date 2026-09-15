@@ -19,7 +19,6 @@ import {
 } from './link-relay-transport.js';
 import { Writable } from 'node:stream';
 import { buildApp } from './app.js';
-import { EventStore } from './event-store.js';
 import type { PicoLinkMailboxRecord } from './event-store.js';
 
 interface HomeWithSweep {

@@ -12,7 +12,6 @@ import {
   picoHomeContinuityRecordSchema,
   picoIdentitySuite,
   picoLinkDirectPayloadDigestHex,
-  picoLinkDirectRequestEnvelopeSchema,
   picoLinkDirectResponseEnvelopeSchema,
   type PicoHomeContinuityRecord,
   type PicoHomeContinuitySignatureInput,

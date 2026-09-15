@@ -14,7 +14,6 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import {
-  createPicoIdentitySessionDevice,
   keyRecordFingerprintHex,
   openPicoHomeWithDevice,
   sendPicoLinkDirectRequest,

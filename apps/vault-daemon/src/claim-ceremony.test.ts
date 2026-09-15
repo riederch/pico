@@ -10,7 +10,6 @@ import {
   type CreatePicoVaultKeyfileResult,
   type PicoVaultRecoveryCard,
 } from '@pico/vault';
-import { picoIdentitySuite } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { connectPicoVaultDaemonClient, type PicoVaultDaemonClient } from './client.js';

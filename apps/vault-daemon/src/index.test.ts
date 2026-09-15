@@ -231,14 +231,6 @@ function possessionInput(): Uint8Array {
   return buildPicoIdentityPossessionSignatureInput(possessionFields() as never);
 }
 
-function canonicalElement(label: string): Buffer {
-  const ascii = Buffer.from(label, 'ascii');
-  const element = Buffer.alloc(4 + ascii.byteLength);
-  element.writeUInt32BE(ascii.byteLength, 0);
-  ascii.copy(element, 4);
-  return element;
-}
-
 function expectReason(response: PicoVaultDaemonResponse, reason: string): void {
   expect(response.ok).toBe(false);
   if (!response.ok) {

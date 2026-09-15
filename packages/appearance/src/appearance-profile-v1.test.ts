@@ -6,7 +6,6 @@ import {
   parseAppearanceProfileV1,
 } from './appearance-profile-v1-codec.js';
 import { validateAppearanceProfileV1 } from './appearance-profile-v1-validation.js';
-import { PicoAppearanceError } from './appearance-errors.js';
 import {
   antennaProfile,
   antennaProfileHex,

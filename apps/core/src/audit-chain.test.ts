@@ -101,7 +101,7 @@ describe('ADR 0121 J1/J2 tamper-evident audit records', () => {
   });
 
   it('detects a deleted row, an edited row and a log rolled back past the anchor', () => {
-    const { open, databasePath, anchorPath } = fixture();
+    const { open, databasePath } = fixture();
     const store = open();
     store.append(auditEvent({ eventId: 'event_audit_a' }));
     store.append(auditEvent({ eventId: 'event_audit_b' }));
