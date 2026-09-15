@@ -478,6 +478,25 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       itemRecord: tampered,
     })).toThrow('invalid_reader_custody_item');
 
+    /**
+     * The domain record's own schema word was unwalked until 2026-09-15
+     * (B181). It guards a record that *travelled* - the Home signs it, sync
+     * carries it - so the case it exists for is a record from a build that
+     * named the domain differently, arriving at a reader that does not know
+     * that name.
+     */
+    const otherDomainVersion = structuredClone(domainRecord);
+    (otherDomainVersion as { schema: string }).schema = 'pico.reader-custody.domain.v2';
+    expect(() => revokePicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord: otherDomainVersion,
+      writerGrantRecord,
+      lifecycleId: 'reader_writer_lifecycle_0009',
+      reasonCategory: 'writer_removed',
+      changedAt: '2026-07-27T10:03:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
+    })).toThrow('invalid_reader_custody_domain');
+
     expect(revokePicoReaderCustodyWriterGrant(sodium, {
       ownerIdentitySession: identitySession,
       domainRecord,
@@ -733,6 +752,36 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       keyfile: truncated,
       passphrase: 'correct horse battery staple',
     })).toThrow();
+  });
+
+  it('refuses a keyfile whose schema or format names something else', () => {
+    /**
+     * Both words were unwalked until 2026-09-15 (B181). `assertExactKeys`
+     * above refuses a *foreign* document first, so these two can only ever see
+     * one thing: a keyfile of ours written by a build that named its envelope
+     * or its format differently. That is what the first open after an upgrade
+     * reads off disk, and a keyfile is the one file a person cannot replace.
+     */
+    const created = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_signing',
+      passphrase: 'correct horse battery staple',
+    });
+    const envelope = JSON.parse(serializePicoVaultKeyfile(created.keyfile)) as Record<string, unknown>;
+
+    expect(() => parsePicoVaultKeyfile(JSON.stringify({
+      ...envelope,
+      schema: 'pico.vault.keyfile.encrypted.v2',
+    }))).toThrow('invalid_keyfile_envelope');
+
+    expect(() => parsePicoVaultKeyfile(JSON.stringify({
+      ...envelope,
+      schemaVersion: 2,
+    }))).toThrow('invalid_keyfile_envelope');
+
+    expect(() => parsePicoVaultKeyfile(JSON.stringify({
+      ...envelope,
+      format: 'pico-vault-keyfile-v2',
+    }))).toThrow('wrong_keyfile_label');
   });
 
   it('refuses a keyfile whose KDF cost is above the sensitive ceiling', () => {

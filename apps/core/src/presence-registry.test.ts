@@ -488,3 +488,20 @@ describe('ADR 0126 P6 - the person switches one off', () => {
       .toEqual([]);
   });
 });
+
+describe('an announcement of ours from a version this build does not have', () => {
+  it('refuses an announcement whose schema names another version', async () => {
+    /**
+     * The schema word was unwalked until 2026-09-15 (B181). The unknown-field
+     * check above refuses a *foreign* record first, so this one only ever sees
+     * an announcement of ours from a runtime built against another version -
+     * which is what a presence that upgraded before the Home sends.
+     */
+    const presences = await registry();
+    expect(() => presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ schema: 'pico.presence.v2' }),
+      at: '2026-08-16T12:00:00.000Z',
+    })).toThrow('invalid_pico_presence_schema');
+  });
+});

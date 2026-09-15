@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { picoRelayOperatorHeader, picoRelayOperatorRoutes } from '@pico/protocol/link-relay-operator';
 import {
@@ -333,5 +333,23 @@ describe('ADR 0154 RO3/RO5/RO6 - administering from the client', () => {
     // reset marker and a restart (RO8), which is the honest cost.
     expect(forgetPicoCompanionRelay({ path: file, baseUrl: 'https://relay.example:3202' }))
       .toBe(false);
+  });
+});
+
+describe('an operator file of ours from a version this build does not have', () => {
+  it('refuses a file whose schema names another version', () => {
+    /**
+     * Unwalked until 2026-09-15 (B181). This is the file that holds which
+     * relays a person claimed; read on every start, and the only value this
+     * word ever sees is our own file from a build that named it differently.
+     */
+    const file = path();
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({
+      schema: 'pico.companion.relay-operators.v2',
+      relays: [],
+    }));
+    expect(() => readPicoCompanionRelayOperators(file))
+      .toThrow('invalid_pico_companion_relay_operators');
   });
 });
