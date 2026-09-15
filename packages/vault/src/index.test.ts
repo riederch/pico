@@ -839,6 +839,22 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       ...envelope,
       format: 'pico-vault-keyfile-v2',
     }))).toThrow('wrong_keyfile_label');
+
+    /**
+     * The format is written *twice* - once on the envelope and once inside the
+     * header, where it is part of the AEAD's associated data. Only the first
+     * was guarded by the check above; the second is refused by the AAD builder,
+     * and that word was unwalked until 2026-09-15 (B181). It matters because
+     * the header's copy is what the decryption is bound to: a header naming
+     * another format would authenticate against bytes this build never wrote.
+     */
+    expect(() => parsePicoVaultKeyfile(JSON.stringify({
+      ...envelope,
+      header: {
+        ...(envelope.header as Record<string, unknown>),
+        format: 'pico-vault-keyfile-v2',
+      },
+    }))).toThrow('wrong_keyfile_label');
   });
 
   it('refuses a keyfile whose KDF cost is above the sensitive ceiling', () => {

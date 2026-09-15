@@ -93,6 +93,18 @@ describe('ADR 0109 device lifecycle protocol forms', () => {
       },
     } satisfies PicoHomeDeviceLifecycleSubmission;
 
+    /**
+     * The submission's own schema word was unwalked until 2026-09-15 (B181).
+     * The exact-key check above refuses a *foreign* record first, so this one
+     * only sees a submission of ours from a device built against another
+     * version - and a digest taken over it would authorize a shape this Home
+     * does not understand.
+     */
+    expect(() => picoHomeDeviceLifecycleSubmissionDigestHex(sodium, {
+      ...base,
+      schema: 'pico.home.device-lifecycle-submission.v2',
+    } as never)).toThrow('invalid_device_lifecycle_submission_schema');
+
     expect(() => picoHomeDeviceLifecycleSubmissionDigestHex(sodium, {
       ...base,
       activation: {

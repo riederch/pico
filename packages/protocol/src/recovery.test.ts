@@ -67,6 +67,28 @@ describe('ADR 0110 recovery protocol forms', () => {
     );
   });
 
+  it('refuses a card and a receipt naming a suite this build cannot speak', () => {
+    /**
+     * The suite word was unwalked until 2026-09-15 (B181). It is not an
+     * assertion about our own call: a Recovery Card carries its suite *in the
+     * card*, and the Vault daemon's `buildersByLabel` hands these builders the
+     * fields that arrived over its socket. What the word refuses is a card or
+     * a request from a cryptographic generation this build cannot speak.
+     */
+    const suite = fixtureSuite();
+    const card = (suite.card as JsonRecord)
+      .fields as unknown as PicoRecoveryCardPayload;
+    const receipt = (suite.receipt as JsonRecord)
+      .fields as unknown as PicoHomeDeviceRecoveryReceiptSignatureInput;
+
+    expect(() => buildPicoRecoveryCardPayload({ ...card, suite: 'pico.suite.id.v2' }))
+      .toThrow('invalid_recovery_suite');
+    expect(() => buildPicoHomeDeviceRecoveryReceiptSignatureInput({
+      ...receipt,
+      suite: 'pico.suite.id.v2',
+    })).toThrow('invalid_recovery_suite');
+  });
+
   it('exports a closed schema and canonical-label vocabulary', () => {
     expect(picoRecoveryCardSchema).toBe('pico.recovery.card.v1');
     expect(picoHomeDeviceRecoverySubmissionSchema)
