@@ -1,18 +1,15 @@
 // Befund B51. Dieselbe Regel, jetzt von dort, wo sie einmal steht.
 import { assertAsciiToken, hexOfBytesPattern } from '@pico/protocol/canonical-bytes';
 import { assertPicoHomeCoreUrl } from '@pico/protocol/home-address';
-import {
-  chmodSync,
-  closeSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+// Befund B179. Hier standen bis zum 2026-09-15 acht weitere Bausteine -
+// `openSync`, `writeFileSync`, `fsyncSync`, `renameSync`, `chmodSync`,
+// `mkdirSync`, `closeSync`, `dirname` -, also genau die Redewendung fuer
+// dauerhaftes Schreiben. Benutzt wurde keiner: das Schreiben ist laengst in
+// `writePicoCompanionFileAtomically` gefaltet. Eine Importliste ist eine
+// Aussage darueber, was eine Datei tut, und diese war seit der Faltung falsch.
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { writePicoCompanionFileAtomically } from './atomic-file.js';
 
 /**

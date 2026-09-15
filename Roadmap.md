@@ -912,6 +912,42 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B179 — Eine Importliste ist eine Aussage darüber, was eine Datei tut
+(2026-09-15).** B178 hat aus der offenen `noUnusedLocals`-Entscheidung die
+Teilmenge genommen, die keine Entscheidung ist. Hier die nächste Frage an
+dieselbe Zahl: **wie verteilt sie sich?** Eine Zahl ohne Verteilung ist eine
+schlechte Entscheidungsgrundlage.
+
+Gemessen über alle elf Pakete: **75 Stellen, davon 29 in Testdateien** — und die
+übrigen 46 liegen nicht verstreut, sondern in Häufungen. Zwei Dateien trugen
+**28 davon**, und beide erzählen dieselbe Geschichte.
+
+- `apps/companion/src/profile.ts` importierte **acht** Dateisystem-Bausteine und
+  benutzte keinen: `openSync`, `writeFileSync`, `fsyncSync`, `renameSync`,
+  `chmodSync`, `mkdirSync`, `closeSync`, `dirname`. Das ist *genau* die
+  Redewendung für dauerhaftes Schreiben — und die Datei schreibt längst über
+  `writePicoCompanionFileAtomically`. Die Importe sind das **Fossil der
+  eingefalteten Fassung**.
+- `apps/vault-daemon/src/cli.ts` trug **dreizehn** Protokoll-Bausteine, die es
+  nicht mehr braucht: Anspruchs-, Gründungs-, Mitgliedschafts- und
+  Kettenschemata. Auch hier fehlt nichts — die Arbeit ist in
+  `device-recovery-ceremony.ts` und `device-lifecycle-ceremony.ts` umgezogen.
+
+**Und das ist die eigentliche Auskunft für die offene Entscheidung:** die
+Meldungen sind überwiegend **Rückstand gelungener Faltungen**, nicht verstecktes
+Unheil. Ein Einschalten von `noUnusedLocals` löschte also vor allem die Spuren
+von Umbauten, die dieser Baum schon gemacht hat.
+
+Einer war trotzdem mehr: in `cli.ts` stand `isRecord` als **lokale Funktion ohne
+Aufrufer** — kein Import, sondern dieselbe Gestalt wie der tote Wächter aus
+B169, seit dem Commit, der den gepinnten Zeremonie-Transport brachte. Entfernt.
+
+Die beiden Häufungen sind aufgeräumt, weil eine Importliste eine **Aussage**
+ist: wer oben `openSync/fsyncSync/renameSync` liest, schließt, dass die Datei
+selbst schreibt. Diese Aussage war seit der Faltung falsch. Von 75 Stellen sind
+**53** übrig, und die restliche Entscheidung — Flagge an oder aus, mitsamt den
+29 in Tests — bleibt beim Nutzer.
+
 **B178 — Zwei Klassen hoben auf, was niemand liest (2026-09-15).** B169 hat
 gemessen, dass `noUnusedLocals` nicht gesetzt ist und ein Einschalten heute **70
 Stellen** meldete — überwiegend ungenutzte Importe, und deshalb eine

@@ -13,9 +13,6 @@ import {
 } from '@pico/vault';
 import {
   picoHomeContinuityReasonCategories,
-  picoHomeContinuityRecordSchema,
-  picoHomeMembershipCredentialSchema,
-  picoHomeSignatureInputLabels,
   picoIdentityDelegationScopes,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
@@ -24,24 +21,14 @@ import {
   picoIdentityRevocationReasonCategories,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentityReaderKeyFreshnessStatuses,
-  picoHomeClaimEnvelopeSchema,
-  picoHomeFoundingAcceptanceSchema,
-  picoHomeSealedClaimPayloadV2Schema,
-  picoHomeV2SignatureInputLabels,
   maxPicoIdentityReaderKeyFreshnessMs,
   picoIdentitySuite,
   picoVaultPersonKeyRoles,
-  type PicoHomeClaimSignatureInput,
   type PicoHomeDeviceRecoveryPendingView,
-  type PicoHomeFoundingSignatureInput,
-  type PicoIdentityKeyRecordSignatureInput,
   type PicoHomeMembershipRole,
   type PicoIdentityDelegationScope,
-  type PicoIdentityDelegationSignatureInput,
   type PicoHomeMembershipScope,
   type PicoHomeContinuityReasonCategory,
-  type PicoHomeContinuitySignatureInput,
-  type PicoHomeMembershipSignatureInput,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
   type PicoIdentityReaderKeyFreshnessStatus,
   type PicoIdentityRevocationReasonCategory,
@@ -1613,10 +1600,6 @@ function requireFlag(flags: Map<string, string>, name: string): string {
     throw new Error(`missing_required_flag:--${name}`);
   }
   return value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function ceremonyTransport(flags: Map<string, string>): 'local' | 'link' {
