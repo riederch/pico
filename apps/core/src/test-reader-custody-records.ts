@@ -1,15 +1,14 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import Database from 'better-sqlite3';
+// Befund B179. Hier standen bis zum 2026-09-15 `mkdtempSync`, `rmSync`,
+// `tmpdir`, `join` und `better-sqlite3` - die Bausteine einer eigenen
+// Testdatenbank, die diese Fabrik laengst nicht mehr anlegt: sie baut nur noch
+// die Datensaetze, und wo sie liegen, entscheidet der Aufrufer. Dazu drei
+// Lebenslauf- und Rotationsbauer, die in die Testdateien umgezogen sind, die
+// sie brauchen.
 import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
-  buildPicoReaderCustodyKekRotationSignatureInput,
-  buildPicoReaderCustodyReaderGrantLifecycleSignatureInput,
   buildPicoReaderCustodyReaderGrantSignatureInput,
-  buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   buildPicoShareWrapPayload,
@@ -17,23 +16,16 @@ import {
   picoMemoryContentSuite,
   picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
-  picoReaderCustodyKekRotationRecordSchema,
-  picoReaderCustodyReaderGrantLifecycleRecordSchema,
   picoReaderCustodyReaderGrantRecordSchema,
-  picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
   picoShareEnvelopeRecordSchema,
   picoShareSuite,
 } from '@pico/protocol';
 import type {
-  PicoHomeFoundingRecord,
   PicoIdentityKeyRecordSignatureInput,
   PicoReaderCustodyDomainRecord,
   PicoReaderCustodyItemRecord,
-  PicoReaderCustodyKekRotationRecord,
-  PicoReaderCustodyReaderGrantLifecycleRecord,
   PicoReaderCustodyReaderGrantRecord,
-  PicoReaderCustodyWriterGrantLifecycleRecord,
   PicoReaderCustodyWriterGrantRecord,
   PicoShareEnvelopeRecord,
 } from '@pico/protocol';

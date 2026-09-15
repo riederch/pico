@@ -6,7 +6,6 @@ import {
   picoHomeV2SignatureInputLabels,
   picoVaultPersonKeyRoles,
   parsePicoRecoveryCardPayload,
-  picoRecoveryCardSchema,
   type PicoVaultPersonKeyRole,
 } from '@pico/protocol';
 import {

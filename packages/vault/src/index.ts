@@ -1,5 +1,5 @@
 // Befund B51. Dasselbe Muster, jetzt von dort, wo es einmal steht.
-import { bytesToHex, canonicalHexPattern, hexToBytes } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hexToBytes } from '@pico/protocol/canonical-bytes';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { wordlist as bip39EnglishWordlist } from '@scure/bip39/wordlists/english.js';

@@ -109,10 +109,6 @@ export interface PicoParkingCandidate {
 }
 
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
 function asRecord(value: unknown, reason: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(reason);

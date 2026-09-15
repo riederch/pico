@@ -28,7 +28,6 @@ import type {
 } from '@pico/protocol';
 import {
   parsePicoRecoveryCardPayload,
-  picoRecoveryCardSchema,
 } from '@pico/protocol';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
 import { picoDisplayDate } from '@pico/protocol/when-display';
@@ -2015,25 +2014,6 @@ function assertPrivateDirectory(path: string): void {
   }
 }
 
-/**
- * Reads the versioned family label an ADR 0079 I3 signature input starts with:
- * `U32BE(len) || bytes`. Used to classify a request for ADR 0099 gating before
- * the Vault is asked to sign anything.
- */
-function firstCanonicalElementAscii(input: Uint8Array): string {
-  if (input.byteLength < 4) {
-    throw new Error('unknown_signature_input_label');
-  }
-  const length = new DataView(input.buffer, input.byteOffset, input.byteLength).getUint32(0, false);
-  if (length === 0 || length > 128 || input.byteLength < 4 + length) {
-    throw new Error('unknown_signature_input_label');
-  }
-  const label = Buffer.from(input.subarray(4, 4 + length)).toString('latin1');
-  if (!/^[\x21-\x7e]+$/.test(label)) {
-    throw new Error('unknown_signature_input_label');
-  }
-  return label;
-}
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

@@ -942,11 +942,38 @@ Einer war trotzdem mehr: in `cli.ts` stand `isRecord` als **lokale Funktion ohne
 Aufrufer** — kein Import, sondern dieselbe Gestalt wie der tote Wächter aus
 B169, seit dem Commit, der den gepinnten Zeremonie-Transport brachte. Entfernt.
 
-Die beiden Häufungen sind aufgeräumt, weil eine Importliste eine **Aussage**
-ist: wer oben `openSync/fsyncSync/renameSync` liest, schließt, dass die Datei
-selbst schreibt. Diese Aussage war seit der Faltung falsch. Von 75 Stellen sind
-**53** übrig, und die restliche Entscheidung — Flagge an oder aus, mitsamt den
-29 in Tests — bleibt beim Nutzer.
+Die Häufungen sind aufgeräumt, weil eine Importliste eine **Aussage** ist: wer
+oben `openSync/fsyncSync/renameSync` liest, schließt, dass die Datei selbst
+schreibt. Diese Aussage war seit der Faltung falsch.
+
+**Und dann ist es zu Ende gegangen: der Produktcode steht auf null.** Von 75
+Stellen sind **29** übrig, und alle 29 liegen in Testdateien. Der Weg dorthin
+zeigte dieselbe Gestalt noch dreimal, und die dritte Häufung war wieder ein
+Fossil — `test-reader-custody-records.ts` hielt die Bausteine einer eigenen
+Testdatenbank (`mkdtempSync`, `tmpdir`, `Database`), die diese Fabrik längst
+nicht mehr anlegt, dazu drei Lebenslaufbauer, die in die Testdateien umgezogen
+sind, die sie brauchen.
+
+Drei waren **keine Importe**, sondern Definitionen ohne Leser:
+
+- `daemon.ts#firstCanonicalElementAscii` — mit einem Kommentar, der eine Rolle
+  beschreibt, **die sie nicht mehr hat**: *„used to classify a request for ADR
+  0099 gating before the Vault is asked to sign anything"*. Sie las das Etikett
+  einmal aus den signierten Bytes; heute **baut** der Daemon die Bytes aus dem
+  Etikett, das der Aufrufer nennt — die stärkere Anordnung, weil die Signatur
+  dann genau das deckt, was der Satz sagt. Der Kommentar hätte einen Leser
+  glauben lassen, es sei umgekehrt.
+- `spatial-recall.ts#isFiniteNumber` — ein Typwächter ohne Aufrufer.
+- `renderer.ts#depotAttach` — eine **Existenzzusicherung ohne Gegenstand**:
+  `requireElement('depot-attach')` wirft, wenn der Abschnitt fehlt, und der
+  Zeichner fasst ihn sonst nie an. Seine sechs Geschwister werden alle benutzt.
+  Ein Schutz für etwas, das der Code nicht braucht, ist keiner.
+
+**Damit ist die offene Entscheidung anders geschnitten als vorher.** Sie lautet
+nicht mehr „siebzig Stellen aufräumen", sondern: *`noUnusedLocals` ist im
+Produktcode ab sofort erfüllt; die Frage ist nur noch, ob die 29 in Tests es
+auch sein sollen.* Das bleibt beim Nutzer — aber es ist eine kleinere Frage
+geworden.
 
 **B178 — Zwei Klassen hoben auf, was niemand liest (2026-09-15).** B169 hat
 gemessen, dass `noUnusedLocals` nicht gesetzt ist und ein Einschalten heute **70

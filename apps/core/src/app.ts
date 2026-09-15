@@ -264,7 +264,7 @@ import {
 } from './recovery-anchor.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { RetentionSweeper } from './retention-sweep.js';
-import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute, type AccessClass } from './access-classes.js';
+import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute } from './access-classes.js';
 import {
   OperatorOverloadedError,
   OperatorRequestError,

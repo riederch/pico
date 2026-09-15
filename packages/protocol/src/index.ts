@@ -1,7 +1,7 @@
 // Befund B50. Die kanonischen Bytes-Regeln stehen in `./canonical-bytes.js`
 // und nirgends sonst: sie standen hier und in `recovery.ts` zweimal, mit
 // denselben Bytes und vier verschiedenen Ablehnungen.
-import { asciiBytes, assertAsciiToken, assertExactKeysWithoutFieldOrder, bytesToHex, canonicalAsciiTokenPattern, canonicalHexPattern, canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isAsciiToken, isHexOfBytes } from './canonical-bytes.js';
+import { asciiBytes, assertAsciiToken, assertExactKeysWithoutFieldOrder, bytesToHex,   canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isAsciiToken, isHexOfBytes } from './canonical-bytes.js';
 import { foundationEventTypes, type FoundationEventType } from './foundation-event-type.js';
 // ADR 0116 W2 (Befund B49). Diese Barriere gibt die Herkunftsklasse weiter und
 // benutzt sie auch selbst; `export … from` legt dafuer keinen lokalen Namen an.

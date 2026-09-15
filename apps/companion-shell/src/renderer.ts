@@ -20,7 +20,6 @@ import {
   picoCompanionHostRotationWarning,
   picoCompanionWindowViewLines,
   type PicoCompanionWindowView,
-  type PicoCompanionCondition,
   type PicoCompanionPresentation,
 } from './contract.js';
 import {
@@ -677,7 +676,6 @@ function refreshSuppliers(): void {
 
 const depotSection = requireElement('depots');
 const depotList = requireElement('depot-list');
-const depotAttach = requireElement('depot-attach');
 const depotRemote = requireInput('depot-remote');
 const depotCommit = requireInput('depot-commit');
 const depotAttachSubmit = requireButton('depot-attach-submit');
