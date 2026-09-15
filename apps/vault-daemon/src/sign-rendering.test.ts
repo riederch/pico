@@ -248,6 +248,23 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       picoHomeDeviceRecoveryCanonicalLabels.claim,
       'device_signing',
     )).toBe(false);
+
+    /**
+     * The suite word in these builders was unwalked until 2026-09-15 (B181).
+     * It is not an assertion the daemon makes about itself: `buildersByLabel`
+     * casts the fields that arrived over the socket and hands them straight
+     * in, so a request naming another cryptographic suite reaches it. Refusing
+     * there is what keeps the daemon from rendering bytes - and then asking a
+     * person to approve them - for a suite this build cannot speak.
+     */
+    expect(() => buildPicoVaultSignatureInputFromFields(
+      picoHomeDeviceRecoveryCanonicalLabels.prepare,
+      { ...prepare, suite: 'pico.suite.id.v2' },
+    )).toThrow('invalid_recovery_suite');
+    expect(() => buildPicoVaultSignatureInputFromFields(
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+      { ...claim, suite: 'pico.suite.id.v2' },
+    )).toThrow('invalid_recovery_suite');
   });
 });
 
