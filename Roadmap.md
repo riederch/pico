@@ -983,12 +983,27 @@ zu haben war:
    Zuteilung jenes Tests nennt genau dieses Pico als Leser und kann deshalb
    **niemals** einen Umschlag erzeugen.
 
-Was ein Gang also braucht, steht damit fest und muss nicht neu gesucht werden:
-**einen zweiten Bewohner** — eigene Identität, eigene Mitgliedschaft, eigene
-Delegation und Geräteschlüssel, eigene Identitätssitzung (die seinen
-Leserschlüssel einträgt), eine Frischebescheinigung auf ihn und eine
-Lesezuteilung, die *ihn* als Leser nennt. Dann erst prägen, entsiegeln,
-unterschreiben, abschließen.
+Was ein Gang braucht, war damit klar: **einen zweiten Bewohner** — eigene
+Identität, Mitgliedschaft, Delegation und Geräteschlüssel, eigene
+Identitätssitzung (die seinen Leserschlüssel einträgt), eine
+Frischebescheinigung auf ihn und eine Lesezuteilung, die *ihn* als Leser nennt.
+
+**Am 2026-09-15 gebaut, und damit sind alle vier gegangen.** Der Test fährt die
+Ausstellung zum ersten Mal über die Produktfläche: Home beanspruchen, Bewohner
+aufnehmen, sein Gerät delegieren, Sitzung binden, etwas in die Domäne schreiben,
+zuteilen, bescheinigen, prägen, entsiegeln, unterschreiben, abschließen,
+auflisten.
+
+Eine letzte Hürde war die lehrreichste: die Delegation trug `surface_session`
+und der Leserschlüssel blieb trotzdem unzulässig. Ein Kandidat verlangt
+`decrypt_domain` **und** `receive_key_envelope` — *anmelden dürfen* und
+*entschlüsseln dürfen* sind in diesem Baum zwei verschiedene Vollmachten, und
+der Umschlagpfad prüft die zweite. Eine Sitzung macht noch keinen Leser.
+
+Geprüft wird am Ende genau das, was die ungegangene Funktion tut: die Liste
+zeigt `issuanceId` und `record` — und **nicht**, welche Delegation den Umschlag
+getragen hat. Der versiegelte Schlüssel gehört dem Leser und geht hinaus; das
+Gerät, über das er kam, geht niemanden an, der die Liste liest.
 
 **B176 — Das Gedächtnis dieses Projekts nennt nichts, was es nicht gibt
 (2026-09-14, negatives Ergebnis).** Dieser Baum stellt an alles die Frage, ob

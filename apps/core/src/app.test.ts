@@ -27,6 +27,7 @@ import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  buildPicoShareEnvelopeSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   buildPicoHomeContinuitySignatureInput,
   buildPicoIdentityRotationSignatureInput,
@@ -51,6 +52,7 @@ import {
   picoHomeSealedClaimPayloadV2Schema,
   picoIdentitySuite,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
+  picoShareSuite,
   picoLinkDirectPayloadDigestHex,
   picoLinkDirectRequestEnvelopeSchema,
   picoLinkDirectResponseEnvelopeSchema,
@@ -3131,6 +3133,259 @@ describe('Pico Home Core app', () => {
       status: 'evicted',
     });
     expect(JSON.stringify(membershipEvents)).not.toContain(sealedClaim.claimantIdentityKeyRecord.publicKeyHex);
+
+    await app.close();
+  });
+
+  it('issues a share envelope to a resident and shows it without the delegation that carried it', async () => {
+    /*
+     * Befund B177, der vierte und teuerste Fall. `publicPicoShareEnvelope`
+     * entscheidet, **was einen Umschlag verlaesst** - und kein Test betrat sie,
+     * weil die Ausstellung ueber die Flaeche nirgends gefahren wurde.
+     *
+     * **Warum es einen zweiten Bewohner braucht**, und das war die Ausbeute
+     * zweier verworfener Anlaeufe: die Kandidatensuche fuer Leserschluessel
+     * verlangt eine *Mitgliedschaft* des Lesers, und das Home Host Pico kann
+     * keine haben - die Gruendungsaufzeichnung ist bereits seine
+     * Mitgliedschaftswurzel (ADR 0080, `home_host_membership_is_not_reissued`).
+     * Ein Umschlag an das Home selbst ist also strukturell unmoeglich, und das
+     * ist richtig so: ein Umschlag traegt einen Schluessel *zu jemandem*.
+     */
+    const app = await buildAppWithCapturedLog({ memoryEncryption: true });
+    const { sealedClaim, claimResponse } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
+    const homeId = (claimResponse.claimState as { homeId: string }).homeId;
+    const operatorSession = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(app), passphrase: OPERATOR_PASSPHRASE },
+    })).json().session as string;
+    const operatorAuth = { authorization: `Bearer ${operatorSession}` };
+    const homeHostIdentityFingerprint = sealedClaim.claim.claimantIdentityKeyFingerprintHex;
+
+    // Der zweite Bewohner: eigene Identitaet, und eine Mitgliedschaft, die das
+    // Home Host Pico ihm ausstellt.
+    const resident = sodium.crypto_sign_keypair();
+    const residentKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'pico_identity',
+      publicKeyHex: bytesToHex(resident.publicKey),
+    };
+    const residentFingerprint = keyRecordFingerprintHex(residentKeyRecord);
+    const membership: PicoHomeMembershipSignatureInput = {
+      suite: picoIdentitySuite,
+      credentialId: 'member_share_envelope_0001',
+      homeId,
+      issuerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      subjectPicoIdentityFingerprintHex: residentFingerprint,
+      hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+      role: 'home_member',
+      scopes: ['host.use'],
+      ...picoTestValidityWindow(),
+      lifecycleOrder: 'seq:0000000000000001',
+    };
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/home/memberships',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeMembershipCredentialSchema,
+        membership,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeMembershipSignatureInput(membership),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    })).statusCode).toBe(201);
+
+    // Sein Geraet, und die Delegation, die *er* dafuer unterschreibt.
+    const deviceSigning = sodium.crypto_sign_keypair();
+    const deviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_signing',
+      publicKeyHex: bytesToHex(deviceSigning.publicKey),
+    };
+    const deviceSigningFingerprint = keyRecordFingerprintHex(deviceSigningKeyRecord);
+    const deviceAgreement = sodium.crypto_box_keypair();
+    const deviceAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_key_agreement',
+      publicKeyHex: bytesToHex(deviceAgreement.publicKey),
+    };
+    const readerKeyFingerprintHex = keyRecordFingerprintHex(deviceAgreementKeyRecord);
+    const delegation: PicoIdentityDelegationSignatureInput = {
+      suite: picoIdentitySuite,
+      delegationId: 'delegation_share_envelope_0001',
+      issuerIdentityKeyFingerprintHex: residentFingerprint,
+      subjectSigningKeyFingerprintHex: deviceSigningFingerprint,
+      subjectKeyAgreementKeyFingerprintHex: readerKeyFingerprintHex,
+      // Ein Leserschluessel verlangt eine Delegation, die das Entschluesseln
+      // ueberhaupt erlaubt - `surface_session` allein macht noch keinen Leser.
+      scopes: ['surface_session', 'decrypt_domain', 'receive_key_envelope'],
+      ...picoTestValidityWindow(),
+      lifecycleOrder: 'seq:0000000000000002',
+    };
+
+    // Die Identitaetssitzung ist es, die seinen Leserschluessel eintraegt.
+    const challenge = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/identity-challenges',
+    })).json() as { challengeId: string; verifierNonceHex: string; verifierContext: string };
+    const session = await app.inject({
+      method: 'POST',
+      url: '/api/auth/identity-session',
+      payload: {
+        challengeId: challenge.challengeId,
+        identityKeyRecord: residentKeyRecord,
+        deviceSigningKeyRecord,
+        deviceKeyAgreementKeyRecord: deviceAgreementKeyRecord,
+        delegation: {
+          record: delegation,
+          signatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoIdentityDelegationSignatureInput(delegation),
+            resident.privateKey,
+          )),
+        },
+        revocations: [],
+        possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityPossessionSignatureInput({
+            suite: picoIdentitySuite,
+            subjectKeyFingerprintHex: deviceSigningFingerprint,
+            verifierNonceHex: challenge.verifierNonceHex,
+            verifierContext: challenge.verifierContext,
+          }),
+          deviceSigning.privateKey,
+        )),
+      },
+    });
+    expect(session.statusCode).toBe(201);
+
+    // Etwas zu teilen, und damit eine Schluesselversion fuer die Domaene.
+    await recordMemoryItem(app, operatorSession, {
+      privacyDomain: 'domain-journal',
+      content: 'Ein Eintrag, den jemand lesen darf.',
+    });
+
+    // Die Zuteilung: das Home Host Pico erteilt, der Bewohner liest.
+    const grant: PicoHomeDomainReadGrantSignatureInput = {
+      suite: picoIdentitySuite,
+      grantId: 'grant_share_envelope_0001',
+      homeId,
+      hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+      privacyDomain: 'domain-journal',
+      controllerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      readerPicoIdentityFingerprintHex: residentFingerprint,
+      ...picoTestValidityWindow(),
+      lifecycleOrder: 'seq:0000000000000001',
+    };
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/home/domain-read-grants',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeDomainReadGrantRecordSchema,
+        grant,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeDomainReadGrantSignatureInput(grant),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    })).statusCode).toBe(201);
+
+    // Und der Nachweis, dass sein Schluessel noch der aktuelle ist - den
+    // unterschreibt er selbst, weil er die Delegation ausgestellt hat.
+    const checkedAtMs = Date.now();
+    const checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput = {
+      suite: picoIdentitySuite,
+      checkpointId: 'checkpoint_share_envelope_0001',
+      homeId,
+      issuerIdentityKeyFingerprintHex: residentFingerprint,
+      deviceSigningKeyFingerprintHex: deviceSigningFingerprint,
+      deviceKeyAgreementKeyFingerprintHex: readerKeyFingerprintHex,
+      delegationId: delegation.delegationId,
+      status: 'current',
+      observedThroughLifecycleOrder: delegation.lifecycleOrder,
+      checkedAt: new Date(checkedAtMs).toISOString(),
+      freshUntil: new Date(checkedAtMs + 4 * 60_000).toISOString(),
+    };
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/home/reader-key-freshness-checkpoints',
+      headers: operatorAuth,
+      payload: {
+        schema: picoIdentityReaderKeyFreshnessCheckpointSchema,
+        checkpoint,
+        issuerIdentityKeyRecord: residentKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityReaderKeyFreshnessSignatureInput(checkpoint),
+          resident.privateKey,
+        )),
+      },
+    })).statusCode).toBe(202);
+
+    const prepared = await app.inject({
+      method: 'POST',
+      url: '/api/home/share-envelope-issuance',
+      headers: operatorAuth,
+      payload: {
+        grantId: grant.grantId,
+        delegationId: delegation.delegationId,
+        readerKeyFingerprintHex,
+        kekVersion: 1,
+      },
+    });
+    expect(prepared.statusCode).toBe(201);
+    const issuance = (prepared.json() as {
+      issuance: {
+        issuanceId: string;
+        envelope: Parameters<typeof buildPicoShareEnvelopeSignatureInput>[0];
+        sealedWrapHex: string;
+      };
+    }).issuance;
+
+    // Der versiegelte Umschlag geht an ihn und an niemanden sonst: er laesst
+    // sich nur mit seinem Vereinbarungsschluessel oeffnen.
+    expect(sodium.crypto_box_seal_open(
+      Buffer.from(issuance.sealedWrapHex, 'hex'),
+      deviceAgreement.publicKey,
+      deviceAgreement.privateKey,
+    ).length).toBeGreaterThan(0);
+
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/home/share-envelopes',
+      headers: operatorAuth,
+      payload: {
+        issuanceId: issuance.issuanceId,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoShareEnvelopeSignatureInput(issuance.envelope),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    })).statusCode).toBe(201);
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/home/share-envelopes',
+      headers: operatorAuth,
+    });
+    expect(listed.statusCode).toBe(200);
+    const envelopes = (listed.json() as { envelopes: Record<string, unknown>[] }).envelopes;
+    expect(envelopes).toHaveLength(1);
+
+    /*
+     * **Und die Delegation bleibt drinnen.** Der versiegelte Umschlag ist fuer
+     * den Leser bestimmt und geht hinaus; *welche Delegation* ihn getragen hat,
+     * ist eine Angabe ueber das Geraet einer Person und geht niemanden an, der
+     * diese Liste liest. Genau das ist der ganze Inhalt von
+     * `publicPicoShareEnvelope` - und genau das stand in keinem Test.
+     */
+    expect(Object.keys(envelopes[0]!).sort()).toEqual(['issuanceId', 'record']);
+    expect(envelopes[0]).toMatchObject({
+      issuanceId: issuance.issuanceId,
+      record: { envelope: { grantId: grant.grantId, suite: picoShareSuite } },
+    });
 
     await app.close();
   });
