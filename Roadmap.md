@@ -958,6 +958,38 @@ Damit ist die Liste der Sondenregeln aus B175 um eine vierte länger, und sie
 steht im Runbook: **rate die Grenzen eines Rumpfes nicht — frag den
 Übersetzer.** Ein Zeichen zu früh eingesetzt, und der Fund ist keiner.
 
+**Drei der vier sind am 2026-09-15 gegangen**, jeder fällt bei seiner Pflanzung:
+die zwei Statusabbildungen über ihre beiden Zweige (401 gegen 400, 404 gegen
+409 — *„du hast dich vertan"* und *„das kenne ich nicht"* sind verschiedene
+Auskünfte), und der Widerrufsparser über einen missgebildeten Widerruf, der vor
+jeder Kryptografie abgewiesen wird. Die Pflanzung dort beißt über die **Meldung**
+und nicht über den Status: beides wäre 400, aber der Satz unterscheidet sie.
+
+**Der vierte bleibt offen, und der Weg dorthin ist die eigentliche Ausbeute.**
+Zwei Anläufe, beide verworfen, beide mit einem Grund, der ohne den Versuch nicht
+zu haben war:
+
+1. *Eine App auf die Datenbank der Speicher-Fixture zeigen lassen.* Scheitert:
+   die Betreiberbindung verlangt **verifizierte Host-Schlüsselverwahrung**, die
+   eine direkt beanspruchte Testdatenbank nicht hat — `home-authority-relay`
+   antwortet 401.
+2. *Die Zeremonie an den bestehenden Identitätssitzungstest anhängen.* Dort ist
+   fast alles beisammen — beanspruchtes Home, Sitzung, Lesezuteilung,
+   Frischebescheinigung, und mit `memoryEncryption` auch eine Schlüsselversion.
+   Es scheitert an einer **Regel, die richtig ist**: die Kandidatensuche für
+   Leserschlüssel verlangt eine *Mitgliedschaft* des Lesers, und das Home Host
+   Pico kann keine haben — `home_host_membership_is_not_reissued`, weil die
+   Gründungsaufzeichnung bereits seine Mitgliedschaftswurzel ist (ADR 0080). Die
+   Zuteilung jenes Tests nennt genau dieses Pico als Leser und kann deshalb
+   **niemals** einen Umschlag erzeugen.
+
+Was ein Gang also braucht, steht damit fest und muss nicht neu gesucht werden:
+**einen zweiten Bewohner** — eigene Identität, eigene Mitgliedschaft, eigene
+Delegation und Geräteschlüssel, eigene Identitätssitzung (die seinen
+Leserschlüssel einträgt), eine Frischebescheinigung auf ihn und eine
+Lesezuteilung, die *ihn* als Leser nennt. Dann erst prägen, entsiegeln,
+unterschreiben, abschließen.
+
 **B176 — Das Gedächtnis dieses Projekts nennt nichts, was es nicht gibt
 (2026-09-14, negatives Ergebnis).** Dieser Baum stellt an alles die Frage, ob
 eine Begründung ihren Gegenstand überlebt hat. An seine eigenen Dokumente hatte
