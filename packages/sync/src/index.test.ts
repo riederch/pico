@@ -206,6 +206,22 @@ describe('reader-custody sync client state (ADR 0090)', () => {
     writeFileSync(statePath, '{"schema":', { mode: 0o600 });
     expect(() => store.load()).toThrow('invalid_reader_sync_state');
 
+    /**
+     * The same word, but the *schema* branch of that `||` chain - unwalked
+     * until 2026-09-16 (B182). This file is what the client believes about
+     * its own floor across restarts; one written by a build that named the
+     * state differently must not be read as this build's state.
+     */
+    writeFileSync(
+      statePath,
+      JSON.stringify({
+        ...readerSyncClientState(1, 1),
+        schema: 'pico.sync.reader-custody-client-state.v2',
+      }),
+      { mode: 0o600 },
+    );
+    expect(() => store.load()).toThrow('invalid_reader_sync_state');
+
     writeFileSync(statePath, 'x'.repeat((64 * 1024) + 1));
     expect(() => store.load()).toThrow('invalid_reader_sync_state_file');
 
@@ -319,6 +335,17 @@ describe('durable reader-custody pending inbox (ADR 0092)', () => {
     const store = new PicoReaderCustodySyncFilePendingStore(pendingPath);
 
     writeFileSync(pendingPath, '{"schema":', { mode: 0o600 });
+    expect(() => store.load()).toThrow('invalid_reader_sync_pending');
+
+    /** The schema branch of the same chain, unwalked until 2026-09-16 (B182). */
+    writeFileSync(
+      pendingPath,
+      JSON.stringify({
+        ...readerSyncPendingRecord(1),
+        schema: 'pico.sync.reader-custody-pending.v2',
+      }),
+      { mode: 0o600 },
+    );
     expect(() => store.load()).toThrow('invalid_reader_sync_pending');
 
     truncateSync(
@@ -1156,6 +1183,27 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
       evaluatedAt: '2026-07-27T10:30:00.000Z',
     }, { signal: new AbortController().signal }))
       .rejects.toThrow('invalid_reader_sync_page');
+
+    /**
+     * The schema branch of that same chain, unwalked until 2026-09-16 (B182):
+     * this word is asserted three times above and every one of them hits a
+     * different branch. A page is what a relay hands this runner, so a batch
+     * under a schema this build does not have is the one thing the word is
+     * for.
+     */
+    await expect(new PicoReaderCustodySyncRunner({
+      read: async () => ({
+        batches: [{
+          ...runnerBatchRecord(1),
+          schema: 'pico.sync.reader-custody-batch.v2' as never,
+        }],
+        nextCursor: 'cursor:0000000000000002',
+        hasMore: false,
+      }),
+    }, client, createMemoryPendingStore(), () => undefined).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+    }, { signal: new AbortController().signal }))
+      .rejects.toThrow('invalid_reader_sync_page');
   });
 
   it('rejects inconsistent opaque transport cursors before parsing a batch', async () => {
@@ -1182,6 +1230,36 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
       evaluatedAt: '2026-07-27T10:30:00.000Z',
     }, { signal: new AbortController().signal }))
       .rejects.toThrow('invalid_sync_read_page');
+
+    /**
+     * And the schema the source reads out of an opaque record's payload -
+     * unwalked until 2026-09-16 (B182). The transport carries bytes it cannot
+     * read; this comparison is the first statement this build makes about what
+     * those bytes are, so a payload written under another schema must not pass
+     * as a batch.
+     */
+    const otherSchema = new TextEncoder().encode(JSON.stringify({
+      ...batch,
+      schema: 'pico.sync.reader-custody-batch.v2',
+    }));
+    await expect(new PicoReaderCustodySyncBatchSource({
+      publish: async () => ({ inserted: false }),
+      latest: async () => undefined,
+      read: async () => ({
+        records: [{
+          objectId: batch.syncBatchId,
+          payload: otherSchema,
+          expiresAt: batch.expiresAt,
+          cursor: 'cursor:0000000000000001',
+        }],
+        nextCursor: 'cursor:0000000000000001',
+        hasMore: false,
+      }),
+    }).read({
+      routeRef,
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+    }, { signal: new AbortController().signal }))
+      .rejects.toThrow('invalid_reader_sync_batch');
   });
 });
 
