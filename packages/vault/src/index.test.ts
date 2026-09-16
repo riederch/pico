@@ -501,6 +501,83 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
     })).toThrow('invalid_reader_custody_item');
 
     /**
+     * The other eighteen branches of these `||` chains, measured on
+     * 2026-09-16 (B182): every one of them could be deleted and all 21 tests
+     * of this package stayed green. They are not decoration - each is the
+     * first thing an assert says about a record that *travelled*, and the
+     * reader-custody records are what hold a person's encrypted memory.
+     *
+     * `tamper` keeps these readable: clone, change one field, feed it to the
+     * door that checks it.
+     */
+    const tamper = <T>(record: T, mutate: (copy: T) => void): T => {
+      const copy = structuredClone(record);
+      mutate(copy);
+      return copy;
+    };
+    const otherContentSuite = 'pico.suite.mem.v2';
+    const otherShareSuite = 'pico.suite.share.v2';
+
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: agreementSession,
+      domainRecord: tamper(domainRecord, (d) => { (d.domain as { suite: string }).suite = otherContentSuite; }),
+      writerGrantRecord,
+      itemRecord,
+    })).toThrow('invalid_reader_custody_domain');
+
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: agreementSession,
+      domainRecord: tamper(domainRecord, (d) => {
+        (d.ownerEnvelope as { schema: string }).schema = 'pico.share.envelope-record.v2';
+      }),
+      writerGrantRecord,
+      itemRecord,
+    })).toThrow('invalid_reader_custody_domain');
+
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: agreementSession,
+      domainRecord: tamper(domainRecord, (d) => {
+        (d.ownerEnvelope.envelope as { suite: string }).suite = otherShareSuite;
+      }),
+      writerGrantRecord,
+      itemRecord,
+    })).toThrow('invalid_reader_custody_domain');
+
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: agreementSession,
+      domainRecord,
+      writerGrantRecord: tamper(writerGrantRecord, (w) => {
+        (w as { schema: string }).schema = 'pico.reader-custody.writer-grant.v2';
+      }),
+      itemRecord,
+    })).toThrow('invalid_reader_custody_writer_grant');
+
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: agreementSession,
+      domainRecord,
+      writerGrantRecord: tamper(writerGrantRecord, (w) => {
+        (w.grant as { suite: string }).suite = otherContentSuite;
+      }),
+      itemRecord,
+    })).toThrow('invalid_reader_custody_writer_grant');
+
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: agreementSession,
+      domainRecord,
+      writerGrantRecord,
+      itemRecord: tamper(itemRecord, (i) => {
+        (i as { schema: string }).schema = 'pico.reader-custody.item.v2';
+      }),
+    })).toThrow('invalid_reader_custody_item');
+
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: agreementSession,
+      domainRecord,
+      writerGrantRecord,
+      itemRecord: tamper(itemRecord, (i) => { (i.item as { suite: string }).suite = otherContentSuite; }),
+    })).toThrow('invalid_reader_custody_item');
+
+    /**
      * The domain record's own schema word was unwalked until 2026-09-15
      * (B181). It guards a record that *travelled* - the Home signs it, sync
      * carries it - so the case it exists for is a record from a build that
@@ -712,6 +789,106 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       rotatedAt: '2026-07-27T10:07:00.000Z',
       lifecycleOrder: 'seq:0000000000000009',
     });
+    /**
+     * The remaining chain branches of this half, measured on 2026-09-16
+     * (B182). A reader grant, a rotation and the share envelope inside them
+     * all travel; each of these words is the first thing its assert says.
+     */
+    const tamper2 = <T>(record: T, mutate: (copy: T) => void): T => {
+      const copy = structuredClone(record);
+      mutate(copy);
+      return copy;
+    };
+    const rotation = (over: Record<string, unknown>) => rotatePicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      readerGrantLifecycleRecords: [readerRevoked],
+      writerGrantLifecycleRecords: [writerV2Revoked],
+      rotationId: 'reader_rotation_branch_probe',
+      rotatedAt: '2026-07-27T10:07:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
+      ...over,
+    });
+
+    expect(() => revokePicoReaderCustodyReaderGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      readerGrantRecord: tamper2(readerGrant, (r) => {
+        (r as { schema: string }).schema = 'pico.reader-custody.reader-grant.v2';
+      }),
+      lifecycleId: 'reader_grant_branch_probe',
+      reasonCategory: 'reader_removed',
+      changedAt: '2026-07-27T10:06:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    })).toThrow('invalid_reader_custody_reader_grant');
+
+    expect(() => revokePicoReaderCustodyReaderGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      readerGrantRecord: tamper2(readerGrant, (r) => {
+        (r.grant as { suite: string }).suite = 'pico.suite.mem.v2';
+      }),
+      lifecycleId: 'reader_grant_branch_probe',
+      reasonCategory: 'reader_removed',
+      changedAt: '2026-07-27T10:06:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    })).toThrow('invalid_reader_custody_reader_grant');
+
+    /** The share envelopes a reader grant carries, reached through that grant. */
+    expect(() => revokePicoReaderCustodyReaderGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      readerGrantRecord: tamper2(readerGrant, (r) => {
+        (r.envelopes[0] as { schema: string }).schema = 'pico.share.envelope-record.v2';
+      }),
+      lifecycleId: 'reader_grant_branch_probe',
+      reasonCategory: 'reader_removed',
+      changedAt: '2026-07-27T10:06:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    })).toThrow('invalid_reader_custody_envelope');
+
+    expect(() => revokePicoReaderCustodyReaderGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      readerGrantRecord: tamper2(readerGrant, (r) => {
+        (r.envelopes[0]!.envelope as { suite: string }).suite = 'pico.suite.share.v2';
+      }),
+      lifecycleId: 'reader_grant_branch_probe',
+      reasonCategory: 'reader_removed',
+      changedAt: '2026-07-27T10:06:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    })).toThrow('invalid_reader_custody_envelope');
+
+    expect(() => rotation({
+      rotationRecords: [tamper2(rotationV2, (r) => {
+        (r as { schema: string }).schema = 'pico.reader-custody.kek-rotation.v2';
+      })],
+    })).toThrow('invalid_reader_custody_rotation');
+
+    /**
+     * The content suite each lifecycle names, the second branch of those two
+     * chains. A lifecycle from another content generation would let a rotation
+     * count a cause it cannot read.
+     */
+    expect(() => rotation({
+      readerGrantLifecycleRecords: [tamper2(readerRevoked, (r) => {
+        (r.lifecycle as { suite: string }).suite = 'pico.suite.mem.v2';
+      })],
+    })).toThrow('invalid_reader_custody_reader_lifecycle');
+
+    expect(() => rotation({
+      writerGrantLifecycleRecords: [tamper2(writerV2Revoked, (r) => {
+        (r.lifecycle as { suite: string }).suite = 'pico.suite.mem.v2';
+      })],
+    })).toThrow('invalid_reader_custody_writer_lifecycle');
+
+    expect(() => rotation({
+      rotationRecords: [tamper2(rotationV2, (r) => {
+        (r.rotation as { suite: string }).suite = 'pico.suite.mem.v2';
+      })],
+    })).toThrow('invalid_reader_custody_rotation');
+
     /**
      * Both lifecycle schema words were unwalked until 2026-09-15 (B181). A
      * lifecycle record travels: the owner signs it, and a rotation reads it

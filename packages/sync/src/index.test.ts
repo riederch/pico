@@ -1376,6 +1376,22 @@ describe('authenticated reader sync and local presentation (ADRs 0089/0094/0095/
     })).toThrow('invalid_reader_sync_batch');
 
     /**
+     * The batch record's own schema word, measured unwalked on 2026-09-16
+     * (B182): it sits first in an `||` chain, so the word said nothing about
+     * which branch a test had hit, and all ten of this package's chain
+     * branches could be deleted with its 28 tests green. A batch is what a
+     * relay hands a reader; the schema is the first thing said about it.
+     */
+    expect(() => openPicoReaderCustodySyncBatch(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      batchRecord: {
+        ...page.batches[0]!,
+        schema: 'pico.sync.reader-custody-batch.v2' as never,
+      },
+      evaluatedAt: '2026-07-27T10:11:00.000Z',
+    })).toThrow('invalid_reader_sync_batch');
+
+    /**
      * The same expired batch, evaluated at the farthest instant a `Date` can
      * hold - and it must still refuse.
      *

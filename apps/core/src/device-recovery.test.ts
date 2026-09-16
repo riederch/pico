@@ -1658,6 +1658,21 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     // anchor exists to hold shut.
     expect(() => reopenAnchor(fixture.anchorPath))
       .toThrow('unreadable_recovery_anchor');
+
+    /**
+     * The same word, but the *schema* branch of that same `||` chain - and it
+     * was unwalked until 2026-09-16 (B182). Three tests assert this word and
+     * all three hit other branches; deleting the schema comparison left all
+     * 1200 tests of this package green. An anchor written by a build that
+     * named the document differently would be read as "no floor", which is
+     * exactly what the word exists to prevent.
+     */
+    writeFileSync(
+      fixture.anchorPath,
+      JSON.stringify({ ...document, schema: 'pico.home.recovery-anchor.v2' }),
+    );
+    expect(() => reopenAnchor(fixture.anchorPath))
+      .toThrow('unreadable_recovery_anchor');
     fixture.store.close();
   });
 
