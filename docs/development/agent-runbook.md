@@ -196,6 +196,12 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+10. **Einen einzelnen Zweig baut man mit `&& false` aus, nicht mit `false`.**
+   Wer `x.schema !== KONST` durch `false` ersetzt, macht die Konstante
+   unbenutzt - und seit dem 2026-09-15 faellt der Bau darueber
+   (`noUnusedLocals`), was bei Paketen mit gebautem Artefakt die Messung
+   verhindert. `(x.schema !== KONST && false)` laesst Konstante und Verengung
+   stehen und ist im `||` trotzdem immer falsch (B182).
 9. **Eine Sonde, die Quellen aendert, misst nur Pakete, deren Tests aus den
    Quellen fahren.** Wer ohne Bau pflanzt, misst jedes abhaengige Paket gegen
    ein sauberes `dist` und bekommt eine Null, die nichts bedeutet. Am

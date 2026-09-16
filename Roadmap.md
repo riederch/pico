@@ -912,6 +912,52 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B182 — Achtzehn Zweige im Vault, die niemand geht (2026-09-16).** B181 endete
+mit einer Entscheidung und einer Empfehlung, die ich nicht beziffern konnte:
+*nur die Oder-Ketten aufteilen, deren Schemazweig nachweislich niemand geht.*
+Eine Empfehlung ohne Zahl ist eine Meinung. Also die Zahl gemessen — nicht
+durch Lesen, sondern durch **Ausbauen genau dieses Zweigs**, mit
+`!== KONSTANTE && false`, damit der Rest der Kette und der Übersetzer
+unberührt bleiben.
+
+32 Ketten tragen **44 solche Zweige** (mehrere Ketten prüfen zwei Konstanten).
+Ausgebaut und die Paketläufe gezählt:
+
+| Paket | Zweige | gegangen | offen |
+| --- | --- | --- | --- |
+| `packages/vault` | 23 | 5 | **18** |
+| `packages/sync` | 10 | 0 | **10** |
+| `apps/vault-daemon` | 6 | 1 | **5** |
+| `apps/companion` | 3 | 3 | 0 |
+| `packages/identity` | 1 | 0 | **1** |
+| `apps/core` | 1 | 0 | **1** |
+| **gesamt** | **44** | **9** | **35** |
+
+**Acht der neun sind von gestern.** Vor B181 war genau *einer* der 44
+gegangen — der Antwortumschlag im Pico-Link-Client des Vault-Daemons. Die
+anderen acht sind die Gänge aus B181, die zufällig in Ketten liegen.
+
+**Der Vault trägt 18 davon, und das ist die Stelle, an der es weh tut.** Alle
+achtzehn liegen in der Reader-Custody: `assertPicoReaderCustodyReaderGrantRecord`,
+`…RotationRecord`, `…WriterGrantRecord`, `…ItemRecord` und der
+Freigabeumschlag. Jede dieser Prüfungen hat dieselbe Gestalt —
+`record.schema !== XSchema || X.suite !== picoMemoryContentSuite || …` — und
+in jeder sind **beide** vorderen Glieder ungegangen. Das ist der Teil, der die
+verschlüsselte Erinnerung einer Person hält, und `packages/vault` hat 21 Tests;
+sie bleiben alle grün, während achtzehn dieser Zweige ausgebaut sind.
+
+**Was die Messung für die Entscheidung ändert.** Meine Empfehlung aus B181 hieß
+„weniger als 32". Sie sind **35**, also mehr Wörter als die Kettenzahl, weil
+eine Kette zwei Zweige tragen kann. Damit ist „nur die ungegangenen aufteilen"
+kaum billiger als „alle aufteilen" — die Empfehlung trägt nicht mehr.
+
+**Und ein Unterschied, den ich in B181 verwischt hatte:** ein Zweig in einer
+Kette lässt sich sehr wohl **gehen** — meine acht Gänge tun genau das, indem
+sie die eine Eingabe bauen, die nur dieses Glied fällen kann. Was nicht geht,
+ist ihn von außen **nachzurechnen**: ein Tor über Namen kann nicht sehen,
+welches Glied ein Test getroffen hat. Aufteilen ist also kein Preis für den
+Gang, sondern ein Preis für das *Tor*.
+
 **B181 — Die Tests füttern ein kaputtes Dokument, nie ein fremdes
 (2026-09-15).** B180 endete mit dem Satz, dass ein Fossil zwei Seiten hat.
 Dieselbe Frage eine Ebene höher: **hat jeder Schemaname eine Erzeuger- *und*
