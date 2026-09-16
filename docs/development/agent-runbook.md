@@ -196,6 +196,12 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+11. **Eine Sammelsonde beantwortet eine andere Frage als eine Einzelsonde.**
+   Alle Zweige eines Pakets gemeinsam auszubauen sagt nur „haelt irgendetwas
+   irgendetwas". Am 2026-09-16 fiel dabei in `@pico/sync` ein Test, waehrend
+   einzeln ausgebaut *kein* Zweig einen Halter hat - der Fehlschlag war ein
+   Zusammenspiel mehrerer abgeschalteter Glieder (B182). Wer einem Zweig einen
+   Halter zuschreiben will, baut genau diesen aus.
 10. **Einen einzelnen Zweig baut man mit `&& false` aus, nicht mit `false`.**
    Wer `x.schema !== KONST` durch `false` ersetzt, macht die Konstante
    unbenutzt - und seit dem 2026-09-15 faellt der Bau darueber

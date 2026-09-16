@@ -923,15 +923,15 @@ unberührt bleiben.
 32 Ketten tragen **44 solche Zweige** (mehrere Ketten prüfen zwei Konstanten).
 Ausgebaut und die Paketläufe gezählt:
 
-| Paket | Zweige | gegangen | offen |
+| Paket | Zweige | gegangen (gemessen) | nach dem Gang |
 | --- | --- | --- | --- |
-| `packages/vault` | 23 | 5 | **18** |
-| `packages/sync` | 10 | 0 | **10** |
-| `apps/vault-daemon` | 6 | 1 | **5** |
-| `apps/companion` | 3 | 3 | 0 |
-| `packages/identity` | 1 | 0 | **1** |
+| `packages/vault` | 23 | 5 | **21** |
+| `packages/sync` | 10 | 0 | 0 |
+| `apps/vault-daemon` | 6 | 1 | 1 |
+| `apps/companion` | 3 | 3 | 3 |
+| `packages/identity` | 1 | 0 | 0 |
 | `apps/core` | 1 | 0 | **1** |
-| **gesamt** | **44** | **9** | **35** |
+| **gesamt** | **44** | **9** | **26** |
 
 **Acht der neun sind von gestern.** Vor B181 war genau *einer* der 44
 gegangen — der Antwortumschlag im Pico-Link-Client des Vault-Daemons. Die
@@ -947,9 +947,24 @@ verschlüsselte Erinnerung einer Person hält, und `packages/vault` hat 21 Tests
 sie bleiben alle grün, während achtzehn dieser Zweige ausgebaut sind.
 
 **Was die Messung für die Entscheidung ändert.** Meine Empfehlung aus B181 hieß
-„weniger als 32". Sie sind **35**, also mehr Wörter als die Kettenzahl, weil
-eine Kette zwei Zweige tragen kann. Damit ist „nur die ungegangenen aufteilen"
-kaum billiger als „alle aufteilen" — die Empfehlung trägt nicht mehr.
+„weniger als 32 aufteilen". Sie sind **35**, also mehr Wörter als die
+Kettenzahl, weil eine Kette zwei Zweige tragen kann. Damit trägt „nur die
+ungegangenen aufteilen" nicht mehr — und die Empfehlung wurde zu etwas
+anderem: **gehen statt aufteilen.**
+
+**Gemacht, am selben Tag.** Die achtzehn im Vault gehen jetzt, dazu der
+Ankerzweig im Core — 26 von 44, ohne dass sich ein einziges Ablehnungswort
+geändert hat. Im Vault bleiben genau **zwei**, beide hinter der AEAD: die
+Nutzlast einer Sync-Charge und der Freigabe-Wickel. Offen bleiben ausserdem
+die zehn in `packages/sync` (sie liegen tief im Lesenden-Klienten, hinter
+gebauten Quellen und einem Zustandsspeicher), fünf im Vault-Daemon und einer
+in `@pico/identity`.
+
+**Eine Feinheit der Sonde, die fast eine falsche Zahl erzeugt hätte:** als ich
+alle zehn Sync-Zweige *gemeinsam* ausbaute, fiel ein Test — einzeln ausgebaut
+fällt bei keinem einer. Der Fehlschlag war ein Zusammenspiel mehrerer
+abgeschalteter Glieder, kein Halter. **Eine Sammelsonde beantwortet „hält
+irgendetwas irgendetwas", nicht „hält etwas *diesen* Zweig".**
 
 **Und ein Unterschied, den ich in B181 verwischt hatte:** ein Zweig in einer
 Kette lässt sich sehr wohl **gehen** — meine acht Gänge tun genau das, indem
