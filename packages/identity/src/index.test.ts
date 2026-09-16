@@ -598,6 +598,23 @@ describe('Pico identity signature verification runtime', () => {
       checkpoint,
       signatureHex,
     })).toThrow('invalid_issuer_key_role');
+
+    /**
+     * The *suite* half of that same word, measured unwalked on 2026-09-16
+     * (B182): every case above names a wrong role, so the suite comparison
+     * never fired. The builder one line above it only asserts that the suite
+     * is an ascii token, not which one - so this branch is the only thing
+     * that keeps a key from another cryptographic generation out of the
+     * issuer position.
+     */
+    expect(() => verifyPicoIdentityReaderKeyFreshnessSignature(testSodium, {
+      issuerIdentityKeyRecord: {
+        ...identity.keyRecord,
+        suite: 'pico.suite.id.v2' as never,
+      },
+      checkpoint,
+      signatureHex,
+    })).toThrow('invalid_issuer_key_role');
   });
 
   it('fails closed for tampered signatures, mismatched issuer fingerprints and wrong issuer roles', () => {
