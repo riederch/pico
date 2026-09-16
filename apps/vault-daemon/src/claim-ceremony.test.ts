@@ -1578,6 +1578,44 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
         },
       },
     });
+    /**
+     * The two schema words in the completion record, measured unwalked on
+     * 2026-09-16 (B182): nothing in the tree names
+     * `invalid_recovery_completion_result`, and this is the record that says a
+     * recovery really happened. A Home of another build answering here would
+     * otherwise be read as a completed recovery.
+     *
+     * A stand-in link client is enough: the ceremony only reads `sender` for
+     * the target binding, and then whatever the Home answered.
+     */
+    const standInResult = (record: unknown) => ({
+      ...targetLink,
+      request: async () => ({
+        outcome: 'ok' as const,
+        result: { status: 'consumed', record },
+      }),
+    }) as unknown as typeof targetLink;
+    const goodRecord = completed.record as unknown as Record<string, unknown>;
+
+    await expect(completePicoHomeDeviceRecovery({
+      targetLinkClient: standInResult({
+        ...goodRecord,
+        schema: 'pico.home.device-recovery-record.v2',
+      }),
+      pending: initiated.pending,
+    })).rejects.toThrow('invalid_recovery_completion_result');
+
+    await expect(completePicoHomeDeviceRecovery({
+      targetLinkClient: standInResult({
+        ...goodRecord,
+        submission: {
+          ...(goodRecord.submission as Record<string, unknown>),
+          schema: 'pico.home.device-recovery-submission.v2',
+        },
+      }),
+      pending: initiated.pending,
+    })).rejects.toThrow('invalid_recovery_completion_result');
+
     const recoveredView = await readPicoHomeDeviceLifecycle(targetLink, {
       identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
       sponsor: targetLink.sender,
