@@ -348,6 +348,25 @@ describe('durable reader-custody pending inbox (ADR 0092)', () => {
     );
     expect(() => store.load()).toThrow('invalid_reader_sync_pending');
 
+    /**
+     * And the batch the pending record carries, the other schema branch of
+     * that chain. This file is not signed - it is a local staging area - so
+     * this comparison is the only thing that says the batch inside it belongs
+     * to this build.
+     */
+    writeFileSync(
+      pendingPath,
+      JSON.stringify({
+        ...readerSyncPendingRecord(1),
+        batchRecord: {
+          ...readerSyncPendingRecord(1).batchRecord,
+          schema: 'pico.sync.reader-custody-batch.v2',
+        },
+      }),
+      { mode: 0o600 },
+    );
+    expect(() => store.load()).toThrow('invalid_reader_sync_pending');
+
     truncateSync(
       pendingPath,
       MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES + 1,

@@ -136,6 +136,8 @@ function answeringFetch(input: {
   deviceSigning: { publicKey: Uint8Array; privateKey: Uint8Array };
   mutateResponse?: (response: PicoLinkDirectResponseSignatureInput) => void;
   replyKeys?: string[];
+  /** The schema inside the sealed payload - a Home of another build's word. */
+  payloadSchema?: string;
 }): typeof fetch {
   return (async (_url: URL | RequestInfo, init?: RequestInit) => {
     const envelope = JSON.parse(String(init?.body)) as {
@@ -173,7 +175,7 @@ function answeringFetch(input: {
     ));
     const sealedResponseHex = hex(sodium.crypto_box_seal(
       new TextEncoder().encode(JSON.stringify({
-        schema: picoLinkDirectResponseEnvelopeSchema,
+        schema: input.payloadSchema ?? picoLinkDirectResponseEnvelopeSchema,
         response,
         result,
         hostSignatureHex,
@@ -316,6 +318,31 @@ describe('Pico Link direct client (ADR 0107 D3)', () => {
           )),
         });
       }) as typeof fetch,
+      now: () => new Date('2026-07-29T12:00:00.000Z'),
+    });
+    await expect(client.request('home.authority.list', { resource: 'home_state' }))
+      .rejects.toThrow('link_invalid_response_payload');
+  });
+
+  it('refuses an opened payload whose schema names another version', async () => {
+    /**
+     * The schema branch of that same chain, measured unwalked on 2026-09-16
+     * (B182). The case above leaves out `result` and the signature, so the
+     * refusal comes from the signature-input builder one step later - under
+     * the same word. Here the payload is *complete and correctly signed*, and
+     * only its schema is another version: the one thing that branch is for.
+     */
+    const f = fixture();
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid/reachable',
+      host: f.host,
+      sender: f.sender,
+      fetch: answeringFetch({
+        ...f,
+        payloadSchema: 'pico.link.direct-response-envelope.v2',
+      }),
       now: () => new Date('2026-07-29T12:00:00.000Z'),
     });
     await expect(client.request('home.authority.list', { resource: 'home_state' }))

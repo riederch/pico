@@ -297,6 +297,31 @@ describe('ADR 0115 U4 host pin refresh', () => {
       coreUrl: 'http://127.0.0.1:1',
       fetch: serving(corruptHead).fetch,
     })).rejects.toThrow('continuity_read_malformed');
+
+    /**
+     * The schema and the head's suite, each on its own - measured unwalked on
+     * 2026-09-16 (B182). The case above names a wrong schema *and* an empty
+     * head, so either branch of that `||` chain could have been the one that
+     * fired; with both named separately, each branch has to carry its own
+     * refusal. What they refuse is a Home answering from another build: this
+     * chain is what decides whether the host keys a device trusts are still
+     * the host's.
+     */
+    const otherSchema = chainResponse([], eraA) as unknown as Record<string, unknown>;
+    otherSchema.schema = 'pico.home.continuity-chain.v2';
+    await expect(fetchPicoHomeContinuityChain({
+      coreUrl: 'http://127.0.0.1:1',
+      fetch: serving(otherSchema).fetch,
+    })).rejects.toThrow('continuity_read_malformed');
+
+    const otherSuite = chainResponse([], eraA) as unknown as {
+      head: Record<string, unknown>;
+    };
+    otherSuite.head.suite = 'pico.suite.id.v2';
+    await expect(fetchPicoHomeContinuityChain({
+      coreUrl: 'http://127.0.0.1:1',
+      fetch: serving(otherSuite).fetch,
+    })).rejects.toThrow('continuity_read_malformed');
   });
 
   /**
