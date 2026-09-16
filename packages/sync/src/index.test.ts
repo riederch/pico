@@ -705,6 +705,46 @@ describe('protected reader-custody projection archive (ADR 0093)', () => {
       'invalid_reader_sync_projection_archive',
     );
 
+    /**
+     * The three schema branches of that same word, unwalked until 2026-09-16
+     * (B182): the archive, the record inside it and the receipt inside that.
+     * `invalid_reader_sync_projection_archive` is asserted several times above
+     * and each of those hits a different branch of the chain. This archive is
+     * the local proof of what a reader has already accepted; one written under
+     * another schema must not be read as this build's proof.
+     */
+    for (const schemaPatch of [
+      (a: Record<string, unknown>) => {
+        a.schema = 'pico.sync.reader-custody-protected-projection-archive.v2';
+      },
+      (a: Record<string, unknown>) => {
+        (a.records as Array<Record<string, unknown>>)[0]!.schema =
+          'pico.sync.reader-custody-protected-projection.v2';
+      },
+      (a: Record<string, unknown>) => {
+        const record = (a.records as Array<Record<string, unknown>>)[0]!;
+        (record.receipt as Record<string, unknown>).schema =
+          'pico.sync.reader-custody-projection-receipt.v2';
+      },
+    ]) {
+      const patchedPath = createReaderSyncProjectionArchivePath();
+      const patchedStore =
+        new PicoReaderCustodySyncProtectedProjectionFileStore(
+          sodium,
+          patchedPath,
+          routeRef,
+        );
+      patchedStore.materialize(projection1);
+      const archive = JSON.parse(
+        readFileSync(patchedPath, 'utf8'),
+      ) as Record<string, unknown>;
+      schemaPatch(archive);
+      writeFileSync(patchedPath, `${JSON.stringify(archive)}\n`);
+      expect(() => patchedStore.load()).toThrow(
+        'invalid_reader_sync_projection_archive',
+      );
+    }
+
     const boundedPath = createReaderSyncProjectionArchivePath();
     const boundedStore =
       new PicoReaderCustodySyncProtectedProjectionFileStore(
