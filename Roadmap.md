@@ -912,66 +912,76 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
-**B182 — Achtzehn Zweige im Vault, die niemand geht (2026-09-16).** B181 endete
-mit einer Entscheidung und einer Empfehlung, die ich nicht beziffern konnte:
-*nur die Oder-Ketten aufteilen, deren Schemazweig nachweislich niemand geht.*
-Eine Empfehlung ohne Zahl ist eine Meinung. Also die Zahl gemessen — nicht
-durch Lesen, sondern durch **Ausbauen genau dieses Zweigs**, mit
-`!== KONSTANTE && false`, damit der Rest der Kette und der Übersetzer
-unberührt bleiben.
+**B182 — Die meisten „ungegangenen" Zweige sind keine Lücke (2026-09-16).**
+B181 endete mit einer Entscheidung und einer Empfehlung, die ich nicht
+beziffern konnte: *nur die Oder-Ketten aufteilen, deren Schemazweig
+nachweislich niemand geht.* Eine Empfehlung ohne Zahl ist eine Meinung. Die
+Zahl zu messen hat einen ganzen Tag gekostet, **drei falsche Zahlen erzeugt**
+und am Ende etwas anderes ergeben als die Frage erwartete.
 
-32 Ketten tragen **44 solche Zweige** (mehrere Ketten prüfen zwei Konstanten).
-Ausgebaut und die Paketläufe gezählt:
+32 Ketten tragen **44 Zweige**, die eine Schemakonstante prüfen (mehrere Ketten
+prüfen zwei). Gemessen wird nicht durch Lesen, sondern durch Ausbauen **genau
+dieses Zweigs** — `!== KONSTANTE && false`, was den Rest der Kette, die
+Verengung und `noUnusedLocals` unberührt lässt.
 
-| Paket | Zweige | gegangen (gemessen) | nach dem Gang |
-| --- | --- | --- | --- |
-| `packages/vault` | 23 | 5 | **21** |
-| `packages/sync` | 10 | 0 | 0 |
-| `apps/vault-daemon` | 6 | 1 | 1 |
-| `apps/companion` | 3 | 3 | 3 |
-| `packages/identity` | 1 | 0 | 0 |
-| `apps/core` | 1 | 0 | **1** |
-| **gesamt** | **44** | **9** | **26** |
+| Paket | Zweige | gehalten |
+| --- | --- | --- |
+| `packages/vault` | 23 | 11 |
+| `packages/sync` | 10 | 7 |
+| `apps/companion` | 3 | 3 |
+| `apps/core` | 1 | 1 |
+| `apps/vault-daemon` | 6 | 1 |
+| `packages/identity` | 1 | 0 |
+| **gesamt** | **44** | **23** |
 
-**Acht der neun sind von gestern.** Vor B181 war genau *einer* der 44
-gegangen — der Antwortumschlag im Pico-Link-Client des Vault-Daemons. Die
-anderen acht sind die Gänge aus B181, die zufällig in Ketten liegen.
+**Vor dieser Arbeit war es genau einer.** Die 22 dazugekommenen sind die Gänge
+aus B181 und diesem Tag: Schlüsseldatei, Entsperrdatei, Recovery Card, die
+sieben Reader-Custody-Sätze, der Anker im Core, das Archiv des Lesenden-Klienten
+mit seinem Satz und seiner Quittung, sein Zustand, sein Pending-Eingang, die
+Seite, die ein Relay ihm reicht, und das Schema in der Nutzlast eines
+undurchsichtigen Satzes.
 
-**Der Vault trägt 18 davon, und das ist die Stelle, an der es weh tut.** Alle
-achtzehn liegen in der Reader-Custody: `assertPicoReaderCustodyReaderGrantRecord`,
-`…RotationRecord`, `…WriterGrantRecord`, `…ItemRecord` und der
-Freigabeumschlag. Jede dieser Prüfungen hat dieselbe Gestalt —
-`record.schema !== XSchema || X.suite !== picoMemoryContentSuite || …` — und
-in jeder sind **beide** vorderen Glieder ungegangen. Das ist der Teil, der die
-verschlüsselte Erinnerung einer Person hält, und `packages/vault` hat 21 Tests;
-sie bleiben alle grün, während achtzehn dieser Zweige ausgebaut sind.
+**Und dann die eigentliche Auskunft, die die Frage umdreht.** Von den 21, die
+*nicht* halten, sind die wenigsten eine Lücke:
 
-**Was die Messung für die Entscheidung ändert.** Meine Empfehlung aus B181 hieß
-„weniger als 32 aufteilen". Sie sind **35**, also mehr Wörter als die
-Kettenzahl, weil eine Kette zwei Zweige tragen kann. Damit trägt „nur die
-ungegangenen aufteilen" nicht mehr — und die Empfehlung wurde zu etwas
-anderem: **gehen statt aufteilen.**
+- **Zehn im Vault vergleichen eine `suite`, die in den signierten Bytes
+  steht.** `buildPicoReaderCustodyDomainSignatureInput` nennt `suite` als
+  erstes Feld. Wer sie ändert, bricht die Unterschrift — und die wird *in
+  derselben Kette* geprüft, unter *demselben Wort*. Der Zweig ist also nicht
+  ungeprüft, sondern **redundant**: ihn auszubauen ändert nichts, was von außen
+  zu sehen wäre. Ein Test dafür wäre nicht zu schreiben, weil es nichts gibt,
+  das ihn von seinem Nachbarn unterscheidet.
+- **Zwei liegen hinter der AEAD** (`invalid_share_wrap`, die Nutzlast einer
+  Sync-Charge): sie lesen Etiketten aus *entschlüsselten* Bytes, ein
+  verfälschtes Byte fällt vorher an der Authentifizierung.
+- Der Rest verteilt sich auf fünf im Vault-Daemon, drei in `sync` und einen in
+  `@pico/identity` — und einer davon, die Charge in
+  `openPicoReaderCustodySyncBatch`, **wird sehr wohl gehalten, nur von einem
+  Test des anderen Pakets.** Eine Messung je Paket sieht das nicht.
 
-**Gemacht, am selben Tag.** Die achtzehn im Vault gehen jetzt, dazu der
-Ankerzweig im Core — 26 von 44, ohne dass sich ein einziges Ablehnungswort
-geändert hat. Im Vault bleiben genau **zwei**, beide hinter der AEAD: die
-Nutzlast einer Sync-Charge und der Freigabe-Wickel. Offen bleiben ausserdem
-die zehn in `packages/sync` (sie liegen tief im Lesenden-Klienten, hinter
-gebauten Quellen und einem Zustandsspeicher), fünf im Vault-Daemon und einer
-in `@pico/identity`.
+**Damit ist die Entscheidung aus B181 anders zu stellen.** „Alle Ketten
+aufteilen, damit ein Tor sie nachrechnen kann" hieße auch, zehn Vergleiche mit
+eigenem Wort auszustatten, die **gar nichts eigenes tun**. Die ehrliche Frage
+ist kleiner: *sollen die zehn redundanten Suite-Vergleiche bleiben?* Sie kosten
+nichts und sagen einem Leser, was gilt — aber sie sind auch genau die Sorte
+Satz, die nach einer Prüfung aussieht und keine ist.
 
-**Eine Feinheit der Sonde, die fast eine falsche Zahl erzeugt hätte:** als ich
-alle zehn Sync-Zweige *gemeinsam* ausbaute, fiel ein Test — einzeln ausgebaut
-fällt bei keinem einer. Der Fehlschlag war ein Zusammenspiel mehrerer
-abgeschalteter Glieder, kein Halter. **Eine Sammelsonde beantwortet „hält
-irgendetwas irgendetwas", nicht „hält etwas *diesen* Zweig".**
+**Drei Messfehler auf dem Weg, alle in meinem eigenen Werkzeug**, und sie
+gehören hierher, weil jeder eine veröffentlichte Zahl falsch gemacht hätte:
 
-**Und ein Unterschied, den ich in B181 verwischt hatte:** ein Zweig in einer
-Kette lässt sich sehr wohl **gehen** — meine acht Gänge tun genau das, indem
-sie die eine Eingabe bauen, die nur dieses Glied fällen kann. Was nicht geht,
-ist ihn von außen **nachzurechnen**: ein Tor über Namen kann nicht sehen,
-welches Glied ein Test getroffen hat. Aufteilen ist also kein Preis für den
-Gang, sondern ein Preis für das *Tor*.
+1. **Die Sonde zählte Pflanzungen, die nicht stattfanden.** Bei umbrochenen
+   Bedingungen (`|| archive.schema\n  !== KONSTANTE`) steht der linke Operand
+   auf der Vorzeile; die Ersetzung griff nicht, der Zähler stieg trotzdem.
+   Sechs Zweige galten als ungegangen, die einen Halter hatten. Das ist
+   Sondenregel 5 — eingebaut ins eigene Werkzeug.
+2. **`(parsed as X).schema !== KONSTANTE` zerbrach die Klammer**, weil mein
+   Muster den linken Operanden mitnahm. Das Ergebnis war ein Übersetzungsfehler
+   und damit ein *Abbruch*, den die Auswertung als „nicht gehalten" las. Die
+   Lösung war, den linken Operanden gar nicht zu berühren: `!== K && false`
+   bindet ohnehin enger als `||`.
+3. **Eine Sammelsonde beantwortet eine andere Frage.** Alle zehn Sync-Zweige
+   gemeinsam auszubauen ließ einen Test fallen; einzeln ausgebaut fällt bei
+   keinem einer. Der Fehlschlag war ein Zusammenspiel, kein Halter.
 
 **B181 — Die Tests füttern ein kaputtes Dokument, nie ein fremdes
 (2026-09-15).** B180 endete mit dem Satz, dass ein Fossil zwei Seiten hat.

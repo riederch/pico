@@ -196,6 +196,15 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+12. **Eine Sonde zaehlt erst, was sie *nachweislich* geaendert hat.** Am
+   2026-09-16 hat mein Pflanzskript `!== KONSTANTE` in einer Zeile gesucht,
+   die Ersetzung laufen lassen und den Zaehler erhoeht - auch wenn die
+   Ersetzung nicht griff. Bei umbrochenen Bedingungen
+   (`|| archive.schema\n  !== KONSTANTE`) steht der linke Operand auf der
+   Vorzeile, es wurde nie gepflanzt, und sechs Zweige galten als ungegangen,
+   die in Wahrheit einen Halter hatten (B182). `re.subn` gibt die Zahl der
+   Ersetzungen zurueck; ist sie null, ist das ein Abbruch. Das ist Regel 5,
+   eingebaut ins eigene Werkzeug - die teuerste Stelle dafuer.
 11. **Eine Sammelsonde beantwortet eine andere Frage als eine Einzelsonde.**
    Alle Zweige eines Pakets gemeinsam auszubauen sagt nur „haelt irgendetwas
    irgendetwas". Am 2026-09-16 fiel dabei in `@pico/sync` ein Test, waehrend
