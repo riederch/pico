@@ -924,47 +924,52 @@ prüfen zwei). Gemessen wird nicht durch Lesen, sondern durch Ausbauen **genau
 dieses Zweigs** — `!== KONSTANTE && false`, was den Rest der Kette, die
 Verengung und `noUnusedLocals` unberührt lässt.
 
-| Paket | Zweige | gehalten |
-| --- | --- | --- |
-| `packages/vault` | 23 | 11 |
-| `packages/sync` | 10 | 7 |
-| `apps/companion` | 3 | 3 |
-| `apps/core` | 1 | 1 |
-| `apps/vault-daemon` | 6 | 1 |
-| `packages/identity` | 1 | 0 |
-| **gesamt** | **44** | **23** |
+| Paket | Zweige | gemessen | am Ende |
+| --- | --- | --- | --- |
+| `packages/vault` | 23 | 5 | **11** |
+| `packages/sync` | 10 | 0 | **10** |
+| `apps/companion` | 3 | 3 | 3 |
+| `apps/core` | 1 | 0 | **1** |
+| `apps/vault-daemon` | 6 | 1 | **6** |
+| `packages/identity` | 1 | 0 | **1** |
+| **gesamt** | **44** | **9** | **32** |
 
-**Vor dieser Arbeit war es genau einer.** Die 22 dazugekommenen sind die Gänge
-aus B181 und diesem Tag: Schlüsseldatei, Entsperrdatei, Recovery Card, die
+**Vor dieser Arbeit war es genau einer.** Jedes Paket außer dem Vault steht am
+Ende auf allen seinen Zweigen. Die dazugekommenen sind die Gänge aus B181 und
+diesem Tag: Schlüsseldatei, Entsperrdatei, Recovery Card, die
 sieben Reader-Custody-Sätze, der Anker im Core, das Archiv des Lesenden-Klienten
 mit seinem Satz und seiner Quittung, sein Zustand, sein Pending-Eingang, die
 Seite, die ein Relay ihm reicht, und das Schema in der Nutzlast eines
 undurchsichtigen Satzes.
 
-**Und dann die eigentliche Auskunft, die die Frage umdreht.** Von den 21, die
-*nicht* halten, sind die wenigsten eine Lücke:
+**Und dann die eigentliche Auskunft, die die Frage umdreht.** Die zwölf, die am
+Ende nicht halten, liegen alle im Vault — und **keiner davon ist eine Lücke:**
 
-- **Zehn im Vault vergleichen eine `suite`, die in den signierten Bytes
-  steht.** `buildPicoReaderCustodyDomainSignatureInput` nennt `suite` als
-  erstes Feld. Wer sie ändert, bricht die Unterschrift — und die wird *in
+- **Zehn vergleichen eine `suite`, die in den signierten Bytes steht.** Alle
+  acht zuständigen Signatur-Bauer — Domäne, Leserecht, Schreiberrecht,
+  Rotation, Eintrag, die zwei Lebensläufe und der Freigabeumschlag — nennen
+  `suite` als Feld. Wer sie ändert, bricht die Unterschrift, und die wird *in
   derselben Kette* geprüft, unter *demselben Wort*. Der Zweig ist also nicht
   ungeprüft, sondern **redundant**: ihn auszubauen ändert nichts, was von außen
-  zu sehen wäre. Ein Test dafür wäre nicht zu schreiben, weil es nichts gibt,
+  zu sehen wäre. Ein Test dafür ist nicht zu schreiben, weil es nichts gibt,
   das ihn von seinem Nachbarn unterscheidet.
-- **Zwei liegen hinter der AEAD** (`invalid_share_wrap`, die Nutzlast einer
-  Sync-Charge): sie lesen Etiketten aus *entschlüsselten* Bytes, ein
-  verfälschtes Byte fällt vorher an der Authentifizierung.
-- Der Rest verteilt sich auf fünf im Vault-Daemon, drei in `sync` und einen in
-  `@pico/identity` — und einer davon, die Charge in
-  `openPicoReaderCustodySyncBatch`, **wird sehr wohl gehalten, nur von einem
-  Test des anderen Pakets.** Eine Messung je Paket sieht das nicht.
+- **Einer liegt hinter der AEAD**: die Nutzlast einer Sync-Charge wird aus
+  *entschlüsselten* Bytes gelesen, ein verfälschtes Byte fällt vorher an der
+  Authentifizierung. (`invalid_share_wrap` ist derselbe Fall und gehört zu den
+  zehn oben, weil es zugleich ein Suite-Vergleich ist.)
+- **Einer wird sehr wohl gehalten — von einem Test des anderen Pakets.** Die
+  Charge in `openPicoReaderCustodySyncBatch` liegt im Vault, ihr Gang steht in
+  `@pico/sync`. Eine Messung je Paket sieht das nicht; von Hand nachgestellt,
+  mit Bau dazwischen, beißt sie.
 
-**Damit ist die Entscheidung aus B181 anders zu stellen.** „Alle Ketten
-aufteilen, damit ein Tor sie nachrechnen kann" hieße auch, zehn Vergleiche mit
-eigenem Wort auszustatten, die **gar nichts eigenes tun**. Die ehrliche Frage
-ist kleiner: *sollen die zehn redundanten Suite-Vergleiche bleiben?* Sie kosten
-nichts und sagen einem Leser, was gilt — aber sie sind auch genau die Sorte
-Satz, die nach einer Prüfung aussieht und keine ist.
+**Damit ist die Entscheidung aus B181 verschwunden.** „Alle Ketten aufteilen,
+damit ein Tor sie nachrechnen kann" hieße, zehn Vergleiche mit eigenem Wort
+auszustatten, die **gar nichts eigenes tun** — und alle übrigen sind gegangen,
+also hätte ein Tor nichts mehr zu finden. Übrig bleibt eine kleinere Frage:
+*sollen die zehn redundanten Suite-Vergleiche bleiben?* Sie kosten nichts und
+sagen einem Leser, was gilt — aber sie sind genau die Sorte Satz, die nach
+einer Prüfung aussieht und keine ist, und dieser Baum hat dafür schon einen
+Befund (B163).
 
 **Drei Messfehler auf dem Weg, alle in meinem eigenen Werkzeug**, und sie
 gehören hierher, weil jeder eine veröffentlichte Zahl falsch gemacht hätte:
