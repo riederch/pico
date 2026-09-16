@@ -692,3 +692,20 @@ describe('Daemon-side KEK ceremony families (ADR 0101 K2/K3/K4)', () => {
     expect(response.ok).toBe(true);
   }, 60_000);
 });
+
+describe('a daemon response from a version this build does not have', () => {
+  it('refuses a response frame whose family names another version', () => {
+    /**
+     * Unwalked until 2026-09-15 (B181). This is the first thing a client does
+     * with the bytes that came back over the Vault socket, and the word is its
+     * own - no sibling condition shares it. What it refuses is a daemon of
+     * another version answering on the same socket: taking its frame would
+     * mean reading fields that mean something else.
+     */
+    expect(() => parsePicoVaultDaemonResponse(Buffer.from(JSON.stringify({
+      family: 'pico.vault.daemon.response.v2',
+      requestId: 'request_0001',
+      ok: true,
+    }), 'utf8'))).toThrow('invalid_response');
+  });
+});

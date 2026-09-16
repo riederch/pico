@@ -969,6 +969,32 @@ Protokoll, dessen Tests aus den Quellen fahren und deshalb sauber messbar sind:
 **alle Schemawächter ausgebaut, und von 663 Tests fielen 8.** Nach dieser
 Arbeit sind es 16 von 670.
 
+**Und dann die Zählung noch einmal, mit dem Syntaxbaum statt mit einem
+Zeilenfenster** — weil die erste Zahl Vergleiche zählte und die Frage nach
+`if`-Gestalten verlangt. Beides gemessen, damit die Zahlen im selben Gerät
+stehen:
+
+| | |
+| --- | --- |
+| Schemakonstanten im Baum | **84** |
+| `if`-Wächter, die eine prüfen und mit benanntem Wort werfen | **67** |
+| davon mit **eigenem** `if` und eigenem Wort | 35 |
+| davon heute in einem Matcher behauptet | **30** |
+| davon in einer **Oder-Kette**, Wort mit Nachbarn geteilt | **32** |
+
+Von den fünf allein stehenden, die nach dieser Arbeit noch offen waren, sind
+zwei unerreichbar, zwei liegen hinter der AEAD — und der fünfte war ein
+Messfehler meiner ersten, losen Suche: `invalid_response` im Vault-Daemon galt
+als behauptet, weil `link_invalid_response_envelope` das Wort *enthält*. Er
+liest den ersten Rahmen, der über den Vault-Socket zurückkommt, und geht jetzt.
+
+**Was damit offen bleibt, ist kein Aufräumen, sondern eine Entscheidung.** Die
+32 in Oder-Ketten lassen sich mit keinem Tor über Namen prüfen — genau das hat
+`unreadable_recovery_anchor` gezeigt. Ein Tor braucht zuerst, dass jeder
+Schemavergleich **sein eigenes Wort** hat. Das sind 32 neue Ablehnungswörter,
+und ein Ablehnungswort ist nach außen sichtbar; das ist keine Umbenennung
+nebenbei.
+
 **Gegangen sind jetzt 21 davon**, jeder mit einer Pflanzung gegen den ganzen
 Paketlauf, die zugleich misst, dass vorher niemand ihn hielt. Die
 Zusammenstellung, weil sie zeigt, was für ein Ding ein Schemawächter ist:
