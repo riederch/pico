@@ -745,6 +745,11 @@ describe('protected reader-custody projection archive (ADR 0093)', () => {
         (record.receipt as Record<string, unknown>).schema =
           'pico.sync.reader-custody-projection-receipt.v2';
       },
+      (a: Record<string, unknown>) => {
+        const record = (a.records as Array<Record<string, unknown>>)[0]!;
+        (record.batchRecord as Record<string, unknown>).schema =
+          'pico.sync.reader-custody-batch.v2';
+      },
     ]) {
       const patchedPath = createReaderSyncProjectionArchivePath();
       const patchedStore =
@@ -763,6 +768,28 @@ describe('protected reader-custody projection archive (ADR 0093)', () => {
         'invalid_reader_sync_projection_archive',
       );
     }
+
+    /**
+     * And the payload's own schema, which is not in the archive at all but in
+     * the projection a caller hands `materialize` - measured unwalked on
+     * 2026-09-16 (B182). It is the first thing said about a value that
+     * travelled all the way from a relay through the Vault; accepting one from
+     * another version would archive a proof about something this build cannot
+     * read.
+     */
+    const otherPayloadStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        createReaderSyncProjectionArchivePath(),
+        routeRef,
+      );
+    expect(() => otherPayloadStore.materialize({
+      ...projection1,
+      payload: {
+        ...projection1.payload,
+        schema: 'pico.sync.reader-custody-payload.v2' as never,
+      },
+    })).toThrow('invalid_reader_sync_projection_materialization');
 
     const boundedPath = createReaderSyncProjectionArchivePath();
     const boundedStore =
