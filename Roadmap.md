@@ -956,6 +956,22 @@ genau diesen Satz zu bewahren — *"would lose the record of what was agreed whi
 it was off"*. Der Satz ist bewahrt; der Zeitpunkt ist es nicht, jedenfalls nicht
 für irgendjemanden, der fragen könnte.
 
+**Und das Tor dazu, weil eine Zahl ohne Gang zurückfällt.** `column:check` ist
+der 53. Kettenschritt und stellt dieselbe Frage wie `store:check`, eine Ebene
+tiefer: hat jede Spalte einen Frager? Die 28 stehen als begründete Einträge
+darin, und `beside_json` wird **nachgerechnet** — die Tabelle muss wirklich eine
+`*_json`-Spalte tragen, sonst fällt das Tor. Drei Pflanzungen, drei eigene
+Sätze: eine neue Spalte ohne Frager, ein `beside_json` in einer Tabelle ohne
+JSON, ein begründeter Eintrag für eine Spalte, die es nicht gibt.
+
+**Der erste Lauf des Tors bestand über alles — und das war der Fehler.** Es
+liest den ganzen Baum, `scripts/` eingeschlossen, und seine eigene
+Begründungsliste nennt jede Spalte, die es entschuldigt. Ein Prüfer, der sich
+selbst zum Gegenstand zählt, findet alles gefragt. Das ist B166s Satz *„ein
+Prüfer ohne Gegenstand ist kaputt und nicht sauber"* in seiner heimtückischsten
+Form: der Gegenstand war da, aber der Prüfer las seine eigene Ausrede als
+Antwort.
+
 Eine Spalte, die eine Person betrifft und die niemand lesen kann, ist entweder
 eine fehlende Fläche oder Ballast. Beides ist eine Entscheidung und steht als
 solche in `.agent-context.md`.

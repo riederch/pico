@@ -235,6 +235,15 @@ Uebersetzung als Schranke davorzusetzen ist dagegen **falsch**: ein unbedingter
 `throw` nimmt TypeScript die Verengung (TS18048), und vitest uebersetzt ohnehin
 nicht - die Schranke verwirft dann gueltige Messungen.
 
+`pnpm column:check` stellt dieselbe Frage wie `store:check`, eine Ebene tiefer:
+hat jede Spalte, die ein Home schreibt, irgendwo einen Frager? Was *fragen*
+heisst, ist abgeleitet - der Name steht irgendwo ausserhalb seiner
+`CREATE TABLE` und ausserhalb einer Schreibstellung (`INSERT`-Spaltenliste,
+`UPDATE ... SET`). Ein Eintrag `beside_json` wird **nachgerechnet**: die Tabelle
+muss wirklich eine `*_json`-Spalte tragen. Und das Tor liest sich selbst nicht -
+seine Begruendungsliste nennt jede Spalte, die es entschuldigt, und ein Pruefer,
+der sich selbst zum Gegenstand zaehlt, findet alles gefragt (B184).
+
 `pnpm transaction:check` haelt die andere Haelfte und stellt zwei Fragen: ob
 zwei Schreibvorgaenge auf einem Weg ueberhaupt eine Transaktion haben, und ob
 ein Schreibsatz in einer Schleife eine hat. Es fragt den Syntaxbaum und kein
