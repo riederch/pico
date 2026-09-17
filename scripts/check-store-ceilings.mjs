@@ -48,6 +48,18 @@ const argued = [
   ['schema_migration', 'one row per migration in a list this repository writes'],
   ['schema_migration_audit', 'one row per run that applied or failed a migration, so it is '
     + 'bounded by that same list rather than by use'],
+  ['relay_account', 'one row per account the operator issued out of band, and the operator is '
+    + 'the ceiling. A revoked account stays as a row because ADR 0154 RO6 needs the revoked '
+    + 'answer to be possible, and nobody but the operator can add one'],
+  ['relay_mailbox', '**unbounded in rows, and this entry says so rather than covering it.** '
+    + 'A revoked mailbox stays on purpose - ADR 0147 RY4 needs the revoked answer, and '
+    + 'forgetting it would turn a deliberate ending into a typo the sender reads as its own '
+    + 'mistake. But the account quota counts only the *open* ones, and nothing deletes from '
+    + 'this table at all, so one account credential can register and deregister in turn: the '
+    + 'quota holds and the table grows. Measured 2026-09-17 (B189) against the real table '
+    + 'shape and the relay\'s own rate limit: 234 bytes a row, 19 MB a day, 6.9 GB a year, '
+    + 'from a single account. How it should end is a decision, not a cleanup - deleting a '
+    + 'revoked mailbox is exactly what RY4 forbids'],
   ['pico_home_claim_state', 'PRIMARY KEY CHECK (id = 1) - one row'],
   ['pico_memory_encryption_decision', 'PRIMARY KEY CHECK (id = 1) - one row'],
   ['pico_link_relay_identity', 'PRIMARY KEY CHECK (id = 1) - one row'],
@@ -71,12 +83,32 @@ const argued = [
     + 'as Roadmap finding B17'],
 ];
 
-const migrations = readFileSync(join(coreRoot, 'migrations.ts'), 'utf8');
-const tables = [...migrations.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?(\w+)/gu)]
+/**
+ * Both schemas, not only the Home's.
+ *
+ * Until 2026-09-17 this read `migrations.ts` alone and said "48 tables", which
+ * was the Home's count - the relay keeps four more in its own store, and no
+ * check had ever asked them this question. One of them had no answer: B189.
+ */
+const schemaSources = [
+  readFileSync(join(coreRoot, 'migrations.ts'), 'utf8'),
+  readFileSync(join(repoRoot, 'apps', 'relay', 'src', 'store.ts'), 'utf8'),
+];
+const tables = schemaSources
+  .flatMap((source) => [...source.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?(\w+)/gu)])
   .map(([, name]) => name);
-const coreSource = readdirSync(coreRoot)
-  .filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
-  .map((entry) => readFileSync(join(coreRoot, entry), 'utf8'))
+/**
+ * The sources that sweep. The relay's store both declares its tables and
+ * empties them, so reading only the Home's would report its swept packet table
+ * as growing for ever.
+ */
+const relayRoot = join(repoRoot, 'apps', 'relay', 'src');
+const coreSource = [
+  ...readdirSync(coreRoot).map((entry) => [coreRoot, entry]),
+  ...readdirSync(relayRoot).map((entry) => [relayRoot, entry]),
+]
+  .filter(([, entry]) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
+  .map(([root, entry]) => readFileSync(join(root, entry), 'utf8'))
   .join('\n');
 
 const storagePressure = readFileSync(
