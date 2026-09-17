@@ -1198,35 +1198,39 @@ export class EventStore {
       if (input.foundingRecord !== undefined) {
         this.insertPicoHomeFoundingRecord(input.foundingRecord);
         this.upsertPicoHomeMembership(picoHomeFoundingMembershipFromRecord(input.foundingRecord));
-        if (input.foundingRecord.schema === picoHomeFoundingRecordSchema) {
-          if (input.sodium === undefined) {
-            throw new Error('Pico Home v2 founding requires identity verification.');
-          }
-          const lifecycle = this.recordPicoIdentityLifecycleEvidence({
-            sodium: input.sodium,
-            identityKeyRecord: input.foundingRecord.claimantIdentityKeyRecord,
-            delegation: input.foundingRecord.firstDeviceDelegation,
-            revocations: input.foundingRecord.firstDeviceRevocations,
-            recordedAt: input.foundingRecord.createdAt,
-          });
-          if (!lifecycle.ok) {
-            throw new Error(`Pico Home first-device lifecycle evidence was refused: ${lifecycle.reason}.`);
-          }
-          const readerKey = this.registerPicoIdentityReaderKey({
-            sodium: input.sodium,
-            picoIdentityFingerprintHex:
-              input.foundingRecord.founding.homeHostPicoIdentityFingerprintHex,
-            deviceSigningKeyFingerprintHex:
-              input.foundingRecord.founding.firstDeviceSigningKeyFingerprintHex,
-            delegationId: input.foundingRecord.founding.firstDeviceDelegationId,
-            deviceKeyAgreementKeyRecord:
-              input.foundingRecord.firstDeviceKeyAgreementKeyRecord,
-            at: input.foundingRecord.founding.foundedAt,
-            registeredAt: input.foundingRecord.createdAt,
-          });
-          if (!readerKey.ok) {
-            throw new Error(`Pico Home first-device reader key was refused: ${readerKey.reason}.`);
-          }
+        /**
+         * No dispatch on the schema here: `assertPicoHomeFoundingRecord`
+         * refused every other spelling before this line, so the comparison
+         * that used to stand here could not be false - and its false branch
+         * would have founded a Home without the first device's evidence.
+         */
+        if (input.sodium === undefined) {
+          throw new Error('Pico Home founding requires identity verification.');
+        }
+        const lifecycle = this.recordPicoIdentityLifecycleEvidence({
+          sodium: input.sodium,
+          identityKeyRecord: input.foundingRecord.claimantIdentityKeyRecord,
+          delegation: input.foundingRecord.firstDeviceDelegation,
+          revocations: input.foundingRecord.firstDeviceRevocations,
+          recordedAt: input.foundingRecord.createdAt,
+        });
+        if (!lifecycle.ok) {
+          throw new Error(`Pico Home first-device lifecycle evidence was refused: ${lifecycle.reason}.`);
+        }
+        const readerKey = this.registerPicoIdentityReaderKey({
+          sodium: input.sodium,
+          picoIdentityFingerprintHex:
+            input.foundingRecord.founding.homeHostPicoIdentityFingerprintHex,
+          deviceSigningKeyFingerprintHex:
+            input.foundingRecord.founding.firstDeviceSigningKeyFingerprintHex,
+          delegationId: input.foundingRecord.founding.firstDeviceDelegationId,
+          deviceKeyAgreementKeyRecord:
+            input.foundingRecord.firstDeviceKeyAgreementKeyRecord,
+          at: input.foundingRecord.founding.foundedAt,
+          registeredAt: input.foundingRecord.createdAt,
+        });
+        if (!readerKey.ok) {
+          throw new Error(`Pico Home first-device reader key was refused: ${readerKey.reason}.`);
         }
       }
     });

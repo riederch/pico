@@ -463,6 +463,40 @@ describe('EventStore', () => {
     store.close();
   });
 
+  it('refuses a founding record under the collapsed v2 name instead of founding unverified', () => {
+    /**
+     * ADR 0134 F2 collapsed `pico.home.founding-record.v1`/`v2` into the
+     * surviving `v1` name on 2026-08-10, and the baseline's CHECK constraint
+     * still admits the `v2` spelling - deliberately, because a migration
+     * describes what a database already holds. What keeps such a record out is
+     * this refusal, and no test named it until 2026-09-17 (B183).
+     *
+     * It matters which guard fires: the claim path also carried a *dispatch*
+     * on the same comparison, whose false branch skipped the first device's
+     * lifecycle evidence and reader-key registration entirely. That branch was
+     * already unreachable behind this refusal - measured, not assumed - and is
+     * gone now.
+     */
+    const store = new EventStore(createDatabasePath());
+    const collapsed = {
+      ...createPicoHomeFoundingRecord(),
+      schema: 'pico.home.founding-record.v2' as never,
+    };
+
+    expect(() => store.claimPicoHome({
+      homeId: collapsed.founding.homeId,
+      hostAdminPicoId: `pico:identity:${collapsed.founding.homeHostPicoIdentityFingerprintHex}`,
+      hostSigningKeyFingerprintHex: collapsed.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: collapsed.founding.hostKeyAgreementKeyFingerprintHex,
+      foundingRecord: collapsed,
+      sodium,
+    })).toThrow('Pico Home founding record schema is invalid.');
+
+    expect(store.picoHomeClaimState().state).toBe('unclaimed');
+    expect(store.picoHomeFoundingRecord()).toBeUndefined();
+    store.close();
+  });
+
   it('persists and clears the current Pico Home founding record through the store boundary', () => {
     const store = new EventStore(createDatabasePath());
     const foundingRecord = createPicoHomeFoundingRecord();
