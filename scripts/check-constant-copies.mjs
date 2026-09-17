@@ -257,7 +257,27 @@ for (const [name, entry] of argued) {
  * Woertern zweimal etwas anderes heissen kann - das waere ein Grund, und ein
  * Grund gehoert aufgeschrieben.
  */
-const arguedUnions = new Map([]);
+const arguedUnions = new Map([
+  [
+    'packages/sync/src/index.ts',
+    ['picoRelayAccountStatuses'],
+  ],
+]);
+
+/**
+ * Warum dieser eine Eintrag (2026-09-17, Befund B187). `readerStatus` sagt,
+ * ob eine *Leseerteilung* noch gilt; `picoRelayAccountStatuses` sagt, ob ein
+ * *Relay-Konto* noch benutzt werden darf. Dieselben zwei Woerter, zwei
+ * Gegenstaende, die nichts miteinander zu tun haben - den einen Typ hier zu
+ * nennen hiesse, den Zustand einer Leseerteilung an den eines Relay-Kontos zu
+ * binden.
+ *
+ * Diese Schublade stand seit ihrer Einfuehrung leer. Sichtbar wurde der Fall
+ * erst, als der Kontostatus einen Namen bekam: ein Wortschatz ohne Namen kann
+ * sich beliebig oft wiederholen, ohne je als Kopie zu gelten, und dieselbe
+ * Benennung, die die echten Kopien aufdeckte, deckte auch diese Namensgleiche
+ * auf.
+ */
 
 const closedLists = new Map();
 for (const file of sourceFiles) {

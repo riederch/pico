@@ -33,7 +33,16 @@ import { fileURLToPath } from 'node:url';
  * is an argued entry, not a looser rule.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const schemaFile = join(repoRoot, 'apps', 'core', 'src', 'migrations.ts');
+/**
+ * Both places this repository declares tables. The Home's schema lives in its
+ * migrations; the relay carries its four tables in its own store. Checking only
+ * the first would make this check's sentence wider than its subject - it says
+ * "every column a Home stores", and a relay stores too (B187).
+ */
+const schemaFiles = [
+  join(repoRoot, 'apps', 'core', 'src', 'migrations.ts'),
+  join(repoRoot, 'apps', 'relay', 'src', 'store.ts'),
+];
 
 /**
  * Columns written but never queried, each with the reason it stays.
@@ -166,8 +175,14 @@ function maskWrites(text) {
   return maskSpans(text, spans);
 }
 
-const schemaText = readFileSync(schemaFile, 'utf8');
-const { tables, spans } = readSchema(schemaText);
+const schemaTexts = new Map(schemaFiles.map((path) => [path, readFileSync(path, 'utf8')]));
+const tables = new Map();
+const spansByFile = new Map();
+for (const [path, text] of schemaTexts) {
+  const read = readSchema(text);
+  spansByFile.set(path, read.spans);
+  for (const [table, columns] of read.tables) tables.set(table, columns);
+}
 
 /**
  * This file is not part of its own corpus. The argued list below names every
@@ -185,8 +200,8 @@ for (const root of ['apps', 'packages', 'modules', 'scripts']) {
  * point at the wrong text.
  */
 const queryable = sources
-  .map((path) => maskWrites(maskComments(path === schemaFile
-    ? maskSpans(schemaText, spans)
+  .map((path) => maskWrites(maskComments(schemaTexts.has(path)
+    ? maskSpans(schemaTexts.get(path), spansByFile.get(path))
     : readFileSync(path, 'utf8'))))
   .join('\n');
 

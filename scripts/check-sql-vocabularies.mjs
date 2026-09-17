@@ -34,7 +34,11 @@ import { fileURLToPath } from 'node:url';
  * what made this check possible at all.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const schemaFile = join(repoRoot, 'apps', 'core', 'src', 'migrations.ts');
+/** Both places this repository declares tables - the Home's and the relay's. */
+const schemaFiles = [
+  join(repoRoot, 'apps', 'core', 'src', 'migrations.ts'),
+  join(repoRoot, 'apps', 'relay', 'src', 'store.ts'),
+];
 
 /**
  * A SQL vocabulary that deliberately says more than the code, and why.
@@ -94,12 +98,14 @@ function checkConstraints(text) {
 }
 
 const words = (text) => [...text.matchAll(/'([^']*)'/gu)].map((match) => match[1]);
-/** A vocabulary is its set of words; the separator is a character none holds. */
-const asKey = (list) => [...new Set(list)].sort().join('');
+/**
+ * A vocabulary is its set of words. The separator is a newline: these words are
+ * SQL string literals from a `CHECK`, and none of them can hold one.
+ */
+const asKey = (list) => [...new Set(list)].sort().join('\n');
 
-const schemaText = readFileSync(schemaFile, 'utf8');
 const sqlVocabularies = [];
-for (const constraint of checkConstraints(schemaText)) {
+for (const constraint of schemaFiles.flatMap((path) => checkConstraints(readFileSync(path, 'utf8')))) {
   const match = /(\w+)\s+IN\s*\(\s*((?:'[^']*'\s*,?\s*)+)\)/u.exec(constraint.body);
   if (match === null) continue;
   sqlVocabularies.push({
@@ -123,7 +129,7 @@ for (const root of ['apps', 'packages', 'modules']) {
     }
   }
 }
-const everyNamedWord = new Set([...named.keys()].flatMap((key) => key.split('')));
+const everyNamedWord = new Set([...named.keys()].flatMap((key) => key.split('\n')));
 
 const arguedByColumn = new Map(argued.map((entry) => [`${entry.table}.${entry.column}`, entry]));
 const failures = [];
