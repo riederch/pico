@@ -912,6 +912,66 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B185 — Der letzte Wächter eines Homes ist die Datenbank, und niemand geht ihn
+(2026-09-17).** B181 hat gefragt, ob die Ablehnungen im Code gegangen werden.
+Dieselbe Frage an die Schicht darunter: ein `CHECK` ist die **letzte**
+Ablehnung, die ein Home aussprechen kann — die, die greift, wenn der Code
+danebenlag. Es sind **51**, und **kein einziger Test im ganzen Baum** nennt je
+eine `CHECK constraint failed`.
+
+Nach B182 heißt „nicht genannt" nicht „nicht gehalten", also die Sonde statt der
+Zählung: alle 51 zu Tautologien gemacht (`CHECK (1)`), damit die Syntax stehen
+bleibt. **Von 1201 Core-Tests fiel genau einer** — und der nennt nichts, er
+schreibt `.toThrow()` ohne Wort. Die drei `CHECK`s auf `pico_home_claim_state`
+verschont und die übrigen **48 entschärft: 1201 von 1201 grün.**
+
+**Das ist kein Fund, sondern eine Einordnung.** Ein `CHECK` ist Tiefenstaffelung;
+dass ihn niemand geht, ist vertretbar, solange der Code vorher ablehnt. Die
+nützliche Frage ist eine andere: **stimmt er noch mit dem Code überein?** Denn
+32 der 51 sind geschlossene Wortschätze (`col IN (…)`), und jeder steht ein
+zweites Mal als TypeScript-Vereinigung. Eine Wahrheit, zweimal geschrieben.
+
+**Abweichung hat zwei Gestalten, und beide sind leise.** Nimmt SQL weniger an
+als TypeScript, wird ein Wert, den der Code erzeugen kann, ganz am Ende
+abgelehnt — nachdem alles darüber ja gesagt hat. Nimmt SQL mehr an, speichert
+jeder andere Weg in die Datenbank etwas, das der Code ablehnt: eine Migration,
+eine Reparatur, ein künftiger Schreiber.
+
+**Gemessen: 21 von 24 Wortschätzen waren deckungsgleich mit einer *benannten*
+TypeScript-Liste.** Die drei übrigen waren nicht abgedriftet — zwei von ihnen
+hatten **keinen Namen**:
+
+- `'pending' | 'vetoed' | 'effective'`, der Zustand einer Wurzelrotation,
+  **viermal ausgeschrieben in `event-store.ts`** und ein fünftes Mal in SQL.
+- `'delegation' | 'key'`, der Gegenstand eines Widerrufs, dreimal in drei
+  Dateien und ein viertes Mal in SQL.
+
+**Und das ist die eigentliche Auskunft.** Dieser Baum hat seit B69 ein
+`copies:check`, das über doppelt definierte **exportierte Namen** wacht. Ein
+Wortschatz, der nie benannt wird, ist dafür unsichtbar — er kann sich beliebig
+oft wiederholen, ohne je als Kopie zu gelten. **Anonymität ist die Lücke im
+Kopientor.** Beide sind jetzt benannt, und danach standen 23 von 24.
+
+Der letzte ist der Gründungssatz mit dem abgelösten `v2`-Namen aus ADR 0134 F2 —
+derselbe, den `check-wire-labels.mjs` seit dem 2026-08-24 ausdrücklich begründet
+und den B183 an anderer Stelle angefasst hat.
+
+**Und ein Nachspiel, das das gestrige Tor geschaerft hat.** Die neuen Namen
+tragen einen Doku-Satz, der die Spalte nennt, auf die sie sich beziehen — *the
+database says the same three words in a CHECK constraint on
+`pico_identity_revocation.subject_kind`*. Damit fiel `column:check` von B184:
+es hatte den Namen im **Kommentar** als Abfrage gezaehlt. Prosa ueber eine
+Spalte ist genau das, was wie eine Verwendung aussieht und keine ist; das Tor
+maskiert Kommentare jetzt und beisst weiterhin.
+
+**Das Tor dazu ist `vocabulary:check`, der 54. Kettenschritt.** Jeder
+SQL-Wortschatz muss genau die Wörter einer exportierten TypeScript-Liste sagen
+oder begründet sein, und der eine begründete wird **nachgerechnet**: der
+überlebende Name muss im Satz stehen, und jedes zusätzliche Wort muss eines
+sein, das kein TypeScript-Wortschatz mehr kennt. Vier Pflanzungen, vier
+Ablehnungen: SQL ein Wort zu viel, TypeScript ein Wort zu viel, ein Wortschatz
+verliert seinen Namen, und der begründete Eintrag verliert seinen überlebenden.
+
 **B184 — Eine Spaltenliste ist eine Aussage darüber, was ein Speicher fragt
 (2026-09-17).** B179 hat gezeigt, dass eine Importliste eine Aussage ist. Eine
 Ebene tiefer gilt dasselbe: wer `content_ciphertext_hex` in einem Schema liest,

@@ -235,6 +235,14 @@ Uebersetzung als Schranke davorzusetzen ist dagegen **falsch**: ein unbedingter
 `throw` nimmt TypeScript die Verengung (TS18048), und vitest uebersetzt ohnehin
 nicht - die Schranke verwirft dann gueltige Messungen.
 
+`pnpm vocabulary:check` haelt die andere Haelfte derselben Schicht: jeder
+geschlossene Wortschatz, den die Datenbank per `CHECK (col IN (...))`
+durchsetzt, sagt genau die Woerter einer *exportierten* TypeScript-Liste - oder
+ist begruendet, und die Begruendung wird nachgerechnet. Dass die TypeScript-
+Seite einen **Namen** haben muss, ist der Punkt: `copies:check` wacht ueber
+exportierte Namen, und ein Wortschatz, der nie benannt wird, kann sich beliebig
+oft wiederholen, ohne je als Kopie zu gelten (B185).
+
 `pnpm column:check` stellt dieselbe Frage wie `store:check`, eine Ebene tiefer:
 hat jede Spalte, die ein Home schreibt, irgendwo einen Frager? Was *fragen*
 heisst, ist abgeleitet - der Name steht irgendwo ausserhalb seiner
