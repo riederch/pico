@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B189 — Vier Tabellen, die nie jemand nach ihrem Wachstumsende gefragt hat
+(2026-09-17).** B187 fand ein Tor, dessen Satz breiter war als sein Gegenstand.
+Die nächste Frage war, ob das nur meins war. Es war nicht:
+**`check-store-ceilings.mjs` liest seit seiner Einführung ebenfalls nur
+`apps/core/src/migrations.ts`.** Seine Ausgabe sagt „48 tables" und meint die
+des Homes; die **vier des Relays** hat es nie gesehen.
+
+Angefangen hatte die Messung woanders — bei B165s Satz *„was niemand mehr
+anfasst, wird nie wieder angefasst"*, verallgemeinert: **jede Spalte, die ein
+Ablaufdatum trägt, wird sie auch gekehrt?** Zehn Tabellen tragen eine. Das
+Ergebnis war ein sauberer Negativbefund: zwei werden nach ihrem Ablauf gekehrt,
+sechs tragen ein `valid_until`, das ein *Gültigkeitsfenster* ist und keine
+Verfallsfrist — die Zeile ist Geschichte und soll bleiben —, und die zwei, die
+gar nicht gelöscht werden, stehen beide im Wachstumsende-Tor mit einer
+Begründung, `pico_model_job_queue` sogar ausdrücklich als *„unbounded in rows,
+and this entry says so rather than covering it up"*.
+
+**Nur galt das alles für 48 von 52 Tabellen.**
+
+**Und in den vier übrigen steckt ein echtes Loch.** `relay_mailbox` sagt in
+seinem eigenen Kommentar, was es tut: *„A revoked mailbox stays, because ADR
+0147 RY4 needs the revoked answer to be possible at all."* Das ist richtig und
+gut begründet — ein widerrufenes Postfach zu vergessen machte aus einer
+absichtlichen Beendigung einen Tippfehler, den der Absender sich selbst
+zuschreibt. Nur: **die Kontenquote zählt ausschließlich die *offenen*.** Der
+Prüfsatz beim Anlegen lautet
+`COUNT(*) … WHERE account_digest = ? AND status = 'open'`, und es gibt im ganzen
+Relay **kein einziges `DELETE FROM relay_mailbox`**.
+
+Anlegen und Zurückziehen brauchen beide nur den Kontokopf — einen
+Inhaberausweis, den der Betreiber außerhalb der Bahn ausgibt. Wer einen hat,
+kann anlegen, zurückziehen, anlegen: die Quote bleibt eingehalten, die Tabelle
+wächst. Gemessen an der echten Tabellenform und der eigenen Ratengrenze des
+Relays (`picoRelayAccountRequestsPerMinute = 120`, also zwei Anfragen je neue
+Zeile):
+
+| | |
+| --- | --- |
+| je widerrufenem Postfach | **234 Byte** |
+| am Tag, aus **einem** Konto | **19 MB** |
+| im Jahr | **6,9 GB** |
+
+Das ist keine Lücke in der Absicht, sondern in der Zählung. Und sie steht
+ausgerechnet dort, wo die Haltung ausdrücklich aufgeschrieben ist: der
+Widerrufsweg zitiert sie zwei Zeilen weiter oben selbst — *„auf einem Relay,
+dessen ganze Haltung ist, so wenig zu halten wie möglich (ADR 0147)"*.
+
+Wie es zugeht, ist eine Entscheidung und keine Aufräumarbeit: ein widerrufenes
+Postfach einfach zu löschen ist genau das, was ADR 0147 RY4 verbietet. Sie
+steht in `.agent-context.md`.
+
 **B188 — Acht Suchwege, die kein Plan je wählt (2026-09-17).** Die letzte
 ungestellte Frage an das Schema: **jeder Index kostet jeden Schreibvorgang.**
 Wird jeder benutzt? Diesmal habe ich nicht gerechnet, sondern **SQLite selbst
