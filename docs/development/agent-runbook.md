@@ -235,6 +235,19 @@ Uebersetzung als Schranke davorzusetzen ist dagegen **falsch**: ein unbedingter
 `throw` nimmt TypeScript die Verengung (TS18048), und vitest uebersetzt ohnehin
 nicht - die Schranke verwirft dann gueltige Messungen.
 
+`pnpm index:check` fragt dasselbe fuer Indizes, und der Preis ist schaerfer:
+eine Spalte, die niemand liest, kostet Bytes; ein Index, den niemand nutzt,
+macht **jeden Schreibvorgang auf seiner Tabelle langsamer** - gemessen am
+Ereignisprotokoll ein Drittel. Das Tor baut das echte Schema in eine
+Wegwerf-Datenbank, schickt jede vorbereitete Anweisung durch
+`EXPLAIN QUERY PLAN` und sammelt ein, welche Indizes die Plaene nennen. Es
+laeuft **hinter `pnpm build`**, weil es `dist/migrations.js` faehrt.
+
+Die Anweisungen kommen aus dem **Syntaxbaum**, nicht aus einer Regex: fuenf
+Regex-Anlaeufe gaben fuenf verschiedene falsche Antworten, der letzte mit einem
+nachweislich falschen Eintrag in der Liste (B188). Wer SQL aus TypeScript
+liest, liest `.prepare(...)` als Aufrufausdruck.
+
 `pnpm vocabulary:check` haelt die andere Haelfte derselben Schicht: jeder
 geschlossene Wortschatz, den die Datenbank per `CHECK (col IN (...))`
 durchsetzt, sagt genau die Woerter einer *exportierten* TypeScript-Liste - oder

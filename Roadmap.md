@@ -912,6 +912,76 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B188 — Acht Suchwege, die kein Plan je wählt (2026-09-17).** Die letzte
+ungestellte Frage an das Schema: **jeder Index kostet jeden Schreibvorgang.**
+Wird jeder benutzt? Diesmal habe ich nicht gerechnet, sondern **SQLite selbst
+gefragt**: das Schema in eine frische Datenbank gebaut, jede Anweisung des
+Produktcodes durch `EXPLAIN QUERY PLAN` geschickt und eingesammelt, welche
+Indizes ein Plan nennt.
+
+**371 `.prepare(…)`-Aufrufe im Produktcode, 369 davon planbar** — und **neun
+von 39 Indizes nennt kein einziger Plan.** Einer davon ist zu Recht dabei:
+`idx_pico_identity_root_rotation_one_pending` ist ein `UNIQUE`-Teilindex, also
+eine **Regel** („eine schwebende Rotation je Vorgänger") und kein Suchweg. Ein
+Plan wählt ihn nie, weil er nicht dafür da ist.
+
+Bleiben **acht Suchwege**, und sie zerfallen in drei Arten:
+
+- **Zwei liegen auf `pico_event`**, dem Kernprotokoll: `(stream, lamport)` und
+  `(device_id, lamport)`. Nichts im Produktcode filtert nach `stream` oder
+  `device_id`. Das Protokoll ist als später replizierbar entworfen (ADR 0014),
+  und beide sehen nach Vorarbeit dafür aus — nur zahlt sie jedes Ereignis
+  **heute**. Gemessen: 50.000 Ereignisse einfügen kostet mit ihnen 295 ms, ohne
+  sie 205 ms. **Ein Drittel der Schreibzeit für zwei Wege, die niemand geht.**
+- **Einer ist Vorarbeit mit sichtbarem Ziel:** `idx_memory_item_place`, ein
+  Teilindex auf `(latitude_deg, longitude_deg)` für aktive Einträge mit
+  Koordinate. Die Frage, die ihn benutzen würde, gibt es noch nicht — Spatial
+  Recall fehlt der Aufrufer der Ableitung, was `progress.md` seit langem sagt.
+- **Einer ist benutzbar und verliert trotzdem:**
+  `idx_pico_home_membership_identity` auf
+  `(pico_identity_fingerprint_hex, status)`. Fragt man nur nach dem Fingerdruck,
+  **wählt** ihn der Planer. Nur nennt jede wirkliche Abfrage auch `home_id`, und
+  dann gewinnt `idx_pico_home_membership_home`. Kein toter Index, sondern ein
+  überholter.
+- **Vier bewachen Spalten, nach denen nichts fragt:**
+  `memory_key_envelope (domain_id)`, `pico_share_envelope (home_id, …)`,
+  `pico_home_device_lifecycle_transition (pico_identity_fingerprint_hex, …)` und
+  `schema_migration_audit (finished_at)`.
+
+**Das Tor dazu ist `index:check`, der 55. Kettenschritt** und der erste, der
+eine Wegwerf-Datenbank baut, um seine Frage zu stellen. Die neun stehen als
+begruendete Eintraege darin, und `constraint` wird nachgerechnet: der Index muss
+wirklich `UNIQUE` sein. Vier Pflanzungen, vier eigene Saetze - ein neuer Index
+ohne Plan, eine Regel, die keine ist, ein Eintrag fuer etwas, das es nicht gibt,
+und ein Eintrag fuer etwas, das ein Plan doch waehlt. Es steht **hinter
+`pnpm build`**, weil es `dist/migrations.js` faehrt; die erste Pflanzung biss
+genau deshalb nicht.
+
+**Und die eigentliche Lehre steckt im Weg dorthin: fünf Anläufe mit einer
+Regex, fünf verschiedene Fehler.** Jeder hätte eine falsche Zahl
+veröffentlicht:
+
+1. `EXPLAIN QUERY PLAN` braucht Werte für die `?`-Platzhalter — ohne sie
+   scheiterten 215 von 294 Anweisungen, und die Messung hätte 32 Indizes als
+   ungenutzt gemeldet.
+2. Das Relay-Schema fehlte in der Datenbank, also fielen seine Abfragen aus.
+3. Die eine Anweisung, die `idx_pico_event_type` nutzt, steht in **doppelten**
+   Anführungszeichen; mein Muster las nur Backticks und einfache.
+4. **Backticks in Doku-Kommentaren** verschieben die Paarung der
+   Vorlagen-Zeichenketten — und dieser Baum schreibt Bezeichner in Backticks in
+   jeden zweiten Satz. Danach fehlte immer noch die Abfrage, die
+   `idx_pico_home_domain_read_grant_reader` benutzt, und mit ihr stand ein
+   **nachweislich falscher Eintrag** in der Liste.
+5. Erst der **Syntaxbaum** — `.prepare(…)` als Aufrufausdruck, sein einziges
+   Argument als Wortlaut — fand 371 statt 301 Anweisungen und 369 planbare
+   statt 298. Der falsche Eintrag verschwand von selbst.
+
+Das ist Sondenregel 4 („rate die Grenzen eines Rumpfes nicht, frag den
+Übersetzer") in ihrer allgemeinen Form: **eine Regex ist kein Leser von
+Quelltext.** Der Baum weiß das seit B163, wo `check-write-transactions.mjs`
+aus demselben Grund zum Syntaxbaum wechselte; ich habe es hier fünfmal neu
+gelernt.
+
 **B187 — Ein Tor, dessen Satz breiter war als sein Gegenstand (2026-09-17).**
 Die erste Frage nach B185 galt meinen eigenen Toren von gestern. `column:check`
 sagt *„every column a Home stores is asked for somewhere"* — und liest
