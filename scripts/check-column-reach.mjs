@@ -137,6 +137,23 @@ function maskSpans(text, spans) {
   return masked;
 }
 
+/**
+ * Comments are not queries.
+ *
+ * Added 2026-09-17, after a doc comment that *named* a column - "the database
+ * says the same three words in a CHECK constraint on
+ * `pico_identity_revocation.subject_kind`" - made this check report that
+ * column as asked for. Prose about a column is exactly the thing that looks
+ * like a use and is not one.
+ */
+function maskComments(text) {
+  const spans = [];
+  for (const match of text.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/gu)) {
+    spans.push([match.index, match.index + match[0].length]);
+  }
+  return maskSpans(text, spans);
+}
+
 /** Write positions: an INSERT column list, or the assignments of an UPDATE. */
 function maskWrites(text) {
   const spans = [];
@@ -168,9 +185,9 @@ for (const root of ['apps', 'packages', 'modules', 'scripts']) {
  * point at the wrong text.
  */
 const queryable = sources
-  .map((path) => maskWrites(path === schemaFile
+  .map((path) => maskWrites(maskComments(path === schemaFile
     ? maskSpans(schemaText, spans)
-    : readFileSync(path, 'utf8')))
+    : readFileSync(path, 'utf8'))))
   .join('\n');
 
 const arguedByColumn = new Map();

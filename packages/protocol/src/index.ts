@@ -959,6 +959,21 @@ export const picoIdentityDelegationScopes = [
 
 export type PicoIdentityDelegationScope = typeof picoIdentityDelegationScopes[number];
 
+/**
+ * What a revocation is about. The database says the same three words in a
+ * CHECK constraint on `pico_identity_revocation.subject_kind`; until
+ * 2026-09-17 this vocabulary was written out inline at each of its three uses
+ * and had no name, so `copies:check` - which watches exported names - could
+ * not see that it stood four times (B185).
+ */
+export const picoIdentityRevocationSubjectKinds = [
+  'delegation',
+  'key',
+] as const;
+
+export type PicoIdentityRevocationSubjectKind =
+  typeof picoIdentityRevocationSubjectKinds[number];
+
 export const picoIdentityRevocationReasonCategories = [
   'lost_device',
   'suspected_compromise',
@@ -1572,7 +1587,7 @@ export interface PicoIdentityRevocationSignatureInput {
   suite: string;
   revocationId: string;
   issuerIdentityKeyFingerprintHex: string;
-  subjectKind: 'delegation' | 'key';
+  subjectKind: PicoIdentityRevocationSubjectKind;
   subjectRef: string;
   reasonCategory: PicoIdentityRevocationReasonCategory;
   revokedAt: string;

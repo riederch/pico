@@ -391,11 +391,26 @@ export interface PicoIdentityRotationSuccessorFirstDevice {
   deviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
 }
 
+/**
+ * Where an identity-root rotation stands. The database says the same three
+ * words in a CHECK constraint on `pico_identity_root_rotation.status`; until
+ * 2026-09-17 this vocabulary was written out inline at each of its four uses
+ * in this file and had no name, so nothing compared the copies (B185).
+ */
+export const picoIdentityRootRotationStatuses = [
+  'pending',
+  'vetoed',
+  'effective',
+] as const;
+
+export type PicoIdentityRootRotationStatus =
+  typeof picoIdentityRootRotationStatuses[number];
+
 export interface PicoIdentityRootRotationView {
   rotationId: string;
   predecessorIdentityFingerprintHex: string;
   successorIdentityFingerprintHex: string;
-  status: 'pending' | 'vetoed' | 'effective';
+  status: PicoIdentityRootRotationStatus;
   reasonCategory: string;
   rotatedAt: string;
   acceptedAt: string;
@@ -417,7 +432,7 @@ export interface PicoIdentityRotationDebtView {
   rotationId: string;
   predecessorIdentityFingerprintHex: string;
   successorIdentityFingerprintHex: string;
-  status: 'pending' | 'vetoed' | 'effective';
+  status: PicoIdentityRootRotationStatus;
   effectiveAt: string;
   successorFirstDevice: {
     delegationId: string;
@@ -2643,7 +2658,7 @@ export class EventStore {
       `)
       .all(homeId, rotation.predecessorIdentityKeyFingerprintHex) as {
         rotationId: string;
-        status: 'pending' | 'vetoed' | 'effective';
+        status: PicoIdentityRootRotationStatus;
       }[];
     if (existing.some((row) => row.rotationId === rotation.rotationId)) {
       return { ok: false, reason: 'rotation_id_reused' };
@@ -2782,7 +2797,7 @@ export class EventStore {
       .get(params.rotationId, this.picoHomeRotationScope()) as {
         predecessorIdentityFingerprintHex: string;
         coSigningDelegationId: string;
-        status: 'pending' | 'vetoed' | 'effective';
+        status: PicoIdentityRootRotationStatus;
       } | undefined;
     if (row === undefined) {
       return { ok: false, reason: 'rotation_not_found' };

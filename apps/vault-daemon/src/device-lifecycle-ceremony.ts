@@ -19,6 +19,7 @@ import {
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationReasonCategory,
+  type PicoIdentityRevocationSubjectKind,
   type PicoIdentityRevocationSignatureInput,
   type PicoHomeDeviceLifecycleDeviceView,
 } from '@pico/protocol';
@@ -151,7 +152,7 @@ export interface RenewPicoHomeDeviceInput extends AuthorityCreationInput {
 
 export interface RevokePicoHomeDeviceInput extends LifecycleCeremonyBaseInput {
   targetDelegationId: string;
-  subjectKind?: 'delegation' | 'key';
+  subjectKind?: PicoIdentityRevocationSubjectKind;
   subject?: 'delegation' | 'device_signing_key' | 'device_key_agreement_key';
   reasonCategory?: PicoIdentityRevocationReasonCategory;
   transitionId?: string;
