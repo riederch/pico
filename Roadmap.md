@@ -912,6 +912,50 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B187 — Ein Tor, dessen Satz breiter war als sein Gegenstand (2026-09-17).**
+Die erste Frage nach B185 galt meinen eigenen Toren von gestern. `column:check`
+sagt *„every column a Home stores is asked for somewhere"* — und liest
+`apps/core/src/migrations.ts`. Das Relay hält **vier eigene Tabellen** in
+`apps/relay/src/store.ts`, und beide neuen Tore haben sie nie angesehen. Das ist
+B166s Satz noch einmal, von der dritten Seite: nicht *ein Prüfer ohne
+Gegenstand*, sondern einer, dessen **Gegenstand schmaler ist als seine Aussage**.
+
+**Was die Weitung gefunden hat.** Die 19 Relay-Spalten sind sauber — alle
+abgefragt, kein einziger Fund. Die zwei Wortschätze des Relays aber zeigten
+genau die Gestalt aus B185, und diesmal beide Spielarten:
+
+- `relay_mailbox.status IN ('open', 'revoked')` **hat** ein benanntes
+  Gegenstück, `PicoLinkMailboxStatus` im Protokoll — und der Relay-Store
+  schreibt daneben trotzdem `'open' | 'revoked'` von Hand hin. Ein Name, der
+  da ist und nicht benutzt wird.
+- `relay_account.status IN ('active', 'revoked')` hatte **keinen**: viermal
+  ausgeschrieben — im Relay-Store, in der Companion-Schale zweimal, im
+  Protokoll selbst — und ein fünftes Mal in SQL. Heißt jetzt
+  `picoRelayAccountStatuses`.
+
+Nach beidem sehen die Tore **437 Spalten über 52 Tabellen** und **26
+Wortschätze**, und jede Pflanzung ins Relay-Schema beißt.
+
+**Die Benennung hat sich sofort selbst bewiesen.** Kaum hieß der Kontostatus,
+meldete `copies:check` **zwei weitere Kopien** in `packages/sync` — die es
+vorher nicht sehen konnte, weil es über exportierte Namen wacht und es keinen
+gab. Genau das ist der Satz aus B185, jetzt als Ereignis statt als Behauptung.
+
+Und die zwei waren **keine** Kopien: `readerStatus` sagt, ob eine
+*Leseerteilung* noch gilt, nicht ob ein *Relay-Konto* benutzt werden darf.
+Dieselben zwei Wörter, zwei Gegenstände. `copies:check` hat für genau diesen
+Fall seit seiner Einführung eine Schublade — *„ein Vokabular mit denselben zwei
+Wörtern kann zweimal etwas anderes heißen, das wäre ein Grund, und ein Grund
+gehört aufgeschrieben"* — und sie stand leer. Sie ist es nicht mehr.
+
+**Und ein Fund im eigenen Werkzeug.** `check-sql-vocabularies.mjs` trennte
+Wortschatz-Wörter mit `U+001F` — geschrieben als Escape-Folge, auf der Platte
+gelandet als **zwei echte Steuerzeichen**, die kein Leser sieht. Es
+funktionierte; nur stand im Quelltext etwas, das niemand lesen konnte. Jetzt
+trennt ein Zeilenumbruch, mit dem Satz daneben, warum das sicher ist: die
+Wörter sind SQL-Zeichenkettenliterale aus einem `CHECK` und können keinen
+enthalten.
+
 **B186 — Eine Haltbarkeit, die durch Weglassen entschieden wurde
 (2026-09-17).** B185 hat die Datenbank als letzten Wächter befragt. Eine Frage
 weiter: **was überlebt einen Stromausfall?** Der Store setzt genau ein Pragma —
