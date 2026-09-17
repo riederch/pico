@@ -3,7 +3,11 @@ import Database from 'better-sqlite3';
 import type {
   PicoRelayAccountSummary,
 } from '@pico/protocol/link-relay-operator';
-import { picoRelayAccountRefLength } from '@pico/protocol/link-relay-operator';
+import type { PicoLinkMailboxStatus } from '@pico/protocol/link-delivery';
+import {
+  picoRelayAccountRefLength,
+  type PicoRelayAccountStatus,
+} from '@pico/protocol/link-relay-operator';
 import { narrowToOwner } from './database-file-mode.js';
 import { picoRelayCredentialDigest } from './operator-claim.js';
 import {
@@ -60,7 +64,7 @@ export interface PicoRelayMailbox {
    * stored: a field called id that holds a key is how a key reaches a log line.
    */
   accountDigest: string;
-  status: 'open' | 'revoked';
+  status: PicoLinkMailboxStatus;
   capacity: number;
   registeredAt: string;
 }
@@ -353,7 +357,7 @@ export class PicoRelayStore {
       digest: string;
       mailboxQuota: number;
       maxCapacity: number;
-      status: 'active' | 'revoked';
+      status: PicoRelayAccountStatus;
       createdAt: string;
       revokedAt: string | null;
       openMailboxes: number;

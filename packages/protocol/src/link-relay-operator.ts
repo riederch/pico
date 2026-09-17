@@ -31,6 +31,19 @@ export const picoRelayClaimCodePattern = /^[A-Za-z0-9_-]{32,128}$/u;
 export const picoRelayOperatorHeader = 'x-pico-relay-operator' as const;
 
 /**
+ * Whether a relay account may still be used. The relay's own database says the
+ * same two words in a CHECK constraint on `relay_account.status`; until
+ * 2026-09-17 this vocabulary was written out inline at each of its four uses
+ * and had no name, so nothing compared the copies (B187).
+ */
+export const picoRelayAccountStatuses = [
+  'active',
+  'revoked',
+] as const;
+
+export type PicoRelayAccountStatus = typeof picoRelayAccountStatuses[number];
+
+/**
  * Four operations, and the first one is the only one that takes no operator
  * credential - because before it there is none to take.
  *
@@ -64,7 +77,7 @@ export interface PicoRelayAccountSummary {
    * by its credential would have meant a list route that hands every key back.
    */
   accountRef: string;
-  status: 'active' | 'revoked';
+  status: PicoRelayAccountStatus;
   mailboxQuota: number;
   maxCapacity: number;
   /** How many mailboxes this account currently holds open. */

@@ -3,6 +3,7 @@ import type {
   PicoReaderCustodyReaderAccessMode,
   PicoReaderCustodyReaderGrantRevocationReasonCategory,
 } from '@pico/protocol';
+import type { PicoRelayAccountStatus } from '@pico/protocol/link-relay-operator';
 import type { PicoModelProviderState } from '@pico/protocol/model-provider-state';
 import type { PicoRulesDecisionValue } from '@pico/protocol/pico-rules';
 
@@ -1509,7 +1510,7 @@ export interface PicoCompanionRelay {
   claimedAt: string;
   accounts?: readonly {
     accountRef: string;
-    status: 'active' | 'revoked';
+    status: PicoRelayAccountStatus;
     mailboxQuota: number;
     maxCapacity: number;
     openMailboxes: number;

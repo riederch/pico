@@ -79,6 +79,7 @@ import type {
 } from '@pico/companion/home-authority';
 import type { PicoReaderCustodyReaderGrantRevocationReasonCategory } from '@pico/protocol';
 import { picoPresenceLeaseMs } from '@pico/protocol/presence';
+import type { PicoRelayAccountStatus } from '@pico/protocol/link-relay-operator';
 import {
   claimPicoCompanionRelay,
   createPicoCompanionRelayAccount,
@@ -397,7 +398,7 @@ export interface PicoCompanionShellRuntime {
     claimedAt: string;
     accounts?: readonly {
       accountRef: string;
-      status: 'active' | 'revoked';
+      status: PicoRelayAccountStatus;
       mailboxQuota: number;
       maxCapacity: number;
       openMailboxes: number;
