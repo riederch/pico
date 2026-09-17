@@ -912,6 +912,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B190 — Die Jagd nach dem schmalen Gegenstand, und sie ist zu Ende
+(2026-09-17).** B187 und B189 fanden dreimal dieselbe Krankheit: ein Prüfer,
+dessen **Gegenstand schmaler ist als seine Aussage**. Zweimal war es meins,
+einmal ein Tor von vor Monaten. Dreimal durch Zufall ist ein Muster, und ein
+Muster misst man, statt auf das vierte Mal zu warten.
+
+**Das Messgerät: einen Haken an `readFileSync` und `readdirSync` legen und
+zählen, welche Pfade ein Tor wirklich öffnet.** Ein Tor kann nicht behaupten,
+breiter gelesen zu haben, als es Dateien angefasst hat. Über 53 Tore gefahren
+(`vacuity:check` und `index:check` ausgelassen, weil das eine alle anderen
+startet und das andere eine Datenbank baut).
+
+**Zwei Fehlalarme meiner ersten, groben Runde** gehören dazu: ich hatte nach
+den Zeichenketten `'apps'` und `'packages'` im Quelltext gesucht und daraufhin
+`awaited-secrets` und `one-voice` für eng gehalten. Beide lesen 284 und 237
+Pfade quer durch den Baum — sie bauen ihre Pfade nur anders. **Wonach ein Tor
+aussieht, ist nicht, was es liest.**
+
+**Das Ergebnis ist ein Negativbefund, und er schließt die Frage.** Kein
+weiteres Tor liest weniger, als sein Satz behauptet. Die eigentliche Auskunft
+steckt in der Verallgemeinerung: die Krankheit entsteht dort, wo **etwas
+zweimal existiert** und ein Prüfer nur eines davon kennt. Dieser Baum hat zwei
+solche Paare:
+
+- **Zwei Speicher** — das Schema des Homes in `migrations.ts` und die vier
+  Tabellen des Relays in seinem Store. Das war das Paar, das keiner sah; drei
+  Tore sind jetzt geweitet (B187, B189).
+- **Zwei Flächen** — der Zeichner der Companion-Schale und `apps/web`. Hier
+  liest **jedes** der neun Flächentore beide, nachgemessen an den Pfaden:
+  `form-labels` 13 gegen 50, `style-names` 14 gegen 51, `one-voice` 8 gegen 40.
+  Wer diese Tore gebaut hat, hat an beide gedacht.
+
+Wenn ein drittes Paar entsteht, entsteht die Krankheit mit ihm. Das ist kein
+Tor wert — ein Tor über Tore prüfte, was ein Prüfer *anfasst*, und nicht, was
+sein Satz behauptet; die Lücke dazwischen ist genau das, was ein Mensch lesen
+muss. Aber der Satz gehört ins Runbook: **wer ein Tor baut, zählt zuerst, wie
+viele es davon gibt, worüber es spricht.**
+
 **B189 — Vier Tabellen, die nie jemand nach ihrem Wachstumsende gefragt hat
 (2026-09-17).** B187 fand ein Tor, dessen Satz breiter war als sein Gegenstand.
 Die nächste Frage war, ob das nur meins war. Es war nicht:

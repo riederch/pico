@@ -235,6 +235,19 @@ Uebersetzung als Schranke davorzusetzen ist dagegen **falsch**: ein unbedingter
 `throw` nimmt TypeScript die Verengung (TS18048), und vitest uebersetzt ohnehin
 nicht - die Schranke verwirft dann gueltige Messungen.
 
+**Wer ein Tor baut, zaehlt zuerst, wie viele es davon gibt, worueber es
+spricht.** Dreimal hat ein Pruefer hier einen Gegenstand gehabt, der schmaler
+war als sein Satz - jedes Mal, weil etwas zweimal existiert und er nur eines
+davon kannte (B187, B189). Der Baum hat zwei solche Paare: zwei Speicher (das
+Schema des Homes und die vier Tabellen des Relays) und zwei Flaechen (der
+Zeichner der Schale und `apps/web`). Beide sind heute gedeckt; ein drittes Paar
+braechte die Krankheit zurueck.
+
+Nachmessen laesst sich das mit einem Haken an `readFileSync` und `readdirSync`:
+ein Tor kann nicht breiter gelesen haben, als es Dateien angefasst hat. Wonach
+ein Tor *aussieht*, ist dagegen nichts wert - zwei Tore, die ich nach ihren
+Pfad-Zeichenketten fuer eng hielt, lasen quer durch den Baum (B190).
+
 `pnpm index:check` fragt dasselbe fuer Indizes, und der Preis ist schaerfer:
 eine Spalte, die niemand liest, kostet Bytes; ein Index, den niemand nutzt,
 macht **jeden Schreibvorgang auf seiner Tabelle langsamer** - gemessen am
