@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B184 — Eine Spaltenliste ist eine Aussage darüber, was ein Speicher fragt
+(2026-09-17).** B179 hat gezeigt, dass eine Importliste eine Aussage ist. Eine
+Ebene tiefer gilt dasselbe: wer `content_ciphertext_hex` in einem Schema liest,
+schließt, dass der Speicher nach Geheimtext fragt. **48 Tabellen, 418 Spalten** —
+wie viele davon werden geschrieben und **nie** abgefragt?
+
+**Erst ein Messfehler, und er ist lehrreich.** Mein erster Lauf schloss
+`migrations.ts` ganz aus, um die Schemadefinition nicht als Verwendung zu
+zählen — und fand genau eine Spalte, die nirgends vorkommt:
+`schema_migration_audit.error_message`. Sie wird sehr wohl geschrieben, nur
+eben *in derselben Datei*, ein paar hundert Zeilen unter ihrer `CREATE TABLE`.
+Wer eine Datei ausschließt, schließt auch das aus, was sie sonst noch tut.
+Korrigiert: nur die `CREATE TABLE`-Blöcke maskieren. Danach steht die grobe
+Frage auf **null von 418** — jede Spalte kommt irgendwo außerhalb ihrer
+Definition vor.
+
+**Die schärfere Frage trennt Schreiben von Lesen: 28 Spalten werden
+geschrieben und nie abgefragt.** Sie zerfallen in drei Gruppen, und nur die
+letzte ist ein Loch:
+
+- **26 stehen neben einer `*_json`-Spalte, die denselben Satz ganz hält.** Die
+  Reader-Custody liest ausschließlich über `item_record_json`,
+  `domain_record_json` und ihre Geschwister; die Einzelspalten daneben sind
+  entnormalisierte Kopien, die kein `SELECT` je nennt. Darunter
+  `content_ciphertext_hex` und `wrapped_dek_hex` — der Geheimtext und der
+  verpackte Datenschlüssel, ein zweites Mal in derselben Zeile. **Kein Drift
+  und kein Rest beim Schreddern:** diese Zeilen werden eingefügt und im Ganzen
+  gelöscht, nie geändert. Was bleibt, ist die falsche Auskunft an einen Leser
+  des Schemas.
+- **Eine ist über einen Fremdschlüssel wiederherstellbar.**
+  `pico_audit_record.recorded_at` liest niemand, aber die Zeile verweist auf
+  `pico_event`, und dort steht `created_at`.
+- **Und eine hat kein zweites Zuhause:**
+  `pico_module_effect_consent.consented_at`.
+
+**Diese eine ist der Fund.** Das Home schreibt auf, *wann* eine Person einer
+Modulwirkung zugestimmt hat, und `picoModuleEffectConsent` holt
+`effect_name`, `description`, `risk` — den Zeitpunkt nicht. Er ist da,
+dauerhaft, und **niemand kann ihn je zurücklesen**: weder die Person, noch eine
+Fläche, noch ein Prüfer. Direkt daneben steht ein Kommentar, der sich Mühe gibt,
+genau diesen Satz zu bewahren — *"would lose the record of what was agreed while
+it was off"*. Der Satz ist bewahrt; der Zeitpunkt ist es nicht, jedenfalls nicht
+für irgendjemanden, der fragen könnte.
+
+Eine Spalte, die eine Person betrifft und die niemand lesen kann, ist entweder
+eine fehlende Fläche oder Ballast. Beides ist eine Entscheidung und steht als
+solche in `.agent-context.md`.
+
 **B183 — Eine Weiche, die nicht mehr wählen kann (2026-09-17).** B181 und B182
 haben `!== KONSTANTE` gemessen — Vergleiche, die **ablehnen**. Die Gegenfrage
 kostete zehn Minuten: wo steht `=== Schemakonstante`, also ein Vergleich, der
