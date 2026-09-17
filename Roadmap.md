@@ -912,6 +912,60 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B186 — Eine Haltbarkeit, die durch Weglassen entschieden wurde
+(2026-09-17).** B185 hat die Datenbank als letzten Wächter befragt. Eine Frage
+weiter: **was überlebt einen Stromausfall?** Der Store setzt genau ein Pragma —
+`journal_mode = WAL`, nackt, ohne Satz daneben, in `event-store.ts` wie im
+Relay. Was WAL über die Haltbarkeit entscheidet, hängt an einem zweiten Pragma,
+und das setzt niemand: `synchronous` bleibt auf **NORMAL**. Kein ADR im ganzen
+Baum nennt WAL oder `synchronous`.
+
+Gemessen an einer laufenden Datenbank: `journal_mode=wal`, `synchronous=1`,
+`foreign_keys=1`, `busy_timeout=5000`. Zwei davon setzt der Code nicht —
+better-sqlite3 schaltet sie selbst ein. (Das korrigiert meine erste Vermutung:
+ich hielt die eine `REFERENCES`-Klausel des Schemas für wirkungslos, weil
+SQLite Fremdschlüssel standardmäßig aus hat. Der Treiber schaltet sie ein, die
+Klausel wirkt.)
+
+**Was NORMAL unter WAL bedeutet:** ein Commit überlebt einen Absturz des
+Prozesses, aber ein Stromausfall oder ein Absturz des Betriebssystems kann die
+zuletzt bestätigten Transaktionen kosten. `FULL` fsyncet bei jedem Commit.
+
+**Meine zweite Vermutung war ebenfalls falsch, und das ist der interessante
+Teil.** Neben der Datenbank stehen elf Dateispeicher, die ausdrücklich fsyncen,
+und zwei ADRs über Absturzsicherheit (0090, 0093). Es lag nahe, dass die
+Architektur das ausgleicht: was einen Absturz überleben muss, liegt in einer
+Datei. Nachgesehen — der Wiederherstellungsanker, das *einzige* Stück des Homes
+außerhalb der Datenbank, liegt dort aus einem **anderen** Grund: ADR 0110 R6
+hält ihn außerhalb jeder rücksicherbaren Momentaufnahme, damit eine Rücksicherung
+eine verbrauchte Wiederherstellung nicht auf `pending` zurückdreht. Das ist
+Rollback-Widerstand, nicht Stromausfall. **Nichts im Home gleicht NORMAL aus.**
+
+Eine Richtung ist dabei gutartig: der Anker ist fsync-gesichert und läuft nur
+vorwärts, also kann er nach einem Stromausfall „verbraucht" sagen, während die
+Datenbank die Zeile dazu verloren hat — und die Wiederherstellung bleibt
+gesperrt. Es fällt zu, nicht auf. Was verloren gehen kann, ist das, was eine
+Person gerade gespeichert hat.
+
+**Was FULL kostet, gemessen statt geschätzt** — auf der Platte dieser Maschine
+(btrfs über LUKS), 2.000 Zeilen:
+
+| Zeilen je Transaktion | NORMAL | FULL |
+| --- | --- | --- |
+| 1 | 59 ms | 2.827 ms |
+| 10 | 10 ms | 289 ms |
+| 100 | 4 ms | 33 ms |
+
+**Der Preis hängt an der Zahl der Commits, nicht an der Zahl der Zeilen:**
+rund **1,4 ms je Transaktion**, gleich wie groß sie ist. Und dieser Baum
+bündelt seit B163/B164: `transaction:check` zählt 80 Schreibvorgänge in
+Transaktionen, 41 davon in Schleifen. Eine Person, die etwas speichert, zahlt
+also einmal 1,4 ms — nicht 1,4 ms je Zeile.
+
+**Der erste Messlauf sagte, FULL koste nichts** (26 ms gegen 24 ms). Er lief in
+`/tmp`, und `/tmp` ist auf dieser Maschine ein RAM-Dateisystem, wo `fsync` ein
+Nichts ist. Eine Haltbarkeitsmessung gehört auf den Träger, um den es geht.
+
 **B185 — Der letzte Wächter eines Homes ist die Datenbank, und niemand geht ihn
 (2026-09-17).** B181 hat gefragt, ob die Ablehnungen im Code gegangen werden.
 Dieselbe Frage an die Schicht darunter: ein `CHECK` ist die **letzte**
