@@ -912,6 +912,64 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B183 — Eine Weiche, die nicht mehr wählen kann (2026-09-17).** B181 und B182
+haben `!== KONSTANTE` gemessen — Vergleiche, die **ablehnen**. Die Gegenfrage
+kostete zehn Minuten: wo steht `=== Schemakonstante`, also ein Vergleich, der
+etwas **zulässt**? Im ganzen Produktcode **zehn Stellen**, und zwei davon
+lohnten den Blick.
+
+Die erste ist vorbildlich: `app.ts` hält `picoHomeSealedClaimPayloadSchema`
+(v1) nur noch, um ihn abzulehnen — *Pico Home v1 claim payload is no longer
+accepted.* Eine alte Fassung, die beim Namen genannt und begründet
+zurückgewiesen wird, mit einem Test daneben.
+
+**Die zweite war eine Weiche ohne Wahl.** In `claimPicoHome` stand der ganze
+Identitätsnachweis des ersten Geräts — Lebenslaufbeleg und Leserschlüssel —
+innerhalb von `if (input.foundingRecord.schema === picoHomeFoundingRecordSchema)`.
+Ein Rest der v1/v2-Weiche, die ADR 0134 F2 am 2026-08-10 zusammengelegt hat.
+Und die Meldung darin sprach noch die alte Sprache: *Pico Home **v2** founding
+requires identity verification* — ein v2, das es nicht mehr gibt. Von zwei
+geworfenen Meldungen im ganzen Baum, die überhaupt eine Fassung nennen, nannte
+genau diese eine, die es nicht gibt.
+
+**Mein erster Schluss daraus war falsch, und der Weg dahin gehört
+aufgeschrieben.** Die `CHECK`-Klausel der Tabelle lässt **beide** Namen zu —
+`check-wire-labels.mjs` sagt das sogar ausdrücklich, weil eine Migration
+beschreibt, was eine Datenbank schon hält. Also schien der Fall offen: ein Satz
+unter dem alten Namen käme durch die Datenbank, würde Mitgliedschaft, und fiele
+dann durch die Weiche — gegründet, ungeprüft. Ich habe den Test dafür
+geschrieben, und er ist gefallen: mit einer **anderen** Meldung.
+`assertPicoHomeFoundingRecord` lehnt jede andere Schreibweise vorher ab. Die
+Weiche war unerreichbar, nicht gefährlich.
+
+**Was bleibt, ist trotzdem beides wert:**
+
+- Die Weiche ist weg. Ein `if`, das nicht falsch werden kann, behauptet eine
+  Wahl, die es nicht gibt — und *diese* Wahl hätte ein Home ohne den Nachweis
+  seines ersten Geräts gegründet. Dass sie unerreichbar war, ist ein Zustand,
+  keine Eigenschaft: eine spätere Fassung, die neben `v1` wieder etwas anderes
+  zuließe, hätte den stillen Übersprung zurückgebracht. An ihrer Stelle steht
+  jetzt der Satz, warum hier nicht verzweigt wird.
+- Die Ablehnung, die wirklich hält, **nannte kein Test**. Sie tut es jetzt, und
+  zwar unter genau dem Namen, den die `CHECK`-Klausel noch durchlässt.
+- Die Meldung nennt kein totes v2 mehr.
+
+**Und die acht übrigen sind das Spiegelbild von B182.** Sie stehen alle in
+Prädikaten — `record.schema === KONSTANTE && lifecycle.suite === … && …` —, die
+`true` oder `false` zurückgeben, und der Aufrufer macht aus dem `false` eine
+Ablehnung. Das ist dieselbe Gestalt wie die Oder-Ketten aus B182, eine Stufe
+schlimmer: dort teilten sich die Glieder wenigstens **ein Wort**, hier haben sie
+nicht einmal das. Ein Test kann so ein Glied *gehen*, aber nichts von außen kann
+je sagen, welches gefallen ist. Kein Fund, sondern eine Grenze, die man kennen
+sollte, bevor man ein Tor über solche Prädikate baut.
+
+**Die Lehre ist die von B181, von der anderen Seite gelesen.** Dort ging es um
+Wächter, die ein fremdes Dokument abweisen; hier um einen Vergleich, der ein
+bekanntes *durchlässt*. Beide Male ist der interessante Fall derselbe: **unser
+eigenes Dokument aus einer Fassung, die es nicht mehr gibt.** Ein `!==` fällt
+dann sicher. Ein `===` überspringt still — und das ist die gefährlichere
+Richtung.
+
 **B182 — Die meisten „ungegangenen" Zweige sind keine Lücke (2026-09-16).**
 B181 endete mit einer Entscheidung und einer Empfehlung, die ich nicht
 beziffern konnte: *nur die Oder-Ketten aufteilen, deren Schemazweig

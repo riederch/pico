@@ -196,6 +196,11 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+13. **Ein Test, der mit der falschen Meldung faellt, ist ein Fund.** Am
+   2026-09-17 habe ich einen Fall fuer erreichbar gehalten und den Test dafuer
+   geschrieben; er fiel - aber an einem *anderen* Waechter, den ich nicht
+   gesucht hatte (B183). Die Meldung im Fehlschlag zu lesen statt den Test
+   zurechtzubiegen, hat die Annahme widerlegt, bevor sie in einen Befund kam.
 12. **Eine Sonde zaehlt erst, was sie *nachweislich* geaendert hat.** Am
    2026-09-16 hat mein Pflanzskript `!== KONSTANTE` in einer Zeile gesucht,
    die Ersetzung laufen lassen und den Zaehler erhoeht - auch wenn die
