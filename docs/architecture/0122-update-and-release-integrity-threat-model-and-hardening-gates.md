@@ -35,9 +35,15 @@ is a mutable tag. A standalone Docker or Podman deployment pulls the
 same tag the same way. Nothing on any consumption path verifies a
 signature, because no signature exists.
 
-**Build.** CI builds on every push to `main` and on `v*` tags,
+**Build.** CI builds on `v*` tags and when somebody starts it by hand,
 publishes with the workflow's ephemeral `GITHUB_TOKEN`, and the
-`verify` job gates the `container` job. That order is right. But the
+`verify` job gates the `container` job. (Until 2026-09-18 it also built
+on every push to `main` and on every pull request - seven paid jobs
+each. The trigger became `workflow_dispatch` plus tags by a user
+decision, because the full chain runs before every commit anyway and
+what CI adds beyond it - a clean runner, the two container smoke tests,
+the client package - is what a release needs. `pnpm prepush` is the
+local half of that decision.) That order is right. But the
 build reads mutable references everywhere: every action is pinned to a
 major tag (`actions/checkout@v4`, `docker/build-push-action@v6`), the
 base image is `node:22-bookworm-slim` by tag, and `packageManager`

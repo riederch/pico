@@ -196,6 +196,16 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+19. **Nach einer Aenderung sofort die Saetze ueber das Geaenderte suchen.** Am
+   2026-09-18 habe ich den CI-Ausloeser umgestellt und damit in derselben
+   Stunde einen verjaehrten Satz erzeugt (B212) - ADR 0122 sagte weiter, CI
+   baue bei jedem Push. Gefunden hat ihn dieselbe Suche, die den ganzen Tag
+   fremde Saetze gefunden hatte, diesmal auf die eigene Aenderung angewandt.
+   Wer etwas aendert, erzeugt Saetze, die nicht mitkommen, und merkt es nicht,
+   weil er gerade woanders hinsieht. Also in derselben Runde suchen, solange
+   man noch weiss, was man geaendert hat - und dabei die Saetze stehen lassen,
+   die weiterhin stimmen: einen richtigen Satz zu berichtigen ist Rauschen.
+
 18. **Wer eine Luecke vermutet, sucht sie zuerst im Befundverzeichnis.** Am
    2026-09-18 habe ich in einem einzigen Faden dreimal eine Luecke vermutet und
    war dreimal zu spaet: die Senkenform `options.log?.(` traegt Befund B81

@@ -912,6 +912,39 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B212 — der erste verjährte Satz, den ich selbst erzeugt habe (2026-09-18).**
+Diese Runde hat sieben Sätze berichtigt, die einmal wahr waren und es
+irgendwann nicht mehr waren. Alle sieben stammten von früher. Dann habe ich den
+CI-Auslöser umgestellt — und damit selbst einen achten erzeugt.
+
+**Die Änderung**: auf Nutzerentscheidung läuft der Ablauf nicht mehr bei jedem
+Push und bei jedem Pull Request, sondern auf Knopfdruck und bei `v*`-Tags.
+Vorher waren das sieben bezahlte Jobs je Push.
+
+**Die Jagd danach, sofort und mit demselben Werkzeug wie den ganzen Tag**: alle
+verzeichneten Markdown-Dateien nach Sätzen durchsucht, die den alten Auslöser
+behaupten. Genau einer, in ADR 0122: *„CI builds on every push to `main` and on
+`v*` tags."* Berichtigt, mit der Geschichte daneben statt an ihrer Stelle.
+
+**Und einer, den ich stehengelassen habe.** Die Matrixzeile zu 0122 sagt, der
+Ablauf melde eine übersprungene Attestierung in der Zusammenfassung, *„rather
+than failing every push"*. Das beschreibt, was er tut, **wenn** er läuft, nicht
+**wann** — daran ist nichts falsch geworden. Einen Satz zu berichtigen, der
+stimmt, ist keine Sorgfalt, sondern Rauschen.
+
+**Warum das eine Nummer wert ist**, obwohl es eine Zeile ist: es ist der erste
+Fall in dieser Reihe, in dem der verjährte Satz **nicht geerbt, sondern erzeugt**
+wurde — und zwar von jemandem, der den ganzen Tag nichts anderes getan hat, als
+solche Sätze zu suchen. Das ist keine Nachlässigkeit, sondern die Normalform:
+wer etwas ändert, erzeugt Sätze, die nicht mitkommen, und merkt es nicht,
+**weil er gerade woanders hinsieht**.
+
+Die Folgerung ist billig und gehört ins Runbook: **nach einer Änderung an einer
+Einrichtung sofort die Sätze über sie suchen** — nicht irgendwann, sondern in
+derselben Runde, solange man noch weiß, was man geändert hat. Eine Stunde später
+wäre dieser Satz Teil des Bestandes gewesen, und jemand hätte ihn in drei
+Wochen als Fund aufgeschrieben.
+
 **B211 — dieselbe Krankheit, eine Datei weiter (2026-09-18).** Regel 18 hat
 diese Runde viermal gespart und einmal etwas gefunden. Die Frage war: **jedes
 Tor dieses Baums liest `.ts` — was steht in den anderen Sprachen?**
