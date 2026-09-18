@@ -912,6 +912,48 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B193 — Ein Zitat ist kein Beweis, und sein Fehlen keine Lücke
+(2026-09-18).** B192 fand eine entschiedene Eigenschaft ohne Tür: ADR 0078 K9
+beschreibt die host-lokale Zerstörung einer Reader-Custody-Domäne, und es gibt
+sie nicht. Gefunden habe ich sie, indem ich einem Schredder nachgegangen bin —
+also durch Zufall. Dieselbe Frage systematisch: **welche beschriftete
+ADR-Klausel zitiert der Code nirgends?**
+
+Dieser Baum beschriftet seine Klauseln (K6, K9, RY4, Q5, M3) und zitiert sie in
+Kommentaren. Gezählt: **429 Klauseln in 72 ADRs, 259 zitiert, 170 stumm.** Das
+ist zu viel zum Lesen und beweist nichts — eine Klausel kann umgesetzt sein,
+ohne dass ein Kommentar sie nennt. Die Gestalt von K9 war schärfer: **eine
+einzelne stumme Klausel in einem sonst durchzitierten ADR.** Danach sortiert
+blieben **22** Kandidaten, und die sieben mit genau einer stummen Klausel habe
+ich gelesen.
+
+**Vier sind zu Recht stumm, und sie sagen es selbst:** `0116 W6` beginnt mit
+*„(open; binds the first free-text Link operation)"*, `0102 M6` mit *„Future:"*,
+`0152 SE7` und `0107 D5` mit *„Done"* — Statusnotizen, keine Regeln. Wer eine
+Notiz zitieren wollte, zitierte ein Datum.
+
+**Drei sind wirkliche Regeln, und alle drei halten:**
+
+- **0077 C3** — *„The authorization target is explicit in the route … never
+  inferred from the body, a header or a default."* Drei Routen tragen
+  `:privacyDomain`, und der einzige Rumpfbezug im ganzen `app.ts` ist
+  `body.confirm !== privacyDomain`: der Rumpf **bestätigt** den Pfad, statt ihn
+  zu ersetzen. Genau C3.
+- **0121 J5** — *„audit records carry no content, and no unauthorized request
+  produces one."* Alle sieben `auth.*`-Einträge gehören zu gelungenen
+  Handlungen; einen fehlgeschlagenen Login schreibt nichts auf. Zwei Handler
+  sahen verdächtig aus, weil ein Ereignis textlich neben einer 4xx-Antwort
+  steht — in beiden kehrt die Antwort **vorher** zurück. Meine Nähe-Heuristik
+  hatte sie zusammengebracht, nicht der Code.
+- **0075 A6** — die Verbote über Anmeldedaten, die andere Tore ohnehin halten.
+
+**Das Ergebnis ist ein Negativbefund mit einer brauchbaren Lehre.** Von 170
+stummen Klauseln war die eine, die etwas fehlen ließ, schon gefunden — und zwar
+nicht durch Zählen von Zitaten, sondern dadurch, dass ich eine Handlung bis zum
+Ende gegangen bin. **Ein Zitat ist kein Beweis, und sein Fehlen keine Lücke:**
+dieser Baum setzt mehr um, als er nennt. Wer die nächste K9 sucht, geht besser
+eine Person durch ihre Handlung als eine Liste durch ihre Beschriftungen.
+
 **B192 — Ein Raum, den man anlegen, aber nicht beenden kann (2026-09-18).**
 Die Frage war die einfachste, die eine Person stellen kann: **was passiert,
 wenn ich das hier loswerden will?** Sechzehn Tabellen tragen eine
