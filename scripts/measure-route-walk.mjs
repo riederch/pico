@@ -147,10 +147,15 @@ const unanswered = served.filter((route) => !answered.has(route) && !invisible.h
 /**
  * Gezählt wird der Schnitt, nicht die Mitschrift.
  *
- * Das Home beantwortet auch, was nicht in `app.ts` steht - `/health` etwa
- * kommt aus einem Plugin -, und eine Zahl, die das mitzählte, sagte „so viele
- * der bedienten" über etwas anderes. Was ausserhalb liegt, wird daneben
- * genannt statt in die Quote gerechnet.
+ * Das Home beantwortet auch, was nicht in `app.ts` steht, und eine Zahl, die
+ * das mitzählte, sagte „so viele der bedienten" über etwas anderes. Was
+ * ausserhalb liegt, wird daneben genannt statt in die Quote gerechnet.
+ *
+ * Das Beispiel, das hier stand, war falsch: `/health` komme „aus einem
+ * Plugin". Es stand die ganze Zeit als `app.get` in `app.ts` und wurde von
+ * `servedRoutes()` gefunden. Seit Befund B217 liegt es in `health.ts`, neben
+ * seiner Sonde und seinem eigenen Deckel - also stimmt der Satz jetzt, nur aus
+ * einem anderen Grund, und das ist kein Grund, ihn stehen zu lassen.
  */
 const servedSet = new Set(served);
 const answeredServed = [...answered].filter((route) => servedSet.has(route));

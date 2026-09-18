@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { picoAddons, picoDockerfiles } from './workspace-members.mjs';
@@ -20,6 +21,7 @@ import { picoAddons, picoDockerfiles } from './workspace-members.mjs';
  */
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
+const ts = createRequire(import.meta.url)('typescript');
 /**
  * Every add-on in this repository, not the one this file was written for.
  * ADR 0155 added a second one, and a gate that guarded the first only would
@@ -213,6 +215,100 @@ for (const dockerfilePath of dockerfilePaths) {
   }
 }
 
+/**
+ * ADR 0119 Q4 mit Befund B217. Was `watchdog:` nennt, ist die Route, die das
+ * Produkt dafuer gebaut hat - und der Port, den es veroeffentlicht.
+ *
+ * Der Supervisor entscheidet an dieser einen Adresse, ob ein Add-on weiter
+ * laufen darf. Sie steht in YAML, die Route steht in TypeScript, und zwischen
+ * beiden hat nie etwas vermittelt: ein umbenanntes `/health` haette hier
+ * weiter gestanden, der Wachhund haette 404 gelesen und ein gesundes Home im
+ * Kreis neu gestartet. Der Pfad kommt deshalb aus der **Konstanten**, die die
+ * Route registriert, und nicht aus einer Abschrift.
+ *
+ * Gelesen wird sie ueber den Syntaxbaum (B188): `export const NAME = '...'`.
+ * Eine Regex haette denselben Text auch in einem Kommentar gefunden.
+ */
+const watchdogRoutes = new Map([
+  ['pico_home', { source: 'apps/core/src/health.ts', constant: 'PICO_HEALTH_PATH' }],
+]);
+
+/** Der Wert einer exportierten String-Konstanten, aus dem Syntaxbaum. */
+function exportedStringConstant(sourcePath, name) {
+  const full = join(repoRoot, sourcePath);
+  if (!existsSync(full)) {
+    return undefined;
+  }
+  const source = ts.createSourceFile(full, readFileSync(full, 'utf8'), ts.ScriptTarget.Latest, true);
+  let found;
+  const scan = (node) => {
+    if (ts.isVariableStatement(node)
+      && node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
+      for (const declaration of node.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)
+          && declaration.name.text === name
+          && declaration.initializer !== undefined
+          && ts.isStringLiteral(declaration.initializer)) {
+          found = declaration.initializer.text;
+        }
+      }
+    }
+    node.forEachChild(scan);
+  };
+  scan(source);
+  return found;
+}
+
+let watchdogsChecked = 0;
+for (const configPath of configPaths) {
+  const slug = configPath.split('/')[0];
+  const config = readFileSync(join(repoRoot, configPath), 'utf8');
+  const watchdog = /^watchdog:\s*"?([^"\n]+)"?\s*$/mu.exec(config)?.[1];
+
+  if (watchdog === undefined) {
+    // Kein Wachhund ist eine Entscheidung, keine Luecke - `pico_relay` legt
+    // sie in seiner eigenen Datei dar. Hier ist nichts zu pruefen.
+    continue;
+  }
+
+  const route = watchdogRoutes.get(slug);
+  if (route === undefined) {
+    errors.push(
+      `${configPath}: declares a watchdog and nothing here knows which route this add-on serves `
+      + 'for it. Der Supervisor startet an dieser Adresse neu; sie gehoert an die Konstante '
+      + 'gebunden, die das Produkt registriert.',
+    );
+    continue;
+  }
+
+  const declared = exportedStringConstant(route.source, route.constant);
+  if (declared === undefined) {
+    errors.push(
+      `${configPath}: ${route.source} exports no string constant ${route.constant}. `
+      + 'Die Route ist umgezogen und der Wachhund zeigt weiter auf ihre alte Adresse.',
+    );
+    continue;
+  }
+
+  const probed = watchdog.includes(']') ? watchdog.replace(/^.*\]/u, '') : watchdog;
+  if (probed !== declared) {
+    errors.push(
+      `${configPath}: watchdog probes ${probed}, and ${route.constant} says the route is `
+      + `${declared}. Ein Wachhund auf einer 404 startet ein gesundes Add-on im Kreis neu.`,
+    );
+  }
+
+  const port = /\[PORT:(\d+)\]/u.exec(watchdog)?.[1];
+  if (port !== undefined && !new RegExp(`^\\s+${port}/tcp:`, 'mu').test(config)) {
+    errors.push(
+      `${configPath}: watchdog probes container port ${port} and \`ports:\` does not declare `
+      + `${port}/tcp.`,
+    );
+  }
+
+  watchdogsChecked += 1;
+}
+
 if (errors.length > 0) {
   console.error('Home Assistant add-on config check failed:');
   for (const error of errors) {
@@ -224,7 +320,9 @@ if (errors.length > 0) {
 console.log(
   `Home Assistant add-on config check passed for ${configPaths.length} add-ons; `
   + `${hostReach.length} fields that would take one out of its container are `
-  + `watched, ${hostReachAsked} in use, each with a reason in its own file.`,
+  + `watched, ${hostReachAsked} in use, each with a reason in its own file; `
+  + `${watchdogsChecked} watchdog address(es) bound to the path constant the product registers `
+  + 'and to a port it declares.',
 );
 
 /**
