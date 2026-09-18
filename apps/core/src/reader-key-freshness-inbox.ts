@@ -12,7 +12,7 @@ import type { PicoIdentityReaderKeyFreshnessQuery } from './reader-key.js';
  * The Vault daemon deliberately has no network surface (ADR 0097), so the
  * Foundation cannot pull a checkpoint from the person's Vault. The owner
  * pushes one instead, and this holds it until the next authority check reads
- * it back through the unchanged `AuthenticatedPicoIdentityReaderKeyFreshness`
+ * it back through the unchanged `AuthenticatedPicoIdentityReaderKeyFreshnessSource`
  * verifier. Nothing here judges a checkpoint: it stores bytes and hands them
  * over, and every signature, binding, age and anti-rollback rule still runs
  * in the verifier.

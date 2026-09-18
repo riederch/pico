@@ -912,6 +912,204 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B196 — ein verjährter Satz ist ein richtiger Name mit einem falschen Verb
+(2026-09-18).** Diese Runde hat fünf Sätze berichtigt, die einmal wahr waren:
+sechs Oberflächenversprechen in den Modulmanifesten (B194), die Statusnotiz von
+ADR 0118, den `surfaces`-Kommentar in `module.ts`, ein „Gate C; unused" im
+Zugriffsregister und einen Satz über eine „offene Hälfte", die längst
+geschlossen war. Fünfmal stolpern ist kein Zufall. **Wie misst man das?**
+
+Zwei Sonden, und die Antwort liegt im Unterschied zwischen ihnen.
+
+**Die erste fragte nach Namen.** Jeder in Backticks genannte Bezeichner in
+einem Kommentar, den der Baum als Quelltext nicht führt: 182 fehlen in ihrer
+eigenen Datei, **19 gibt es im ganzen Baum nicht**. Einzeln gegangen: **null
+verjährte Verweise.** Fremde Namen (`AbortError`, `getUserMedia`,
+`StrongBoxUnavailableException`), Namen, von denen der Kommentar selbst sagt,
+dass es sie nicht gibt (`setEnabled` in `ports.ts`), und vor allem
+**absichtliche Vergangenheit** — `picoSupplierDomainPattern`,
+`picoRulesDomainPattern` und `picoApprovalDomainPattern` *„**were** three
+exported constants … They are one rule now"*. Dieser Baum schreibt seine
+Geschichte in die Kommentare; eine Sonde, die das für Verfall hält, misst die
+Tugend. Übrig blieb **ein abgeschnittener Name**: der Verweis auf den Prüfer
+hieß `AuthenticatedPicoIdentityReaderKeyFreshness`, die Klasse heißt
+`…FreshnessSource`. Ergänzt.
+
+**Die zweite fragte nach Verben** — nach Sätzen, die eine *Abwesenheit*
+behaupten (`unused`, `no caller`, `nothing calls`, `does not exist`, „keinen
+Aufrufer"). **95 im Baum**, und sie zerfallen in drei Klassen:
+
+- **Vergangenheit** (*„`attachPicoSupplier` had no caller"*) — ehrliche
+  Geschichte, kann nicht verjähren.
+- **Präsens über eine Fähigkeit** — gehalten von den begründeten Listen in
+  `check-capability-reach.mjs` und `check-store-writers.mjs`, die ihre
+  Argumente nachprüfen und laut fallen, sobald jemand baut. Genau die Bauart,
+  die `surfaces:check` in B194 übernommen hat.
+- **Präsens über etwas, das keine Fähigkeit ist** — gehalten von nichts.
+
+**Die dritte Klasse ist die, in der beide Funde saßen.**
+
+**`domain-content` trug „Gate C; unused" und hat zwei Routen.** Die Frage kam
+aus B195: hat jede Zugriffsklasse eine Route? Alle neun haben eine — 62
+Registrierungen, von `home-authority-relay` mit 22 bis `link-intake` mit einer.
+Ehrliches Positiv. Aber `domain-content` sind die beiden Gedächtnis-Leserouten,
+und Git nennt das Datum: der Satz stammt aus Gate A vom **2026-07-17**, die
+Registrierungen kamen **am selben Tag** mit Gate C dazu, ohne ihn anzufassen.
+Wer das Register liest, um die Klassen zu verstehen, hätte seither geschlossen,
+die Leserschaftsprüfung sei nicht in Gebrauch — auf der Zeile über
+`host-admin`.
+
+**Und ein Satz, dessen Zwilling schon korrigiert war.** `event-store.ts`
+schreibt über `setPicoSupplierCredential`: *„The secret does not pass through
+here. Where it lives at rest is **the open half** of CO1."* Die begründete
+Zeile in `store:check` sagt seit dem **2026-08-25** das Gegenteil — *„that was
+settled long ago"* —, und sie sagt es, weil sie **damals selbst berichtigt
+wurde**: ihre erste Fassung machte genau denselben Fehler. Die Korrektur ging
+an ihrem Zwilling vorbei, weil nichts die beiden aneinanderhält. Berichtigt.
+
+**Eine dritte Sonde, nach Zahlen, fand nichts** — und das ist eine gute
+Nachricht. Nur zwei Torkommentare nennen überhaupt eine Zählung im Text
+(`fifteen of 134`, `six of fourteen`), und **beide tragen ein Datum**. Dieser
+Baum datiert seine Zahlen; eine datierte Zahl ist Geschichte und kann nicht
+verjähren.
+
+**Die Lehre.** Ein Name hat zwei Prüfer, den Übersetzer und das Auge. Eine Zahl
+hat hier ein Datum. **Ein Verb hat nichts.** Deshalb ist die Bauart von
+`surfaces:check` die richtige: sie fragt nicht, ob ein Satz einen Gegenstand
+*nennt*, sondern ob sein Verb noch *stimmt* — indem ein Wort abwesend bleiben
+muss. Wer in diesem Baum nach faulen Sätzen sucht, sucht nach `unused`,
+`nothing calls`, `does not exist` — nicht nach Bezeichnern.
+
+**B195 — ein Tor kann breit lesen und schmal fragen (2026-09-18).** B194 endete
+mit dem Satz, ein Gegenstand ohne Prüfer sei ein Versprechen. Die nächste Frage
+schreibt sich von selbst: **wo sonst behauptet dieser Baum etwas, das kein
+Prüfer liest?** Ein Manifestfeld war es. Was noch?
+
+**Das Messgerät: jede geschlossene Liste, über den Syntaxbaum.** Ein
+`export const X = [...] as const` ist eine Behauptung darüber, welche Zustände
+es gibt. Gemessen: **130 Listen, 608 Wörter.** Davon kommen **19 im ganzen Baum
+sonst nirgends vor** — nicht im Produkt, nicht in einem Test. (Der erste
+Anlauf war eine Regex und zerbrach an Apostrophen in Doku-Kommentaren, die sie
+für Zeichenkettengrenzen hielt. B188s Lehre, zum zweiten Mal bezahlt: *eine
+Regex ist kein Leser von Quelltext.*)
+
+**Die 19 einzeln gegangen, und die Mehrheit ist gesund** — auf zwei
+verschiedene Arten, die beide Regel 8 sind:
+
+- `picoHomeEventTypes` nennt fünf Ereignisse, und drei erzeugt nichts. Das ist
+  richtig so: die Liste ist eine **Sperrliste**. Die Foundation-API weist genau
+  diese Namen ab, und ein Erzeuger wäre der Fehler, nicht sein Fehlen.
+- Die Kleidungsfamilien, die Erzeuger-Status, die Linux-Schlüsselspeicher:
+  gegen sie wird **geprüft**. Die Wörter kommen von außen — aus einer
+  Registerdatei, von einer Plattformsonde — und brauchen nie ein Literal.
+
+Übrig bleiben zwei, und beide stehen in einer Datei, die nichts liest.
+
+**Der erste: ADR 0118 O2s Vokabular der Nichtverfügbarkeit.**
+`packages/protocol/src/offline-floor.ts` erklärt `picoCapabilityOutcomes`,
+`picoUnavailabilityReasons`, `picoProviderClasses` und die drei Typen daneben.
+**Nennungen außerhalb der eigenen Datei: null.** `PicoCapabilityOutcome` — der
+Typ, von dem der ADR sagt, er mache Nichtverfügbarkeit *zu einem getippten
+Ergebnis statt zu einem leeren* — tippt nichts.
+
+Der ADR ist dabei ehrlich: O2 sei „vocabulary and rules implemented;
+enforcement still binds **the first model integration**". Das ist eine
+Vertagung mit einer **benannten Bedingung** — und die Bedingung ist
+eingetreten. `apps/core/src/model-runtime.ts` ist die Modellintegration, sie
+zitiert O2 beim Namen (*„Slow is unavailable, not slow. ADR 0118 O2's rule,
+given a number here for the first time"*), und sie spricht **eigene sieben
+Wörter**: `PicoModelDispatchRefusal`, mit `provider_unreachable` und
+`provider_did_not_answer_in_time` dort, wo O2 `no_network` und `timeout` sagt.
+Eine dritte Datei übersetzt die wieder in eine dritte Menge
+(`model-provider-state.ts`: `provider_unreachable: 'did_not_answer'`).
+
+**Was fehlt, ist das gemeinsame Wort, nicht die Sicherheit.** Das ist die
+wichtige Einschränkung: `PicoModelDispatchError` ist getippt, es entsteht
+nirgends ein leeres Ergebnis, um das herum sich etwas schleichen könnte. Die
+Gefahr, die O2 benennt, ist nicht da. Die Wörter, die O2 dagegen gebaut hat,
+sind es auch nicht.
+
+**Der zweite, und der ist schärfer: `staticTokenCeiling`.** In
+`apps/core/src/access-classes.ts` steht
+
+    /** Classes the principal-less static token may satisfy (ADR 0075: its ceiling). */
+    export const staticTokenCeiling: readonly AccessClass[] = ['public', 'foundation-diagnostic'];
+
+und dieser Name kommt **im ganzen Baum genau einmal vor**: hier. Kein Produkt,
+kein Test, kein Tor liest ihn.
+
+Durchgesetzt wird die Decke von der **Reihenfolge einer `if`-Kette** im
+`onRequest`-Haken: `public` geht durch, `link-intake` geht durch,
+`setup-bootstrap` entscheidet am Hostzustand, `foundation-diagnostic` lässt
+`static-token` ausdrücklich zu — und ganz unten fängt ein Durchfallen alles
+Übrige mit *„needs the operator role"*. Die Decke ist also eine
+**Eigenschaft der Zweigfolge**. Daneben steht sie zweimal als Prosa: einmal am
+Durchfallen (*„its ceiling is foundation-diagnostic (ADR 0075)"*), einmal bei
+`domain-content` (*„the principal-less static token is capped at
+foundation-diagnostic and cannot reach here"*).
+
+**Drei Sätze und eine Konstante sagen dieselbe Grenze, und keiner davon zieht
+sie.** Wer eine Zugriffsklasse hinzufügt oder einen Zweig verschiebt, kann die
+Reichweite des Tokens ändern, ohne die Konstante anzufassen — und nichts würde
+widersprechen, weil die Konstante keinen Leser hat. Es ist die Datei, die
+selbst schreibt: *„The registry is the enforcement mechanism, not a
+checklist."* Für die Klassen gilt das; für ihre Decke nicht.
+
+**Warum kein Tor das gesehen hat, und warum das B190 nicht widerspricht.**
+`check-capability-reach.mjs` trägt genau den richtigen Satz — *„A capability
+that nothing calls is a capability nobody has"* — und fragt ihn an
+`^export function` und `^export class`. **Ein Vokabular ist weder das eine noch
+das andere.** B190 hat 53 Tore mit einem Haken an `readFileSync` vermessen und
+gefunden, dass keines *weniger Dateien liest*, als sein Satz behauptet; dieses
+liest den ganzen Baum. B190 sagt im letzten Absatz selbst, ein Tor über Tore
+prüfte nur, was ein Prüfer *anfasst*. Hier ist die andere Achse: **ein Tor kann
+breit lesen und schmal fragen**, und das sieht kein Haken.
+
+**Zwei Gegenproben, damit niemand sie nachmisst.** Ob das Muster des Tors noch
+auf anderen Achsen schmal ist: (1) Pfeilfunktionen — der Syntaxbaum findet in
+`packages/*/src` **null** aufrufbare Ausfuhren, die `^export function` nicht
+sieht; dieser Baum schreibt jede exportierte Funktion gleich. (2)
+Unterverzeichnisse — der apps-Durchgang liest jede Wurzel nur auf oberster
+Ebene, und genau eine Wurzel hat ein Unterverzeichnis
+(`apps/companion-shell/src/renderer`), das keine einzige `.ts`-Datei hält. Die
+Schmalheit ist also genau eine: **ein Wortschatz ist keine Funktion.**
+
+**Und eine dritte Gegenprobe, die eine ganze Klasse falscher Funde killt.**
+Die naheliegende Verallgemeinerung wäre: *welcher Protokoll-Wortschatz wird
+außerhalb seines Pakets nie genannt?* Gemessen: **42 von 98** — und das ist
+kein Befund, sondern die gesunde Form. Ein Protokoll-Wortschatz wird durch
+seinen **eigenen Prüfer** verbraucht; `parsePicoModuleManifest` hält
+`picoModuleKinds` fest, und danach reist der *Wert* getippt bis ins Dashboard,
+während der *Name* im Paket bleibt. Was `offline-floor.ts` zum Fund macht, ist
+nicht das Fehlen eines Namens, sondern **eine benannte Bedingung, die
+eingetreten ist.**
+
+**Eine vierte Gegenprobe, und sie fand die blinde Stelle ein zweites Mal.**
+`check-capability-reach.mjs` hat zwei Durchgänge, und ihre Muster sind nicht
+dasselbe: der Paketdurchgang sucht `^export function` **und**
+`^export class`, der apps-Durchgang nur `^export function`. In den Wurzeln des
+apps-Durchgangs stehen **57 exportierte Klassen**, die er nie ansieht.
+
+Nachgemessen mit seiner *eigenen* Regel — eigene Datei als Aufrufer
+übersprungen, dann „nur von sich selbst benutzt" als harmlos gezählt (Regel 11:
+eine andere Regel misst eine andere Frage): drei sind harmlos, **eine hat
+überhaupt keinen Aufrufer**: `SupplierCredentialCrypto`.
+
+**Und sie ist gehalten — von einem anderen Tor.** `store:check` begründet den
+Schreiber daneben, `setPicoSupplierCredential`, und der Eintrag ist besser als
+meine Lesart: er wurde am **2026-08-25 korrigiert**, weil seine erste Fassung
+genau meinen Fehler machte. Er sagt, wo die Berechtigung ruht, sei *längst
+entschieden* — in der Domäne, in die ihr Lieferant sich gehängt hat, unter
+deren KEK, so dass ein Domänenschredder sie mitnimmt. Was fehlt, ist jemand,
+dem man eine Berechtigung übergeben könnte: der einzige Lieferant, den es gibt,
+ist eine lokale Git-Arbeitskopie, deren eigener Kopf sagt, dass sie keine
+braucht.
+
+Also **kein Fund, sondern ein Zustandsbericht**: die blinde Stelle des apps-
+Durchgangs ist echt und heute folgenlos, weil ihr einziger Kandidat vom
+Nachbartor gehalten wird. Das gehört aufgeschrieben, damit es niemand
+nachmisst.
+
 **B194 — vierzehn Versprechen, und sechs davon gibt es nicht (2026-09-18).**
 B193 endete mit dem Rat, den es selbst gefunden hatte: **geh eine Person durch
 ihre Handlung, nicht eine Liste durch ihre Beschriftungen.** B192 ging dem

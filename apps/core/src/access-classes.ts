@@ -21,7 +21,10 @@ export const accessClasses = [
   'foundation-diagnostic',
   // Any authenticated principal, no role required.
   'authenticated',
-  // Authenticated principal with readership of the domain. Gate C; unused.
+  // Authenticated principal with readership of the domain. Gate C, and it
+  // carries the two memory-content reads - this said `unused` from Gate A on
+  // 2026-07-17 until finding B195 measured it on 2026-09-18, which is the
+  // whole life of the routes Gate C added the same day.
   'domain-content',
   // Operator role. The static token never reaches this.
   'host-admin',

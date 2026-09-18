@@ -6844,8 +6844,15 @@ export class EventStore {
    * quieter than losing the credential: the quotes would stay accurate about a
    * source changed to agree with them. Pico never pushes.
    *
-   * The secret does not pass through here. Where it lives at rest is the open
-   * half of CO1, stated in the ADR rather than guessed at by this method.
+   * The secret does not pass through here, and where it lives at rest was
+   * settled long ago: `SupplierCredentialCrypto` seals it in the domain its
+   * supplier attached into, under that domain's KEK, so a domain shred takes
+   * it with everything else that domain held. What is missing is anybody to
+   * hand a credential to.
+   *
+   * This said "the open half of CO1" until finding B196 held it against the
+   * argued line in `store:check` - which had been corrected on 2026-08-25 for
+   * exactly this wording, without its twin here hearing about it.
    */
   public setPicoSupplierCredential(input: {
     identifier: string;

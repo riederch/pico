@@ -48,9 +48,19 @@ Accepted as a pre-implementation availability contract; the initiative
 and its scope were chosen by the user on 2026-08-01. **O1 is complete**:
 all five floor families exist and are mechanically enforced, and the
 gate reports five of five. O2 and O4 have their vocabulary and their invariants
-implemented and tested; both still bind a surface that does not exist -
-the first model integration for O2, and anything that computes network
-or model health for O4. O3 and O5 are untouched, because neither an
+implemented and tested; O4 still binds anything that computes network or
+model health, which does not exist.
+
+Status note, 2026-09-18 (finding B195): **O2's condition arrived and nobody
+went back.** This said O2 bound "the first model integration", and that
+integration is here - `apps/core/src/model-runtime.ts` cites O2 by name and
+gives its rule a number for the first time. It does so in its own seven words
+(`PicoModelDispatchRefusal`), and O2's vocabulary is named nowhere outside
+`offline-floor.ts`: `PicoCapabilityOutcome` types nothing. What is missing is
+the shared word, not the safety - the dispatch refusal is typed, so no empty
+result routes around anything, which is the danger O2 exists to name.
+
+O3 and O5 are untouched, because neither an
 enrichment path nor an Action Runner exists to hold them. The contract is a
 floor, not a feature set: it states what may never depend on a model or
 a network, and what everything else must do when one of them is

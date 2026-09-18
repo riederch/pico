@@ -196,6 +196,27 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+16. **Ein verjaehrter Satz ist ein richtiger Name mit einem falschen Verb.**
+   Am 2026-09-18 waren in einer Runde vier Saetze still falsch geworden, und
+   ich habe beide Richtungen vermessen (B195). Nach *Namen* gesucht: 19
+   Bezeichner, die ein Kommentar nennt und der Baum nicht fuehrt, und
+   **keiner** davon war Verfall - fremde Namen, absichtliche Vergangenheit,
+   ein Tippfehler. Nach *Verben* gesucht: 95 Abwesenheitsbehauptungen, und
+   genau dort sass der Fund. Ein Name hat zwei Pruefer, den Uebersetzer und
+   das Auge; ein Verb hat keinen. Wer nach faulen Saetzen sucht, sucht nach
+   `unused`, `nothing calls`, `does not exist` - nicht nach Bezeichnern.
+
+15. **Ein Vertrag, der selbst prueft, wird draussen nicht genannt.** Am
+   2026-09-18 wollte ich aus einem Fund die Regel machen: *welcher
+   Protokoll-Wortschatz wird ausserhalb seines Pakets nie genannt?* Gemessen
+   waren es 42 von 98 - und fast alle gesund (B195). Ein Protokoll verbraucht
+   seinen Wortschatz durch den **eigenen Pruefer**; danach reist der *Wert*
+   getippt bis ins Dashboard, waehrend der *Name* im Paket bleibt. Ein
+   fehlender Name ist also kein Fund. Was einen macht, ist etwas anderes: eine
+   **benannte Bedingung, die eingetreten ist** - ein ADR, der eine Vertagung an
+   ein Ereignis knuepft, und das Ereignis ist da. Die Sonde findet Kandidaten,
+   der Grund steht im ADR.
+
 14. **Wer eine Abwesenheit prueft, nimmt die Erklaerung aus dem Gegenstand.**
    Am 2026-09-18 sollte `surfaces:check` beweisen, dass eine Oberflaeche keinen
    Aufrufer hat, und suchte das Wort in ihrer Schicht - dort steht aber auch

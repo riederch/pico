@@ -70,7 +70,15 @@ export interface PicoModuleManifest {
    * budget, and the answer chosen in ADR 0127 was subpaths from the first day.
    */
   publishedSubpaths: readonly string[];
-  /** Where this module reaches a person. Prose, for the status surface. */
+  /**
+   * Where this module reaches a person, as prose.
+   *
+   * **It reaches no person itself** (2026-09-18, finding B194).
+   * `PicoModuleActivationView` does not carry it, so the sentence a module
+   * writes here is read by `surfaces:check` and by whoever opens this file -
+   * and by nobody else. That check is what keeps it true: every sentence
+   * names code that exists, or is argued as unbuilt.
+   */
   surfaces: readonly string[];
   /**
    * ADR 0128 H3. What this module can cause outside Pico's custody.
