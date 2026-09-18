@@ -871,6 +871,33 @@ export class EventStore {
      * without a subject.
      */
     this.db.pragma('foreign_keys = ON');
+    /**
+     * ADR 0070, and the measurement that made it necessary (2026-09-18,
+     * finding B203).
+     *
+     * **Every way this product forgets clears a column in place.**
+     * `deleteInDomain` sets `content = NULL` and keeps the row so the store can
+     * still answer what became of a reference; `forgetRecall` and
+     * `forgetDomainRecalls` set `job_json = '{}'` with the result and the
+     * recall context beside it. Four sites, all of them person content - what
+     * somebody wrote down, and what they said to a model.
+     *
+     * With SQLite's default (`secure_delete` off), the old bytes stay in the
+     * page until something overwrites them. Measured through this store's own
+     * API: sixty items with a distinctive sentence, all deleted, the store
+     * closed - and the sentence was still in the file sixty-one times. Only a
+     * `VACUUM` removed it, and nothing here ever runs one.
+     *
+     * ADR 0070's core rule says deletion is storage removal and *backups* may
+     * retain plaintext. It does not say the live database does, and a person
+     * reading it would not expect that.
+     *
+     * The pragma is a property of the connection and covers all four sites at
+     * once. Measured at 200 and 800 deletes of 3 kB, over seven runs a side, it
+     * is not slower - it came out 5 to 15 percent faster, which is within the
+     * shape of doing less page shuffling rather than a claim about speed.
+     */
+    this.db.pragma('secure_delete = ON');
     narrowToOwner(databasePath);
     this.memoryCrypto = options.memoryCrypto;
     this.recoveryAnchor = options.recoveryAnchor;

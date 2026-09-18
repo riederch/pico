@@ -89,6 +89,14 @@ export class PicoRelayStore {
     }
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
+    /**
+     * Befund B203. Anders als bei den Fremdschluesseln hat der Schalter hier
+     * einen Gegenstand: dieser Store kehrt Postfaecher, und die Zeile darueber
+     * sagt, warum das zaehlt - was hier liegt, ist versiegelt, die Adressen
+     * sind es nicht. Ohne diesen Pragma bleiben die Bytes einer gekehrten
+     * Zeile in der Seite stehen, bis etwas sie ueberschreibt.
+     */
+    this.db.pragma('secure_delete = ON');
     // Befund B120. Was hier liegt, ist versiegelt - die Adressen sind es nicht.
     narrowToOwner(databasePath);
     this.db.exec(`

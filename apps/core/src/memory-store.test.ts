@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -19,6 +19,45 @@ function openMemory(): MemoryStore {
   stores.push(store);
   return store.memory();
 }
+
+/**
+ * Befund B203. Was geloescht ist, steht nicht mehr in der Datei.
+ *
+ * **Der Kanarienvogel, weil die Frage nur an den Bytes zu beantworten ist.**
+ * `deleteInDomain` loescht die Zeile nicht, es leert den Inhalt - der Eintrag
+ * muss noch sagen koennen, was aus einer Referenz wurde. Unter SQLites
+ * Voreinstellung (`secure_delete` aus) bleiben die alten Bytes in der Seite,
+ * bis etwas sie ueberschreibt, und gemessen stand der Satz nach sechzig
+ * Loeschungen noch einundsechzigmal in der geschlossenen Datei.
+ *
+ * Grosse Inhalte auf eigenen Seiten, und erst an der **geschlossenen** Datei
+ * gelesen: bei kleinen Zeilen lebt und stirbt der Eintrag in der WAL, und der
+ * Checkpoint schreibt die Seite ohnehin neu - dann misst der Test, dass SQLite
+ * Seiten neu schreibt, und nicht, dass dieses Haus vergisst (Regel 11).
+ */
+it('ADR 0070 mit B203 - geloeschter Inhalt steht nicht mehr in der Datenbankdatei', () => {
+  const databasePath = createDatabasePath();
+  const store = new EventStore(databasePath);
+  const kanarienvogel = 'KANARIENVOGEL-b203-dieser-satz-ist-geloescht';
+  const memory = store.memory();
+  for (let index = 0; index < 20; index += 1) {
+    memory.create({
+      memoryItemId: `mem-b203-${index}`,
+      privacyDomain: 'domain-private',
+      owner: 'person',
+      controller: 'person',
+      contentType: 'text/plain',
+      content: `${kanarienvogel}-${index}-${'x'.repeat(3000)}`,
+    });
+  }
+  for (let index = 0; index < 20; index += 1) {
+    expect(memory.deleteInDomain(`mem-b203-${index}`, 'domain-private')).toBe('deleted');
+  }
+  store.close();
+
+  const inDerDatei = readFileSync(databasePath).includes(kanarienvogel);
+  expect(inDerDatei).toBe(false);
+});
 
 function createInput(overrides: Partial<MemoryItemInput> = {}): MemoryItemInput {
   return {

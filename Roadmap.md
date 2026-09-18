@@ -912,6 +912,79 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B203 — was gelöscht ist, stand noch in der Datei (2026-09-18).** B200 und
+B201 fanden zwei Zusicherungen an Übersetzungsschaltern einer fremden
+Bibliothek. Der dritte Schalter, den niemand setzt, ist `secure_delete` — aus,
+also werden die Bytes einer freigewordenen Zelle nicht überschrieben. Für ein
+Produkt, dessen ganze Geschichte Löschen ist, ist das keine Feinheit.
+
+**Gemessen am Produktweg, nicht an SQLite:** sechzig Gedächtniseinträge mit
+einem erkennbaren Satz angelegt, alle über `deleteInDomain` gelöscht, den Store
+geschlossen — **der Satz stand einundsechzigmal in der geschlossenen Datei.**
+Erst ein `VACUUM` räumte ihn weg, und **niemand im Produkt führt je eines aus.**
+
+**Dreimal habe ich vorher die falsche Frage gemessen** und jedes Mal null
+Treffer bekommen (Regel 11, in Serie). Kleine Einträge leben und sterben in der
+WAL, und ein Checkpoint schreibt die Seite ohnehin neu; auch achtzig Nachbarn
+auf derselben Seite ändern daran nichts. Erst große Inhalte auf eigenen Seiten,
+gelesen an der **geschlossenen** Datei — so, wie eine gestohlene Platte sie
+zeigt —, beantworten die Frage. Die ersten drei Messungen sagten „SQLite
+schreibt Seiten neu", nicht „dieses Haus vergisst".
+
+**Der Mechanismus, und er ist Absicht.** `deleteInDomain` löscht die Zeile
+nicht, es leert den Inhalt: sechzig Zeilen vorher, sechzig nachher, davon null
+mit Inhalt. Der Eintrag muss noch sagen können, was aus einer Referenz wurde.
+Mit `secure_delete` aus bleibt der alte Inhalt in der Seite stehen.
+
+**Und es ist kein Einzelfall, sondern jeder Vergessensweg dieses Produkts.**
+Sechs Stellen leeren eine Spalte an Ort und Stelle; vier davon leeren
+Personeninhalt:
+
+| Stelle | Was dort verschwinden soll |
+|---|---|
+| `memory-store.ts:547` | `deleteInDomain`: der Inhalt eines Eintrags — **gemessen** |
+| `memory-store.ts:607` | derselbe Weg beim Durchsetzen eines Grabsteins |
+| `model-job-queue.ts:488` | `forgetRecall`: `job_json`, `result_json`, `recall_context_json` |
+| `model-job-queue.ts:524` | dasselbe für eine ganze Domäne |
+
+Die letzten beiden wiegen am schwersten: `job_json` trägt den lebenden Zug —
+die Worte einer Person an ein Modell — und `result_json` die Antwort darauf.
+Die zwei übrigen Stellen leeren Kennungen, keinen Inhalt.
+
+**Was ADR 0070 verspricht, ist enger als das.** Seine Kernregel sagt:
+*„deletion is storage-removal only and **backups** may retain plaintext."* Sie
+nennt Sicherungskopien. Sie sagt nicht, dass die lebende Datenbank den Klartext
+behält, und wer „gelöscht" liest und daneben „Sicherungen können ihn noch
+haben", schließt genau das aus.
+
+**Getan: `secure_delete = ON` in beiden Stores.** Ein Pragma deckt alle vier
+Stellen, weil es eine Eigenschaft der Verbindung ist und nicht einer
+Anweisung. Im Relay **anders als bei den Fremdschlüsseln (B200) auch**: dort
+hatte der Schalter keinen Gegenstand, hier hat er einen — das Relay kehrt
+Postfächer, und seine eigene Zeile daneben sagt, warum das zählt: *„Was hier
+liegt, ist versiegelt — die Adressen sind es nicht."*
+
+**Die Kosten sind gemessen und es gibt keine.** Bei 200 und 800 Löschungen zu
+je 3 kB, über sieben Läufe je Seite: nicht langsamer, sondern 5 bis 15 Prozent
+schneller. Das ist keine Aussage über Geschwindigkeit, sondern die Form davon,
+weniger Seiten herumzuschieben.
+
+**Zwei Pflanzungen, und der Unterschied zu B200 ist die Pointe.**
+
+- Die Zeile entfernt — **der Test fällt.** Bei B200 blieb bei derselben
+  Pflanzung alles grün, weil die Voreinstellung dort *für* uns war. Hier war
+  sie gegen uns, und deshalb hat das Netz einen Gegenstand.
+- `FAST` statt `ON` — der Test besteht. Richtig so: er behauptet, dass die
+  Bytes weg sind, nicht welcher Schalter das erledigt. Ein Netz über ein
+  Verhalten nimmt jeden Weg an, der es erfüllt.
+
+**Die Lehre, und sie ist B200 mit umgedrehtem Vorzeichen.** Zwei geerbte
+Voreinstellungen im selben Konstruktor: eine hielt eine Zusicherung, die
+niemand aussprach, eine brach eine. Beide waren aus demselben Grund unsichtbar
+— eine Voreinstellung hat keinen Ort, an dem man sie liest. **Der Unterschied
+ist nur, dass die eine wartete, bis jemand hinsieht, und die andere darauf,
+dass jemand die Platte findet.**
+
 **B202 — der Grenzstein beschreibt ein Haus, das es nicht mehr gibt
 (2026-09-18).** B200 und B201 fanden zwei Zusicherungen, die an
 Übersetzungsschaltern einer fremden Bibliothek hingen. Der nächste Schalter,
