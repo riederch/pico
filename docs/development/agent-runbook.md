@@ -196,6 +196,16 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+18. **Wer eine Luecke vermutet, sucht sie zuerst im Befundverzeichnis.** Am
+   2026-09-18 habe ich in einem einzigen Faden dreimal eine Luecke vermutet und
+   war dreimal zu spaet: die Senkenform `options.log?.(` traegt Befund B81
+   nach, und zwar mit genau meinen drei Beispielen; die Adressregel ist ADR
+   0148 EX4; das Verbot freier Fehlermeldungen steht als Kommentar an der
+   Stelle selbst. Jede Vermutung kostete mehrere Messungen, ein `grep` im
+   Verzeichnis haette sie in einer erledigt. In einem gepflegten Verzeichnis
+   ist die dritte Vermutung meist schon eine Nummer - und die Nummer sagt
+   ausserdem, *warum* es so ist.
+
 17. **Ein Messgeraet ist gerichtet.** Am 2026-09-18 zeigte die Zitiergewohnheit
    dieses Baums - eine Datei, die eine Entscheidung umsetzt, nennt ihr ADR im
    Doku-Kommentar -, dass eine `concept-only`-Zeile mit elf zitierenden Dateien

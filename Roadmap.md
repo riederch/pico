@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B210 — ein Messgerät gebaut, widerlegt und weggelegt (2026-09-18).** Dieser
+Befund hat wenig über den Baum zu sagen und viel über das Suchen darin. Er
+steht hier, weil das Weglegen sonst niemand aufschreibt.
+
+**Das Negativ zuerst, denn es ist demonstriert.** Ein Relay wird von jemand
+anderem betrieben; was seine Protokolle tragen, ist deshalb keine Feinheit.
+Gemessen: das Relay schreibt **zehn** Zeilen — sechs beim Starten und Beenden,
+vier im Betrieb —, und keine trägt eine Mailboxadresse. Die Anfragebehandlung
+reicht ausdrücklich **nur einen snake_case-Namen** durch, mit dem Grund
+daneben: *„eine freie Fehlermeldung trägt Pfade, Adressen und Werte."*
+Gepflanzt: eine Mailboxadresse in genau diese Zeile fällt mit Datei, Zeile und
+Senkenklasse — *„a relay mailbox address must not reach a logger handed in as a
+function."*
+
+**Dreimal hatte der Baum meine Vermutung schon beantwortet.** Ich hielt die
+Senkenform `options.log?.(` für unbewacht — Befund **B81** hat sie nachgetragen
+und nennt dabei genau meine drei Beispiele. Ich hielt die Adressregel für
+ungesagt — sie ist ADR 0148 EX4. Ich hielt das Durchreichen freier
+Fehlermeldungen für unbemerkt — der Kommentar an der Stelle verbietet es und
+begründet es. Jede dieser Vermutungen kostete mehrere Messungen, die ein Blick
+ins Verzeichnis erspart hätte. Daraus **Runbook-Regel 18**.
+
+**Und dann das Gerät, das ich gebaut habe, um genau das zu vermeiden.** Die
+Frage klang gut: *welche Produktdateien hat noch nie ein Befund genannt?* Das
+wäre eine Karte der blinden Flecken. Gemessen: **131 von 262.** Einmal
+verfeinert — zählt auch, wenn die Datei selbst eine Befundnummer zitiert, denn
+dieser Baum schreibt sie hinein — blieben **119**.
+
+**Die ersten beiden Stichproben haben es widerlegt.**
+`apps/companion/src/atomic-file.ts` steht auf der Liste und ist der Gegenstand
+von Befund B121, was die Datei in ihrem eigenen Kopf sagt — nur nennt der
+Befund `profile.ts` und das Verhalten, nicht ihren Namen.
+`packages/gesture` steht mit vier Dateien darauf, und `Roadmap.md` nennt das
+Paket **achtmal**, ADR 0124 führt es als `not implemented`, zwei Torskripte
+tragen eine Notiz dazu.
+
+**Also ist „nie genannt" hier kein Ersatz für „nie gemessen".** Befunde in
+diesem Baum benennen **Verhalten und Pakete**, nicht Dateien — das ist gute
+Prosa und ein schlechtes Merkmal. Die 119 sind eine Obergrenze, aus der man
+einzelne Spuren ziehen kann, und keine Liste von Lücken. Ich habe sie nicht
+weiter ausgebeutet.
+
+**Die Lehre**, und sie ist die unbequeme Schwester von Regel 17: ein
+Messgerät, das in eine Richtung nichts beweist, ist gerichtet; eines, dessen
+**erste zwei Stichproben** es widerlegen, ist kaputt. Der Unterschied ist, ob
+man die Stichprobe zieht. Eine Liste mit 119 Einträgen sieht wie Arbeit aus,
+und genau deshalb wäre sie hier ein Befund geworden, den niemand geprüft hätte.
+
 **B209 — der Satz nannte einen Ort, an dem niemand nachgesehen hatte
 (2026-09-18).** B208 maß die Umgebung **eines** externen Programms. Die Frage
 gilt für alle: was startet dieses Produkt, und was gibt es mit?
