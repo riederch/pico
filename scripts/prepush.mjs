@@ -1,5 +1,7 @@
-import { spawnSync } from 'node:child_process';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * Was vor einem Push zu laufen hat, hier statt auf fremden Läufern.
@@ -22,29 +24,42 @@ import { execFileSync } from 'node:child_process';
  * (`--workspace-concurrency=1`), aber vitest startet je Paket bis zu einen
  * Arbeiter pro Kern.
  *
- * **Warum der eine Wiederholungsversuch:** `clock:check` unmittelbar nach den
- * Suiten fiel am 2026-09-18 zweimal im ersten Anlauf und lief im zweiten
- * unverändert durch - beim dritten Mal, im ersten Lauf dieses Skripts, fiel es
- * gar nicht. **Zwei von drei, also wackelig und nicht deterministisch**; die
- * erste Fassung dieses Satzes sagte "zweimal von zwei" und war eine Runde zu
- * früh verallgemeinert.
+ * **Warum jeder Schritt einen Versuch mehr bekommt.** Am 2026-09-18 wurden vier
+ * Läufe gefahren; zwei wurden vom Speichermangel abgeschossen, und sie trafen
+ * **verschiedene** Schritte - einmal `clock:check` direkt nach den Suiten,
+ * einmal `display-zone:check` kurz vor dem Ende. Zwei frühere Fassungen dieses
+ * Kommentars schrieben das `clock:check` zu ("zweimal von zwei", dann "zwei von
+ * drei"); beide waren zu früh verallgemeinert. Die Eigenschaft gehört der
+ * Maschine, nicht dem Schritt.
  *
  * Die Ursache kenne ich nicht, und drei Erklärungen sind widerlegt: nicht
  * `shift-clock.mjs` (53 Zeilen, leitet nur `Date` ab), nicht der freie
  * Arbeitsspeicher und nicht der Swap-Stand - beim Abbruch und beim Erfolg
  * standen dieselben Zahlen.
  *
- * Für ein wackeliges Scheitern ist *ein* Versuch mehr die richtige Antwort,
- * und er wird laut angekündigt: ein stiller Wiederholungsversuch verwandelt
- * einen echten Fehlschlag in Rauschen. Er kostet nur Zeit, wenn ohnehin etwas
- * gefallen ist.
+ * Für ein umgebungsbedingtes Scheitern ist *ein* Versuch mehr die richtige
+ * Antwort, und er wird laut angekündigt: ein stiller Wiederholungsversuch
+ * verwandelt einen echten Fehlschlag in Rauschen. Er kostet nur Zeit, wenn
+ * ohnehin etwas gefallen ist.
+ *
+ * **Und warum es sich merkt, was schon grün war.** Der zweite Abbruch kam nach
+ * zwanzig Minuten im letzten Schritt - und wenn der Aufrufer selbst getötet
+ * wird, hilft kein Wiederholungsversuch im Skript, weil es den Versuch nicht
+ * mehr erlebt. Ein Lauf, der dann von vorn anfinge, wäre auf dieser Maschine
+ * unbenutzbar. Also wird je Commit festgehalten, welcher Schritt grün war, und
+ * ein neuer Lauf überspringt ihn. Der Stand gilt **nur für genau diesen
+ * Commit**: eine Änderung macht ihn wertlos, und das ist der ganze Punkt.
+ * `pnpm prepush --fresh` fängt trotzdem von vorn an.
  */
 const STEPS = [
   { script: 'verify:gates', title: 'Die Torkette' },
   { script: 'test', title: 'Die Testsuiten' },
-  { script: 'clock:check', title: 'Suiten unter verschobener Uhr', retryOnce: true },
+  { script: 'clock:check', title: 'Suiten unter verschobener Uhr' },
   { script: 'display-zone:check', title: 'Suiten in fremder Zeitzone' },
 ];
+
+/** Wo der Stand liegt: im Scratchpad, nicht im Baum - er ist kein Ergebnis. */
+const STATE = join(tmpdir(), 'pico-prepush-state.json');
 
 function run(script) {
   const started = Date.now();
@@ -70,23 +85,50 @@ if (dirty !== '') {
   process.exit(1);
 }
 
+const head = git(['rev-parse', 'HEAD']);
+const fresh = process.argv.includes('--fresh');
+let done = new Set();
+if (!fresh && existsSync(STATE)) {
+  try {
+    const saved = JSON.parse(readFileSync(STATE, 'utf8'));
+    if (saved.head === head && Array.isArray(saved.green)) {
+      done = new Set(saved.green);
+    }
+  } catch {
+    // Ein unlesbarer Stand ist kein Stand. Von vorn ist immer richtig.
+  }
+}
+if (done.size > 0) {
+  process.stdout.write(
+    `\nFuer ${head.slice(0, 8)} waren schon gruen: ${[...done].join(', ')}.\n`
+    + 'Diese Schritte werden uebersprungen; `--fresh` faehrt alles noch einmal.\n',
+  );
+}
+
 const outcomes = [];
 for (const step of STEPS) {
-  process.stdout.write(`\n── ${step.title} (${step.script})\n`);
+  if (done.has(step.script)) {
+    outcomes.push({ ...step, ok: true, status: 0, seconds: 0, skipped: true });
+    continue;
+  }
+  process.stdout.write(`\n\u2500\u2500 ${step.title} (${step.script})\n`);
   let outcome = run(step.script);
-  if (!outcome.ok && step.retryOnce === true) {
+  if (!outcome.ok) {
     process.stdout.write(
       `\n${step.script} ist mit ${outcome.status} gefallen. Ein Versuch mehr, und\n`
-      + 'zwar ein einziger: dieser Schritt fiel auf dieser Maschine an zwei von drei\n'
-      + 'Tagen im ersten Anlauf und lief im zweiten unverändert durch - wackelig\n'
-      + 'also, nicht sicher. Faellt er auch jetzt, ist es keine Speicherlage,\n'
-      + 'sondern ein Fund.\n',
+      + 'zwar ein einziger: auf dieser Maschine wurden am 2026-09-18 zwei von vier\n'
+      + 'Laeufen vom Speichermangel abgeschossen, und sie trafen verschiedene\n'
+      + 'Schritte - die Eigenschaft gehoert der Maschine, nicht dem Schritt.\n'
+      + 'Faellt er auch jetzt, ist es keine Speicherlage, sondern ein Fund.\n',
     );
     outcome = run(step.script);
     outcome.retried = true;
   }
   outcomes.push({ ...step, ...outcome });
-  if (!outcome.ok) {
+  if (outcome.ok) {
+    done.add(step.script);
+    writeFileSync(STATE, JSON.stringify({ head, green: [...done] }), 'utf8');
+  } else {
     break;
   }
 }
@@ -94,7 +136,9 @@ for (const step of STEPS) {
 const failed = outcomes.find((outcome) => !outcome.ok);
 process.stdout.write('\n── Stand\n');
 for (const outcome of outcomes) {
-  const mark = outcome.ok ? 'gruen' : `GEFALLEN (${outcome.status})`;
+  const mark = outcome.skipped === true
+    ? 'gruen, aus einem frueheren Lauf'
+    : (outcome.ok ? 'gruen' : `GEFALLEN (${outcome.status})`);
   const again = outcome.retried === true ? ', im zweiten Anlauf' : '';
   process.stdout.write(`  ${outcome.script.padEnd(20)} ${mark}${again}  ${outcome.seconds}s\n`);
 }
@@ -109,6 +153,7 @@ if (failed !== undefined) {
   process.exit(1);
 }
 
+rmSync(STATE, { force: true });
 const ahead = git(['rev-list', '--count', 'origin/main..HEAD']);
 process.stdout.write(
   `\nAlle vier Schritte gruen. ${ahead === '' ? 'Unbekannt viele' : ahead} Commit(s) vor origin/main.\n`
