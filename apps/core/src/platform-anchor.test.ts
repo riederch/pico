@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -266,5 +266,37 @@ describe('ADR 0027 IM1 tpm2 counter adapter', () => {
     // A TPM that refuses is not a TPM that is absent, and the difference
     // decides whether the honest fallback applies.
     expect(() => refusing.read()).toThrow(/pico_tpm2_failed:tpm2_nvread:ERROR: authorization failure/u);
+  });
+});
+
+/**
+ * Befund B214. Der Anker traegt die Rechte einer liegengebliebenen `.tmp` nicht.
+ *
+ * **Warum gerade dieser Fall.** `mode` in `writeFileSync` gilt nur beim
+ * Anlegen; oeffnet es eine `.tmp` von einem abgestuerzten Vorlauf, bleiben
+ * deren Rechte stehen und das Umbenennen traegt sie auf den Anker. Ein Test,
+ * der nur "die Datei ist 0600" prueft, besteht auch ohne die Verengung - genau
+ * das hat B121 an der eigenen Pflanzung gemessen. Deshalb wird hier eine offene
+ * Zwischendatei **hingelegt**, bevor der Anker schreibt.
+ *
+ * Was auf dem Spiel steht: der Zeitboden der Einspruchsfenster (ADR 0120 N2),
+ * der Plattformzaehlerstand und die Auditpruefpunkte.
+ */
+describe('ADR 0120 N2 mit B214 - die Rechte des Ankers', () => {
+  it('erbt die Rechte einer liegengebliebenen Zwischendatei nicht', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-anchor-mode-'));
+    tempDirs.push(dir);
+    const anchorPath = join(dir, 'recovery-anchor.json');
+    // Ein abgestuerzter Vorlauf hat sie offen liegenlassen.
+    writeFileSync(`${anchorPath}.tmp`, '{}\n', { mode: 0o644 });
+    chmodSync(`${anchorPath}.tmp`, 0o644);
+
+    const anchor = openPicoHomeRecoveryAnchor(anchorPath);
+    anchor.auditCheckpoint('pico-core');
+    anchor.recordAuditCheckpoint({
+      writerId: 'pico-core', chainPosition: 1, headDigestHex: 'ab'.repeat(32),
+    });
+
+    expect(statSync(anchorPath).mode & 0o777).toBe(0o600);
   });
 });

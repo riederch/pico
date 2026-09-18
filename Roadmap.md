@@ -912,6 +912,56 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B214 — derselbe Fehler wie B121, im Kern statt im Companion (2026-09-18).**
+B213 legte vier Abschriften der atomaren Schreibfolge zusammen und endete mit
+dem Satz, eine Abschrift sei gefährlich, wenn sie die **Prüfung** nicht miterbt.
+Die naheliegende Anschlussfrage: wo steht diese Folge sonst noch?
+
+**Gemessen über Kern, Relay und Vault-Daemon: zwei Stellen.**
+`sqlite-backup.ts` ist gedeckt — sie ruft `narrowToOwner`, den geprüften Helfer
+aus `database-file-mode.ts`. Die andere ist `recovery-anchor.ts`, und dort
+**fehlte die Verengung ganz.**
+
+**Was das heißt, und es ist B121s Messung wörtlich:** `mode` in `writeFileSync`
+gilt **nur beim Anlegen**. Öffnet es eine `.tmp` von einem abgestürzten
+Vorlauf, bleiben deren Rechte stehen, und das Umbenennen trägt sie auf das
+Ziel. Unter `umask 022` wäre das eine `0644`-Datei.
+
+**Und es ist nicht irgendeine Datei.** Der Wiederherstellungsanker hält den
+Zeitboden der Einspruchsfenster (ADR 0120 N2, gegangen in B206), den
+Plattformzählerstand gegen Rückrollen (B200/B201) und die Auditprüfpunkte.
+
+**Was den Fall heute auffing** — und warum das kein Grund ist, ihn zu lassen:
+das Verzeichnis wird `0700` angelegt. Aber `mkdirSync`s `mode` gilt ebenfalls
+nur beim Anlegen, und zwei Zeilen neben dem Helfer steht der Satz dazu: *„a
+protection that holds by accident holds until somebody installs the thing
+differently, mounts a volume, or restores a backup."* Genau diese drei Fälle
+sind die, in denen ein Verzeichnis schon existiert.
+
+**Kein Test prüfte die Rechte des Ankers.** Null Zusicherungen über seinen
+Modus in beiden Ankertestdateien.
+
+**Getan: `narrowToOwner(temporaryPath)` vor dem fsync**, also der geprüfte
+Helfer statt eines eigenen `chmodSync` — B213s Lehre an der Stelle angewandt,
+die sie gefunden hat. Dazu ein Test, der eine **offene Zwischendatei hinlegt**,
+bevor der Anker schreibt; ein Test, der nur „die Datei ist 0600" prüft, bestünde
+auch ohne die Verengung, und genau das hat B121 an der eigenen Pflanzung
+gemessen.
+
+**Zwei Pflanzungen, und die zweite ist die ehrlichere Auskunft.** Ohne die
+Verengung fällt der Test mit `420` gegen `384` — `0o644` gegen `0o600`. Verengt
+man dagegen **nach** dem Umbenennen statt davor, besteht er: das Ergebnis
+stimmt, und mein Test sieht das kurze Fenster nicht, in dem das Ziel schon
+offen dasteht. Die Reihenfolge ist trotzdem die strengere Wahl, und sie steht
+im Kommentar - ein Netz, das eine Ordnung nicht prüfen kann, ist ein Grund, sie
+aufzuschreiben, und keiner, sie beliebig zu lassen.
+
+**Die Lehre**, und sie schließt an B207 an: dort trug die **Reihenfolge** zweier
+Prüfungen die Sicherheit, hier trägt sie ein Verzeichnis, das zufällig eng
+angelegt wurde. Beide Male hält etwas, und beide Male hält es aus einem Grund,
+den niemand gewählt hat. **Eine Verteidigung, die man nicht benennen kann, ist
+noch keine.**
+
 **B213 — fünf Abschriften einer Folge, und nur das Original war geprüft
 (2026-09-18).** B203 fand Bytes, die eine Löschung in der SQLite des Homes
 überlebten. Dieselbe Frage einen Prozess weiter: **was schreibt und löscht der

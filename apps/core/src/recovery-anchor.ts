@@ -13,6 +13,7 @@ import {
   verifyPicoPlatformAnchorGeneration,
   type PicoPlatformAnchorCounter,
 } from './platform-anchor.js';
+import { narrowToOwner } from './database-file-mode.js';
 
 /**
  * ADR 0110 R6. The consumption anchor.
@@ -337,6 +338,24 @@ export function openPicoHomeRecoveryAnchor(
 
     const temporaryPath = `${anchorPath}.tmp`;
     writeFileSync(temporaryPath, `${JSON.stringify(withGeneration, null, 2)}\n`, { mode: 0o600 });
+    /**
+     * Befund B214, und der Grund steht seit dem 2026-09-10 in B121: **`mode`
+     * gilt nur beim Anlegen.** Nach einem Absturz liegt eine `.tmp` von vorher
+     * da, `writeFileSync` öffnet sie und lässt ihre Rechte, wie sie sind - und
+     * das Umbenennen trägt sie auf den Anker. Unter `umask 022` wäre das eine
+     * `0644`-Datei, die den Zeitboden, den Plattformzählerstand und die
+     * Auditprüfpunkte für jeden lesbar macht.
+     *
+     * Das Verzeichnis ist `0700`, was den Fall heute auffängt - aber auch
+     * `mkdirSync`s `mode` gilt nur beim Anlegen, und `database-file-mode.ts`
+     * sagt daneben den Satz, um den es geht: *„a protection that holds by
+     * accident holds until somebody installs the thing differently."*
+     *
+     * `narrowToOwner` statt eines eigenen `chmodSync`: der Helfer ist geprüft,
+     * verengt nur und weitet nie, und eine Abschrift, die den Beweis nicht
+     * miterbt, ist genau das, was B213 eine Datei weiter zusammengelegt hat.
+     */
+    narrowToOwner(temporaryPath);
     fsyncPath(temporaryPath);
     renameSync(temporaryPath, anchorPath);
     fsyncPath(dirname(anchorPath), true);
