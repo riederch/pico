@@ -912,6 +912,66 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B217 — dasselbe Argument stand schon im Haus, eine Tuer weiter
+(2026-09-18).** `pico_home/config.yaml` richtet den Wachhund des Supervisors
+auf `http://[HOST]:[PORT:3100]/health`. Diese eine Route entscheidet also, ob
+das Add-on weiterlaufen darf. Sie sah so aus:
+
+    app.get('/health', async () => ({ ok: true, service: 'pico-home-core', deviceId }));
+
+Eine Konstante. Sie beantwortet genau eine Frage — *laeuft der Prozess?* — und
+das ist die Frage, deren Antwort man schon hat, wenn man die Verbindung
+aufbauen konnte. Ein Home, dessen Lauscher steht und dessen Speicher weg,
+schreibgeschuetzt oder geschlossen ist, sagt `ok: true`, und der Wachhund
+schweigt.
+
+Die zweite Haelfte ist die schlimmere. Der Haken, der das Gleichzeitigkeitsbudget
+der Foundation-API zieht, ist **ohne Routenfilter** gesetzt, also zog `/health`
+daraus mit. Gemessen mit einem Budget von eins und einer gehaltenen Anfrage:
+`/health` antwortet **503**. Auf einem echten Home heisst das, dass gewoehnlicher
+Verkehr den Platz ausgibt, von dem die Neustart-Entscheidung des Supervisors
+abhaengt — je beschaeftigter ein Home, desto wahrscheinlicher der Neustart. Das
+ist die Umkehrung dessen, wofuer ein Wachhund da ist.
+
+**Beides war in diesem Repository schon entschieden — vom Relay.**
+`apps/relay/src/health.ts` steht seit ADR 0153 da und sagt es wortwoertlich:
+*„It asks the store rather than the event loop. A health check that answers
+because the process is running answers yes to the one failure that matters
+here."* Und es hat einen **eigenen Lauscher** auf einem eigenen Port mit
+`maxConnections = 16`. Dazu sagt `concurrency-cap.ts` im Kern schon das
+Trennargument: zwei Flaechen, zwei Zaehler, damit die eine die andere nicht
+aushungert. Beide Saetze hatten den Wachhund nur nie als dritte Flaeche
+gesehen.
+
+Gebaut: `apps/core/src/health.ts`, mit der Route, ihrer Sonde und ihrem eigenen
+Deckel an einem Ort — das erste Stueck von P8, das nicht aus einer Zerlegung
+kam, sondern aus einer Frage. `EventStore.probe()` liest eine Tabelle, die klein
+bleibt (`pico_home_founding_record`, ein Satz pro Home); `COUNT(*)` auf dem
+Ereignislog waere die falsche Form gewesen, weil eine Pruefung, deren Kosten mit
+den Daten wachsen, eine Pruefung ist, die man irgendwann abstellt. Der grosse
+Deckel laesst `PICO_HEALTH_PATH` durch, weil die Route ihren eigenen hat: ganz
+ohne Schranke waere sie der einzige unbegrenzte Pfad auf einer erreichbaren
+Flaeche.
+
+Drei Netze, fuenf Pflanzungen, alle gebissen. Ohne die Ausnahme im grossen
+Deckel faellt der Wachhund-Test mit `expected 503 to be 200`; mit einer Sonde,
+die nichts fragt, faellt er mit `expected 200 to be 503`; mit einer `probe()`,
+die nur `return` sagt, faellt der Store-Test. Dazu die neue Regel in
+`addon:check`: der Pfad in `watchdog:` kommt aus der **Konstanten**, die die
+Route registriert, ueber den Syntaxbaum gelesen — ein umbenanntes `/health`
+haette sonst in der YAML weitergestanden, der Wachhund haette 404 gelesen und
+ein gesundes Home im Kreis neu gestartet. Der Port dazu muss in `ports:`
+erklaert sein.
+
+Und ein verjaehrter Satz, gefunden von Regel 19: `measure-route-walk.mjs`
+erklaerte, `/health` komme „aus einem Plugin". Es stand die ganze Zeit als
+`app.get` in `app.ts`, wo `servedRoutes()` es fand. Seit heute stimmt der Satz —
+aus einem anderen Grund, und das ist kein Grund, ihn stehen zu lassen.
+
+**Was die Sonde nicht sieht**, gehoert dazugesagt: eine Seite, die sie nie
+anfasst, kann verdorben sein, und keine bezahlbare Sonde saehe alle. Sie sieht,
+was ein Wachhund sehen soll — eine Datenbank, die nicht mehr antwortet.
+
 **B216 — drei Nachbarn waren entschieden, sieben fuhren einfach mit
 (2026-09-18).** `pico_home/config.yaml` schließt drei Verzeichnisse von den
 Sicherungen des Supervisors aus und schreibt zu jedem hin, warum: die beiden

@@ -61,7 +61,7 @@ The dashboard preserves Home Assistant ingress path prefixes when it calls Found
 | Endpoint | Purpose |
 | --- | --- |
 | `/` | Foundation diagnostics dashboard |
-| `/health` | App health check |
+| `/health` | App health check: the route `watchdog:` probes. It asks the database, so a Home whose listener is up and whose store has stopped answering reports `503` and the Supervisor restarts it. It has its own small concurrency budget, so ordinary traffic cannot make it look unhealthy. |
 | `/api/system/version` | Service and protocol version information |
 | `/api/system/status` | Diagnostic service, capability, Pico Home claim-state and database migration status |
 | `/api/events` | Development event list and limited event creation |
