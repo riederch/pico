@@ -4,6 +4,10 @@
 
 Accepted as the concept-level protection boundary for memory-store content at rest. It defines what must eventually be encrypted, how deletion is upgraded by crypto-shredding, and in which order content may become exposed or protected. It chooses no algorithms and implements no cryptography.
 
+Status note, 2026-09-18 (finding B202): **the state this ADR bounds has moved, and the section below still describes the one it was written in.** Three of its bullets said, in the present tense, that there is *no encryption, no access model and no membership* behind a privacy domain. All three exist now, under later ADRs rather than this one: `apps/core/src/memory-content-crypto.ts` with the `memory_key_envelope` family, domain read grants with their own lifecycle table beside 62 classified routes, and the three `pico_home_membership*` tables.
+
+What stays true is narrower than it reads. Memory content **is** plaintext at rest in a Home where nobody switched encryption on, and that is the default: with nothing configured, boot reads `holdsEncryptedMemoryContent()`, which is false for a fresh house. So "plaintext at rest" is a statement about an unchanged Home, not about the store - and `deleteInDomain` is storage removal in exactly that Home, while a domain shred destroys key material in one where encryption is on. The bullets below are kept as the snapshot they were; this note is what they now mean.
+
 ## Context
 
 ADR 0016 keeps cryptography a non-goal until a documented threat model, key lifecycle, reviewed primitives, canonicalization and test vectors exist.
@@ -16,7 +20,7 @@ ADR 0032 defines the key envelope schema family conceptually; ADR 0033 defines k
 
 ADR 0068 and ADR 0069 built the deleteable memory store and the `memory.recorded`/`memory.tombstone` flow. The store works end to end for foundation data.
 
-The honest current state, which this ADR exists to bound:
+The honest current state **at the time of writing**, which this ADR exists to bound (see the 2026-09-18 status note above for what has since changed):
 
 - `memory_item.content` is **plaintext at rest** in SQLite.
 - `MemoryStore.deleteInDomain` removes content from the live database. That is storage deletion, **not crypto-shredding**: SQLite backups created by the backup flow can still contain plaintext copies of deleted content, and restoring an old backup can resurrect items that were deleted later.

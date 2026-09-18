@@ -912,6 +912,58 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B202 — der Grenzstein beschreibt ein Haus, das es nicht mehr gibt
+(2026-09-18).** B200 und B201 fanden zwei Zusicherungen, die an
+Übersetzungsschaltern einer fremden Bibliothek hingen. Der nächste Schalter,
+den niemand setzt, ist `secure_delete` — aus, also bleiben die Bytes gelöschter
+Zeilen in der Datei stehen, bis etwas sie überschreibt. Für ein Produkt, dessen
+ganze Geschichte Löschen ist, ist das die richtige Frage. **Wo steht, was
+Löschen hier bedeutet?** In ADR 0070.
+
+**Und dort steht ein Haus, das es nicht mehr gibt.** Der Abschnitt „The honest
+current state, which this ADR exists to bound" nennt im Präsens drei
+Abwesenheiten:
+
+> `privacyDomain` scopes store access programmatically, but there is **no
+> encryption, no access model and no membership** behind it.
+
+Alle drei existieren, und zwar unter späteren ADRs als diesem:
+
+| Behauptet fehlend | Gemessen vorhanden |
+|---|---|
+| Verschlüsselung | `apps/core/src/memory-content-crypto.ts`, `memory_key_envelope` |
+| Zugriffsmodell | `pico_home_domain_read_grant` samt Lebenszyklus, 62 klassifizierte Routen |
+| Mitgliedschaft | `pico_home_membership`, `_credential`, `_lifecycle` |
+
+**Die Statusmatrix hat recht** und führt ADR 0070 als `partially implemented`.
+Falsch ist allein die Prosa des ADR selbst — und zwar an der Stelle, die
+jemand liest, der wissen will, was ein Schredder in diesem Haus überhaupt
+leisten kann.
+
+**Ein vierter Satz bleibt wahr und liest sich falscher, als er ist.** „Memory
+content ist Klartext im Ruhezustand" gilt für ein Home, in dem niemand die
+Verschlüsselung eingeschaltet hat — und das ist die Voreinstellung: ohne
+Konfiguration liest der Start `holdsEncryptedMemoryContent()`, und das ist bei
+einem frischen Haus `false`. Der Satz stimmt also über ein *unverändertes*
+Home, nicht über den Store. Derselbe Unterschied trägt den Satz daneben:
+`deleteInDomain` ist Speicherlöschen dort, wo nichts verschlüsselt ist, und in
+einem Haus mit eingeschalteter Verschlüsselung nimmt ein Domänenschredder
+Schlüsselmaterial mit. **Ein Satz ohne seine Bedingung ist in der Hälfte der
+Häuser falsch.**
+
+**Berichtigt, ohne die Geschichte zu nehmen:** eine datierte Statusnotiz sagt,
+was sich bewegt hat und was die Aufzählung heute bedeutet; die Aufzählung
+selbst bleibt als die Momentaufnahme stehen, die sie war, und ihre
+Zwischenüberschrift sagt das jetzt.
+
+**Kein Tor dazu, und das ist kein Versäumnis.** Die Regel in `docs:check`, die
+Abwesenheitssätze prüft, braucht einen Namen in Backticks — *„there is no
+encryption"* nennt keinen. Das ist genau die Grenze, die B197 schon gemessen
+und aufgeschrieben hat, und ein breiteres Muster wäre die Abhilfe, die dort
+verworfen wurde. Was diesen Fall gefunden hat, war kein Prüfer, sondern eine
+Frage an das Produkt: *was bedeutet Löschen hier?* — der siebte verjährte Satz
+dieser Runde, und der erste, den ich beim Gehen und nicht beim Messen fand.
+
 **B201 — dieselbe Stille, einmal zugunsten und einmal zulasten (2026-09-18).**
 B200 fand eine Zusicherung, die an einem Übersetzungsschalter einer
 eingebetteten C-Bibliothek hing. Drei Zeilen weiter oben im selben Konstruktor
