@@ -196,6 +196,16 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+14. **Wer eine Abwesenheit prueft, nimmt die Erklaerung aus dem Gegenstand.**
+   Am 2026-09-18 sollte `surfaces:check` beweisen, dass eine Oberflaeche keinen
+   Aufrufer hat, und suchte das Wort in ihrer Schicht - dort steht aber auch
+   ihre eigene `export function`, also fand es sich selbst und erklaerte jedes
+   Argument fuer veraltet (B194). Was einer ungebauten Flaeche fehlt, ist ein
+   *Aufrufer*, nicht ein *Wort*; die erklaerende Datei gehoert aus dem Korpus,
+   und zwar benannt, damit ihr Umzug die Frage neu stellt. Das ist B166s
+   Zwilling von innen: ein Pruefer, der seinen eigenen Gegenstand mitzaehlt,
+   misst sich selbst.
+
 13. **Ein Test, der mit der falschen Meldung faellt, ist ein Fund.** Am
    2026-09-17 habe ich einen Fall fuer erreichbar gehalten und den Test dafuer
    geschrieben; er fiel - aber an einem *anderen* Waechter, den ich nicht

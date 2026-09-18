@@ -912,6 +912,89 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B194 — vierzehn Versprechen, und sechs davon gibt es nicht (2026-09-18).**
+B193 endete mit dem Rat, den es selbst gefunden hatte: **geh eine Person durch
+ihre Handlung, nicht eine Liste durch ihre Beschriftungen.** B192 ging dem
+Löschen nach; das Spiegelbild ist das Lesen — *was kann eine Person von dem
+zurücklesen, was ihr Zuhause über sie hält?* —, und der empfindlichste Fall ist
+der Standort.
+
+**Die Handlung, ganz gegangen.** Eine Person stimmt der Aufzeichnung für
+`spatial-recall` zu; ohne diese Zustimmung antwortet der Home
+`capture_not_consented`. Ihr Gerät misst und schickt: `home.observations.submit`.
+Der Home schreibt nach `pico_observation`, kehrt nach Alter, löscht beim
+Domänenschredder. **Und dann sieht sie niemand.** `picoObservationWindow` ist
+der einzige Leser der Tabelle im ganzen Baum, und sein einziger Aufrufer ist
+sein eigener Test.
+
+Daneben liegt ein **zweiter Entwurf für dieselbe Sache**: ADR 0126 P3 lässt das
+Gerät selbst ableiten und schickt nur das Ergebnis
+(`home.observation.derived.keep`) — „und der Home sieht die Messungen nie",
+sagt der Kommentar. Auch dieser Weg endet im Nichts:
+`condensePicoCompanionObservations` und
+`keepPicoCompanionDerivedObservation` rufen nur Tests,
+`PicoSpatialCapturePorts` hat nirgends eine Implementierung, und
+`picoParkingAnswer` — die Funktion, die aus der Ableitung den Satz macht, den
+ein Mensch liest — hat überhaupt keinen Aufrufer. Zwei Entwürfe, beide
+unfertig, und der eine schreibt dabei Standortdaten weg.
+
+**Und dann die Liste, die das hätte sagen sollen.** Jedes Modul erklärt in
+seinem Manifest, was eine Person erreichen kann. `spatial-recall` nennt drei
+Sätze. Gemessen über alle vier ausgelieferten Module, vierzehn Sätze:
+
+| Modul | Sätze | davon gebaut |
+|---|---|---|
+| calendar | 5 | 5 |
+| depot | 5 | 3 |
+| home-assistant | 1 | 0 |
+| spatial-recall | 3 | 0 |
+
+**Sechs von vierzehn nennen etwas, das es nicht gibt** — und zwei von vier
+Modulen haben keinen einzigen wahren Satz. `depot` erscheint in keiner Quelle
+von `apps/web/src`, obwohl es zwei Dashboard-Oberflächen verspricht.
+`recordPicoConnectorObservations` ist die *einzige* Oberfläche von
+`home-assistant`, und ihr einziger Aufrufer ist ihr Test: was ausgeliefert
+wird, ist ein Transport ohne etwas dahinter. `parking` erscheint in keiner
+Quelle des Homes.
+
+**Warum das niemand gemerkt hat.** `parsePicoModuleManifest` prüft, dass
+`surfaces` eine nichtleere Liste verschiedener Zeichenketten ist — die Form,
+nie den Inhalt. Und `PicoModuleView`, was vom Modul zur Person reist, trägt
+`surfaces` gar nicht: die Liste erreicht auch keinen Menschen, der
+widersprechen könnte. Eine Behauptung, die weder ein Prüfer noch ein Leser je
+sieht, ist eine Behauptung, die nur altern kann.
+
+**Gebaut: `surfaces:check`**, der 56. Kettenschritt, hinter `module:check`,
+weil er dieselben gebauten Manifeste liest, die das Produkt lädt. Das Präfix
+eines Satzes sagt, wo zu suchen ist — vier Schichten, und ein unbekanntes
+Präfix fällt, statt durchzugehen. `Pico Link: <operation>` braucht keinen
+Eintrag: der Name steht im Satz, und der Prüfer sucht sein `case` im Home.
+Alles andere nennt einen Anker oder ist als **unbuilt** begründet, und ein
+unbuilt-Eintrag ist *geprüft, nicht geglaubt*: er nennt ein Wort, das in seiner
+Schicht abwesend bleiben muss. Wer die Oberfläche baut, bringt das Argument zu
+Fall, statt es zu überleben.
+
+Fünf Pflanzungen, fünf verschiedene Sätze: ein umformulierter Satz (zweimal —
+der Satz ohne Ort *und* der verwaiste Eintrag), ein `Android widget:`-Präfix,
+eine Link-Operation, die der Home nicht beantwortet, ein umbenannter Anker, ein
+aufgetauchter Aufrufer. Der erste Lauf fiel von selbst, und zu Recht: das
+gesuchte Wort war eine Funktion, die **in ihrer eigenen Schicht definiert** ist
+und sich darum selbst fand. Was einer unbuilt-Oberfläche fehlt, ist ein
+*Aufrufer*, nicht ein Wort — `except` nennt die erklärende Datei, und eine
+`except`, die ins Leere zeigt, ist selbst ein Fehlschlag, damit ein Umzug der
+Erklärung die Frage neu stellt statt sie zu verstecken.
+
+**Was der Prüfer nicht kann**, und es steht in seinem Kommentar: einen Satz
+lesen. Ob eine Tabelle wirklich den Commit zeigt, weiß kein Skript. Ob das Wort
+`depot` im Dashboard überhaupt vorkommt, weiß es — und das hat alle sechs
+gefunden.
+
+**Die Lehre**, und sie ist der Zwilling von B166 (*ein Prüfer ohne Gegenstand
+ist kaputt und nicht sauber*): **ein Gegenstand ohne Prüfer ist ein Versprechen,
+und Versprechen altern in die Unwahrheit.** Vierzehn Sätze standen da, seit die
+Module geschrieben wurden; sechs waren nie wahr, und nichts im Baum hätte je
+widersprochen.
+
 **B193 — Ein Zitat ist kein Beweis, und sein Fehlen keine Lücke
 (2026-09-18).** B192 fand eine entschiedene Eigenschaft ohne Tür: ADR 0078 K9
 beschreibt die host-lokale Zerstörung einer Reader-Custody-Domäne, und es gibt
