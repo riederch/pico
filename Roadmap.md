@@ -912,6 +912,58 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B191 — Zwei Flächen, und nur eine fasst ihre Ablehnungen in Sätze
+(2026-09-18).** B190 endete mit dem Satz, dass dieser Baum zwei Paare hat, bei
+denen ein Prüfer nur eines kennen könnte — zwei Speicher und zwei Flächen. Die
+nächste Frage war die an das Produkt statt an die Prüfer: **sieht eine Person je
+einen rohen Ablehnungsnamen?**
+
+**Die Schale antwortet vorbildlich.** `contract.ts` hält eine Tabelle
+gesprochener Sätze, und ihr Rückfall ist selbst ein Satz: wer eine unbekannte
+`invalid_*`-Ablehnung auslöst, liest *„Pico refused what this window sent
+(…). That is a defect in Pico and not something you did; nothing was
+changed."* Der Name steht darin — aber **eingefasst**, mit der Auskunft, wessen
+Fehler es ist. Ihr eigener Kommentar sagt warum: *„sonst läse eine Person
+`not_a_reader` und wüsste nicht, ob sie etwas falsch gemacht hat oder ob Pico
+etwas nicht darf."*
+
+**`apps/web` hat dieselbe Frage anders beantwortet, und zwar an vier Stellen
+richtig und sonst gar nicht.** Vier benannte Fehlerklassen fangen vier
+Ablehnungen ab und machen Sätze daraus — `PicoModuleHasDependentsError` sagt
+sogar, *welches* Modul das andere festhält. Alles daneben geht durch
+`formatUnknownError`, und das ist `error.message` unverändert. Von dort führt
+ein gerader Weg: `state.errorMessage` → `errorBanner.textContent`.
+
+**Die Kette ist nachgegangen, nicht vermutet.** `POST /api/memory/encryption`
+antwortet `400 { error: 'invalid_memory_encryption_decision' }`;
+`describeFailure` nimmt `data.error` und gibt ihn wörtlich zurück; der Zeichner
+schreibt ihn ins Banner. Eine Person sieht
+**`invalid_memory_encryption_decision`** und weiß nicht, ob sie etwas falsch
+gemacht hat.
+
+Gezählt von der Seite der Fläche: `apps/web` ruft **18 Routen**, davon können
+**vier** einen rohen Namen im `error`-Feld liefern, und es sind **acht
+verschiedene** Namen. Eine davon fängt eine Klasse ab; **sieben erreichen das
+Banner uneingefasst**:
+
+| Route | roh |
+| --- | --- |
+| `POST /api/home/modules` | `invalid_authority_list_arguments`, `invalid_authority_submit_arguments`, `no_founding_record`, `unknown_authority_resource` |
+| `POST /api/model/providers/:entryId/narrowing` | `pico_model_provider_entry_not_found` |
+| `POST /api/link/relay-identity` | `invalid_pico_link_relay_identity` |
+| `POST /api/memory/encryption` | `invalid_memory_encryption_decision` |
+
+**Das Schärfste steht in einem einzigen Handler.** Beim Abschalten eines Moduls
+wird `pico_module_has_active_dependents` zu *„… stays on: … depends on it.
+Switch those off first."* — und die vier Geschwister derselben Route fallen
+durch `formatUnknownError`. Im selben `catch`, drei Zeilen auseinander: eine
+Ablehnung mit Stimme, vier ohne.
+
+Das ist keine vergessene Fläche, sondern eine halb erledigte: wer die vier
+Klassen geschrieben hat, hat die Frage gesehen und für vier Fälle beantwortet.
+Wie die anderen klingen, ist eine Entscheidung über **Worte für eine Person**
+und steht deshalb in `.agent-context.md` und nicht hier.
+
 **B190 — Die Jagd nach dem schmalen Gegenstand, und sie ist zu Ende
 (2026-09-17).** B187 und B189 fanden dreimal dieselbe Krankheit: ein Prüfer,
 dessen **Gegenstand schmaler ist als seine Aussage**. Zweimal war es meins,
