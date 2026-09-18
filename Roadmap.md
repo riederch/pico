@@ -949,6 +949,17 @@ spricht. Ein grüner Lauf beweist von einem neuen Tor **gar nichts** — er
 beweist nur, dass der Gegenstand heute in Ordnung ist, und das war er auch
 vorher schon.
 
+**Nachgetragen, weil der Baum es besser gesagt hat als ich.** Die Frage, ob ein
+Tor wie dieses nicht maschinell zu fangen wäre, führt zu
+`check-vacuous-gates.mjs` — und das benennt die Grenze selbst: *„A check that
+reads a file it names and dies because the file is not there fails closed …
+and this cannot tell that apart from a guard. Proving that a check guards
+rather than crashes is **the job of the plant beside it**, in the check's own
+file."* Mein kaputtes Tor wäre also dort durchgelaufen, und das ist kein
+Versäumnis jenes Prüfers, sondern seine ausgesprochene Arbeitsteilung. Die
+Praxis, jedes Tor zu pflanzen, **ist** die entworfene Antwort auf genau diese
+Lücke — und ich hätte sie hier beinahe übersprungen.
+
 **B214 — derselbe Fehler wie B121, im Kern statt im Companion (2026-09-18).**
 B213 legte vier Abschriften der atomaren Schreibfolge zusammen und endete mit
 dem Satz, eine Abschrift sei gefährlich, wenn sie die **Prüfung** nicht miterbt.
