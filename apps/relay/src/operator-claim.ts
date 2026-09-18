@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { dirname, join } from 'node:path';
 
 /**
  * ADR 0154 RO2. The one-time code that turns an unclaimed relay into somebody's.
@@ -80,4 +81,18 @@ export function picoRelayCredentialDigest(credential: string): string {
 
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+/**
+ * Where a pending operator reset is announced (ADR 0154 RO8).
+ *
+ * The Home has had this as a named function since it was written
+ * (`operatorResetMarkerPath`); the relay joined the path together at the one
+ * place that reads it. Finding B216 is why it has a name now: a marker built
+ * inside an entrypoint is invisible to anything that asks the product where it
+ * puts things, and this one file beside the database turned out to be the one
+ * neighbour no backup rule had ever decided about.
+ */
+export function picoRelayOperatorResetMarkerPath(databasePath: string): string {
+  return join(dirname(databasePath), 'operator-reset');
 }

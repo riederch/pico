@@ -1,9 +1,10 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { picoRelayOperatorResetMarkerPath } from './operator-claim.js';
 
 /**
  * ADR 0153 PK3 with ADR 0154 - the relay as the thing an operator installs.
@@ -314,6 +315,53 @@ describe('the relay process an operator installs', () => {
      */
     expect(second.lines().map((line) => line.event)).not.toContain('relay_unclaimed');
     await second.stop();
+  }, 60_000);
+
+  it('spends a pending operator reset exactly once', async () => {
+    /**
+     * ADR 0154 RO8 with finding B216. The escape from a lost operator
+     * credential is a file beside the database and a restart, and nothing ran
+     * it - `main.ts` had no test at all until this file, and afterwards no
+     * case for these four lines.
+     *
+     * **Once is the whole property.** The marker is deleted the moment it is
+     * read, so somebody who spends one and restarts again keeps the operator
+     * they just set. It is also why `pico_relay/config.yaml` keeps the file
+     * out of Supervisor backups since B216: a restored marker would perform
+     * the reset a second time, on a boot nobody connected to it.
+     */
+    const dir = mkdtempSync(join(tmpdir(), 'pico-relay-reset-'));
+    dirs.push(dir);
+    const databasePath = join(dir, 'relay.sqlite');
+
+    const first = spawnRelay(databasePath);
+    const unclaimed = await first.waitFor('relay_unclaimed');
+    expect((await post(first.operatorPort, '/operator/claim', {
+      claimCode: unclaimed.claimCode as string,
+    })).status).toBe(200);
+    await first.stop();
+
+    // The act itself: a file, by hand, beside the database. Nothing else.
+    const marker = picoRelayOperatorResetMarkerPath(databasePath);
+    writeFileSync(marker, '');
+
+    const second = spawnRelay(databasePath);
+    expect((await second.waitFor('relay_operator_reset')).marker).toBe(marker);
+    // Forgotten means claimable again, which is what the escape is for.
+    const reclaimed = await second.waitFor('relay_unclaimed');
+    expect(existsSync(marker)).toBe(false);
+    expect((await post(second.operatorPort, '/operator/claim', {
+      claimCode: reclaimed.claimCode as string,
+    })).status).toBe(200);
+    await second.stop();
+
+    // And a third boot keeps what the second one set: spent is spent.
+    const third = spawnRelay(databasePath);
+    await third.waitFor('relay_listening');
+    const events = third.lines().map((line) => line.event);
+    expect(events).not.toContain('relay_operator_reset');
+    expect(events).not.toContain('relay_unclaimed');
+    await third.stop();
   }, 60_000);
 
   it('spends the unauthenticated budget before the operator’s', async () => {

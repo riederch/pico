@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { loadPicoRelayConfig } from './config.js';
 import { applyPicoRelayHomeAssistantOptions } from './home-assistant-options.js';
 import { startPicoRelayHealthListener, type PicoRelayHealthListener } from './health.js';
-import { PicoRelayClaimCode } from './operator-claim.js';
+import { PicoRelayClaimCode, picoRelayOperatorResetMarkerPath } from './operator-claim.js';
 import { startPicoRelayOperatorListener, type PicoRelayOperatorListener } from './operator.js';
 import { startPicoRelayServer, type PicoRelayServer } from './server.js';
 import { PicoRelayStore } from './store.js';
@@ -127,7 +127,7 @@ try {
    * host. The accounts stay; losing the administration credential is not a
    * reason to cut off every customer.
    */
-  const resetMarker = join(dirname(config.databasePath), 'operator-reset');
+  const resetMarker = picoRelayOperatorResetMarkerPath(config.databasePath);
   if (existsSync(resetMarker)) {
     store.forgetOperator();
     rmSync(resetMarker, { force: true });
