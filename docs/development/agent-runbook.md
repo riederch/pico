@@ -196,6 +196,15 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+17. **Ein Messgeraet ist gerichtet.** Am 2026-09-18 zeigte die Zitiergewohnheit
+   dieses Baums - eine Datei, die eine Entscheidung umsetzt, nennt ihr ADR im
+   Doku-Kommentar -, dass eine `concept-only`-Zeile mit elf zitierenden Dateien
+   ein Widerspruch ist (B197). Das Spiegelbild lag nahe und traegt nicht: von
+   36 `implemented`-Zeilen haben vier keine Nennung, und keine davon ist ein
+   Fund - drei zitieren ihr ADR in den Beschreibungen ihrer Tests, beim vierten
+   ist der Beleg ein Dokument. Wer aus einem Widerspruch ein Tor baut, prueft
+   zuerst, ob die Gegenrichtung ueberhaupt etwas behauptet.
+
 16. **Ein verjaehrter Satz ist ein richtiger Name mit einem falschen Verb.**
    Am 2026-09-18 waren in einer Runde vier Saetze still falsch geworden, und
    ich habe beide Richtungen vermessen (B195). Nach *Namen* gesucht: 19

@@ -912,6 +912,244 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B199 — der vierte Gang, und er geht leer aus (2026-09-18).** B192 ging dem
+Löschen nach und fand einen Raum, den man anlegen, aber nicht beenden kann.
+B194 ging dem Lesen nach und fand Standortmessungen, die niemand ansieht. B197
+ging dem Mitnehmen nach. Der vierte ist **Zurücknehmen**: *für jede Zustimmung,
+die eine Person gibt — gibt es den Weg zurück?*
+
+**Der Korpus aus dem Schema, nicht aus dem Kopf** (Regel 7): jede Tabelle, die
+eine Zustimmung hält. Es sind zehn, und jede hat einen Rückweg.
+
+| Zustimmung | Weg zurück |
+|---|---|
+| `pico_home_domain_read_grant` | eigene Lebenszyklustabelle, `POST /api/home/domain-read-grant-lifecycle` |
+| `pico_reader_custody_reader_grant` | eigene Lebenszyklustabelle |
+| `pico_reader_custody_writer_grant` | eigene Lebenszyklustabelle |
+| `pico_model_provider_consent` | `home.model.provider.decision.revoke` und `DELETE /api/model/providers/:entryId/decision` |
+| `pico_module_effect_consent` | gelöscht, sobald das Modul ausgeht |
+| `pico_rule_decision` | `home.rule.forget`, ein eigener Vorgang |
+| `pico_memory_encryption_decision` | eine Zeile, eine Route, beide Werte |
+
+**Einer sah nach einer Lücke aus, und ist keine.**
+`pico_module_effect_consent` hat keine `revoke`-Operation und keine
+Lebenszyklustabelle — die beiden Formen, in denen dieser Baum sonst eine
+Rücknahme schreibt. Nachgemessen: die Tabelle wird gelesen
+(`app.ts:1918`) und **durchgesetzt** (`app.ts:4810` hält eine Wirkungsanfrage
+gegen sie), und `setPicoModuleActivation` löscht ihre Zeilen, sobald eine
+Änderung `active: false` trägt. Es gibt keine eigene Tür, weil das Abschalten
+des Moduls die Rücknahme **ist** — eine Zustimmung, die nur besteht, solange
+das besteht, wofür sie gilt.
+
+**Das Ergebnis ist ein Negativbefund, und der erste dieser vier Gänge.** Drei
+fanden eine Lücke; dieser findet keine. Aufgeschrieben, damit ihn niemand noch
+einmal geht.
+
+**Und der Grund, warum er leer ausgeht, ist der interessante Teil.** Jede
+dieser sieben Zustimmungen steht **neben dem Ding, das sie erlaubt**, und beide
+werden in derselben Transaktion geändert: die Wirkungszustimmung im selben
+Aufruf wie die Aktivierung, der Lesezugang in derselben Lebenszeile wie sein
+Widerruf, die Anbieterentscheidung unter derselben Kennung wie ihr `revoke`.
+Man kann die Rücknahme nicht vergessen, weil es keinen Ort gibt, an dem man sie
+getrennt hätte schreiben müssen.
+
+Die drei Lücken der anderen Gänge liegen genau spiegelbildlich: ein Raum, dessen
+Schlüssel im Vault liegt und dessen Tür im Home fehlt; eine Tabelle, deren
+Schreiber im Home steht und deren Leser nirgends; sechs Oberflächen, die im
+Manifest stehen und im Code nicht. **Was zusammen geschrieben wird, wird
+zusammen zurückgenommen — und was auseinanderliegt, fällt auseinander.** Das
+ist derselbe Satz, den dieser Baum über doppelte Wahrheiten schon hat, von der
+anderen Seite gelesen.
+
+**B198 — ein Name in einem Dokument ist eine Tür, die jemand sucht
+(2026-09-18).** B197 berichtigte eine Spalte der Statusmatrix. Die Spalte
+daneben nennt Dateien, und die sind längst gehalten: `docs:check` prüft jeden
+Backtick-Pfad mit Wurzelverzeichnis und Endung gegen den Bestand — 1.269 Stück
+— mit einer Begründung, die genau hierher gehört: *„a path in it is a pointer
+somebody follows rather than a record of where something was."* Die Frage
+schreibt sich von selbst: **was nennt ein Dokument sonst noch, dem jemand
+folgt?**
+
+**Und dann dieselbe Frage an die Nachbarspalte, mit einem unangenehmen
+Ergebnis.** Die Belegspalte der Matrix nennt Dateien, und die sind gehalten:
+`docs:check` prüft jeden Backtick-Pfad mit Wurzelverzeichnis und Endung gegen
+den Bestand — 1.269 Stück — mit einer Begründung, die genau hierher gehört:
+*„a path in it is a pointer somebody follows rather than a record of where
+something was."*
+
+**Ein Operationsname ist derselbe Zeiger eine Schicht tiefer, und ihn hielt
+nichts.** Gemessen über alle verzeichneten Dokumente: **256 Nennungen von 57
+verschiedenen Pico-Link-Operationen.** Drei fallen aus der geschlossenen Liste
+des Protokolls.
+
+Einer ist ein Fehlalarm der guten Sorte: *„Kein `home.rules.read` daneben"* —
+der Satz nennt die Abwesenheit, und das ist der Grund, warum er den Namen
+schreibt.
+
+**Die anderen zwei stehen in `Roadmap.md`** — in diesem Dokument, das jeden
+Befund über verjährte Sätze aufschreibt. *„Zwei Vorgänge
+(`home.reader_key.freshness.submit`, `home.reader_custody.reader_grant.submit`),
+ein Knopf im Fenster"*, im Präsens. Git sagt beides: die Türen kamen mit
+`93f6ace3` und gingen mit `08bf8603` — *„drei Türen entfernt, die es schon
+gab"* —, weil Befund **B30** maß, dass `home.authority.submit` die Ressourcen
+`reader_key_freshness_checkpoint` und `reader_custody_reader_grant` längst
+trug. Der Eintrag behält seine Geschichte und bekommt sein Verb zurück.
+
+**Gebaut: die Geschwisterregel zur Pfadprüfung.** Korpus ist die geschlossene
+Liste des Protokolls, nicht eine zweite hier; Gegenstand ist jeder
+Operationsname in Backticks in einem verzeichneten Dokument. Drei Argumente,
+und wieder in beide Richtungen geprüft: ein Argument für eine Nennung, die
+verschwunden ist, fällt — *„one more sentence nobody reads"* —, und eines für
+eine Operation, die **zurückkommt**, fällt auch. Drei Pflanzungen, drei
+verschiedene Sätze.
+
+**Und eine vierte Probe, die ich wieder nicht gepflanzt habe.** Der erste volle
+Lauf fiel — an diesem Absatz. Mein eigener Text hatte die Gestalt einer
+Operation mit Kleinbuchstaben ausgeschrieben, und die Regel las sie als Tür. Das ist kein Fehlalarm, sondern die
+richtige Antwort auf eine falsche Schreibweise: eine Gestalt gehört in spitze
+Klammern, wie `surfaces:check` es nebenan schon macht. Ein Tor über Prosa fängt
+auch die Prosa, die es beschreibt — und das ist die billigste Art, zu erfahren,
+dass es wirklich liest.
+
+**Das Geschwister dazu habe ich gemessen und nicht gebaut.** Ereignistypen
+haben dieselbe geschlossene Liste — 48 Namen —, und 448 Nennungen stehen in den
+Dokumenten. Sechzehn fallen heraus, und **keine ist ein Fund**: sieben sind
+Feldpfade in eine Nutzlast hinein (`device.registered.payload`), einer ist ein
+Dateiname, `home.set_state` ist ein MCP-Werkzeug aus ADR 0144, `approval.*` ist
+die Sprache des Haltekanals, und `action.completed` nennen ADR 0026 und 0141
+ausdrücklich als *entfernte Doppelung*. Ein Tor dafür wäre lauter Sonderfälle
+ohne Fang — Regel 17 an der eigenen Arbeit: erst messen, ob die Richtung
+überhaupt etwas behauptet.
+
+**Die Lehre ist B197s Abhilfe, auf sie selbst angewandt**: nicht ein breiteres
+Muster, sondern ein anderer Gegenstand — die geschlossene Liste daneben. Und
+die Nebenauskunft ist die unbequemere: **das Befunddokument ist von seinen
+eigenen Befunden nicht ausgenommen.** Sechs verjährte Sätze hat diese Runde
+berichtigt, und die letzten zwei standen in der Datei, in der die ersten vier
+aufgeschrieben sind.
+
+**B197 — ein Konzept, das elf Produktdateien zitieren (2026-09-18).** B192 ging
+dem Löschen nach, B194 dem Lesen. Das dritte Grundrecht an eigenen Daten ist
+**Mitnehmen**, und dieses Produkt verspricht es in einem Satz: ADR 0003,
+*„**A person must be able to leave with their Pico.**"* Mit einem Ablauf in
+drei Schritten und einer Liste, was das Bündel enthält — persönliches
+Ereignisprotokoll, persönliches Gedächtnis, Geräteliste, Peer-Beziehungen,
+portable Einstellungen — und mit dem Satz daneben, der Serverbetreiber dürfe
+die Ausfuhr nicht blockieren.
+
+**Gemessen: es gibt sie nicht.** Keine Route, keine Link-Operation, kein
+Ereignistyp trägt das Wort. Die einzige Sicherung im Baum ist eine
+Migrationssicherung — eine Kopie, bevor ein riskanter Schritt läuft.
+
+**Und das ist kein Fund, denn der Baum weiß es.** ADR 0003 ist eine
+Konzeptnotiz, die Statusmatrix führt sie als `concept-only`. B193s Muster zum
+zweiten Mal: die ehrliche Aufzeichnung war schon da.
+
+**Aber die Lückenspalte derselben Zeile ist eine Abwesenheitsbehauptung im
+Präsens** — B196s dritte Klasse, die von nichts gehalten wird. Sie nannte
+sechs Dinge, die fehlten: getrennte Pico-Identitäten, personeneigene
+Schlüssel, Privatdomänen, verschlüsselte Ausfuhr, serverloser Betrieb,
+Migrationswege. **Drei davon sind gebaut**, und zwar sichtbar: vier
+`pico_identity_*`-Tabellen, neun Tabellen für Leser-Custody und Umschläge,
+`privacy_domain` quer durchs Schema mit eigenem Muster und eigener
+Schredderroute.
+
+**Also dieselbe Frage an alle neunzehn `concept-only`-Zeilen.** Das Messgerät
+ist die eigene Gewohnheit dieses Baums: eine Datei, die eine Entscheidung
+umsetzt, sagt es in ihrem Doku-Kommentar — *„ADR 0142 PE3"*, *„ADR 0078 K6"*.
+Wie viele Produktdateien zitieren also ein Konzept?
+
+Vierzehn der neunzehn: **null**. Die Matrix hat recht. Fünf haben ein bis vier
+Nennungen, und einzeln nachgesehen sind alle fünf echte Randbemerkungen — ein
+geborgter Begriff (`model-context.ts` sagt ausdrücklich, ADR 0002s
+Beziehungsstufen seien dort **nicht** modelliert), ein zitierter Stil (ADR
+0037s Auditform in der Schredderprüfspur), eine referenzierte Gestalt.
+
+**Und einer hat elf: ADR 0048**, „Model capability delegation and remote
+inference boundary". Seine Zeile sagte:
+
+- Statusspalte: **`concept-only`**
+- Belegspalte: **„None; docs only."**
+- Lückenspalte: *„Registry, job envelope schema, transport, provider
+  authentication, retention enforcement and runtime execution are **still
+  missing**."*
+
+**Alle sechs existieren**, jedes mit einem benennbaren Gegenstand:
+`model-provider-registry.ts` mit den drei Tabellen `pico_model_provider_entry`,
+`_consent` und `_credential`; die Umschlagschemata in
+`packages/protocol/src/model-job.ts` und `model-result.ts`; der Versand in
+`model-runtime.ts`, der Kommentar dort zitiert ADR 0118 O2 beim Namen; die
+Versiegelung in `model-provider-credential-crypto.ts` hinter
+`home.model.provider.credential.submit`; der Kehrlauf in `model-job-queue.ts`
+mit `POST /api/model/jobs/:jobId/keep`. Das ist kein Konzept, das ist ein
+Teilsystem.
+
+**Warum nichts es gefangen hat, und das ist die eigentliche Auskunft.**
+`docs:check` hat für genau diese Krankheit **schon zwei Regeln**. Die eine
+fängt eine Zeile, die sagt, *nichts* sei gebaut, und hält sie gegen ihre eigene
+Statusspalte. Die andere fängt Sätze der Form „`X` has no caller" und prüft sie
+gegen den Baum — sie wurde nach Befund B107 neu gebaut, weil sie an ihrem
+ersten Tag eine hohle Null meldete, und sie liest inzwischen alle 247
+verzeichneten Dokumente.
+
+Ihr Muster ist `has|have no [wort] caller(s)`, und sie braucht einen Namen in
+Backticks davor. *„are still missing"* trifft sie nicht. *„None; docs only"*
+trifft sie nicht. Ein Satz über ein **Teilsystem in Prosa**, ohne Backticks,
+ist für sie unsichtbar — nicht aus Nachlässigkeit, sondern weil ihre Kraft
+gerade aus dem benannten Symbol kommt.
+
+Das ist B195s Gestalt an der empfindlichsten Stelle: **das eine Tor, das Verben
+prüft, kennt ein Verb.**
+
+**Gebaut: eine dritte Regel in `docs:check`**, neben die beiden anderen, weil
+sie dieselbe Frage von der dritten Seite stellt. Eine `concept-only`-Zeile,
+deren ADR das Produkt zitiert, muss sagen, *was* die Zitate sind. Der Korpus
+ist abgeleitet — die Zeilen der Matrix, die Zitate aus dem Baum —, die sechs
+Randbemerkungen stehen als Argumente da, und geprüft wird in beide Richtungen:
+ein Argument für ein ADR, das niemand mehr zitiert, fällt ebenfalls, weil es
+dann eine Nennung beschreibt, die es nicht gibt.
+
+Drei Pflanzungen, drei verschiedene Sätze: eine gebaute Zeile auf
+`concept-only` zurückgestellt, ein Argument für ein ADR ohne Nennung, und die
+Statusspalte tree-weit umbenannt, so dass die Regel über nichts lief — den Fall
+fängt sie selbst ab, denn eine Null über keinem Korpus ist kein Befund (B166).
+
+**Und eine vierte, die ich nicht gepflanzt habe.** Die Berichtigung von ADR
+0048 auf `partially implemented` machte den Satz in der README falsch — *„Of
+157 architecture decisions, 36 are implemented and 87 partially"* —, und die
+Reifegradregel sagte es, bevor ich es merkte. Zwei Tore, die ineinandergreifen,
+sind mehr als zwei Tore.
+
+**Die Lehre**, und sie ist B196 eine Windung enger: ein Verb hat keinen Prüfer,
+und wo doch einer steht, kennt er die Formulierung, an der er gebaut wurde.
+**Wer ein Tor über Prosa baut, baut es über einen Satz, nicht über eine
+Aussage.** Die Abhilfe ist nicht ein breiteres Muster — es gibt unendlich viele
+Arten, „das gibt es nicht" zu sagen —, sondern ein *anderer Gegenstand*: nicht
+der Satz, sondern die Spalte daneben und das, was der Baum dazu tut.
+
+**Das Spiegelbild gemessen, und es trägt nicht.** Die naheliegende zweite Regel
+wäre: eine Zeile, die `implemented` sagt, und kein Produktcode zitiert das ADR.
+Gemessen: von 36 `implemented`-Zeilen haben **vier** keine Nennung — 0091,
+0092, 0095, 0135. Einzeln nachgesehen ist keine davon ein Fund. Drei zeigen auf
+`packages/sync`, und dieses Paket zitiert seine ADRs in den **Beschreibungen
+seiner Tests** (`describe('bounded reader-custody sync runs (ADR 0091)')`),
+nicht in den Produktkommentaren; beim vierten ist der Beleg ein
+Design-System-Dokument, wo eine Codenennung falsch wäre.
+
+**Also ist das Messgerät gerichtet, und das ist keine Schwäche, sondern seine
+Gestalt.** Die Zitiergewohnheit ist stark genug, dass *„concept-only, und elf
+Dateien zitieren es"* ein Widerspruch ist. Sie ist zu schwach, dass
+*„implemented, und niemand zitiert es"* irgendetwas wäre. Ein Instrument, das
+in eine Richtung einen Widerspruch beweist, beweist in der Gegenrichtung
+nichts.
+
+**Und dieselbe Frage an das eigene Muster gestellt**, weil ein Prüfer seinen
+eigenen Gegenstand nicht raten darf: dieser Baum zitiert auch bloß, ohne
+Präfix — `0142 PE3`, `0078 K6` —, und `ADR nnnn` fände das nicht. Nachgemessen
+über alle achtzehn `concept-only`-Zeilen: **keine** wird nur in der bloßen Form
+genannt. Heute ist die Lücke leer; dass sie existiert, steht hier, damit der
+nächste sie nicht neu entdecken muss.
+
 **B196 — ein verjährter Satz ist ein richtiger Name mit einem falschen Verb
 (2026-09-18).** Diese Runde hat fünf Sätze berichtigt, die einmal wahr waren:
 sechs Oberflächenversprechen in den Modulmanifesten (B194), die Statusnotiz von
@@ -8995,8 +9233,12 @@ entschieden: nur den ersten Fall bauen, den zweiten als benannte Lücke stehen
 lassen.
 
 Zwei Vorgänge (`home.reader_key.freshness.submit`,
-`home.reader_custody.reader_grant.submit`), ein Knopf im Fenster, und der
-Zugang gilt **ab jetzt und nicht rückwirkend** (ADR 0088s `from_version`) —
+`home.reader_custody.reader_grant.submit`) — beide gab es an diesem Tag und
+**seit `08bf8603` nicht mehr**: B30 maß, dass `home.authority.submit` die
+Ressourcen `reader_key_freshness_checkpoint` und
+`reader_custody_reader_grant` längst trug, und entfernte drei Türen, die es
+schon gab. Ein Knopf im Fenster, und der Zugang gilt **ab jetzt und nicht
+rückwirkend** (ADR 0088s `from_version`) —
 der Satz daneben sagt das, weil eine Person sonst später nach etwas suchte,
 das dort nie stehen wird.
 

@@ -2,6 +2,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { picoLinkDirectOperations } from '../packages/protocol/dist/index.js';
 
 /**
  * Documents that claim to enumerate something, checked against the something.
@@ -575,6 +576,162 @@ for (const row of trackedRows.split('\n')) {
 }
 
 /**
+ * An operation named in a document is a door somebody goes looking for.
+ *
+ * **The occasion** (2026-09-18, finding B198). The path rule above says a path
+ * in a document is "a pointer somebody follows rather than a record of where
+ * something was". A Pico Link operation name is the same pointer one layer in,
+ * and nothing held it: `Roadmap.md` named `home.reader_key.freshness.submit`
+ * and `home.reader_custody.reader_grant.submit` in the present tense, and both
+ * doors were removed by finding B30 when it measured that
+ * `home.authority.submit` already carried their resources.
+ *
+ * **The corpus is the protocol's closed list**, not a second one written here,
+ * and the subject is every `home.<area>.<verb>` in backticks across the tracked
+ * documents - 256 mentions of 57 distinct names on the day this was written.
+ *
+ * **What gets argued is a name said to be gone or absent.** This repository
+ * writes its history into its prose on purpose, so a removed door stays named;
+ * the argument is what keeps that from reading as a door that is there.
+ */
+const arguedOperationNames = [
+  ['home.reader_key.freshness.submit',
+    'removed in 08bf8603 and named in Roadmap.md as the door it was that day; '
+    + 'B30 measured that home.authority.submit already carried '
+    + 'reader_key_freshness_checkpoint'],
+  ['home.reader_custody.reader_grant.submit',
+    'the same removal, for reader_custody_reader_grant'],
+  ['home.rules.read',
+    'named in Roadmap.md as the operation deliberately NOT built beside the '
+    + 'rules decision - a named absence, and the sentence around it says so'],
+];
+const knownOperations = new Set(picoLinkDirectOperations);
+const arguedOperations = new Map(arguedOperationNames);
+let operationNamesChecked = 0;
+const operationsFound = new Set();
+for (const file of markdownFiles) {
+  readFileSync(join(repoRoot, file), 'utf8').split('\n').forEach((line, index) => {
+    for (const [, name] of line.matchAll(/`(home(?:\.[a-z][a-z0-9_]*){2,})`/gu)) {
+      operationNamesChecked += 1;
+      operationsFound.add(name);
+      if (knownOperations.has(name) || arguedOperations.has(name)) {
+        continue;
+      }
+      errors.push(
+        `${file}:${index + 1}: names the Pico Link operation \`${name}\`, and the protocol `
+        + 'does not list one. A document is read as the current state, so an operation in '
+        + 'it is a door somebody goes looking for. Name the operation that answers today, '
+        + 'or - if it was removed - argue it in scripts/check-docs-structure.mjs so the '
+        + 'history keeps its tense.',
+      );
+    }
+  });
+}
+for (const [name] of arguedOperationNames) {
+  if (!operationsFound.has(name)) {
+    errors.push(
+      `scripts/check-docs-structure.mjs argues the operation \`${name}\`, and no tracked `
+      + 'document names it. An argument for a mention that is gone is one more sentence '
+      + 'nobody reads.',
+    );
+  }
+  if (knownOperations.has(name)) {
+    errors.push(
+      `scripts/check-docs-structure.mjs argues \`${name}\` as removed or unbuilt, and the `
+      + 'protocol lists it. It came back; drop the argument.',
+    );
+  }
+}
+if (operationNamesChecked === 0) {
+  errors.push(
+    'no Pico Link operation name was found in any tracked document, so this rule compared '
+    + 'nothing. A null over no corpus is not a finding.',
+  );
+}
+
+/**
+ * A concept eleven product files cite is not a concept any more.
+ *
+ * **The occasion** (2026-09-18, finding B197). The rule above catches a row
+ * that says *nothing* is built. It cannot catch the quieter shape: a row whose
+ * status column still says `concept-only` while the tree has since built the
+ * thing. ADR 0048 was exactly that - status `concept-only`, evidence column
+ * "None; docs only", and a gap sentence naming six missing pieces (registry,
+ * job envelope schema, transport, provider authentication, retention
+ * enforcement, runtime execution). All six existed, and eleven product files
+ * cited the ADR.
+ *
+ * **The instrument is the tree citing the ADR by number**, which is this
+ * repository's own habit: a file that implements a decision says so in its doc
+ * comment. That habit is what makes the contradiction visible without reading
+ * either side.
+ *
+ * **A citation is not always an implementation**, so each concept-only ADR the
+ * product names is argued below with what the citation actually is - a
+ * borrowed term, a cited style, a referenced shape. Measured over all nineteen
+ * concept-only rows: fourteen are cited by nothing at all, and the matrix is
+ * right about them.
+ *
+ * Verified rather than trusted in both directions: an argument for an ADR the
+ * product has stopped citing fails too, because it is then describing a
+ * citation that is gone.
+ */
+const conceptOnlyCitations = [
+  ['0002', 'model-context.ts says its relationship tiers are deliberately NOT modelled '
+    + 'there - a citation that denies an implementation'],
+  ['0003', 'offline-floor.ts borrows the sovereignty argument for why an approved '
+    + 'message may wait for a route. The export path this ADR describes does not '
+    + 'exist, which is the part its own row must keep saying'],
+  ['0015', 'presence.ts names the Light Client shape to say what a presence record '
+    + 'may hold. The client tiers themselves are not built'],
+  ['0036', 'four mentions of the capability/connector boundary as a term - what a '
+    + 'capability name is, and that a request is not an action. The MCP boundary '
+    + 'itself is unbuilt'],
+  ['0037', 'the audit *style* - a decision and references, never content or key '
+    + 'material - cited by the shred audit and the operator records. Proactive '
+    + 'delegation and procurement are unbuilt'],
+  ['0045', 'link-mailbox.ts builds the shape a handover has to produce; the draft '
+    + 'membership credential this placeholder reserves is not issued anywhere'],
+];
+const arguedConceptOnly = new Map(conceptOnlyCitations);
+let conceptRowsChecked = 0;
+const citedBy = (number) => treeSources
+  .filter((source) => source.includes(`ADR ${number}`)).length;
+for (const row of trackedRows.split('\n')) {
+  if (!/^\| \[\d{4}\]/u.test(row)) {
+    continue;
+  }
+  const cells = row.split('|').map((cell) => cell.trim());
+  const number = cells[1].slice(1, 5);
+  if (cells[4] !== 'concept-only') {
+    continue;
+  }
+  conceptRowsChecked += 1;
+  const citations = citedBy(number);
+  const argued = arguedConceptOnly.has(number);
+  if (citations > 0 && !argued) {
+    errors.push(
+      `${matrixPath}: ADR ${number} is filed \`concept-only\` and ${citations} product `
+      + 'source file(s) cite it. Either the concept got built and the row is out of date, '
+      + 'or the citations are mentions rather than implementations - and then say which, '
+      + 'in scripts/check-docs-structure.mjs, so the next reader does not have to look.',
+    );
+  }
+  if (citations === 0 && argued) {
+    errors.push(
+      `${matrixPath}: ADR ${number} is argued as cited-but-unbuilt and no product source `
+      + 'cites it any more. The argument describes a citation that is gone.',
+    );
+  }
+}
+if (conceptRowsChecked === 0) {
+  errors.push(
+    `${matrixPath}: no row carries the status \`concept-only\`, so this rule compared `
+    + 'nothing. Either the column stopped using that word or the rows stopped being read.',
+  );
+}
+
+/**
  * Die drei Zahlen, mit denen die README den Reifegrad angibt.
  *
  * **Sie standen von Hand da und zwei von dreien waren falsch** (externes
@@ -686,7 +843,11 @@ console.log(
   + `${matrixPathsChecked} named files under a root directory, each real; `
   + `${claimsChecked} present-tense absence claims and `
   + `${statusClaimsChecked} nothing-is-built claims, each still true, read across `
-  + `${claimDocuments} tracked documents; the handoff is ${handoffLines} lines against the `
+  + `${claimDocuments} tracked documents; ${conceptRowsChecked} rows filed concept-only, of `
+  + `which ${arguedConceptOnly.size} are cited by product code and say what the citation is; `
+  + `${operationNamesChecked} mentions of ${operationsFound.size} Pico Link operations, `
+  + `${arguedOperations.size} of them argued as a door removed or never built; `
+  + `the handoff is ${handoffLines} lines against the `
   + `limit ${handoffPath} states; ${maturityPath} says ${maturityCounts.decisions} decisions, `
   + `${maturityCounts.implemented} implemented and ${maturityCounts.partially} partially, and `
   + 'the matrix counts the same).',
