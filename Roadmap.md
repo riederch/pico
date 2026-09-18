@@ -912,6 +912,69 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B216 — drei Nachbarn waren entschieden, sieben fuhren einfach mit
+(2026-09-18).** `pico_home/config.yaml` schließt drei Verzeichnisse von den
+Sicherungen des Supervisors aus und schreibt zu jedem hin, warum: die beiden
+Schlüsselspeicher (ADR 0072 R6) und den Wiederherstellungsanker (ADR 0110 R6).
+Drei gute Sätze. Die Frage, die keiner von ihnen beantwortet, ist: **wie viele
+gibt es zu entscheiden?**
+
+Gemessen: zehn. Der Kern legt neben seine Datenbank die beiden
+Schlüsselspeicher, den Anker, sein eigenes Sicherungsverzeichnis, die
+Depot-Arbeitskopien, den Lieferanten-Kratzplatz und drei Markendateien. Drei
+davon waren entschieden. Die anderen **sieben fuhren in jeder Sicherung mit**,
+nicht weil jemand das wollte, sondern weil nie jemand nachgesehen hat.
+
+Die schärfste Hälfte sind die drei Marken. `home-reset`,
+`recovery-anchor-reseed` und `operator-reset` sind Dateien, die eine Person von
+Hand anlegt, damit der nächste Start **einmal** etwas tut — den Home
+zurücksetzen, den Anker neu säen, die Betreiberkennung vergessen. Der Code sagt
+den Grund selbst: *„consumed on read so a reset happens once rather than on
+every restart"*. Eine Marke, die in eine Sicherung wandert, kommt beim
+Zurückspielen zurück, und der einmalige Akt geschieht ein zweites Mal, auf
+einem Start, den niemand damit verbunden hat. Das ist wörtlich die Begründung,
+die für `recovery-anchor` ein Verzeichnis weiter schon dasteht — sie galt nur
+nie für die Nachbarn.
+
+Die anderen vier sind leiser und nicht falsch: `backups` sind ganze Kopien der
+Datenbank (heute keine, weil keine Migration `requiresBackup` trägt, und nichts
+räumt sie je auf), `depots` sind nachladbare fremde Historie, `scratch` sagt es
+im Namen. Alle drei hätten die Sicherung wachsen lassen mit Dingen, die das
+Zurückspielen nicht braucht.
+
+**Das Messgerät fragt zweimal, und die zweite Frage hat sich sofort bezahlt
+gemacht.** `check-data-neighbours.mjs` lädt für jedes Add-on die Konfiguration
+mit dem Datenpfad, den sein Dockerfile setzt, und liest zurück, was das Produkt
+unter `/data` legt. Dann liest es dieselbe Menge noch einmal aus dem
+Syntaxbaum: jedes `join(dirname(…databasePath), …)` der App, über den AST und
+nicht über eine Regex (B188). Die beiden waren beim ersten Lauf **uneins** —
+das Relay baut seine `operator-reset`-Marke im Einstiegspunkt zusammen, also
+kennt keine geladene Konfiguration sie, und eine Prüfung, die nur das Produkt
+fragt, hätte dieses Add-on für vollständig erklärt. `pico_relay/config.yaml`
+hatte überhaupt keine Ausschlussliste.
+
+Gepflanzt und gebissen: `depots` aus der Liste genommen (der Nachbar ist
+unentschieden), einen neuen `join(dirname(databasePath), 'stray')` in den
+Quelltext gesetzt (die Quelle nennt etwas, das das Produkt nicht nennt), und
+`PICO_DATABASE_PATH` im Dockerfile umbenannt (wo die Daten liegen, ist
+unbekannt). Dazu ein vierter Schnitt am Produkt: das `rmSync` der Relay-Marke
+entfernt — der neue Prozesstest fällt beim dritten Start, weil die Marke ein
+zweites Mal gilt.
+
+Mitgenommen, weil es dazugehört: die Relay-Marke heißt jetzt
+`picoRelayOperatorResetMarkerPath` statt eines `join` mitten im Einstieg, und
+der Fluchtweg aus einer verlorenen Betreiberkennung (ADR 0154 RO8) wird zum
+ersten Mal gegangen — drei Starts gegen dieselbe Datenbank: claimen, Marke
+legen, neu claimen, und der dritte Start behält, was der zweite gesetzt hat.
+`pico_home/DOCS.md` und `docs/release/upgrade-contract.md` sagten beide noch
+die alte, kürzere Wahrheit über `backup_exclude`; Regel 19 hat sie gefunden.
+
+**Regel 20 für das Handbuch: wer misst, was ein Programm neben seine Daten
+legt, fragt den Lauf *und* den Quelltext.** Der Lauf kennt nur, was durch eine
+Konfiguration geht; der Quelltext kennt auch, was ein Einstiegspunkt sich
+selbst zusammenbaut. Hier war genau ein Pfad nur im zweiten sichtbar, und es
+war der eines ganzen Add-ons.
+
 **B215 — ein Tor, das grün war, weil es nie etwas zu sagen hatte
 (2026-09-18).** B214 endete an `narrowToOwner`, dem geprüften Helfer für
 Dateirechte. Beim Hinsehen fiel auf: **er steht zweimal im Baum.**

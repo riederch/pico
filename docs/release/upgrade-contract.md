@@ -140,6 +140,10 @@ Honest limits, because rollback is where the exclusions bite.
   key store is gone leaves `domain_encrypted` memory permanently unreadable —
   that is crypto-shredding working as intended, and it is also the largest
   operational hazard in the current design.
+- **Reset markers**: `home-reset`, `recovery-anchor-reseed` and `operator-reset`
+  are files a person creates by hand so that the next start does something
+  once, and each is deleted the moment it is read. They are `backup_exclude`d
+  (B216), so **a restore never re-performs a reset somebody already spent.**
 - **Add-on options**: not versioned at all. Rolling back the add-on does not
   roll back stored options.
 

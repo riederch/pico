@@ -196,6 +196,18 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+20. **Wer misst, was ein Programm neben seine Daten legt, fragt den Lauf und
+   den Quelltext.** Am 2026-09-18 sollte ein Tor zaehlen, was die beiden
+   Add-ons unter `/data` ablegen (B216). Der Lauf antwortet sauber: die
+   Konfiguration mit dem Datenpfad des Dockerfiles laden und zurueckgeben, was
+   unter dem Verzeichnis liegt - sieben Pfade beim Home. Der Quelltext
+   antwortet anders: jedes `join(dirname(…databasePath), …)` ueber den AST,
+   und da stand einer mehr, weil das Relay seine Ruecksetzmarke **im
+   Einstiegspunkt** zusammenbaut und keine geladene Konfiguration sie kennt.
+   Eine Sonde, die nur das Produkt fragt, haette dieses Add-on fuer
+   vollstaendig erklaert - und es hatte gar keine Ausschlussliste. Was ein
+   Programm ueber sich sagt, endet an seiner Konfiguration; was es tut, nicht.
+
 19. **Nach einer Aenderung sofort die Saetze ueber das Geaenderte suchen.** Am
    2026-09-18 habe ich den CI-Ausloeser umgestellt und damit in derselben
    Stunde einen verjaehrten Satz erzeugt (B212) - ADR 0122 sagte weiter, CI
