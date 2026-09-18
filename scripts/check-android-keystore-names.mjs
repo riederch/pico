@@ -35,6 +35,25 @@ const core = readFileSync(
 const probe = readFileSync(
   join(root, 'tools/android-runtime-probe/apk/src/com/pico/a1probe/KeystoreEvidence.java'),
   'utf8');
+/**
+ * Befund B211. Dasselbe Paar, eine Datei weiter - und dort war es unbewacht.
+ *
+ * Der Kopf dieses Tors sagt, eine zweimal geschriebene Wahrheit driftet.
+ * Zwischen `KeystorePort.java` und `apk/keystore-port.mjs` steht eine zweite:
+ * die **Verben** des AF_UNIX-Sockets, ueber den ADR 0131 A3 den Beleg holt und
+ * versiegelt. Der Java-Server beantwortet drei, der Klient schickt drei, und
+ * kein Pruefer las eine der beiden Dateien - `tools/` liegt ausserhalb jedes
+ * Korpus, und von den Toren dieses Baums lesen vierundzwanzig `.ts` und fuenf
+ * `.mjs`.
+ *
+ * Gemessen stimmten sie am 2026-09-18 ueberein. Das ist der Zeitpunkt, an dem
+ * man ein Tor baut, und nicht der, an dem man eines braucht.
+ */
+const portServer = readFileSync(
+  join(root, 'tools/android-runtime-probe/apk/src/com/pico/a1probe/KeystorePort.java'),
+  'utf8');
+const portClient = readFileSync(
+  join(root, 'tools/android-runtime-probe/apk/keystore-port.mjs'), 'utf8');
 
 const failures = [];
 
@@ -177,6 +196,38 @@ if (written === null) {
   }
 }
 
+/**
+ * Die Verben, die der Server beantwortet, gegen die, die der Klient schickt.
+ *
+ * Auf beiden Seiten steht das Wort als Zeichenkette in einem Vergleich - Java
+ * in einer `equals`-Kette, das Modul in seinem Aufruf. Verglichen wird deshalb
+ * nicht die Form, sondern die **Menge**, und zwar in beide Richtungen: ein
+ * Verb, das nur der Server kennt, ist eine Tuer, die niemand oeffnet; eines,
+ * das nur der Klient schickt, ist eine Frage ohne Antwort.
+ */
+const keystorePortVerbs = ['evidence', 'seal', 'open'];
+const serverVerbs = new Set(keystorePortVerbs.filter(
+  (verb) => new RegExp(`"${verb}"`, 'u').test(portServer)));
+const clientVerbs = new Set(keystorePortVerbs.filter(
+  (verb) => new RegExp(`'${verb}'`, 'u').test(portClient)));
+for (const verb of keystorePortVerbs) {
+  if (serverVerbs.has(verb) && !clientVerbs.has(verb)) {
+    failures.push(
+      `Socket-Verb: KeystorePort.java beantwortet "${verb}", keystore-port.mjs `
+      + 'schickt es nie - eine Tuer, die niemand oeffnet');
+  }
+  if (clientVerbs.has(verb) && !serverVerbs.has(verb)) {
+    failures.push(
+      `Socket-Verb: keystore-port.mjs schickt "${verb}", KeystorePort.java `
+      + 'beantwortet es nicht - eine Frage ohne Antwort');
+  }
+}
+if (serverVerbs.size === 0) {
+  failures.push(
+    'Socket-Verb: KeystorePort.java beantwortet keines der bekannten Verben. '
+    + 'Entweder heisst der Port anders, oder dieser Vergleich lief ueber nichts.');
+}
+
 if (failures.length > 0) {
   for (const failure of failures) {
     process.stderr.write(`  ${failure}\n`);
@@ -189,4 +240,5 @@ if (failures.length > 0) {
 process.stdout.write(
   `android keystore names: ${evidenceFields.length} Belegfelder, `
   + `${pinnedBytes.length} Wurzeln mit geprüften Bytes und Reihenfolge, `
-  + 'Wurzeln und Niveaus in beiden Sprachen gleich.\n');
+  + `Wurzeln und Niveaus in beiden Sprachen gleich; ${serverVerbs.size} `
+  + 'Socket-Verben, von Server und Klient in derselben Menge.\n');

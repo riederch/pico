@@ -912,6 +912,62 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B211 — dieselbe Krankheit, eine Datei weiter (2026-09-18).** Regel 18 hat
+diese Runde viermal gespart und einmal etwas gefunden. Die Frage war: **jedes
+Tor dieses Baums liest `.ts` — was steht in den anderen Sprachen?**
+
+**Gemessen: 19 Java-Dateien unter `tools/android-runtime-probe`**, und von den
+Toren lesen vierundzwanzig `.ts`, fünf `.mjs`, keines etwas unter `tools/`.
+Vierzehn protokollförmige Zeichenketten stehen im Java, und keine davon kennt
+das TypeScript.
+
+**Die meisten zu Recht.** `pico_unlock_secret_v1` ist ein Keystore-Alias, den
+ADR 0131 beschreibt und der in Java gehört; `pico_a1`, `pico_probe_tee` und die
+übrigen sind Namen der Sonde selbst. Und für die Namen, die **beide** Sprachen
+kennen müssen — Sicherheitsniveaus und Attestierungswurzeln — gibt es längst
+ein Tor, `check-android-keystore-names.mjs`, geboren aus einem echten
+Auseinanderlaufen: die Sonde nannte die EC-Wurzel `google_ec_ca1`, der Kern
+erwartete `google_ec_key_attestation_ca1`, und die Ablehnung dafür heißt
+`platform_keystore_attestation_unrooted` — *„die Kette erreichte keine gepinnte
+Wurzel"*, obwohl sie es hatte.
+
+**Aber dieses Tor liest ein Dateipaar, und daneben liegt ein zweites.** Über
+denselben AF_UNIX-Socket, den ADR 0131 A3 beschreibt, reden `KeystorePort.java`
+und `apk/keystore-port.mjs` in **drei Verben**: `evidence`, `seal`, `open`. Der
+Java-Server beantwortet sie in einer `equals`-Kette, das Modul schickt sie als
+Zeichenketten — zwei Sprachen, ein Vokabular, **und kein Prüfer las eine der
+beiden Dateien.**
+
+Der Kopf des Nachbartors sagt den Satz selbst: *„Eine Wahrheit, die zweimal
+geschrieben steht, driftet."* Eine Datei weiter stand dieselbe Wahrheit
+ungeschützt.
+
+**Gemessen stimmen sie heute überein**, und das ist der Punkt: das ist der
+Zeitpunkt, an dem man ein Tor baut, und nicht der, an dem man eines braucht.
+Die Erweiterung steht im selben Tor statt in einem neuen, weil es dieselbe
+Regel ist — verglichen wird die **Menge**, in beide Richtungen: ein Verb, das
+nur der Server kennt, ist eine Tür, die niemand öffnet; eines, das nur der
+Klient schickt, ist eine Frage ohne Antwort.
+
+Drei Pflanzungen, drei Meldungen: ein umbenanntes Verb beim Klienten, eines
+beim Server, und ein Port, der ganz anders heißt — den fängt die Wache gegen
+den leeren Vergleich, denn *„entweder heißt der Port anders, oder dieser
+Vergleich lief über nichts"* (B166s Idiom).
+
+**Was ich gemessen und nicht gebaut habe.** Die Java-Seite nennt sechs
+Ablehnungen — `sealed_too_short`, `unexpected_iv_length`, `witness_key_absent`
+und drei Feldfehler —, die der Klient nie erwähnt; er hat stattdessen ein
+`unnamed`. Das ist **keine** Drift derselben Art: eine Ablehnung reist vom
+Server zum Klienten, und ein Klient, der sie durchreicht statt sie zu kennen,
+ist eine vertretbare Bauart. Sie zu erzwingen hieße, eine Liste zu fordern, wo
+eine Durchreiche genügt. Aufgeschrieben, damit die nächste Runde sie nicht für
+eine Lücke hält.
+
+**Die Lehre**, und sie ist Regel 18 von der anderen Seite: das Verzeichnis
+sagte mir viermal, dass meine Vermutung schon eine Nummer hat. Beim fünften Mal
+sagte es nichts — **und genau dort lag etwas.** Ein gepflegtes Verzeichnis ist
+kein Grund, nicht zu suchen; es ist der Filter, der die Suche bezahlbar macht.
+
 **B210 — ein Messgerät gebaut, widerlegt und weggelegt (2026-09-18).** Dieser
 Befund hat wenig über den Baum zu sagen und viel über das Suchen darin. Er
 steht hier, weil das Weglegen sonst niemand aufschreibt.
