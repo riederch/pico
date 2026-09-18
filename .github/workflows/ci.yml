@@ -1,14 +1,27 @@
 name: CI
 
+# Nutzerentscheidung vom 2026-09-18: **CI laeuft auf Bedarf, nicht auf jeden
+# Push.**
+#
+# Vorher loeste jeder Push auf `main` und jeder Pull Request **sieben bezahlte
+# Jobs** aus - die Torkette, vier Suitenlaeufe (normal, verschobene Uhr,
+# Pacific/Kiritimati, Pacific/Niue) und die zwei Container-Rauchtests. Auf einem
+# privaten Repository zieht das ein Kontingent, das an anderer Stelle fehlt.
+#
+# **Was dadurch nicht verlorengeht**, und das ist der Grund, warum diese Wahl
+# tragbar ist: die volle Kette laeuft vor jedem Commit lokal - `release:verify`
+# sind dieselben Tore und dieselben Suiten. Was CI *zusaetzlich* leistet, ist ein
+# sauberer Ubuntu-Laeufer ohne die Zustaende dieser Arbeitsmaschine, die beiden
+# Container-Rauchtests und das Client-Paket. Genau das braucht ein Release - und
+# genau dafuer bleibt der Tag-Ausloeser stehen.
+#
+# `workflow_dispatch` ist der Knopf fuer alles andere: wer einen Zweifel hat,
+# startet den Lauf von Hand, statt ihn ungefragt zu bezahlen.
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 # Befund B89. Ein ueberholter Lauf wird abgebrochen - aber nur der, den
 # abzubrechen nichts kostet.
@@ -19,10 +32,14 @@ on:
 #
 # `cancel-in-progress` ist deshalb **an eine Bedingung gebunden und nicht auf
 # `true` gesetzt**: dieser Ablauf veroeffentlicht. Ein abgebrochener Lauf auf
-# `main` oder auf einem Tag hiesse, dass ein Commit nie geprueft wurde und eine
-# Veroeffentlichung auf halbem Weg endete - und beides ist schlimmer als
-# verbrannte Minuten. Bei einem Pull Request zaehlt nur der neueste Stand, und
-# der aeltere Lauf beantwortet eine Frage, die niemand mehr stellt.
+# einem Tag hiesse, dass eine Veroeffentlichung auf halbem Weg endete, und das
+# ist schlimmer als verbrannte Minuten.
+#
+# Seit dem 2026-09-18 gibt es keinen Pull-Request-Ausloeser mehr, die Bedingung
+# ist also nie wahr. Sie bleibt trotzdem stehen statt als `false`: sie sagt,
+# *warum* nichts abgebrochen wird, und sie greift wieder, sobald jemand den
+# Ausloeser zurueckholt. Ein `false` ohne Satz waere die Entscheidung ohne ihren
+# Grund.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
