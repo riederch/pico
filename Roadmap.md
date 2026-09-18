@@ -912,6 +912,83 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B205 — die schlafende Sicherung (2026-09-18).** B203 ließ die lebende
+Datenbank wirklich vergessen. Damit rückt die Frage nach, die ADR 0070 als
+Restrisiko benennt: *„backups may retain plaintext"*. **Welche Sicherungen?**
+
+**Gemessen: keine.** `createSqliteBackup` ist vollständig gebaut und geprüft,
+schreibt nach `<data>/backups` und wird **nie ausgelöst**. Eine Sicherung
+entsteht nur, wenn eine *ausstehende* Wanderung `requiresBackup: true` trägt —
+und von sechsundzwanzig tut das **keine**. Der Satz des ADR beschreibt heute
+ein Risiko, das es nicht gibt.
+
+**Das Interessante ist, was beim ersten Gebrauch passiert.** Wer die erste
+Wanderung mit `requiresBackup: true` schreibt, legt damit eine vollständige
+Kopie der Datenbank an — auf einem Home ohne eingeschaltete Verschlüsselung
+als Klartext, und `nextAvailableBackupPath` sucht den nächsten freien Namen,
+also **häufen sie sich**. Im ganzen Baum gibt es keine Stelle, die eine `.bak`
+je wieder wegnimmt.
+
+Seit B203 wiegt das schwerer als vorher: die lebende Datei überschreibt jetzt,
+was sie löscht, also wäre diese Kopie **der einzige Ort, an dem Gelöschtes
+überlebt**.
+
+**Zwei benachbarte Sätze sind dabei ehrlich und bleiben es.** ADR 0119 Q5 nimmt
+„backup sizing, off-host retention or storage provisioning" ausdrücklich aus
+seinem Umfang, und ADR 0072 hält das Schlüsselmaterial aus jeder
+Datenbanksicherung heraus — auf einem verschlüsselten Home ist eine `.bak`
+darum Chiffretext ohne Schlüssel. Beides ist gewollt. Ungewollt ist nur, dass
+die Kopie **leise** entsteht.
+
+**Gebaut: ein Tor über null Fällen**, in der Bauart von
+`check-product-path.mjs`, das seinen eigenen Kommentar dafür hat — *„today no
+document contains one, so this starts green and stays useful by refusing the
+first regression"*. Wer eine Sicherung verlangt, trägt in
+`check-migration-immutability.mjs` ein, **wer die Kopie wieder wegnimmt**. Ein
+Satz, den sonst niemand zu schreiben hätte, und der genau dann fällig wird,
+wenn er etwas kostet.
+
+Zwei Pflanzungen: die jüngste, nicht ausgelieferte Wanderung verlangt eine
+Sicherung — die Regel bellt allein; ein Argument für eine Wanderung, die es
+nicht gibt — sie bellt in die Gegenrichtung. (Auf einer *ausgelieferten*
+Wanderung feuern zwei Netze zugleich, weil sich dann auch ihr Rumpf geändert
+hat. Schön zu sehen, aber die schwächere Probe.)
+
+**B204 — eine Regel, die durch die Gestalt einer Zeile gilt (2026-09-18).**
+B195 schrieb, ADR 0118 O2s Verbot, bei einem Fehlschlag auf eine andere
+Anbieterklasse auszuweichen, gelte nur durch die **Abwesenheit von Code**:
+`model-runtime.ts` setzt es um, indem dort nichts steht, was einen zweiten
+Anbieter wählte. Das ist die Art Zusicherung, die still fällt, sobald jemand
+die Abwesenheit füllt.
+
+**Nachgemessen gilt sie stärker, und anders.** Die Warteschlange schreibt
+`entry_id` in die Auftragszeile, und **keines der fünf `UPDATE` dieser Datei
+fasst es an** — sie betreffen Versuche, Abschluss, den behaltenen Eintrag und
+das Vergessen. Ein Auftrag ist damit dauerhaft an den Anbieter gebunden, für
+den er eingestellt wurde. Ausweichen wäre kein Wiederholungsversuch, sondern
+ein **neuer Auftrag**, und der ist eine andere Handlung mit eigener Zustimmung.
+
+Das ist der Unterschied zwischen „hier steht nichts" und „hier kann nichts
+stehen": das erste ist eine Lücke, die jemand füllt, das zweite eine Gestalt,
+die jemand brechen müsste.
+
+**Gebaut: das Netz, das die Gestalt behauptet.** Ein Test geht **jeden
+verändernden Weg der Warteschlange** ab — einstellen, Versuch verbuchen,
+abschließen, vergessen — und hält danach dieselbe Bindung. Er fällt an dem Tag,
+an dem ein sechstes `UPDATE` sie mitnimmt. Zwei Pflanzungen, beide gesehen: das
+Verbuchen eines Versuchs verschiebt die Bindung, und das Vergessen tut es.
+
+Und wieder fiel die erste Fassung mit der **falschen Meldung**:
+`pico_model_job_library_read_without_derivation`, weil meiner Vorrichtung die
+Herkunftsangabe fehlte — der Auftrag wurde abgelehnt, bevor die Bindung
+überhaupt entstand, und der Test hätte eine leere Tabelle geprüft. Regel 13,
+zum dritten Mal in dieser Runde an meiner eigenen Arbeit.
+
+**Die Lehre**, und sie ist die freundliche Hälfte von B195: nicht jede Regel,
+die kein `if` hat, ist ungeschützt. Manche stehen im **Datenmodell**, und das
+ist der bessere Ort — nur muss jemand einmal hinsehen und es aufschreiben,
+sonst ist der Unterschied zur echten Lücke von außen nicht zu sehen.
+
 **B203 — was gelöscht ist, stand noch in der Datei (2026-09-18).** B200 und
 B201 fanden zwei Zusicherungen an Übersetzungsschaltern einer fremden
 Bibliothek. Der dritte Schalter, den niemand setzt, ist `secure_delete` — aus,

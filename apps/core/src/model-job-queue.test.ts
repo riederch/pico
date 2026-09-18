@@ -58,6 +58,66 @@ async function queue(): Promise<{
   return { queue: new PicoModelJobQueue(db), db, close: () => { db.close(); } };
 }
 
+/**
+ * Befund B204. Ein Auftrag traegt seinen Anbieter, und nichts verschiebt ihn.
+ *
+ * **Warum das eine Sicherheitszusage ist.** ADR 0118 O2 verbietet, bei einem
+ * Fehlschlag auf eine andere Anbieterklasse auszuweichen - sonst waehlte
+ * Verfuegbarkeitsdruck die Datenschutzhaltung, und genau darauf zielt "ein
+ * Angreifer verschlechtert den lokalen Anbieter, um einen Cloud-Weg zu
+ * erzwingen". B195 hielt diese Regel fuer eine, die nur durch die *Abwesenheit*
+ * von Code gilt; gemessen gilt sie staerker, naemlich durch die Gestalt der
+ * Zeile: `entry_id` wird beim Einstellen geschrieben, und keines der fuenf
+ * `UPDATE` dieser Datei fasst es an.
+ *
+ * Eine Zusicherung aus einer Abwesenheit faellt still, wenn jemand die
+ * Abwesenheit fuellt. Dieser Test geht deshalb **jeden veraendernden Weg der
+ * Warteschlange** ab und behauptet danach dieselbe Bindung - er faellt an dem
+ * Tag, an dem ein sechstes `UPDATE` sie mitnimmt.
+ */
+describe('ADR 0118 O2 mit B204 - die Anbieterbindung eines Auftrags', () => {
+  it('ueberlebt jeden veraendernden Weg der Warteschlange', async () => {
+    const { queue: jobs, db, close } = await queue();
+    const gebunden = () => (db
+      .prepare('SELECT entry_id AS entryId FROM pico_model_job_queue WHERE job_id = ?')
+      .get('job_queue_0001') as { entryId: string } | undefined)?.entryId;
+
+    // Mit Herkunft, wie die Nachbartests: ohne sie gilt der Auftrag als
+    // Bibliothekslesung und wird abgelehnt, bevor die Bindung ueberhaupt
+    // entsteht - dann pruefte dieser Test eine leere Tabelle (Regel 13).
+    jobs.enqueue({
+      job: job(),
+      picoIdentityFingerprintHex: 'a'.repeat(64),
+      entryId: 'entry-der-bleibt',
+      derivedFrom: {
+        supplierIdentifier: 'a-library',
+        commit: 'a'.repeat(40),
+        pinCoversContent: true,
+      },
+      at: '2026-08-14T12:00:00.000Z',
+    });
+    expect(gebunden()).toBe('entry-der-bleibt');
+
+    jobs.recordAttempt('job_queue_0001', '2026-08-14T12:01:00.000Z');
+    jobs.settle({
+      jobId: 'job_queue_0001',
+      outcome: 'provider_unreachable',
+      at: '2026-08-14T12:02:00.000Z',
+    });
+    jobs.forgetRecall({
+      picoIdentityFingerprintHex: 'a'.repeat(64),
+      jobId: 'job_queue_0001',
+      at: '2026-08-14T12:03:00.000Z',
+    });
+
+    // Fehlgeschlagen, abgeschlossen, vergessen - und immer noch derselbe
+    // Anbieter. Ausweichen waere ein neuer Auftrag, und der ist eine andere
+    // Handlung mit eigener Zustimmung.
+    expect(gebunden()).toBe('entry-der-bleibt');
+    close();
+  });
+});
+
 describe('ADR 0049 - which refusals are worth trying again', () => {
   it('treats what is about the job as final and what is about the world as not', () => {
     // Waiting changes whether a host answers. It does not change whose words

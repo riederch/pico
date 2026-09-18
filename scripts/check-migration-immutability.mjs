@@ -193,6 +193,58 @@ for (const [id, body] of shipped) {
   }
 }
 
+/**
+ * Die erste Wanderung, die eine Sicherung verlangt, legt eine Klartextkopie an.
+ *
+ * **Der Anlass** (2026-09-18, Befund B205). `createSqliteBackup` ist
+ * vollstaendig gebaut und geprueft, und es laeuft nie: eine Sicherung entsteht
+ * nur, wenn eine *ausstehende* Wanderung `requiresBackup: true` traegt, und
+ * keine der sechsundzwanzig tut das. Wer die erste schreibt, legt damit still
+ * eine vollstaendige Kopie der Datenbank nach `<data>/backups` - und nichts im
+ * Baum raeumt eine `.bak` je wieder ab.
+ *
+ * **Warum das seit B203 schwerer wiegt.** Der Store vergisst jetzt wirklich
+ * (`secure_delete = ON`), also waere eine solche Kopie der einzige Ort, an dem
+ * geloeschter Inhalt weiterlebt - auf einem Home ohne eingeschaltete
+ * Verschluesselung als Klartext. ADR 0070 nennt genau das als Restrisiko, ADR
+ * 0119 Q5 nimmt Sicherungsgroesse und Aufbewahrung ausdruecklich aus seinem
+ * Umfang. Beides ist ehrlich; unbeabsichtigt ist nur, dass die Kopie *leise*
+ * entsteht.
+ *
+ * **Also ein Tor ueber null Faellen**, in der Bauart von
+ * `check-product-path.mjs`: es faengt heute nichts und weist den ersten
+ * Rueckfall ab. Wer eine Sicherung verlangt, traegt hier ein, wer die Kopie
+ * wieder wegnimmt - ein Satz, den sonst niemand zu schreiben haette.
+ */
+const arguedBackupMigrations = new Map([
+  // ['0027_beispiel', 'wer die Kopie wieder wegnimmt, und wann'],
+]);
+let backupMigrationsChecked = 0;
+for (const [id, body] of current) {
+  if (!/requiresBackup:\s*true/u.test(body)) {
+    continue;
+  }
+  backupMigrationsChecked += 1;
+  if (!arguedBackupMigrations.has(id)) {
+    errors.push(
+      `${id} declares requiresBackup: true, and nothing says who removes the copy it `
+      + 'makes. A backup is a full copy of the database in `<data>/backups`; no code in '
+      + 'this tree ever prunes one, and since finding B203 the live store overwrites '
+      + 'what it deletes - so that copy is the one place deleted content survives, as '
+      + 'plaintext on a Home without encryption. Name in '
+      + 'scripts/check-migration-immutability.mjs who takes it away again.',
+    );
+  }
+}
+for (const id of arguedBackupMigrations.keys()) {
+  if (!current.has(id)) {
+    errors.push(
+      `${id} is argued as a backup-requiring migration and no such migration is in the `
+      + 'tree. An argument for a migration that is gone is one more sentence nobody reads.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Migration immutability check failed:');
   for (const error of errors) {
@@ -204,5 +256,7 @@ if (errors.length > 0) {
 console.log(
   `Migration immutability check passed (${shipped.size} migrations shipped in `
   + `${releaseTag}, each still word for word what it was; ${current.size} in the tree, `
-  + 'each named once and numbered in the order it runs).',
+  + `each named once and numbered in the order it runs; ${backupMigrationsChecked} of `
+  + `them ask for a backup before they run, ${arguedBackupMigrations.size} with a named `
+  + 'owner for the copy that makes).',
 );
