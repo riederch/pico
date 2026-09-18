@@ -73,3 +73,13 @@ ports_description:
 # answer binds to loopback. Pointing a watchdog at either would either undo
 # PK3 or restart a healthy relay in a loop, and a watchdog that restarts a
 # working machine is worse than none.
+
+# The relay's first backup rule, and it names the one thing it has to name
+# (finding B216, 2026-09-18). A relay holds sealed packets and no authority, so
+# its database is the whole of what a backup is for - but ADR 0154 RO8 puts one
+# more file beside it: `operator-reset`, created by hand to let the next start
+# forget the operator credential. It is deleted the moment it is read, so a
+# reset happens once. A marker that travelled in a backup would happen twice,
+# and the second time nobody asked for it.
+backup_exclude:
+  - operator-reset

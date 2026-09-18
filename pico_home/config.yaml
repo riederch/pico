@@ -57,6 +57,33 @@ watchdog: "http://[HOST]:[PORT:3100]/health"
 # accepted and resolved, so a restored database cannot resurrect a recovery
 # that was already consumed or vetoed. Including it here would restore the
 # anchor alongside the rows it is supposed to outlive.
+#
+# The three families below were added on 2026-09-18 (finding B216). Until then
+# this list held the three above and nothing said how many there were to
+# decide about. Measured: the Home puts ten paths under /data, and seven of
+# them travelled in every Supervisor backup because nobody had ever looked.
+# `scripts/check-data-neighbours.mjs` now asks the product where it puts things
+# and reads every join beside the database path out of the syntax tree, so the
+# eleventh one fails this file rather than shipping in it.
+#
+# /data/backups holds whole copies of the database, written before a migration
+# that declares `requiresBackup` (no migration does today). Nothing prunes
+# them. A backup artifact that carried them would hold the same memories two
+# and three times over in older versions, beside the live database it already
+# contains - and a restore brings the database itself, so the copies restore
+# nothing that is not there.
+#
+# /data/depots are working copies of remote repositories, each named after a
+# digest of the remote it came from (ADR 0143). They are re-fetched by
+# definition; carrying them makes the artifact grow with somebody else's
+# history. /data/scratch is supplier scratch and says so in its name.
+#
+# The last three are one-shot local acts: `home-reset`, `recovery-anchor-reseed`
+# and `operator-reset` are files a person creates by hand to make the next boot
+# do something once. Each is consumed on read, in the words of the code, "so a
+# reset happens once rather than on every restart". A marker that travelled in
+# a backup would perform its act a second time on a restore, unasked - which is
+# the same argument /data/recovery-anchor is excluded for, one directory over.
 backup_exclude:
   - keys/**
   - keys
@@ -64,3 +91,12 @@ backup_exclude:
   - home-host-keys
   - recovery-anchor/**
   - recovery-anchor
+  - backups/**
+  - backups
+  - depots/**
+  - depots
+  - scratch/**
+  - scratch
+  - home-reset
+  - recovery-anchor-reseed
+  - operator-reset
