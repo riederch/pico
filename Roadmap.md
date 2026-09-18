@@ -912,6 +912,97 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B208 — die Adresse, die ein Depot nennt, ist nicht die, von der geholt wird
+(2026-09-18).** Ein Depot ist die einzige Wirkung in diesem Baum, die **Code
+installiert** (ADR 0139 AC1). Beide Reichweitenentscheidungen stehen
+voreingestellt auf aus, der Abruf ist `execFileSync` ohne Shell, holt einen
+Commit statt eines Zweignamens, hat eine Zeitgrenze — und eine ausdrücklich
+verengte Umgebung:
+
+    PATH, HOME, GIT_TERMINAL_PROMPT=0, GIT_CONFIG_NOSYSTEM=1, GIT_ADVICE=0
+
+Der Kommentar daneben sagt, `git` bekomme *„what it needs to run and nothing
+about this process"*.
+
+**Auch die Adresse ist begrenzt**, und gut begründet: `picoDepotRemotePattern`
+lässt nur `https://`, `ssh://`, `file://` und `git@` zu. Damit ist `ext::`
+ausgeschlossen — der git-Transport, der einen Befehl ausführt. Und ein blanker
+Pfad ist ausdrücklich verboten, mit diesem Satz: *„a remote is an **address** …
+pretending otherwise would let a rename silently redirect what executes."*
+
+**Genau das tut `HOME`.** `GIT_CONFIG_NOSYSTEM=1` schneidet `/etc/gitconfig`
+ab; die **globale** Konfiguration unter `$HOME` nicht, und `GIT_CONFIG_GLOBAL`
+kommt im ganzen Baum nicht vor. Gemessen, nicht vermutet:
+
+| Umgebung | angesteuerte Adresse |
+|---|---|
+| wie der Abrufer (mit `HOME`) | `https://umgeleitet.example/repo` |
+| ohne `HOME` | `https://gewollt.example/repo` |
+| mit `GIT_CONFIG_GLOBAL=/dev/null` | `https://gewollt.example/repo` |
+
+Eine `~/.gitconfig` mit `[url "…"] insteadOf = …` leitet also um, wovon der
+Kommentar im Protokoll sagt, es dürfe nicht umgeleitet werden. Die Pinnung auf
+einen Commit bleibt wirksam — es wird kein *anderer* Commit geholt —, aber
+*von wem* die Bytes kommen, entscheidet eine Datei außerhalb des Records.
+
+**Wer schreibt diese Datei?** Der Betreiber, oder was als dieser Benutzer
+läuft. Das ist kein Ausbruch eines Depots und keine Rechteausweitung; es ist
+der Unterschied zwischen *„die Adresse, die eine Person genehmigt hat"* und
+*„die Adresse, von der geholt wurde"* — und ADR 0143s ganzes Argument handelt
+davon.
+
+**Zwei Abhilfen, beide gemessen.** `git ls-remote --get-url <adresse>` druckt
+die umgeschriebene Adresse **ohne das Netz anzufassen**; damit lässt sich vor
+jedem Abruf vergleichen. `GIT_CONFIG_GLOBAL=/dev/null` schaltet die
+Umschreibung ganz ab, nimmt aber `http.proxy` und `credential.helper` mit —
+also einen privaten Depot-Zugang hinter einem Proxy.
+
+**Nicht entschieden, weil es eine Produktentscheidung ist.** Wer `insteadOf`
+absichtlich benutzt — `git@github.com:` statt `https://github.com/` ist ein
+verbreiteter Aufbau —, würde von einer Ablehnung getroffen. Die Frage liegt als
+Entscheidung 16 in `.agent-context.md`.
+
+**Die Lehre**, und sie ist die dritte dieser Art in einer Runde: **eine
+Zusicherung endet an der Grenze des Prozesses, den man kennt.** Das Muster
+prüft die Adresse, die *ankommt*; die Umgebung entscheidet, was daraus *wird*.
+Zwischen beiden liegt ein Programm, das dieser Baum nicht geschrieben hat, und
+dessen Konfiguration er halb abgeschnitten hat — die Hälfte, an die jemand
+gedacht hat.
+
+**B207 — Tiefe ist Tiefe nur in der richtigen Reihenfolge (2026-09-18).** Der
+Vault-Daemon hält die Schlüssel und hat absichtlich keine Netzfläche (ADR
+0097). Die erste Frage an so etwas ist, **wer sich verbinden darf** — und die
+zweite, ob zwischen dem Binden des Sockets und seiner Verengung eine Lücke
+klafft.
+
+**Zwei Schichten, gemessen:** das Vault-Verzeichnis muss genau `0700` sein und
+dem laufenden Benutzer gehören, sonst startet der Daemon nicht
+(`vault_home_permissions`); der Socket wird zusätzlich auf `0600` gesetzt.
+
+**Die klassische Lücke ist die umask.** `listen()` legt den Socket mit den
+Rechten an, die die umask des Prozesses übriglässt — bei `022` wäre er kurz für
+alle erreichbar, bis `chmodSync` greift. Hier ist sie **konstruktiv
+geschlossen**, und zwar durch die Reihenfolge: `#assertCustodyLayout` läuft im
+**Konstruktor**, legt die Verzeichnisse mit `0700` an und prüft jedes einzeln;
+`listen()` bindet danach *innerhalb* eines bereits geprüften Verzeichnisses. Ein
+kurz zu offener Socket in einem Verzeichnis, das Fremde nicht betreten dürfen,
+ist unerreichbar.
+
+**Und die Gegenstelle kann nichts erschöpfen:** sechzehn Verbindungen, 128 KB
+je Rahmen, ein Hello-Zeitgeber, fünf Fehlversuche bis zur Sperre, eine
+Leerlaufsperre nach fünf Minuten, ein Deckel auf die Signaturbeschriftung.
+
+**Ein Negativbefund**, der dritte dieser Runde. Aufgeschrieben, damit ihn
+niemand noch einmal geht.
+
+**Die Lehre ist übertragbar und steht nirgends als Satz.** Dieselben zwei
+Prüfungen in umgekehrter Folge — erst binden, dann das Verzeichnis prüfen —
+ließen ein Fenster, in dem ein fremder Prozess sich verbindet. Dass die Prüfung
+im Konstruktor steht und nicht in `listen()`, ist der ganze Unterschied.
+**Verteidigung in der Tiefe ist keine Menge von Schichten, sondern eine
+Folge** — und welche Folge es ist, sieht man einer Datei nicht an, in der die
+eine Prüfung siebenhundert Zeilen vor der anderen steht.
+
 **B206 — zwei Arten Frist, und jede hat ihre eigene Regel (2026-09-18).** Nach
 den Voreinstellungen ein anderes Thema, und zwar eines mit einem echten
 Angreifer: **kann jemand eine Einspruchsfrist verkürzen, indem er die Uhr
