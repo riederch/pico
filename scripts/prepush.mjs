@@ -23,12 +23,21 @@ import { execFileSync } from 'node:child_process';
  * Arbeiter pro Kern.
  *
  * **Warum der eine Wiederholungsversuch:** `clock:check` unmittelbar nach den
- * Suiten fiel zweimal von zwei im ersten Anlauf und lief im zweiten
- * unverändert durch. Das Muster ist belegt, die Ursache nicht - weder der freie
- * Arbeitsspeicher noch der Swap-Stand sagen es vorher, und zwei Erklärungen
- * habe ich widerlegt. Deshalb *ein* Versuch mehr, laut angekündigt: ein
- * stiller Wiederholungsversuch verwandelt einen echten Fehlschlag in ein
- * Rauschen, und genau das darf hier nicht passieren.
+ * Suiten fiel am 2026-09-18 zweimal im ersten Anlauf und lief im zweiten
+ * unverändert durch - beim dritten Mal, im ersten Lauf dieses Skripts, fiel es
+ * gar nicht. **Zwei von drei, also wackelig und nicht deterministisch**; die
+ * erste Fassung dieses Satzes sagte "zweimal von zwei" und war eine Runde zu
+ * früh verallgemeinert.
+ *
+ * Die Ursache kenne ich nicht, und drei Erklärungen sind widerlegt: nicht
+ * `shift-clock.mjs` (53 Zeilen, leitet nur `Date` ab), nicht der freie
+ * Arbeitsspeicher und nicht der Swap-Stand - beim Abbruch und beim Erfolg
+ * standen dieselben Zahlen.
+ *
+ * Für ein wackeliges Scheitern ist *ein* Versuch mehr die richtige Antwort,
+ * und er wird laut angekündigt: ein stiller Wiederholungsversuch verwandelt
+ * einen echten Fehlschlag in Rauschen. Er kostet nur Zeit, wenn ohnehin etwas
+ * gefallen ist.
  */
 const STEPS = [
   { script: 'verify:gates', title: 'Die Torkette' },
@@ -68,9 +77,10 @@ for (const step of STEPS) {
   if (!outcome.ok && step.retryOnce === true) {
     process.stdout.write(
       `\n${step.script} ist mit ${outcome.status} gefallen. Ein Versuch mehr, und\n`
-      + 'zwar ein einziger: dieser Schritt fiel auf dieser Maschine zweimal von zwei\n'
-      + 'im ersten Anlauf und lief im zweiten unverändert durch. Faellt er auch\n'
-      + 'jetzt, ist es keine Speicherlage, sondern ein Fund.\n',
+      + 'zwar ein einziger: dieser Schritt fiel auf dieser Maschine an zwei von drei\n'
+      + 'Tagen im ersten Anlauf und lief im zweiten unverändert durch - wackelig\n'
+      + 'also, nicht sicher. Faellt er auch jetzt, ist es keine Speicherlage,\n'
+      + 'sondern ein Fund.\n',
     );
     outcome = run(step.script);
     outcome.retried = true;
