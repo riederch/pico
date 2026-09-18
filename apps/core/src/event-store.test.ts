@@ -885,6 +885,26 @@ function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
  * auf das Geraet einer Person schiebt - der Batterieangriff, von ihm selbst
  * ausgefuehrt. Die Regel dagegen haelt allein das Schema.
  */
+describe('the probe a watchdog stands on (B217)', () => {
+  it('answers while the store is open and throws once it is not', async () => {
+    const databasePath = createDatabasePath();
+    const store = await EventStore.open(databasePath, {
+      backupDirectory: join(dirname(databasePath), 'backups'),
+    });
+
+    // Healthy is the uninteresting half, and it has to be asserted anyway:
+    // a probe that threw on a good store would take down every Home.
+    expect(() => store.probe()).not.toThrow();
+
+    store.close();
+
+    // The failure a watchdog exists for. Without this the health route could
+    // report on a store it never touches and nothing would notice - which is
+    // exactly the state B217 found it in.
+    expect(() => store.probe()).toThrow();
+  });
+});
+
 describe('ADR 0150 PU5 - the push ledger the Home actually writes', () => {
   const device = 'a'.repeat(64);
   const pushedAt = '2026-09-11T12:00:00.000Z';

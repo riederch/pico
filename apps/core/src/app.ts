@@ -63,7 +63,6 @@ import {
   type PicoEventCreateResponse,
   type PicoEventListResponse,
   type PicoEventType,
-  type PicoHealthResponse,
   type PicoHomeClaimEnvelope,
   type PicoHomeClaimResponse,
   type PicoHomeClaimResponseRecord,
@@ -265,6 +264,7 @@ import {
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { RetentionSweeper } from './retention-sweep.js';
 import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute } from './access-classes.js';
+import { PICO_HEALTH_PATH, registerPicoHealthRoute } from './health.js';
 import {
   OperatorOverloadedError,
   OperatorRequestError,
@@ -697,6 +697,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     auditSodium: sodium,
     recoveryAnchor: openPicoHomeRecoveryAnchor(recoveryAnchorPath),
   });
+  /**
+   * B217. The store, reachable by name, so the one failure a watchdog exists
+   * for can be walked against the real thing: a listener that is up and a
+   * store that has stopped answering. It grants nothing - every route on this
+   * app already holds this handle - and it is the difference between a health
+   * route that is tested and one that is only read.
+   */
+  app.decorate('picoEventStore', store);
+
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
   const loginThrottle = new LoginThrottle();
@@ -2950,6 +2959,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     if ((request.raw as { [picoLinkIntakeRequestMark]?: true })[picoLinkIntakeRequestMark]) {
       return;
     }
+    // B217. The watchdog route carries its own, smaller counter. Charging it
+    // here would let ordinary traffic spend the slot the Supervisor's restart
+    // decision depends on - the same coupling the two counters above exist to
+    // break, one surface further out.
+    if (request.routeOptions?.url === PICO_HEALTH_PATH) {
+      return;
+    }
     if (!foundationInFlight.acquire()) {
       return reply.code(503).send({ error: 'Busy.' });
     }
@@ -3230,11 +3246,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('GET', '/api/events/tail', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/events', 'foundation-diagnostic');
 
-  app.get('/health', async (): Promise<PicoHealthResponse> => ({
-    ok: true,
+  // ADR 0119 Q4 mit Befund B217. Die Route, auf die `watchdog:` im Add-on
+  // zeigt - mit eigener Sonde und eigenem Budget, in `health.ts` neben ihrer
+  // Begruendung.
+  registerPicoHealthRoute(app, {
+    probe: () => store.probe(),
     service: 'pico-home-core',
     deviceId: config.deviceId,
-  }));
+    ...(config.healthMaxInFlight === undefined ? {} : { maxInFlight: config.healthMaxInFlight }),
+  });
 
   app.get('/api/system/version', async (_request, reply) => {
     const response: PicoSystemVersionResponse = {

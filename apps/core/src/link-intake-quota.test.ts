@@ -157,6 +157,71 @@ describe('ADR 0119 Q4 quotas and concurrency caps on the published intake', () =
   });
 });
 
+describe('ADR 0119 Q4 and the watchdog the Supervisor points at', () => {
+  /**
+   * `pico_home/config.yaml` sets `watchdog: http://[HOST]:[PORT:3100]/health`,
+   * so this one route decides whether the Supervisor lets the add-on keep
+   * running. Two properties follow from that, and finding B217 measured that
+   * neither held.
+   *
+   * The relay solved both a release earlier and wrote down why: its health
+   * listener is a separate server with its own small connection bound, and it
+   * runs a probe query rather than answering because the process is up. The
+   * Home answered from the same listener, out of the same budget, with a
+   * constant.
+   */
+  it('answers the watchdog while the Foundation budget is spent', async () => {
+    await withIntake(
+      { foundationMaxInFlight: 1 },
+      async (_baseUrl, _listener, app) => {
+        const port = foundationPort(app);
+        // A public route, so the request reaches the body parser and parks
+        // there holding its slot. An authenticated one would be refused before
+        // the body and would free the slot again, proving nothing.
+        const held = holdOpen(port, '{}', '/api/auth/session');
+        await held.connected;
+        // Precondition, asserted rather than assumed: the one slot is taken.
+        expect(await settle(held.status, 500)).toBe(stillInFlight);
+
+        const probe = await rawRequest({
+          hostname: '127.0.0.1',
+          port,
+          path: '/health',
+          method: 'GET',
+        });
+        // Sharing the budget means ordinary traffic decides whether the
+        // Supervisor restarts this Home - the busier it gets, the likelier the
+        // restart, which is the inversion of what a watchdog is for.
+        expect(probe.status).toBe(200);
+      },
+      { listenFoundation: true },
+    );
+  });
+
+  it('reports unhealthy once the store cannot answer', async () => {
+    await withIntake(
+      {},
+      async (_baseUrl, _listener, app) => {
+        const port = foundationPort(app);
+        expect((await rawRequest({
+          hostname: '127.0.0.1', port, path: '/health', method: 'GET',
+        })).status).toBe(200);
+
+        // The failure a watchdog exists for: the process is up and its store
+        // is not. Closing it is the cheapest honest version of that.
+        (app as unknown as { picoEventStore: { close(): void } }).picoEventStore.close();
+
+        const probe = await rawRequest({
+          hostname: '127.0.0.1', port, path: '/health', method: 'GET',
+        });
+        expect(probe.status).toBe(503);
+        expect(JSON.parse(probe.body).ok).toBe(false);
+      },
+      { listenFoundation: true },
+    );
+  });
+});
+
 interface RawResponse {
   status: number;
   body: string;
@@ -226,7 +291,7 @@ function settle(status: Promise<number>, ms: number): Promise<number> {
  * status line as soon as the server answers - which for a refusal is
  * immediately, because the cap is checked before the body is read.
  */
-function holdOpen(port: number, body: string): {
+function holdOpen(port: number, body: string, path: string = PICO_LINK_INTAKE_PATH): {
   connected: Promise<Socket>;
   status: Promise<number>;
 } {
@@ -241,7 +306,7 @@ function holdOpen(port: number, body: string): {
     const socket = connect(port, '127.0.0.1', () => {
       heldSockets.push(socket);
       socket.write(
-        `POST ${PICO_LINK_INTAKE_PATH} HTTP/1.1\r\n`
+        `POST ${path} HTTP/1.1\r\n`
         + 'host: 127.0.0.1\r\n'
         + 'content-type: application/json\r\n'
         // One byte more than will ever arrive.

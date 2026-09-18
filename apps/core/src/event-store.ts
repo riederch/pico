@@ -8178,6 +8178,29 @@ export class EventStore {
     return { enforced };
   }
 
+  /**
+   * Whether this store can still answer, for the signal a supervisor reads.
+   *
+   * **It asks the database rather than the event loop** (finding B217). A
+   * health route that answers because the process is running answers yes to
+   * the one failure a watchdog exists for - a Home whose listener is up and
+   * whose store is gone, read-only or shut. The relay has argued exactly this
+   * in `apps/relay/src/health.ts` since it was written; the Home answered with
+   * a constant until B217 measured it.
+   *
+   * One indexed read of a table that stays small - a Home has one founding
+   * record, never a page of them - so this can run per probe. `COUNT(*)` on
+   * the event log would have been the wrong shape: that table grows forever,
+   * and a health check whose cost grows with the data is a health check that
+   * becomes a reason to stop checking.
+   *
+   * It throws rather than returning false, so the reason reaches the caller's
+   * log instead of being flattened into a boolean.
+   */
+  public probe(): void {
+    this.db.prepare('SELECT COUNT(*) AS n FROM pico_home_founding_record').get();
+  }
+
   public close(): void {
     if (this.closed) {
       return;

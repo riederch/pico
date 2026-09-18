@@ -123,6 +123,12 @@ export interface CoreConfig {
    */
   foundationMaxConnections?: number;
   foundationMaxInFlight?: number;
+  /**
+   * B217. The watchdog route's own counter, kept apart from the one above for
+   * the same reason the intake's is: what decides whether this Home is
+   * restarted must not be spendable by whoever is talking to it.
+   */
+  healthMaxInFlight?: number;
   /** ADR 0119 Q4. Relationship-keyed send budgets for the Link intake. */
   linkRequestQuota?: PicoRequestQuotaOptions;
   /**
