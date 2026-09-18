@@ -912,6 +912,110 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B201 — dieselbe Stille, einmal zugunsten und einmal zulasten (2026-09-18).**
+B200 fand eine Zusicherung, die an einem Übersetzungsschalter einer
+eingebetteten C-Bibliothek hing. Drei Zeilen weiter oben im selben Konstruktor
+steht die zweite, und sie zeigt in die andere Richtung.
+
+**Offene Entscheidung 10 (B186) sagt, `synchronous` stehe auf NORMAL und
+niemand habe das entschieden.** Das stimmt, und bis heute war es eine
+Schlussfolgerung aus einer Abwesenheit — niemand setzt den Pragma, *also* gilt
+die Voreinstellung. Gemessen ist es jetzt, und der Mechanismus ist genauer, als
+„die Voreinstellung" sagt:
+
+| Zeitpunkt | `synchronous` | WAL-Datei |
+|---|---|---|
+| frisch geöffnet | 2 (FULL) | nein |
+| nach `journal_mode = WAL` | 2 (FULL) | nein |
+| **nach dem ersten Schreiben** | **1 (NORMAL)** | ja |
+
+Die mitgelieferte SQLite 3.49.2 trägt zwei Schalter, die `PRAGMA
+compile_options` nennt: `DEFAULT_SYNCHRONOUS=2` und
+`DEFAULT_WAL_SYNCHRONOUS=1`. Der zweite greift nicht, wenn der Pragma gesetzt
+wird, sondern **wenn die WAL-Datei entsteht** — also beim ersten Schreiben, und
+das ist im Betrieb die erste Migration. Ein Home läuft daher praktisch immer
+auf NORMAL, und die kurze Spanne auf FULL davor ist zu kurz, um irgendetwas zu
+bedeuten.
+
+**Das korrigiert die Entscheidung nicht, es schärft sie.** „Niemand hat das
+entschieden" war zu freundlich formuliert: es hat jemand entschieden, nur nicht
+hier — ein `-D`-Schalter im Bauskript einer Abhängigkeit hat die Haltbarkeit
+dieses Hauses festgelegt. `synchronous = FULL` zu setzen heißt damit nicht,
+eine Lücke zu füllen, sondern **eine fremde Entscheidung zu überstimmen**, und
+das ist ein anderer Satz für dieselbe Zeile Code.
+
+**Und die beiden zusammen sind die eigentliche Auskunft.** Derselbe
+Konstruktor erbt zwei Übersetzungsschalter aus derselben Bibliothek: einer
+schaltet Fremdschlüssel ein und **hält** eine Zusicherung, die dieses
+Repository nirgends ausspricht (B200); einer senkt die Haltbarkeit und
+**schwächt** eine, die dieses Repository nirgends ausspricht. Beide waren
+unsichtbar, weil eine Voreinstellung keinen Ort hat, an dem man sie liest. Der
+eine ist jetzt gesagt; der andere wartet auf eine Entscheidung.
+
+**Eine Sonde, die ich verworfen habe, gehört dazu.** Meine erste Messung nahm
+eine nachgebaute Verbindung statt des echten Stores und las 2 statt 1 — der
+Unterschied war, dass sie nach dem WAL-Pragma nichts schrieb. Regel 11 in
+Reinform: ein anderer Aufbau beantwortet eine andere Frage, und der Unterschied
+war hier genau der Gegenstand.
+
+**B200 — eine Zusicherung, die eine Voreinstellung trägt (2026-09-18).** B199
+endete mit dem Satz *„was auseinanderliegt, fällt auseinander"*. Die schärfste
+Form davon in einem SQLite-Schema ist ein Fremdschlüssel, den niemand
+durchsetzt.
+
+**Gemessen: 52 Tabellen, genau eine `REFERENCES`-Klausel**, und sie steht dort,
+wo nichts lügen darf — `pico_audit_record.event_id REFERENCES pico_event
+(event_id)`. Das Relay hat keine. Beide Stores setzen genau einen Pragma,
+`journal_mode = WAL`, und `foreign_keys` setzt niemand.
+
+**Meine Vermutung war, sie sei Zierat, und sie war falsch.** Statt sie
+aufzuschreiben, habe ich sie gefahren: der Pragma steht auf 1, und ein
+Auditeintrag ohne sein Ereignis wird abgelehnt. Nachgefragt, *warum* — und die
+Antwort liegt tiefer, als ich zuerst geschrieben hatte: nicht `better-sqlite3`
+setzt ihn, sondern die mitgelieferte SQLite ist mit `SQLITE_DEFAULT_FOREIGN_KEYS`
+**übersetzt** (`PRAGMA compile_options`, Fassung 3.49.2). Die Zusicherung hing
+an einem Übersetzungsschalter einer eingebetteten C-Bibliothek. **Zweites Negativ:** kein Produktcode löscht
+je aus `pico_event`; nur Tests tun es, und der eine, der es tut, nimmt den
+Auditeintrag zuerst weg. Ein `ON DELETE` fehlt also nicht, es wird nicht
+gebraucht.
+
+**Was übrig bleibt, ist der Fund.** Die einzige referenzielle Zusicherung
+dieses Schemas hing an der Wahl einer Abhängigkeit, war nirgends gesagt und von
+keinem Test gehalten — an der Auditkette, deren ganze Aufgabe ist, nicht zu
+lügen. Ein Auditeintrag ohne Ereignis wäre eine Kette, die Deckung behauptet,
+die sie nicht hat.
+
+**Getan:** der Store sagt es selbst (`foreign_keys = ON`), mit dem Grund
+daneben. Das Relay bewusst nicht — es erklärt keine `REFERENCES`, und ein
+Pragma ohne Gegenstand ist ein Prüfer ohne Gegenstand (B166). Dazu ein Test,
+der den Weg geht, und zwar **über die Verbindung des Stores selbst**: der
+Pragma gilt je Verbindung, eine zweite beantwortete eine andere Frage
+(Regel 11).
+
+**Drei Pflanzungen, und die mittlere ist der Befund in einem Satz.**
+
+- Pragma auf `OFF`: der Test fällt an der Pragma-Zusicherung.
+- **Die Zeile ganz entfernt — alles bleibt grün.** Weil die Voreinstellung sie
+  trägt, ändert ihr Fehlen heute nichts. Genau deshalb hat es niemand gemerkt,
+  und genau deshalb ist die Zeile eine Versicherung und kein Zierat: sie hält
+  den Tag, an dem jemand `better-sqlite3` gegen eine anders übersetzte SQLite
+  tauscht. Ein Test kann einen *falschen* Wert fangen, nicht eine *fehlende*
+  Zeile.
+- Die `REFERENCES`-Klausel aus der Migration genommen: der Test fällt **und**
+  `migration:check` meldet, dass eine ausgelieferte Migration ihren Körper
+  geändert hat. Zwei Netze aus einer Pflanzung.
+
+Die erste Fassung des Tests fiel mit der **falschen Meldung** — `NOT NULL
+constraint failed: recorded_at` —, weil meinem `INSERT` eine Pflichtspalte
+fehlte und die Bedingung sprach, bevor der Fremdschlüssel zu Wort kam. Regel 13
+an der eigenen Arbeit.
+
+**Die Lehre: eine Zusicherung, die eine Voreinstellung trägt, gehört dem, der
+die Voreinstellung setzt** — und hier war das niemand im Repository, sondern
+ein `-D`-Schalter im Bauskript einer Abhängigkeit. Der Zwilling steht drei
+Zeilen weiter oben im selben Konstruktor: `synchronous`, offene Entscheidung
+10. Dieselbe Stille, und B201 nebenan misst, was sie kostet.
+
 **B199 — der vierte Gang, und er geht leer aus (2026-09-18).** B192 ging dem
 Löschen nach und fand einen Raum, den man anlegen, aber nicht beenden kann.
 B194 ging dem Lesen nach und fand Standortmessungen, die niemand ansieht. B197

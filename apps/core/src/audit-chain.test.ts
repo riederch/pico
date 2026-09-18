@@ -65,6 +65,40 @@ function auditEvent(overrides: {
 }
 
 describe('ADR 0121 J1/J2 tamper-evident audit records', () => {
+  /**
+   * Befund B200. Die einzige referenzielle Zusicherung dieses Schemas, gegangen.
+   *
+   * `pico_audit_record.event_id` verweist auf `pico_event`, und bis zum
+   * 2026-09-18 hielt diese Klausel nur, weil `better-sqlite3` den Pragma
+   * `foreign_keys` von sich aus einschaltet - SQLites eigene Voreinstellung ist
+   * *aus*. Der Store sagt es jetzt selbst, und dieser Test geht den Weg: ein
+   * Auditeintrag ohne sein Ereignis ist eine Kette, die Deckung behauptet, die
+   * sie nicht hat, und die Datenbank muss ihn ablehnen.
+   *
+   * Über dieselbe Verbindung wie der Store, denn der Pragma gilt je Verbindung:
+   * eine zweite Verbindung würde eine andere Frage beantworten (Regel 11).
+   */
+  it('refuses an audit record whose event is not in the log', () => {
+    const { open } = fixture();
+    const store = open();
+    store.append(auditEvent({ eventId: 'event_audit_1' }));
+
+    const db = (store as unknown as { db: InstanceType<typeof Database> }).db;
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    // Alle Pflichtspalten gefuellt, sonst spricht eine NOT-NULL-Bedingung
+    // zuerst und der Fremdschluessel kaeme nie zu Wort (Regel 13: ein Test,
+    // der mit der falschen Meldung faellt, ist ein Fund - hier war es meiner).
+    expect(() => db
+      .prepare(`INSERT INTO pico_audit_record
+        (event_id, writer_id, chain_position, previous_digest_hex, digest_hex, recorded_at)
+        VALUES (?, ?, ?, NULL, ?, ?)`)
+      .run('event_that_never_happened', 'other-writer', 1, 'ff'.repeat(32),
+        '2026-09-18T00:00:00.000Z'))
+      .toThrow(/FOREIGN KEY constraint failed/u);
+
+    store.close();
+  });
+
   it('chains audit records per writer and leaves ordinary events alone', () => {
     const { open, databasePath } = fixture();
     const store = open();

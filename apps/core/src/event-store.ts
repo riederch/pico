@@ -851,6 +851,26 @@ export class EventStore {
     mkdirSync(dirname(databasePath), { recursive: true, mode: 0o700 });
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
+    /**
+     * ADR 0121. Said rather than inherited (2026-09-18, finding B200).
+     *
+     * This schema declares exactly one referential constraint in 52 tables -
+     * `pico_audit_record.event_id REFERENCES pico_event (event_id)` - and it
+     * sits where nothing may lie: an audit record pointing at an event that is
+     * not there would be a chain claiming coverage it does not have.
+     *
+     * SQLite's own default for this pragma is *off*. It held anyway, and the
+     * reason is one layer below the driver: the bundled SQLite (3.49.2) is
+     * **compiled** with `SQLITE_DEFAULT_FOREIGN_KEYS`, which `PRAGMA
+     * compile_options` reports. The guarantee rested on a `-D` flag in a
+     * dependency's build script, which nobody here is holding - so it is said
+     * here and walked by a test that plants a dangling record.
+     *
+     * The relay store deliberately does not do this: it declares no
+     * `REFERENCES` at all, and a pragma with nothing to enforce is a checker
+     * without a subject.
+     */
+    this.db.pragma('foreign_keys = ON');
     narrowToOwner(databasePath);
     this.memoryCrypto = options.memoryCrypto;
     this.recoveryAnchor = options.recoveryAnchor;
