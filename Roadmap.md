@@ -912,6 +912,51 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B192 — Ein Raum, den man anlegen, aber nicht beenden kann (2026-09-18).**
+Die Frage war die einfachste, die eine Person stellen kann: **was passiert,
+wenn ich das hier loswerden will?** Sechzehn Tabellen tragen eine
+Domänenspalte; der Schredder ist eine Kaskade mit drei Wegen, und ich bin sie
+bis zum Ende gegangen.
+
+**Für Host-Custody stimmt alles.** `cryptoShredDomain` löscht die
+Schlüsseldateien der Domäne von der Platte, `memory_item` wird als unlesbar
+markiert, ein Anschluss löscht die Beobachtungen und ein zweiter leert die
+Worte in der Modelljob-Warteschlange. Der Produktaufruf reicht beide Anschlüsse
+mit je einem Satz daneben, und die Reihenfolge ist begründet: erst die
+Schlüssel, damit ein Fehlschlag dazwischen Lesungen ohne Schlüssel hinterlässt
+und nicht Schlüssel ohne Lesungen.
+
+**Für Reader-Custody gibt es nichts.** Der Schlüsselspeicher weist den
+Schredder ausdrücklich ab — `assertHostCustodyRawKek` wirft mit ADR 0078 K6 im
+Wortlaut, weil das Home für diese Klasse gar keine Schlüsseldatei halten darf.
+Das ist richtig. Nur müsste dann die andere Tür existieren, und **ADR 0078 K9
+sagt seit jeher, dass es sie gibt:**
+
+> *Reader-custody: shred is host-local destruction and every surface offering
+> it must present it as such, never reusing the host-custody wording.*
+
+Nachgezählt: `apps/core` bedient **sieben** Reader-Custody-Routen — Domänen
+anlegen, Leser- und Schreibererteilungen, deren Lebensläufe,
+Schlüsselrotationen, Einträge. **Alle sieben sind `POST`. Keine löscht.** Und
+jedes `DELETE FROM pico_reader_custody_*` im Produktcode steht in `reconcile`,
+das aufräumt, wenn ein Satz seine Prüfung nicht mehr besteht — **Reparatur,
+keine Wahl.**
+
+**Damit kann eine Person einen Reader-Custody-Raum anlegen, hineinschreiben,
+jemanden hereinlassen, dessen Zugang beenden und das Schloss wechseln — aber
+nicht sagen: das soll weg.** `progress.md` zählt genau diese fünf Fähigkeiten
+auf und nennt die sechste nicht, auch nicht unter den offenen Flächen. Die
+Entscheidung ist getroffen und aufgeschrieben; sie ist nur aus den Listen
+gefallen.
+
+**Was dabei nicht fehlt, gehört dazu**, damit die Lücke ihre richtige Größe
+behält: Rotation gibt es (das Schloss wechseln, vorwärts), Widerruf einer
+Erteilung gibt es, und der Geheimtext liegt beim Home als Chiffre, die es nicht
+lesen kann. Was fehlt, ist das Vergessen — und K9 sagt auch, wie es klingen
+muss: **host-lokal**, ohne die Worte der Host-Custody zu borgen, weil die
+Schlüssel bei den Lesern liegen und höchstens eine *Bitte* um Zerstörung reisen
+kann.
+
 **B191 — Zwei Flächen, und nur eine fasst ihre Ablehnungen in Sätze
 (2026-09-18).** B190 endete mit dem Satz, dass dieser Baum zwei Paare hat, bei
 denen ein Prüfer nur eines kennen könnte — zwei Speicher und zwei Flächen. Die
