@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B206 — zwei Arten Frist, und jede hat ihre eigene Regel (2026-09-18).** Nach
+den Voreinstellungen ein anderes Thema, und zwar eines mit einem echten
+Angreifer: **kann jemand eine Einspruchsfrist verkürzen, indem er die Uhr
+vorstellt?** ADR 0120 N2 sagt nein und begründet es; gegangen ist die Frage
+noch niemand.
+
+**Der Baum unterscheidet zwei Arten von Frist, und das ist der Grund, warum
+die Frage überhaupt prüfbar ist.**
+
+| Art | Was ihr Ablauf tut | Regel |
+|---|---|---|
+| Einspruchsfenster | **erlaubt** etwas | `hasPicoObjectionWindowElapsed`: Wanduhr **und** dauerhafter Boden müssen vorbei sein |
+| Expositionsfenster | **verbietet** etwas | `hasPicoExposureWindowElapsed`: die **früheste** der beiden Uhren gewinnt |
+
+Beide Regeln zeigen in die sichere Richtung ihrer Art, und die erste ist
+zusätzlich vorsichtig: ohne Boden gilt das Fenster als **nicht** abgelaufen.
+
+**Die beiden Aufrufstellen der Einspruchsregel sind genau die zwei Übergänge,
+bei denen Warten etwas freigibt** — eine Gerätewiederherstellung wird wirksam,
+und eine Wurzelrotation wird wirksam. Beide verankert, beide mit einem Satz
+daneben, der sagt warum. Expositionsfenster nutzen Sitzungen und
+Freigabeumschläge.
+
+**Und die Gegenprobe, die den Befund erst zu einem macht:** gibt es ein
+Fenster, das *keine* der beiden Regeln benutzt? Sieben blanke Vergleiche eines
+Zeitpunkts gegen die Gegenwart stehen im Core, und einzeln gegangen ist keiner
+davon ein Fenster in diesem Sinn — es sind Gültigkeitsprüfungen, die bei
+Ablauf **verweigern**: eine Delegation vor ihrer Gültigkeit, ein Anspruch nach
+seinem Ende, ein Anker-Eintrag über seiner Frist. Auch der unauffälligste,
+`validUntil > completionExpiresAt`, verlangt bloß, dass eine Delegation den
+Abschluss überlebt.
+
+**Also ein Negativbefund**, der zweite dieser Art nach B199. Aufgeschrieben,
+damit ihn niemand noch einmal geht, und mit den vierzehn Fristkonstanten
+daneben, die die Suche eingegrenzt haben.
+
+**Die Lehre steckt nicht im Ergebnis, sondern darin, dass es eines gibt.** Ein
+einziges `hasElapsed` hätte diese Prüfung unmöglich gemacht — man kann nicht
+fragen, ob ein Fenster die richtige Regel benutzt, wenn es nur eine gibt. Zwei
+Wörter für zwei Dinge sind das, was einen Baum prüfbar macht: **ein Vokabular
+mit einem Wort hat keine Fehler, es hat nur keine Unterscheidung.** Das ist
+B185 von der anderen Seite gelesen.
+
 **B205 — die schlafende Sicherung (2026-09-18).** B203 ließ die lebende
 Datenbank wirklich vergessen. Damit rückt die Frage nach, die ADR 0070 als
 Restrisiko benennt: *„backups may retain plaintext"*. **Welche Sicherungen?**
