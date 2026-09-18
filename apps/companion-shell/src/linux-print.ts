@@ -11,7 +11,30 @@ export function createLinuxLpRecoveryCardPrinter(input: {
   return {
     printRecoveryCard: async ({ form, pdf }) => await new Promise((resolve, reject) => {
       const args = picoLinuxRecoveryCardPrintArguments(form);
-      const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+      /**
+       * Befund B209. `stdout` wird gelesen, weil dort steht, wohin die Karte
+       * ging.
+       *
+       * **Vorher stand hier `'ignore'`**, und dieser Weg gab die feste
+       * Zeichenkette `'default printer'` zurueck - die die Schale einer Person
+       * in einen Satz setzt, neben der Bitte, den Card-PIN getrennt zu halten
+       * und die Geheimseite nie zu fotografieren. Wohin die Karte wirklich
+       * ging, entscheidet aber die geerbte Umgebung (`PRINTER`, `LPDEST`,
+       * `CUPS_SERVER`), und `lp` sagt es: sein Bericht ueber die
+       * Auftragskennung ist voreingestellt an - dafuer gibt es `-s`, um ihn
+       * abzuschalten -, und eine CUPS-Kennung traegt das Ziel im Namen.
+       *
+       * Ein Satz ueber das empfindlichste Stueck dieses Produkts nennt keinen
+       * Ort, an dem niemand nachgesehen hat.
+       */
+      const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      let stdout = '';
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk: string) => {
+        if (stdout.length < 4_096) {
+          stdout += chunk.slice(0, 4_096 - stdout.length);
+        }
+      });
       let stderr = '';
       child.stderr.setEncoding('utf8');
       child.stderr.on('data', (chunk: string) => {
@@ -22,7 +45,7 @@ export function createLinuxLpRecoveryCardPrinter(input: {
       child.once('error', () => reject(new Error('recovery_card_printer_unavailable')));
       child.once('close', (code) => {
         if (code === 0) {
-          resolve({ destination: 'default printer' });
+          resolve({ destination: picoLinuxPrintDestination(stdout) });
         } else {
           reject(new Error(
             stderr.trim().length === 0
@@ -35,6 +58,21 @@ export function createLinuxLpRecoveryCardPrinter(input: {
       child.stdin.end(Buffer.from(pdf));
     }),
   };
+}
+
+/**
+ * Das Ziel aus dem Bericht von `lp`, oder ein Satz, der keinen Ort nennt.
+ *
+ * Eine CUPS-Auftragskennung ist `<ziel>-<nummer>`, und ein Ziel darf selbst
+ * Bindestriche tragen - deshalb endet das Muster an der Zahl. Was sich nicht
+ * lesen laesst, wird nicht geraten: dann sagt der Satz, dass das System
+ * gewaehlt hat, und nennt kein Ziel (Befund B209).
+ */
+export function picoLinuxPrintDestination(report: string): string {
+  const destination = /request id is (\S+)-\d+/u.exec(report)?.[1];
+  return destination === undefined || destination.trim() === ''
+    ? 'printer your system chose'
+    : `printer ${destination}`;
 }
 
 export function picoLinuxRecoveryCardPrintArguments(

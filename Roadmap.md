@@ -912,6 +912,59 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B209 — der Satz nannte einen Ort, an dem niemand nachgesehen hatte
+(2026-09-18).** B208 maß die Umgebung **eines** externen Programms. Die Frage
+gilt für alle: was startet dieses Produkt, und was gibt es mit?
+
+**Fünf Aufrufe, und sie zerfallen sauber.**
+
+| Aufruf | Programm | Umgebung |
+|---|---|---|
+| `depot-fetch.ts` | `git` | verengt, mit Satz (B208) |
+| `supplier-host.ts` | Node-Runner | **nur `PATH`**, mit ADR 0143 DP3 daneben |
+| `linux-print.ts` | `lp` | vollständig geerbt |
+| `notify.ts` | `notify-send` | vollständig geerbt |
+| `main.ts` | sich selbst | geerbt, absichtlich |
+
+Das Erben ist bei den beiden Desktop-Integrationen **richtig** — `notify-send`
+braucht den Sitzungsbus, `lp` die Druckerkonfiguration. Nur steht es nirgends,
+während die beiden anderen ihre Verengung ausdrücklich begründen.
+
+**Und beim Drucken hängt daran etwas.** Wohin die Wiederherstellungskarte geht,
+entscheidet genau diese geerbte Umgebung: `PRINTER`, `LPDEST`, `CUPS_SERVER`.
+Der Weg gab aber die **feste Zeichenkette** `'default printer'` zurück, und
+`stdout` stand auf `'ignore'` — der Bericht von `lp`, in dem das Ziel steht,
+wurde weggeworfen.
+
+Diese Zeichenkette erreicht eine Person:
+
+> *Pico sent the folded A4 card for … to the **default printer**. Print and
+> laminate it now, keep the Card PIN elsewhere, and never photograph the secret
+> side.*
+
+**Der sorgfältigste Satz dieses Produkts, und das ungeprüfte Wort steht mitten
+darin.** Daneben drei Warnungen, die jemand durchdacht hat — und ein bestimmter
+Artikel, der Wissen behauptet, das niemand hatte.
+
+**Gemessen statt vermutet.** `lp`s Handbuch führt `-s` als *„Do not report the
+resulting job IDs (silent mode)"* — der Bericht ist also voreingestellt an, und
+eine CUPS-Auftragskennung trägt das Ziel im Namen. Daneben nennt `lpstat -d`
+das Ziel, ohne zu drucken; auf dieser Maschine sagt es „keine
+systemvoreingestellten Ziele".
+
+**Getan:** `stdout` wird gelesen, das Ziel aus der Auftragskennung genommen —
+von hinten getrennt, weil ein Druckername Bindestriche tragen darf — und was
+sich **nicht** lesen lässt, wird nicht geraten: dann sagt der Satz, das System
+habe gewählt, und nennt kein Ziel. Zwei Pflanzungen: die feste Zeichenkette
+zurück, und ein Muster, das statt zu verweigern einen Namen erfindet.
+
+**Die Lehre ist B196 in einem Satz für Menschen.** Dort war ein verjährter Satz
+ein richtiger Name mit einem falschen Verb; hier ist es ein richtiges
+Hauptwort — „printer" stimmt — mit einem **bestimmten Artikel**, der eine
+Tatsache behauptet. Und die unbequeme Hälfte: Sorgfalt im *Inhalt* ist nicht
+Sorgfalt in den *Tatsachen*. Wer drei Warnungen über die Geheimseite schreibt,
+hat damit nicht nachgesehen, wohin das Blatt geht.
+
 **B208 — die Adresse, die ein Depot nennt, ist nicht die, von der geholt wird
 (2026-09-18).** Ein Depot ist die einzige Wirkung in diesem Baum, die **Code
 installiert** (ADR 0139 AC1). Beide Reichweitenentscheidungen stehen
