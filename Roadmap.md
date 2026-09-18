@@ -912,6 +912,43 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B215 — ein Tor, das grün war, weil es nie etwas zu sagen hatte
+(2026-09-18).** B214 endete an `narrowToOwner`, dem geprüften Helfer für
+Dateirechte. Beim Hinsehen fiel auf: **er steht zweimal im Baum.**
+`database-file-mode.ts` liegt in `apps/core/src` und in `apps/relay/src`, mit
+Zeichen für Zeichen **identischem Code** und je eigenem Kommentar — der Kern
+zitiert ADR 0071, das Relay seinen eigenen gegangenen Fall aus B120.
+
+**Die Doppelung ist gewollt**: zwei Anwendungen, keine gemeinsame Abhängigkeit,
+und ein Dateirechte-Helfer gehört nicht ins Protokoll. **Die Prüfung war es
+nicht.** Drei Tests halten die Kernfassung — verengt nur, weitet nie, nimmt
+auch `-wal` und `-shm` mit —, und die Relay-Fassung hatte **keinen einzigen**.
+Genau B213s Gestalt: eine Abschrift, die das Verhalten trägt und den Beweis
+nicht.
+
+**Gebaut: die Gleichheit halten, statt 81 Zeilen Test abzuschreiben.** Solange
+beide Fassungen denselben Code tragen, gilt der Beweis der einen für die
+andere; läuft eine fort, fällt der Schritt und sagt, welche. Kommentare bleiben
+ausgenommen — jede Fassung soll ihren eigenen Fall erzählen.
+
+**Und jetzt der Teil, der diesen Befund verdient.** Die erste Fassung der Regel
+war **grün und kaputt.** Sie schrieb in eine Liste namens `failures`, die es in
+diesem Skript nicht gibt — es heißt `errors` —, und sie stand hinter dem
+`process.exit`, das die Meldungen ausgibt. Solange die beiden Dateien
+übereinstimmten, lief sie durch und meldete „bestanden". Erst die Pflanzung
+brachte es heraus, und auch da nicht als Meldung, sondern als
+`ReferenceError: failures is not defined`.
+
+Ein Tor, dessen Fehlerweg nie gegangen wurde, ist kein Tor. Es ist eine Zeile,
+die „bestanden" sagt, weil sie nichts zu sagen hatte — **B166 in meiner eigenen
+Arbeit, eine Stunde nachdem ich denselben Satz über fremde geschrieben habe.**
+
+**Die Lehre ist nicht neu, sondern bezahlt:** die Pflanzung ist nicht die
+Zeremonie am Ende, sondern der einzige Beweis, dass ein Prüfer überhaupt
+spricht. Ein grüner Lauf beweist von einem neuen Tor **gar nichts** — er
+beweist nur, dass der Gegenstand heute in Ordnung ist, und das war er auch
+vorher schon.
+
 **B214 — derselbe Fehler wie B121, im Kern statt im Companion (2026-09-18).**
 B213 legte vier Abschriften der atomaren Schreibfolge zusammen und endete mit
 dem Satz, eine Abschrift sei gefährlich, wenn sie die **Prüfung** nicht miterbt.

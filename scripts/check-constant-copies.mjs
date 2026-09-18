@@ -334,6 +334,56 @@ for (const file of sourceFiles) {
   }
 }
 
+/**
+ * Ein Modul, das zweimal steht, steht zweimal gleich - und einer von beiden
+ * traegt den Beweis fuer beide.
+ *
+ * **Der Anlass** (2026-09-18, Befund B215). `database-file-mode.ts` steht in
+ * `apps/core/src` und in `apps/relay/src`, mit **identischem Code** und je
+ * eigenem Kommentar: der Kern zitiert ADR 0071, das Relay seinen eigenen
+ * gegangenen Fall (Befund B120, ein Relay gegen ein schon vorhandenes
+ * Datenverzeichnis). Die Doppelung ist gewollt - zwei Anwendungen, keine
+ * gemeinsame Abhaengigkeit, und ein Dateirechte-Helfer gehoert nicht ins
+ * Protokoll.
+ *
+ * **Die Pruefung war es nicht.** Drei Tests halten `narrowToOwner` im Kern -
+ * verengt nur, weitet nie, nimmt auch die `-wal`- und `-shm`-Begleitdateien -,
+ * und die Relay-Fassung hatte keinen einzigen. Genau die Gestalt aus Befund
+ * B213: eine Abschrift, die das Verhalten traegt und den Beweis nicht.
+ *
+ * **Deshalb wird hier die Gleichheit gehalten und nicht der Test abgeschrieben.**
+ * Solange der Code beider Fassungen derselbe ist, gilt der Beweis der einen fuer
+ * die andere; laeuft eine fort, faellt dieser Schritt und sagt, welche.
+ * Kommentare bleiben ausgenommen - jede Fassung erzaehlt ihren eigenen Fall.
+ */
+const mirroredModules = [
+  ['apps/core/src/database-file-mode.ts', 'apps/relay/src/database-file-mode.ts'],
+];
+const withoutProse = (text) => text
+  .replace(/\/\*[\s\S]*?\*\//gu, '')
+  .split('\n')
+  .map((line) => line.replace(/\/\/.*$/u, '').trimEnd())
+  .filter((line) => line.trim() !== '')
+  .join('\n');
+for (const [one, other] of mirroredModules) {
+  const left = withoutProse(readFileSync(join(repoRoot, one), 'utf8'));
+  const right = withoutProse(readFileSync(join(repoRoot, other), 'utf8'));
+  if (left !== right) {
+    errors.push(
+      `${one} und ${other} tragen denselben Helfer und nicht mehr denselben Code. `
+      + 'Eine Fassung ist geprueft und die andere nicht; solange sie gleich sind, '
+      + 'gilt der Beweis fuer beide. Gleichziehen, oder die ungepruefte Fassung mit '
+      + 'eigenen Tests versehen und den Eintrag hier nehmen.',
+    );
+  }
+}
+if (mirroredModules.length === 0) {
+  errors.push(
+    'kein Modulpaar wird mehr gespiegelt, also lief dieser Schritt ueber nichts. '
+    + 'Eine Null ueber keinem Korpus ist kein Befund.',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Constant-copies check failed:');
   for (const error of errors) {
@@ -348,5 +398,7 @@ console.log(
   `Constant-copies check passed (${definitionCount} exported constants across `
   + `${sourceFiles.length} files; ${copies.length} names stand more than once, `
   + `each argued, each agreed; ${closedLists.size} closed lists, and `
-  + `${unionSites} of them written out by hand as a union).`,
+  + `${unionSites} of them written out by hand as a union; `
+  + `${mirroredModules.length} Modulpaar(e) stehen zweimal und tragen denselben Code, `
+  + 'damit der Beweis der geprueften Fassung fuer beide gilt).',
 );
