@@ -1,16 +1,13 @@
 import { assertExactKeys, isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { writePicoCompanionFileAtomically } from './atomic-file.js';
 import { assertPicoInstant, picoInstantToEpochMs } from '@pico/protocol/instant';
 import {
-  chmodSync,
   closeSync,
   existsSync,
   fsyncSync,
-  mkdirSync,
   openSync,
   readFileSync,
-  renameSync,
   unlinkSync,
-  writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { PicoHomeDeviceRecoveryPendingView } from '@pico/protocol';
@@ -100,15 +97,7 @@ export function writePicoCompanionRecoveryState(
   state: PicoCompanionRecoveryState,
 ): void {
   const parsed = parsePicoCompanionRecoveryState(state);
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const temporaryPath = `${path}.tmp`;
-  writeFileSync(temporaryPath, `${JSON.stringify(parsed, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  chmodSync(temporaryPath, 0o600);
-  fsyncPath(temporaryPath, 'r+');
-  renameSync(temporaryPath, path);
-  fsyncPath(dirname(path), 'r');
+  writePicoCompanionFileAtomically(path, `${JSON.stringify(parsed, null, 2)}\n`);
 }
 
 export function clearPicoCompanionRecoveryState(path: string): void {

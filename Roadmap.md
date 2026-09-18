@@ -912,6 +912,63 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B213 — fünf Abschriften einer Folge, und nur das Original war geprüft
+(2026-09-18).** B203 fand Bytes, die eine Löschung in der SQLite des Homes
+überlebten. Dieselbe Frage einen Prozess weiter: **was schreibt und löscht der
+Companion, und was hält das?**
+
+**Das Löschen ist vier schlichte `unlinkSync`** — Postfachbuch, Erholungsstand,
+Erstlaufjournal, offene Antworten. Kein Überschreiben, was auf einem modernen
+Dateisystem auch nichts brächte; ADR 0072 hedged für die Schlüsseldateien
+ehrlich mit *„best-effort file and directory sync"*. Hier ist kein Fund.
+
+**Beim Schreiben stand einer.** Befund B121 hat am 2026-09-10
+`writePicoCompanionFileAtomically` gebaut, und sein Kommentar erklärt die
+teuerste Zeile darin: `chmodSync` neben dem `mode`. Der Grund ist nicht die
+umask — *„gemessen stimmt sie für diesen Wert nicht"* —, sondern dass `mode`
+**nur beim Anlegen** gilt. Nach einem Absturz liegt eine `.tmp` von vorher da,
+`writeFileSync` öffnet sie, lässt ihre Rechte wie sie sind, und das Umbenennen
+trägt sie auf das Ziel. Aufgefallen ist das, weil die Pflanzung *„`chmodSync`
+weg"* zuerst **nicht feuerte.**
+
+**Gemessen: die Folge stand fünfmal im Baum.** Zwei Dateien benutzen den
+Helfer (`profile.ts`, `reader-custody-space.ts`), vier schreiben sie von
+Hand - und zwar Zeile für Zeile dieselbe: `mkdir 0700`, `.tmp` mit `0600`,
+`chmodSync`, fsync, umbenennen, Verzeichnis-fsync. Kein Abschriftfehler; alle
+vier hatten das `chmodSync`.
+
+**Der Fund ist, was sie hielt.** Nur der Test des Helfers kennt den Fall der
+liegengebliebenen Zwischendatei:
+
+| Datei | Faelle mit `.tmp` im Test |
+|---|---|
+| `atomic-file.test.ts` | **6** |
+| `link-mailbox`, `pending-reply` | 1 |
+| `recovery-state`, `first-run-journal`, `profile`, `reader-custody-space` | 0 |
+
+Die vier Handfassungen haben Moduszusicherungen — aber die **leichte**: „die
+geschriebene Datei ist 0600". Genau die besteht auch ohne `chmodSync`, und
+genau das hat B121 an der eigenen Pflanzung gemessen. Die teure Eigenschaft
+stand also viermal von Hand da und war von **nichts** gehalten; der Test, der
+sie hält, prüfte eine Implementierung, die diese vier nicht benutzten.
+
+**Getan: die vier benutzen jetzt den Helfer.** 48 Zeilen weniger, 8 mehr, die
+vierzig Tests der betroffenen Suiten unverändert grün, und `noUnusedLocals`
+hat beim Aufräumen jede tote Einfuhr benannt - das Werkzeug aus B178 bis B180
+an genau der Stelle, für die es da ist.
+
+**Was das kauft, gemessen:** die Pflanzung *„`chmodSync` aus dem Helfer"* lässt
+weiterhin genau einen Test fallen. Die Zahl ändert sich nicht - **die Zahl der
+Schreiber hinter diesem Test ändert sich**, von zwei auf sechs. Ein Netz wird
+nicht dadurch besser, dass mehr Tests fallen, sondern dadurch, dass mehr Code
+dahinter liegt.
+
+**Die Lehre.** Eine Abschrift ist nicht dann gefährlich, wenn sie falsch ist -
+diese vier waren richtig -, sondern wenn sie **die Prüfung nicht miterbt**. Der
+Helfer trug seinen Beweis; die Abschriften trugen nur das Verhalten. Das ist
+*„eine Wahrheit, zweimal geschrieben, driftet"* mit einem Zusatz: sie driftet
+auch dann, wenn beide Fassungen heute stimmen, weil nur eine gehalten wird.
+
 **B212 — der erste verjährte Satz, den ich selbst erzeugt habe (2026-09-18).**
 Diese Runde hat sieben Sätze berichtigt, die einmal wahr waren und es
 irgendwann nicht mehr waren. Alle sieben stammten von früher. Dann habe ich den
