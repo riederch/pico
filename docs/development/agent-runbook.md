@@ -196,6 +196,19 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+21. **Wer eine Zahl ueber sein eigenes Werkzeug viermal berichtigt, hat
+   dreimal nicht gemessen.** Seit dem 2026-09-18 wurde `pnpm prepush` immer
+   wieder abgebrochen. Ich habe die Ursache dreimal behauptet und dreimal
+   widerlegt, danach aufgehoert zu erklaeren und nur noch gezaehlt - „zwei von
+   vier", „drei von sieben" -, jedes Mal mit einem vorsichtigeren Satz daneben.
+   Am 2026-09-19 haben zwei Zeilen es entschieden (B221): `journalctl -k` zeigt
+   ueber drei Tage **null** OOM-Kills, und der letzte abgebrochene Lauf
+   hinterliess **24 Byte**, starb also vor dem ersten Schritt. Es war nie der
+   Kernel und nie ein Schritt. Dieses Programm besteht darauf, dass eine
+   Eigenschaft erst gemessen wahr ist - und ich hatte die Regel auf alles
+   angewandt ausser auf mein eigenes Werkzeug. Ein Zaehler ist keine Ursache,
+   und Vorsicht im Satz ersetzt keine Messung.
+
 20. **Wer misst, was ein Programm neben seine Daten legt, fragt den Lauf und
    den Quelltext.** Am 2026-09-18 sollte ein Tor zaehlen, was die beiden
    Add-ons unter `/data` ablegen (B216). Der Lauf antwortet sauber: die

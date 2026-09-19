@@ -912,6 +912,52 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B221 — vier Abbrüche, drei falsche Erklärungen, und die Messung war ein
+Einzeiler (2026-09-19).** Seit dem 2026-09-18 wird `pnpm prepush` auf dieser
+Maschine abgebrochen. Ich habe die Ursache **dreimal** behauptet und dreimal
+falsch: nicht `shift-clock.mjs`, nicht der freie Arbeitsspeicher, nicht der
+Swap-Stand. Danach habe ich aufgehört zu erklären und nur noch gezählt — „zwei
+von vier", „drei von sieben", jedes Mal mit einem vorsichtigeren Satz daneben.
+Vorsichtig war richtig; **messen** wäre besser gewesen.
+
+Zwei Zeilen haben es entschieden.
+
+`journalctl -k --since "3 days ago" | grep -c 'out of memory\|oom-kill'` sagt
+**null**. Der Linux-OOM-Killer hat auf dieser Maschine in drei Tagen nichts
+getötet. Was die Läufe beendet, ist die **Aufsicht über die Hintergrundaufgaben
+des Agenten**, die bei knappem Speicher eingreift — sie sagt es sogar selbst,
+und ich habe zwei Tage lang „Speichermangel" gelesen und „Kernel" verstanden.
+
+Und der letzte abgebrochene Lauf hinterließ **24 Byte** Ausgabe. Er starb,
+bevor der erste Schritt seine Überschrift schreiben konnte. Damit fällt auch
+der letzte Satz, den ich noch für gemessen hielt: die Abbrüche gehören keinem
+Schritt, weil sie oft gar keinen erreichen.
+
+**Der Druck ist trotzdem echt, und jetzt ist er eine Zahl.** Eine Stichprobe
+alle zwei Sekunden über einen vollen Suitenlauf:
+
+| | vitest-Prozesse | vitest-RSS | belegt gesamt | Dauer |
+|---|---|---|---|---|
+| ungebremst | 17 | 3,3 GB | **14,6 von 15,3 GB** | 399 s |
+| auf vier gebremst | 6 | 1,6 GB | 14,0 GB | **396 s** |
+
+Die Hälfte des Speichers, und **dieselbe Zeit**. Sechzehn Arbeiter bringen hier
+nichts, weil `--workspace-concurrency=1` die Pakete ohnehin nacheinander fährt
+und die meisten zu wenige Testdateien haben, um sechzehn zu beschäftigen.
+Parallelität in der falschen Richtung, bezahlt mit 1,7 GB.
+
+Die Grenze steht in `prepush.mjs`, in der Umgebung der Kindprozesse — nicht in
+siebzehn Paketen und nicht in `package.json`: wie viel von *dieser* Maschine ein
+Prüflauf nehmen darf, ist eine Eigenschaft der Maschine, und ein fremder Läufer
+ist eine andere.
+
+**Die Lehre ist unbequemer als der Fund.** Dieses Programm besteht darauf, dass
+eine Eigenschaft erst dann wahr ist, wenn sie gemessen wurde — und ich habe die
+Regel an allem angewandt außer an meinem eigenen Werkzeug. Vier Fassungen eines
+Kommentars, jede vorsichtiger als die vorige, keine davon eine Messung. Regel 21
+fürs Handbuch: **wer eine Zahl über sein eigenes Werkzeug viermal berichtigt,
+hat dreimal nicht gemessen.** Ein Zähler ist keine Ursache.
+
 **B220 — drei dokumentierte Knöpfe, die es nie gab (2026-09-19).** ADR 0104 S2
 macht eine Einstellung einer Person in der Umgebung zu einem Defekt, und
 `settings:check` hält die Klassifikation dagegen: jede `PICO_*`-Variable muss
