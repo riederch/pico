@@ -912,6 +912,104 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B219 — ein Befund, dessen Gegenstand unter ihm weitergewachsen ist
+(2026-09-19).** B78 hat am 2026-09-07 die Empfangsfristen der lauschenden
+Flächen vermessen und dabei die schärfste Form dieser Krankheit gefunden: die
+Foundation-Fläche hatte **keine** Empfangsfrist, nicht weil eine fehlte,
+sondern weil Fastify `requestTimeout` auf `0` setzt. Wer den Rahmen nimmt,
+verliert eine Grenze, die die Laufzeit mitbringt. Die Tabelle in B78 hatte
+**drei Zeilen**, weil der Baum drei lauschende HTTP-Flächen hatte.
+
+Er hat jetzt **sieben Lauscher**. ADR 0154 hat dem Relay zwei weitere gegeben
+(Gesundheit, Betreiber), ADR 0110 dem Vault-Daemon einen Socket, und eine
+Testvorrichtung öffnet einen eigenen. Der Test, den B78 hinterlassen hat, liest
+die Werte am *laufenden* Foundation-Server ab — und weiss von den anderen
+sechs nichts. Der Befund ist nicht gealtert, sein **Gegenstand** ist gewachsen.
+
+Gemessen, Datei für Datei über den Syntaxbaum: fünf setzen alle vier Schranken,
+zwei nicht. Und beide zu Recht — es ist heute kein Loch im Baum, sondern eine
+Eigenschaft, die durch Aufmerksamkeit gilt und nicht durch Bauart. Genau das
+war auch B94s Satz über `no-store`, und dort war die siebzehnte Antwort die
+gefährliche.
+
+**Welche Schranken einer schuldet, sagt sein Import und nicht sein Name.**
+`createServer` aus `node:http` ist eine Anfragefläche und schuldet vier;
+derselbe Name aus `node:net` ist ein Strom und schuldet eine Verbindungsgrenze
+plus etwas, das ein Gespräch beendet, das nie anfängt. Der Vault-Daemon ist der
+zweite Fall: AF_UNIX auf `0600`, `maxConnections = 16`, und ein
+`HELLO_TIMEOUT_MS`, das den Socket zerstört, wenn kein Hallo kommt. Danach
+bleibt eine Verbindung **absichtlich** offen, weil eine Lease und eine
+entsperrte Sitzung an genau einer hängen.
+
+**Eine begründete Ausnahme wird am Gegenstand geprüft, nicht geglaubt** (Regel
+14). Der Daemon-Eintrag nennt `HELLO_TIMEOUT_MS` als das, was in der Datei
+stehen bleiben muss; die Testvorrichtung ist ausgenommen, solange **keine
+ausgelieferte Quelle sie importiert** — was das Tor selbst nachsieht, statt es
+ihrem Kommentar zu glauben.
+
+Und dieser Kommentar war falsch. Er sagte *„Nothing ships this"*. Gemessen:
+`tsc` baut die Datei nach `apps/core/dist`, und `docker/home.Dockerfile` kopiert
+den ganzen Bau ins Abbild — sie **wird** ausgeliefert. Harmlos ist sie, weil
+nichts sie importiert und also nichts sie startet; das ist ein anderer Satz,
+und seit heute eine Regel statt einer Gewohnheit.
+
+Gepflanzt und gebissen: zwei Schranken aus dem Gesundheitslauscher des Relays
+genommen, `HELLO_TIMEOUT_MS` im Daemon umbenannt, und `app.ts` die
+Testvorrichtung importieren lassen.
+
+**B218 — neun Wörter und dreizehn Adressen, die erst beim Tag falsch werden
+(2026-09-19).** Die Container-Rauchtests sind die einzige Stelle, an der
+irgendetwas die gebauten Abbilder wirklich fährt. Sie entscheiden, was sie
+gesehen haben, indem sie ihre Ausgabe nach Zeichenketten durchsuchen: ein
+Dashboard-Titel, ein Dienstname, drei Ereignisse aus dem Startprotokoll. Jede
+davon ist eine Wahrheit, zweimal geschrieben — einmal in
+`.github/workflows/ci.yml`, einmal in einer Quelldatei —, und nichts hat die
+beiden je zusammengehalten.
+
+Es ist schon einmal schiefgegangen, und der Arbeitsablauf sagt es im eigenen
+Kommentar: eine Zeile, auf die der Job wartete, wanderte auf einen späteren
+Start, *„which is a check that could not pass and read as a broken image for
+two days"*.
+
+**Seit dem 2026-09-18 ist es schlimmer, durch meine eigene Änderung.** Der Job
+läuft nicht mehr bei jedem Push, sondern auf einen Release-Tag und auf einen
+Knopf (B211/B212). Eine abgedriftete Zeichenkette fiel früher beim nächsten
+Push auf, während derjenige, der umbenannt hatte, noch hinsah. Jetzt fällt sie
+am Tag auf — auf dem einen Job, den niemand billig noch einmal fährt.
+
+Gemessen: **neun** Suchen nach Zeichenketten und **dreizehn** Adressen, die der
+Job anruft. Alle stimmen heute; der Fund ist nicht eine Abweichung, sondern
+dass es keine gab, die eine hätte finden können.
+
+`smoke:check` liest beides **aus dem Arbeitsablauf heraus statt aus einer Liste
+daneben** — eine Liste hier wäre die dritte Abschrift derselben Wahrheit. Eine
+Suchform, die der Leser nicht versteht, **fällt**, statt übersprungen zu
+werden: ein Wortschatz, der still wächst, hört auf, einer zu sein. Vier der
+neun stehen wörtlich in einer ausgelieferten Quelle, fünf über jedes Wort, das
+sie nennen (`"service":"pico-home-core"` steht im Quelltext als
+`service: 'pico-home-core'`, und eine Prüfung auf die JSON-Schreibweise wäre
+eine Prüfung auf nichts).
+
+Die zweite Hälfte hat sich bezahlt gemacht, wie schon bei B216: `/operator/claim`
+steht in **keiner** App, sondern in `packages/protocol` — wer nur in `apps/`
+gesucht hätte, hätte die Route für verschwunden gehalten. Und `/nothing-here`
+ist der umgekehrte Fall und **geprüft statt geglaubt**: der Job ruft sie an,
+*damit* sie wie nichts antwortet (ADR 0153 PK3), also muss sie abwesend
+bleiben. Baut jemand eine Route dieses Namens, hört der Vergleich zwischen
+unbekannter Route und `/health` auf, etwas zu beweisen — und fällt hier, statt
+dort durchzugehen.
+
+Gepflanzt und gebissen: ein Ereignis im Arbeitsablauf umbenannt, eine Adresse
+auf eine nicht bediente gelegt, eine Suchform in ein `$(printf …)` gepackt.
+
+**Was dieses Tor nicht hält**, gehört dazugesagt. Die Rauchtests behaupten
+mehr: einen Statuscode 401 ohne Token, `b.status === 'ok'` aus der
+Gesundheitsantwort des Relays, `typeof body.credential === 'string'` aus der
+Übernahme. Feldnamen wie `status` und `credential` kommen in diesem Baum
+hundertfach vor; eine Regel darüber könnte nie fallen, und eine Prüfung, die
+nicht fallen kann, ist schlechter als keine — das ist B166s Satz, und er gilt
+auch für die Regeln, die ich *nicht* schreibe.
+
 **B217 — dasselbe Argument stand schon im Haus, eine Tuer weiter
 (2026-09-18).** `pico_home/config.yaml` richtet den Wachhund des Supervisors
 auf `http://[HOST]:[PORT:3100]/health`. Diese eine Route entscheidet also, ob
