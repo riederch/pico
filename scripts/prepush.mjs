@@ -24,18 +24,25 @@ import { join } from 'node:path';
  * (`--workspace-concurrency=1`), aber vitest startet je Paket bis zu einen
  * Arbeiter pro Kern.
  *
- * **Warum jeder Schritt einen Versuch mehr bekommt.** Am 2026-09-18 wurden vier
- * Läufe gefahren; zwei wurden vom Speichermangel abgeschossen, und sie trafen
- * **verschiedene** Schritte - einmal `clock:check` direkt nach den Suiten,
- * einmal `display-zone:check` kurz vor dem Ende. Zwei frühere Fassungen dieses
- * Kommentars schrieben das `clock:check` zu ("zweimal von zwei", dann "zwei von
- * drei"); beide waren zu früh verallgemeinert. Die Eigenschaft gehört der
- * Maschine, nicht dem Schritt.
+ * **Warum jeder Schritt einen Versuch mehr bekommt.** Stand 2026-09-19 sind
+ * sieben Läufe gefahren worden, **drei** davon vom Speichermangel abgeschossen.
+ * Und sie trafen nicht irgendwo: **alle drei im dritten oder vierten Schritt** -
+ * einmal `clock:check`, zweimal `display-zone:check`. Nie `verify:gates`, nie
+ * `test`.
  *
- * Die Ursache kenne ich nicht, und drei Erklärungen sind widerlegt: nicht
- * `shift-clock.mjs` (53 Zeilen, leitet nur `Date` ab), nicht der freie
+ * Diese Zahl hat schon viermal nicht gestimmt. Frühere Fassungen schrieben
+ * "zweimal von zwei", dann "zwei von drei", dann "zwei von vier, verschiedene
+ * Schritte" - die letzte davon war der Versuch, sich das Verallgemeinern
+ * abzugewöhnen, und mit dem dritten Abbruch ist sie selbst zu vorsichtig
+ * geworden. Was sich über sieben Läufe hält: es sind die beiden Schritte, die
+ * die Suiten ein **zweites** und **drittes** Mal fahren.
+ *
+ * Die Ursache kenne ich weiterhin nicht, und drei Erklärungen sind widerlegt:
+ * nicht `shift-clock.mjs` (53 Zeilen, leitet nur `Date` ab), nicht der freie
  * Arbeitsspeicher und nicht der Swap-Stand - beim Abbruch und beim Erfolg
- * standen dieselben Zahlen.
+ * standen dieselben Zahlen. Beim dritten Abbruch lief nebenher anderes im
+ * selben Baum (fünf Tore von Hand); das ist ein Verdacht und keine Messung,
+ * aber es kostet nichts, während eines Laufs nichts anderes zu starten.
  *
  * Für ein umgebungsbedingtes Scheitern ist *ein* Versuch mehr die richtige
  * Antwort, und er wird laut angekündigt: ein stiller Wiederholungsversuch
@@ -116,9 +123,9 @@ for (const step of STEPS) {
   if (!outcome.ok) {
     process.stdout.write(
       `\n${step.script} ist mit ${outcome.status} gefallen. Ein Versuch mehr, und\n`
-      + 'zwar ein einziger: auf dieser Maschine wurden am 2026-09-18 zwei von vier\n'
-      + 'Laeufen vom Speichermangel abgeschossen, und sie trafen verschiedene\n'
-      + 'Schritte - die Eigenschaft gehoert der Maschine, nicht dem Schritt.\n'
+      + 'zwar ein einziger: auf dieser Maschine wurden bis zum 2026-09-19 drei von\n'
+      + 'sieben Laeufen vom Speichermangel abgeschossen, alle drei im dritten oder\n'
+      + 'vierten Schritt - also in den beiden, die die Suiten noch einmal fahren.\n'
       + 'Faellt er auch jetzt, ist es keine Speicherlage, sondern ein Fund.\n',
     );
     outcome = run(step.script);
