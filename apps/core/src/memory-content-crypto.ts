@@ -202,8 +202,15 @@ export class MemoryContentCrypto {
 
   /**
    * Crypto-shred a domain: destroy every KEK version so all of the domain's
-   * items become unreadable, including copies in backups (ADR 0072 R5, with the
-   * ADR 0033 limits). Ciphertext and envelopes stay; only the keys are gone.
+   * items become unreadable, including copies in backups (ADR 0072 R6, with
+   * the ADR 0033 limits). Ciphertext and envelopes stay; only the keys are
+   * gone.
+   *
+   * This said `R5` until 2026-09-19 (finding B223), and ADR 0072 has no R5 -
+   * it carries exactly one label, `R6`, inherited from ADR 0071. R6 is also
+   * the right one: the half of this sentence that reaches into backups is
+   * precisely R6's, because "destroying a key that every data backup still
+   * contains destroys nothing".
    */
   public shredDomain(domainId: string, custodyClass: MemoryDomainCustodyClass = 'host_custody'): { removed: number } {
     return this.keyStore.shredDomain(domainId, { custodyClass });
