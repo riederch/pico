@@ -19,30 +19,41 @@ import { join } from 'node:path';
  * einzeln, aus einem gemessenen Grund, nicht aus Geschmack.
  *
  * **Warum einzeln: der volle Lauf passt auf dieser Maschine nicht in einen
- * Zug.** Am 2026-09-18 wurde er zweimal vom Speichermangel abgeschossen, neben
- * einer laufenden IDE. Die Pakete laufen zwar schon einzeln
- * (`--workspace-concurrency=1`), aber vitest startet je Paket bis zu einen
- * Arbeiter pro Kern.
+ * Zug.** Am 2026-09-18 wurde er zweimal abgebrochen, neben einer laufenden IDE.
+ * Die Pakete laufen zwar schon einzeln (`--workspace-concurrency=1`), aber
+ * vitest startet je Paket bis zu einen Arbeiter pro Kern.
  *
- * **Warum jeder Schritt einen Versuch mehr bekommt.** Stand 2026-09-19 sind
- * sieben Läufe gefahren worden, **drei** davon vom Speichermangel abgeschossen.
- * Und sie trafen nicht irgendwo: **alle drei im dritten oder vierten Schritt** -
- * einmal `clock:check`, zweimal `display-zone:check`. Nie `verify:gates`, nie
- * `test`.
+ * **Warum jeder Schritt einen Versuch mehr bekommt.** Bis zum 2026-09-19
+ * wurden acht Läufe gefahren und vier abgebrochen. Vier Fassungen dieses
+ * Kommentars haben die Zahl mitgeschleppt und dreimal eine Ursache behauptet,
+ * die nicht stimmte. Am 2026-09-19 wurde sie gemessen, und keine der drei war
+ * es (Befund B221):
  *
- * Diese Zahl hat schon viermal nicht gestimmt. Frühere Fassungen schrieben
- * "zweimal von zwei", dann "zwei von drei", dann "zwei von vier, verschiedene
- * Schritte" - die letzte davon war der Versuch, sich das Verallgemeinern
- * abzugewöhnen, und mit dem dritten Abbruch ist sie selbst zu vorsichtig
- * geworden. Was sich über sieben Läufe hält: es sind die beiden Schritte, die
- * die Suiten ein **zweites** und **drittes** Mal fahren.
+ * **Es war nie der Kernel.** `journalctl -k` über drei Tage: *null* Zeilen mit
+ * `Out of memory` oder `oom-kill`. Der Linux-OOM-Killer hat auf dieser Maschine
+ * nichts getötet. Was die Läufe beendet, ist die Aufsicht über die
+ * Hintergrundaufgaben des Agenten, die bei knappem Speicher eingreift - und
+ * deshalb passte auch keine Erklärung, die am Schritt hing: der letzte Abbruch
+ * hinterließ **24 Byte** Ausgabe, er kam also, bevor der erste Schritt seine
+ * Überschrift schreiben konnte.
  *
- * Die Ursache kenne ich weiterhin nicht, und drei Erklärungen sind widerlegt:
- * nicht `shift-clock.mjs` (53 Zeilen, leitet nur `Date` ab), nicht der freie
- * Arbeitsspeicher und nicht der Swap-Stand - beim Abbruch und beim Erfolg
- * standen dieselben Zahlen. Beim dritten Abbruch lief nebenher anderes im
- * selben Baum (fünf Tore von Hand); das ist ein Verdacht und keine Messung,
- * aber es kostet nichts, während eines Laufs nichts anderes zu starten.
+ * **Der Druck ist trotzdem echt, und woher er kommt, ist jetzt eine Zahl.**
+ * Gemessen an den Suiten, mit einer Stichprobe alle zwei Sekunden:
+ *
+ *   ungebremst      17 vitest-Prozesse   3,3 GB   14,6 von 15,3 GB belegt   399 s
+ *   auf vier        6 vitest-Prozesse    1,6 GB   14,0 GB belegt            396 s
+ *
+ * Die Hälfte des Speichers, und **dieselbe Zeit**. Die Aufteilung auf sechzehn
+ * Arbeiter bringt hier nichts, weil `--workspace-concurrency=1` die Pakete
+ * ohnehin nacheinander fährt und die meisten Pakete zu wenige Testdateien
+ * haben, um sechzehn Arbeiter zu beschäftigen. Parallelität in der falschen
+ * Richtung, bezahlt mit 1,7 GB.
+ *
+ * Deshalb setzt dieser Befehl die Grenze selbst, in der Umgebung der
+ * Kindprozesse und nicht in siebzehn Paketen: wie viel von dieser Maschine ein
+ * Prüflauf nehmen darf, ist eine Eigenschaft der Maschine und nicht der Pakete.
+ * `package.json` bleibt unangetastet, weil ein fremder Läufer eine andere
+ * Maschine ist.
  *
  * Für ein umgebungsbedingtes Scheitern ist *ein* Versuch mehr die richtige
  * Antwort, und er wird laut angekündigt: ein stiller Wiederholungsversuch
@@ -68,9 +79,24 @@ const STEPS = [
 /** Wo der Stand liegt: im Scratchpad, nicht im Baum - er ist kein Ergebnis. */
 const STATE = join(tmpdir(), 'pico-prepush-state.json');
 
+/**
+ * Was ein Schritt an Arbeitern bekommen darf (B221). Beide Namenspaare, weil
+ * vitest je nach Pool das eine oder das andere liest und ein Wert, den niemand
+ * liest, still nichts tut.
+ */
+const workerLimits = {
+  VITEST_MAX_FORKS: '4',
+  VITEST_MIN_FORKS: '1',
+  VITEST_MAX_THREADS: '4',
+  VITEST_MIN_THREADS: '1',
+};
+
 function run(script) {
   const started = Date.now();
-  const result = spawnSync('pnpm', ['run', script], { stdio: 'inherit' });
+  const result = spawnSync('pnpm', ['run', script], {
+    stdio: 'inherit',
+    env: { ...process.env, ...workerLimits },
+  });
   return { ok: result.status === 0, status: result.status, seconds: Math.round((Date.now() - started) / 1000) };
 }
 
@@ -123,9 +149,10 @@ for (const step of STEPS) {
   if (!outcome.ok) {
     process.stdout.write(
       `\n${step.script} ist mit ${outcome.status} gefallen. Ein Versuch mehr, und\n`
-      + 'zwar ein einziger: auf dieser Maschine wurden bis zum 2026-09-19 drei von\n'
-      + 'sieben Laeufen vom Speichermangel abgeschossen, alle drei im dritten oder\n'
-      + 'vierten Schritt - also in den beiden, die die Suiten noch einmal fahren.\n'
+      + 'zwar ein einziger: bis zum 2026-09-19 wurden vier von acht Laeufen\n'
+      + 'abgebrochen - nicht vom Kernel (der hat nie einen OOM-Kill protokolliert),\n'
+      + 'sondern von der Aufsicht ueber Hintergrundaufgaben. Seit B221 laufen die\n'
+      + 'Suiten mit vier Arbeitern statt sechzehn: halber Speicher, gleiche Zeit.\n'
       + 'Faellt er auch jetzt, ist es keine Speicherlage, sondern ein Fund.\n',
     );
     outcome = run(step.script);
