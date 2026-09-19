@@ -35,9 +35,8 @@ since ADR 0147 keeps the mailbox surface, the health signal and operator
 administration apart. `PICO_RELAY_OPERATOR` is the hostname senders resolve
 to reach this relay, so it is an address rather than a preference, and the
 service refuses to start without it rather than guessing one that would issue
-addresses pointing elsewhere. `PICO_RELAY_MAX_CONNECTIONS`,
-`PICO_RELAY_HEADERS_TIMEOUT_MS`, `PICO_RELAY_KEEP_ALIVE_TIMEOUT_MS` and
-`PICO_RELAY_REQUEST_TIMEOUT_MS` are what the machine can carry.
+addresses pointing elsewhere. `PICO_RELAY_MAX_CONNECTIONS` is what the machine
+can carry.
 
 **Not one of them is a person's decision**, and that is the load-bearing part:
 a relay holds no Pico identity and decides nothing for anybody, so it has no
@@ -45,6 +44,36 @@ setting to misplace. The classification is cheap here precisely because the
 component was built that way - and writing it down is what makes the emptiness
 checkable instead of assumed.
 
+**S5 (companion, shell and vault daemon), 2026-09-19 - deployment parameters
+and one probe switch:**
+`PICO_COMPANION_PROFILE` is where the companion keeps its profile file, and
+`PICO_VAULT_HOME`, `PICO_FOUNDATION_DATA_PATH` and
+`PICO_FOUNDATION_BACKUP_PATH` are the three paths the vault daemon and its CLI
+are told about. All four are places on a disk rather than preferences.
+
+`PICO_COMPANION_RELEASE_PROBE` is the odd one and gets its own word: it is a
+**probe switch**, not a deployment parameter. Its two values turn the shell
+into an instrument for one measurement, and calling that a deployment parameter
+would suggest an operator sets it in a running household. Nobody should.
+
+These five were read by the product and classified nowhere until 2026-09-19.
+The relay block above was written when this check learned to look past the
+core, and its passing line then read as though those two were all of them. This
+is the same lesson a second time, so the check now reads **every** shipped
+source instead of two named directories - there is no third layer left to find.
+
+Status note, 2026-09-19: **three knobs that were never there** (finding B220).
+The relay block above named `PICO_RELAY_HEADERS_TIMEOUT_MS`,
+`PICO_RELAY_KEEP_ALIVE_TIMEOUT_MS` and `PICO_RELAY_REQUEST_TIMEOUT_MS` as
+deployment parameters from 2026-08-24 until today. They are exported constants
+in `apps/relay/src/server.ts`, and no deployment can set them. The check that
+was meant to keep this table honest matched a **name** in the relay's sources
+with a regular expression, so three compile-time constants counted as
+environment entries - a documented knob that does not exist, which is the
+mirror of an undocumented one and reads as knowledge just the same. The check
+reads the syntax tree now, and only a real read of `env` counts. Whether the
+three should become settable is a separate question and deliberately left
+open.
 
 Status note, 2026-08-16: **S3's retirement is carried out.**
 `memory_encryption` is gone from the add-on configuration in 0.2.0, and

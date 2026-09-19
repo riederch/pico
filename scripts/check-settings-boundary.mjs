@@ -1,4 +1,6 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,16 +23,69 @@ import { fileURLToPath } from 'node:url';
  * something that is gone, which reads as knowledge and is furniture.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
+const ts = createRequire(import.meta.url)('typescript');
 const errors = [];
 
-const config = readFileSync(join(repoRoot, 'apps/core/src/config.ts'), 'utf8');
+/**
+ * Every `PICO_*` a source really reads out of the environment.
+ *
+ * **Through the syntax tree, because a regular expression reads names and not
+ * reads** (finding B220, and B188 before it). Both halves of this check used
+ * to match `\bPICO_[A-Z0-9_]+\b` in a file's text, so
+ * `PICO_RELAY_REQUEST_TIMEOUT_MS` - an exported constant in the relay's
+ * server - counted as an environment entry. ADR 0104 then classified three
+ * such constants as deployment parameters, which promised three knobs no
+ * deployment can turn: a documented setting that does not exist, which is the
+ * mirror of an undocumented one and reads as knowledge just the same.
+ *
+ * Three shapes, and they are the three this tree uses: `env.NAME`,
+ * `env['NAME']`, and a helper that takes the environment and the name as
+ * arguments (`readNonEmptyString(env, 'PICO_X', fallback)`).
+ */
+function environmentReads(path) {
+  const text = readFileSync(join(repoRoot, path), 'utf8');
+  if (!text.includes('PICO_')) return new Set();
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
+  const found = new Set();
+  const add = (name) => {
+    if (/^PICO_[A-Z0-9_]+$/u.test(name)) found.add(name);
+  };
+  const isEnvironment = (node) => /(^|\.)env$/u.test(node.getText());
+  (function scan(node) {
+    if (ts.isPropertyAccessExpression(node) && isEnvironment(node.expression)) {
+      add(node.name.text);
+    }
+    if (ts.isElementAccessExpression(node)
+      && isEnvironment(node.expression)
+      && node.argumentExpression !== undefined
+      && ts.isStringLiteral(node.argumentExpression)) {
+      add(node.argumentExpression.text);
+    }
+    if (ts.isCallExpression(node) && node.arguments.some(isEnvironment)) {
+      for (const argument of node.arguments) {
+        if (ts.isStringLiteral(argument)) add(argument.text);
+      }
+    }
+    node.forEachChild(scan);
+  })(source);
+  return found;
+}
+
+/** Every shipped source, because every one of them can read the environment. */
+const shipped = execFileSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf8' })
+  .split('\n')
+  .filter((path) => /^(apps|packages|modules)\/.*\.ts$/u.test(path))
+  .filter((path) => !path.includes('.test.'));
+
 const adr = readFileSync(
   join(repoRoot, 'docs/architecture/0104-settings-belong-to-pico-not-to-host-configuration.md'),
   'utf8',
 );
 
-/** Everything the parser reads from the environment. */
-const inConfig = new Set([...config.matchAll(/\bPICO_[A-Z0-9_]+\b/gu)].map(([name]) => name));
+/** Everything the core reads from the environment. */
+const inConfig = new Set(shipped
+  .filter((path) => path.startsWith('apps/core/src/'))
+  .flatMap((path) => [...environmentReads(path)]));
 
 /**
  * **And the relay's own, which this check did not look at until 2026-08-24.**
@@ -44,12 +99,22 @@ const inConfig = new Set([...config.matchAll(/\bPICO_[A-Z0-9_]+\b/gu)].map(([nam
  * relay holds no Pico identity and decides nothing for anybody, so it has no
  * setting to misplace. That emptiness is now checkable rather than assumed.
  */
-const relayRoot = join(repoRoot, 'apps', 'relay', 'src');
-const inRelay = new Set(readdirSync(relayRoot)
-  .filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
-  .flatMap((entry) => [
-    ...readFileSync(join(relayRoot, entry), 'utf8').matchAll(/\bPICO_[A-Z0-9_]+\b/gu),
-  ].map(([name]) => name)));
+const inRelay = new Set(shipped
+  .filter((path) => path.startsWith('apps/relay/src/'))
+  .flatMap((path) => [...environmentReads(path)]));
+
+/**
+ * And everything else, which nothing looked at until 2026-09-19 (B220).
+ *
+ * The relay block below was written when this check learned to look past the
+ * core, and its passing line then read as though *those two* were all of them.
+ * They were not: the companion, the shell and the vault daemon read five more.
+ * This group is defined by exclusion rather than by a list of directories, so
+ * a new app is inside it on the day it is written.
+ */
+const inRest = new Set(shipped
+  .filter((path) => !path.startsWith('apps/core/src/') && !path.startsWith('apps/relay/src/'))
+  .flatMap((path) => [...environmentReads(path)]));
 
 /**
  * Everything S5 classifies. Read from the gate's own section rather than the
@@ -84,6 +149,10 @@ const relayStart = adr.indexOf('**S5 (relay), 2026-08-24 - deployment parameters
 const relayEnd = relayStart === -1 ? -1 : [
   adr.indexOf('\n## ', relayStart),
   adr.indexOf('\nStatus note', relayStart),
+  // Und am naechsten S5-Block, seit es einen dritten gibt (B220): ohne diese
+  // Grenze verschluckte der Relay-Schnitt die Klassifikation darunter und
+  // meldete jeden ihrer Namen als veraltete Relay-Zeile.
+  adr.indexOf('\n**S5 (', relayStart + 4),
 ].filter((index) => index !== -1).sort((left, right) => left - right)[0] ?? -1;
 if (relayStart === -1) {
   errors.push(
@@ -96,6 +165,30 @@ const relaySection = relayStart === -1
   : adr.slice(relayStart, relayEnd === -1 ? undefined : relayEnd);
 const inRelayAdr = new Set(
   [...relaySection.matchAll(/`(PICO_[A-Z0-9_]+)`/gu)].map(([, name]) => name),
+);
+
+/**
+ * Der dritte Block, nach derselben Regel wie die beiden darueber: an seiner
+ * Ueberschrift gefunden, nicht im ganzen Dokument - erwaehnt werden und
+ * einsortiert sein sind zwei verschiedene Dinge.
+ */
+const restStart = adr.indexOf('**S5 (companion, shell and vault daemon), 2026-09-19');
+const restEnd = restStart === -1 ? -1 : [
+  adr.indexOf('\n## ', restStart),
+  adr.indexOf('\nStatus note', restStart),
+  adr.indexOf('\n**S5 (relay)', restStart),
+].filter((index) => index !== -1).sort((left, right) => left - right)[0] ?? -1;
+if (restStart === -1) {
+  errors.push(
+    'ADR 0104 has no block for what the companion, the shell and the vault daemon read. '
+    + 'The classification is the gate, so a missing block is a missing rule.',
+  );
+}
+const restSection = restStart === -1
+  ? ''
+  : adr.slice(restStart, restEnd === -1 ? undefined : restEnd);
+const inRestAdr = new Set(
+  [...restSection.matchAll(/`(PICO_[A-Z0-9_]+)`/gu)].map(([, name]) => name),
 );
 
 for (const name of [...inConfig].sort()) {
@@ -136,6 +229,28 @@ for (const name of [...inRelayAdr].sort()) {
     );
   }
 }
+for (const name of [...inRest].sort()) {
+  if (!inRestAdr.has(name)) {
+    errors.push(
+      `${name} is read from the environment outside the core and the relay, and classified `
+      + 'nowhere in ADR 0104. A knob nobody sorted is a knob nobody can call a defect.',
+    );
+  }
+}
+for (const name of [...inRestAdr].sort()) {
+  if (!inRest.has(name)) {
+    errors.push(
+      `${name} is classified in ADR 0104's third block and nothing outside the core and the `
+      + 'relay reads it. A stale row reads as knowledge and is furniture.',
+    );
+  }
+}
+if (inRest.size === 0) {
+  errors.push(
+    'nothing outside the core and the relay reads the environment, so the third part of this '
+    + 'check ran over nothing.',
+  );
+}
 if (inRelay.size === 0) {
   errors.push(
     'apps/relay/src: no environment entry was read, so the relay half of this check ran '
@@ -152,6 +267,9 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Settings boundary check passed: ${inConfig.size} Home and ${inRelay.size} relay `
-  + 'environment entries, each classified in ADR 0104.',
+  `Settings boundary check passed: ${inConfig.size + inRelay.size + inRest.size} environment `
+  + `entries across ${shipped.length} shipped sources - ${inConfig.size} the Home reads, `
+  + `${inRelay.size} the relay, ${inRest.size} the companion, the shell and the vault daemon - `
+  + 'each classified in ADR 0104, and each one a real read of `env` out of the syntax tree '
+  + 'rather than a name that looked like one.',
 );
