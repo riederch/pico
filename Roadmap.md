@@ -912,6 +912,50 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B223 — ein Versprechen, das niemand gegeben hat (2026-09-19).** Dieser Baum
+argumentiert in Zitaten: `ADR 0119 Q4`, `ADR 0104 S5`, `ADR 0121 J1`,
+`ADR 0153 PK3`. Die Nummer sagt, welches Dokument gemeint ist; die **Marke**
+sagt, welches Tor darin — und die Marke ist die tragende Hälfte, denn sie
+benennt das Versprechen, das eine Zeile Code gerade hält. Gehalten hat die
+beiden nichts.
+
+Gemessen: **11 398 Zitate** in 898 Quellen und Dokumenten, davon **4 811 mit
+Marke**. Die Nummern waren alle in Ordnung — 157 Entscheidungsdokumente, jede
+zitierte Nummer eine Datei. Von den Marken war **eine** falsch, und sie stand
+an der einzigen Stelle, an der es weh tut:
+
+    Crypto-shred a domain: … including copies in backups (ADR 0072 <Marke>, …)
+
+und die Marke war ein `R5`. ADR 0072 hat kein R5. Es trägt **genau eine** Marke, `R6`, und die hat es von
+ADR 0071 geerbt; seine eigene Schredder-Entscheidung ist Punkt 4 einer
+nummerierten Liste. Der Satz zitierte also ein Tor, das niemand aufgestellt
+hat — und zwar für die Behauptung, dass Schreddern **bis in die Sicherungen**
+reicht. Das ist wörtlich R6s Eigenschaft: *„destroying a key that every data
+backup still contains destroys nothing."* Berichtigt auf R6, mit dem Hinweis im
+Kommentar, was dort stand und warum R6 die richtige Marke ist.
+
+**Die Dokumente waren sauber** — 1 159 Zitate mit Marke, alle auflösbar. Der
+einzige Fund lag im Quelltext, wo die Zitate von Hand entstehen und kein
+Lektorat über sie läuft.
+
+`citations:check` liest beide Korpora, löst die zusammengezogenen Schreibweisen
+auf (`ADR 0119 Q1/Q2`, `ADR 0071/0072`, `PK2/3` mit geliehenen Buchstaben) und
+prüft zweierlei: jede Nummer ist ein Dokument, und jede Marke ist ein Wort, das
+dieses Dokument trägt. Gepflanzt und gebissen in beide Richtungen — eine Marke
+im Quelltext verdreht, eine Nummer erfunden, und die Marke aus dem ADR
+entfernt: der dritte Schnitt meldet sich aus `Roadmap.md`, also von der
+zitierenden Seite, was genau der Punkt ist.
+
+Und es hat innerhalb einer Stunde seinen eigenen Autor gefasst: dieser Absatz
+zitierte die falsche Marke zunächst wörtlich, in genau der Schreibweise, die das
+Tor liest — deshalb steht die Zeile oben mit `<Marke>` statt mit ihr. Derselbe
+Fall wie bei B197, und ein gutes Zeichen: ein Prüfer, der die Hand nicht
+ausnimmt, die ihn geschrieben hat.
+
+Was das Tor **nicht** kann, gehört dazu: es weiß nicht, ob eine Marke noch
+dasselbe sagt wie beim Zitieren. Es weiß, dass das Dokument sie überhaupt
+führt — und das hat gereicht, um die eine zu finden, die es nicht tat.
+
 **B222 — zwei Zähler, ein Baum, und nur einer verträgt eine zweite Hand
 (2026-09-19).** Nichts hindert einen zweiten Pico-Kern daran, dieselbe
 `pico.sqlite` zu öffnen. Der Vault-Daemon kennt diese Frage und beantwortet sie
