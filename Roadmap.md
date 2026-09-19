@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B222 — zwei Zähler, ein Baum, und nur einer verträgt eine zweite Hand
+(2026-09-19).** Nichts hindert einen zweiten Pico-Kern daran, dieselbe
+`pico.sqlite` zu öffnen. Der Vault-Daemon kennt diese Frage und beantwortet sie
+(`daemon_already_running`), der Home nicht: gemessen, zwei `EventStore` auf
+derselben Datei, beide öffnen ohne ein Wort.
+
+Was dann geschieht, hängt daran, **wann** ein Zähler seinen Stand liest.
+
+Die **Auditkette** liest ihren Kopf bei *jedem* Anhängen — `SELECT …
+chain_position DESC LIMIT 1` vor jedem Satz. Zwei Prozesse verschränken ihre
+Positionen also sauber, und `UNIQUE (writer_id, chain_position)` steht
+zusätzlich im Schema, mit einem Kommentar, der genau diesen Fall benennt:
+*„so no writer can fork its own sequence and keep both branches"*. Gemessen:
+zwei Homes, ein geketteter Ereignistyp, beide Schreibvorgänge gehen durch, die
+Kette bleibt eine.
+
+Die **Lamport-Uhr** liest ihren Stand **einmal**, beim Start:
+`new LamportClock(store.maxLamport())`. Danach nie wieder. Gemessen: beide
+Homes vergeben `lamport = 2`, und `pico_event` nimmt beide — es gibt keine
+Eindeutigkeit über `(device_id, lamport)`. Zwei verschiedene Ereignisse
+desselben Geräts stehen an derselben logischen Stelle, und der Index
+`(lamport, wall_time, event_id)` bricht den Gleichstand nach Wanduhr auf: eine
+Reihenfolge, die es gibt, aber keine, die jemand gemeint hat.
+
+**Wie weit trägt der Schutz, den es gibt?** 37 Foundation-Ereignistypen, **26**
+davon in der Auditkette (`auth.` und `home.`), **elf nicht** — darunter
+`memory.recorded`, also die Erinnerungen selbst. Für diese elf gibt es
+überhaupt keine zweite Meinung im Schema.
+
+Das Netz ist hier ein **Test, der beschreibt und nicht billigt** — dieselbe
+Form wie der `connectionTimeout`-Test in `app.test.ts`, der eine Auslassung
+festhält, *„damit die Auslassung eine Entscheidung bleibt und kein Vergessen"*.
+Gepflanzt: eine Ablehnung doppelter `(device_id, lamport)` in `append`
+eingesetzt — der Test fällt sofort mit `expected 'refused_storage_pressure' to
+be 'inserted'`. Er hat also Zähne: wer die Eigenschaft ändert, muss ihn
+bewusst umschreiben.
+
+Die Entscheidung selbst gehört nicht mir und steht als Punkt 18 im Handoff.
+Empfohlen ist `UNIQUE (device_id, lamport)` — dieselbe Form, mit der die
+Auditkette das Problem schon gelöst hat, und sie fällt am Speicher statt in der
+Anwendung. Eine Instanzsperre wäre für eine Betreiberin klarer, verböte aber
+auch den zweiten, nur lesenden Prozess.
+
 **B221 — vier Abbrüche, drei falsche Erklärungen, und die Messung war ein
 Einzeiler (2026-09-19).** Seit dem 2026-09-18 wird `pnpm prepush` auf dieser
 Maschine abgebrochen. Ich habe die Ursache **dreimal** behauptet und dreimal
