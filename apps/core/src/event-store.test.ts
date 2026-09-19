@@ -885,6 +885,59 @@ function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
  * auf das Geraet einer Person schiebt - der Batterieangriff, von ihm selbst
  * ausgefuehrt. Die Regel dagegen haelt allein das Schema.
  */
+describe('what a second Home on one database does (B222)', () => {
+  /**
+   * Nichts hindert einen zweiten Kern daran, dieselbe Datei zu oeffnen, und
+   * zwei Zaehler in diesem Baum vertragen das unterschiedlich gut.
+   *
+   * **Die Auditkette vertraegt es**, weil sie ihren Kopf **bei jedem** Anhaengen
+   * frisch liest: zwei Prozesse verschraenken ihre Positionen und die Kette
+   * bleibt eine. **Die Lamport-Uhr vertraegt es nicht**, weil sie beim Start
+   * einmal aus `maxLamport()` gesetzt und danach nie wieder abgeglichen wird.
+   * Also vergeben beide dieselbe Zahl, und der Log nimmt beide.
+   *
+   * Dieser Test **beschreibt und billigt nicht**. Er steht hier in derselben
+   * Form wie der `connectionTimeout`-Test in `app.test.ts`, der eine
+   * Auslassung festhaelt, damit sie eine Entscheidung bleibt und kein
+   * Vergessen: solange niemand entschieden hat, ob ein Home einen zweiten
+   * abweisen soll, faellt hier jede Aenderung dieser Eigenschaft auf, statt
+   * unbemerkt zu passieren.
+   */
+  it('lets two stores hand out the same lamport for different events', async () => {
+    const databasePath = createDatabasePath();
+    const backupDirectory = join(dirname(databasePath), 'backups');
+
+    const first = await EventStore.open(databasePath, { backupDirectory });
+    const second = await EventStore.open(databasePath, { backupDirectory });
+
+    // Der Startwert, den beide beim Hochfahren lesen wuerden.
+    expect(first.maxLamport()).toBe(0);
+    expect(second.maxLamport()).toBe(0);
+
+    const event = (eventId: string, note: string) => ({
+      eventId,
+      deviceId: 'pico-core',
+      lamport: 1,
+      wallTime: '2026-09-19T10:00:00.000Z',
+      type: 'device.seen' as const,
+      stream: 'probe',
+      payload: { note },
+    });
+
+    expect(first.append(event('aaaaaaaa-1111-4111-8111-000000000001', 'A'))).toBe('inserted');
+    // Dasselbe Geraet, dieselbe Lamport-Zahl, ein anderes Ereignis - und der
+    // Log nimmt es. `pico_event` kennt keine Eindeutigkeit ueber
+    // (device_id, lamport); `pico_audit_record` kennt sie ueber
+    // (writer_id, chain_position), und genau deshalb faellt die Kette auf und
+    // die Uhr nicht.
+    expect(second.append(event('bbbbbbbb-2222-4222-8222-000000000002', 'B'))).toBe('inserted');
+
+    expect(first.maxLamport()).toBe(1);
+    first.close();
+    second.close();
+  });
+});
+
 describe('the probe a watchdog stands on (B217)', () => {
   it('answers while the store is open and throws once it is not', async () => {
     const databasePath = createDatabasePath();
