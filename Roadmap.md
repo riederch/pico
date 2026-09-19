@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B220 — drei dokumentierte Knöpfe, die es nie gab (2026-09-19).** ADR 0104 S2
+macht eine Einstellung einer Person in der Umgebung zu einem Defekt, und
+`settings:check` hält die Klassifikation dagegen: jede `PICO_*`-Variable muss
+in S5 einsortiert sein, und jede Zeile in S5 muss noch gelesen werden. Die
+zweite Richtung ist die interessante — *„a stale row is a classification of
+something that is gone; it reads as knowledge and is furniture"*, sagt der
+Prüfer über sich selbst.
+
+Er hat sich nicht daran gehalten, und zwar aus dem Grund, der in diesem Baum
+schon einen eigenen Satz hat: **eine Regex ist kein Leser von Quelltext**
+(B188). Beide Hälften suchten `\bPICO_[A-Z0-9_]+\b` im *Text* einer Datei.
+Also zählte `PICO_RELAY_REQUEST_TIMEOUT_MS` als Umgebungseintrag — obwohl es
+eine exportierte Konstante in `apps/relay/src/server.ts` ist, die keine
+Bereitstellung setzen kann.
+
+Gemessen, über den Syntaxbaum: das Relay liest **neun** Variablen aus der
+Umgebung, die ADR nennt **zwölf**. Die drei zusätzlichen sind Zeitschranken —
+genau die, die B219 gestern als Schranken vermessen hat. Seit dem 2026-08-24
+verspricht das Dokument drei Knöpfe, die niemand drehen kann. Das ist das
+Spiegelbild eines undokumentierten Knopfes und liest sich genauso wie Wissen.
+
+Und die Prüfung hatte dasselbe Loch noch einmal, eine Schicht weiter draußen.
+Ihre grüne Zeile sagte *„22 Home- und 12 Relay-Einträge, jeder klassifiziert"* —
+wahr, und es liest sich, als wären das alle. Gemessen sind es **37**: 23 im
+Kern, 9 im Relay und **fünf**, die nirgends klassifiziert waren —
+`PICO_COMPANION_PROFILE`, `PICO_VAULT_HOME`, `PICO_FOUNDATION_DATA_PATH`,
+`PICO_FOUNDATION_BACKUP_PATH` und `PICO_COMPANION_RELEASE_PROBE`. Das ist
+derselbe Satz, den die ADR am 2026-08-24 schon einmal über sich selbst
+geschrieben hat, diesmal über den Nachfolger dieser Korrektur.
+
+Vier sind Orte auf einer Platte. Der fünfte bekommt ein eigenes Wort: ein
+**Sondenschalter**. `PICO_COMPANION_RELEASE_PROBE` macht die Hülle für eine
+Messung zum Instrument, und ihn einen Bereitstellungsparameter zu nennen würde
+nahelegen, dass eine Betreiberin ihn in einem laufenden Haushalt setzt. Soll
+sie nicht.
+
+Der Prüfer liest jetzt **jede ausgelieferte Quelle** statt zweier benannter
+Verzeichnisse, und die dritte Gruppe ist durch Ausschluss definiert — eine neue
+App liegt an dem Tag darin, an dem sie geschrieben wird. Drei Schreibweisen
+zählen als Lesen: `env.NAME`, `env['NAME']` und ein Helfer, der Umgebung und
+Namen als Argumente nimmt.
+
+Gepflanzt und gebissen: eine Zeile in die Klassifikation gesetzt, die niemand
+liest; **dieselbe Zeile noch einmal, zusammen mit einer gleichnamigen Konstanten
+im Relay** — was die alte Regex gerettet hätte und der Syntaxbaum nicht; und
+eine echte `env`-Lesung in den Companion gesetzt, die niemand einsortiert hat.
+
+Offen gelassen, weil es eine Produktfrage ist und keine Messung: ob die drei
+Zeitschranken des Relays *werden* sollen, was sie zu sein versprachen. Heute
+sagt das Dokument, was ist.
+
 **B219 — ein Befund, dessen Gegenstand unter ihm weitergewachsen ist
 (2026-09-19).** B78 hat am 2026-09-07 die Empfangsfristen der lauschenden
 Flächen vermessen und dabei die schärfste Form dieser Krankheit gefunden: die
