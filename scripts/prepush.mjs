@@ -55,6 +55,16 @@ import { join } from 'node:path';
  * `package.json` bleibt unangetastet, weil ein fremder Läufer eine andere
  * Maschine ist.
  *
+ * **Und wo dieser Befehl laufen muss.** Die Grenze allein reicht auf dieser
+ * Maschine nicht: der fünfte Abbruch kam mit ihr. Gemessen, warum - vor jedem
+ * Lauf sind schon **11,6 von 15,3 GB** belegt (PhpStorm 2,4, Android Studio
+ * 1,7, Chromium 1,1, die Agentenprozesse gut 1), es bleiben 3,7 GB, und die
+ * Suiten brauchen auch gebremst 2,4. Der Unterschied liegt nicht am Verbrauch,
+ * sondern am Ort: **vier Läufe im Vordergrund sind durchgelaufen, fünf im
+ * Hintergrund wurden gestoppt** - zuletzt die ganze Kette am 2026-09-19 mit
+ * 144 s, 378 s, 399 s und 561 s. Wer diesen Befehl über einen Agenten fährt,
+ * fährt ihn im Vordergrund; eine Person im Terminal tut das ohnehin.
+ *
  * Für ein umgebungsbedingtes Scheitern ist *ein* Versuch mehr die richtige
  * Antwort, und er wird laut angekündigt: ein stiller Wiederholungsversuch
  * verwandelt einen echten Fehlschlag in Rauschen. Er kostet nur Zeit, wenn

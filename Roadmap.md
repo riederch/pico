@@ -951,6 +951,16 @@ siebzehn Paketen und nicht in `package.json`: wie viel von *dieser* Maschine ein
 Prüflauf nehmen darf, ist eine Eigenschaft der Maschine, und ein fremder Läufer
 ist eine andere.
 
+**Nachtrag, dieselbe Stunde: die Grenze allein reicht nicht.** Der fünfte
+Abbruch kam mit ihr. Gemessen, warum: vor jedem Lauf sind schon **11,6 von
+15,3 GB** belegt — PhpStorm 2,4, Android Studio 1,7, Chromium 1,1, die
+Agentenprozesse gut ein GB. Es bleiben 3,7 GB, und die Suiten brauchen auch
+gebremst 2,4. Der Unterschied liegt nicht am Verbrauch, sondern **am Ort**:
+vier Läufe im Vordergrund sind durchgelaufen, fünf im Hintergrund wurden
+gestoppt. Die ganze Kette danach im Vordergrund, grün: 144 s, 378 s, 399 s,
+561 s. Damit ist auch die Arbeitergrenze nicht überflüssig — sie halbiert den
+Speicher zum Nulltarif —, sie war nur nie die Ursache.
+
 **Die Lehre ist unbequemer als der Fund.** Dieses Programm besteht darauf, dass
 eine Eigenschaft erst dann wahr ist, wenn sie gemessen wurde — und ich habe die
 Regel an allem angewandt außer an meinem eigenen Werkzeug. Vier Fassungen eines
