@@ -196,6 +196,15 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+22. **Ein Tor, das den getrackten Baum liest, ist blind fuer sich selbst, bis
+   es committet ist.** Am 2026-09-19 hat `citations:check` beim Schreiben gruen
+   gemeldet, obwohl sein eigener Kopfkommentar das falsche Zitat als Beispiel
+   nannte (B223). Sein Korpus ist `git ls-files`, und eine ungetrackte Datei
+   steht nicht darin. Nach dem ersten Commit fiel es sofort. Wer ein Tor baut,
+   das den Baum liest, faehrt es **nach** dem Stagen noch einmal - und rechnet
+   damit, dass die eigene Erklaerung zum Gegenstand gehoert. Dritte Fassung
+   derselben Lehre: B166, B215, Regel 14.
+
 21. **Wer eine Zahl ueber sein eigenes Werkzeug viermal berichtigt, hat
    dreimal nicht gemessen.** Seit dem 2026-09-18 wurde `pnpm prepush` immer
    wieder abgebrochen. Ich habe die Ursache dreimal behauptet und dreimal

@@ -14,10 +14,17 @@ import { fileURLToPath } from 'node:url';
  * line of code is keeping. Nothing held them to their documents.
  *
  * Measured: 3,600 labelled citations in sources and 1,159 in documents, of
- * which **one** named a gate its ADR does not have - `ADR 0072 R5`, over the
- * crypto-shred path, where the whole point of the citation is that somebody
- * decided this. ADR 0072 has exactly one label, `R6`, and inherits it from
- * ADR 0071; its shredding decision is point 4 of a numbered list.
+ * which **one** named a gate its ADR does not have - an `R5` over the
+ * crypto-shred path in ADR 0072, where the whole point of the citation is that
+ * somebody decided this. That record has exactly one label, `R6`, and inherits
+ * it from ADR 0071; its shredding decision is point 4 of a numbered list.
+ *
+ * **The label is written apart from its number on purpose, right here.** The
+ * first version of this comment quoted the wrong citation the way it is
+ * written, and this check reads its own file - so it failed on its own
+ * explanation. It did not fail on the first run, and that is the part worth
+ * keeping: the corpus is `git ls-files`, and an uncommitted checker is not in
+ * it. A gate of this kind is blind to itself until it is committed.
  *
  * **The bare number is checked too**, and it was already sound: 118 distinct
  * ADR numbers, every one a file. That half will not fail often, which is why

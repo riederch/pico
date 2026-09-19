@@ -946,11 +946,19 @@ im Quelltext verdreht, eine Nummer erfunden, und die Marke aus dem ADR
 entfernt: der dritte Schnitt meldet sich aus `Roadmap.md`, also von der
 zitierenden Seite, was genau der Punkt ist.
 
-Und es hat innerhalb einer Stunde seinen eigenen Autor gefasst: dieser Absatz
-zitierte die falsche Marke zunächst wörtlich, in genau der Schreibweise, die das
-Tor liest — deshalb steht die Zeile oben mit `<Marke>` statt mit ihr. Derselbe
-Fall wie bei B197, und ein gutes Zeichen: ein Prüfer, der die Hand nicht
-ausnimmt, die ihn geschrieben hat.
+Und es hat seinen eigenen Autor **zweimal** gefasst. Erst diesen Absatz, der
+die falsche Marke wörtlich zitierte, in genau der Schreibweise, die das Tor
+liest — deshalb steht die Zeile oben mit `<Marke>` statt mit ihr. Dann seinen
+eigenen Kopfkommentar, der dasselbe Beispiel nennt.
+
+**Der zweite Fang ist der lehrreiche, weil er erst später kam.** Beim Schreiben
+lief das Tor grün, obwohl der Kommentar schon dastand: sein Korpus ist
+`git ls-files`, und ein ungetracktes Skript steht nicht darin. Es hat sich
+selbst erst gesehen, als es committet war — **ein Tor dieser Bauart ist blind
+für sich selbst, bis es im Baum steht.** Das ist Regel 22 fürs Handbuch und die
+dritte Fassung derselben Lehre: B166 (ein Prüfer ohne Gegenstand), B215 (ein
+Tor, grün und kaputt), Regel 14 (wer eine Abwesenheit prüft, nimmt die
+Erklärung aus dem Gegenstand).
 
 Was das Tor **nicht** kann, gehört dazu: es weiß nicht, ob eine Marke noch
 dasselbe sagt wie beim Zitieren. Es weiß, dass das Dokument sie überhaupt
