@@ -16,7 +16,13 @@ import { createServer, type Server } from 'node:http';
  * need it - the measurer's own and the Link operation that drives it - and a
  * second copy of a fake host is a second thing to keep honest.
  *
- * Not exported from the package. Nothing ships this.
+ * Not exported from the package, and nothing starts it. The earlier sentence
+ * here said "nothing ships this", which is not true and was never checked:
+ * `tsc` builds it into `apps/core/dist`, and `docker/home.Dockerfile` copies
+ * the whole build into the image. What keeps it harmless is that no shipped
+ * source imports it - and since finding B219 that is a rule
+ * (`listeners:check`) rather than a habit, because this is the one listener
+ * in the tree that sets no bounds at all.
  */
 
 export interface PicoFakeModelHostOptions {
