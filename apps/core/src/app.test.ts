@@ -5659,3 +5659,49 @@ function socketMessageToString(data: unknown): string {
   }
   return String(data);
 }
+
+describe('what a recorded address says (B231)', () => {
+  /**
+   * Eine URL ist der Teil einer Anfrage, der aufgeschrieben wird - von diesem
+   * Home selbst und von allem dazwischen. Der Serialisierer schneidet `ticket`
+   * heraus, weil eine Eintrittskarte ein Zugangsmittel ist.
+   *
+   * **Gelaufen ist das immer, behauptet hat es nie jemand.** Die Suiten geben
+   * eine Senke als Protokollziel und sehen nicht hin. Hier wird hingesehen:
+   * das Geheimnis darf in keiner Zeile stehen, und die Adresse muss die
+   * Schwaerzung tragen - am laufenden Home, nicht am Helfer.
+   */
+  it('cuts a realtime ticket out of the logged request line', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'pico-redact-'));
+    const written: string[] = [];
+    const logDestination = new Writable({
+      write(chunk: Buffer, _encoding: string, callback: () => void) {
+        written.push(chunk.toString('utf8'));
+        callback();
+      },
+    });
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: join(directory, 'pico.sqlite'),
+      deviceId: 'redaction-test',
+      logDestination,
+    });
+
+    try {
+      await app.inject({
+        method: 'GET',
+        url: '/api/system/version?ticket=ein-geheimnis&limit=5',
+      });
+      const log = written.join('');
+      expect(log).not.toContain('ein-geheimnis');
+      expect(log).toContain('ticket=%5Bredacted%5D');
+      // Und was kein Zugangsmittel ist, bleibt lesbar - sonst waere die Zeile
+      // fuer eine Betreiberin wertlos.
+      expect(log).toContain('limit=5');
+    } finally {
+      await app.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
