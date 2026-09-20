@@ -912,6 +912,39 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B230 — was die Suite nie sieht, weil sie immer leer anfängt
+(2026-09-20).** Jeder Test dieses Baums migriert eine **frische** Datenbank.
+Und SQLite ist mit einer leeren Tabelle nachsichtiger als mit einer vollen.
+Gemessen an der mitgelieferten Fassung (3.49.2), dieselbe Anweisung zweimal:
+
+| | leere Tabelle | eine Zeile |
+|---|---|---|
+| `ADD COLUMN a TEXT NOT NULL` | **angenommen** | *„Cannot add a NOT NULL column with default value NULL"* |
+| `ADD COLUMN c TEXT DEFAULT CURRENT_TIMESTAMP` | **angenommen** | *„Cannot add a column with non-constant default"* |
+
+Damit ist eine ganze Klasse von Migrationsfehlern hier unsichtbar und nur dort
+sichtbar, wo etwas drinsteht — also auf dem Home einer Person, in dem Moment,
+in dem sie aktualisiert.
+
+**Gemessen statt gefolgert:** mit `NOT NULL` ohne Vorgabe an einer echten
+Migration läuft `migrations.test.ts` durch — **elf Tests, alle grün**. Die
+Suite, die es für Migrationen gibt, sieht den Fehler nicht.
+
+Die zwanzig Spaltenerweiterungen im heutigen Schema sind **alle sicher**. Das
+ist der Zustand, den dieses Tor halten soll, und kein Problem, das es gefunden
+hat.
+
+**Das Messgerät ist SQLite, nicht ein Leser von SQL** — dieselbe Wahl wie bei
+`index:check`. Jede Erweiterung wird gegen eine Probetabelle mit **einer Zeile**
+noch einmal gefahren, und die Datenbank entscheidet. Eine Klausel, an die ich
+nicht gedacht habe, wird von dem beurteilt, was sie am Tag der Aktualisierung
+beurteilt.
+
+Drei Pflanzungen, drei Bisse, jede mit SQLites eigener Meldung: `NOT NULL` ohne
+Vorgabe, ein nicht konstanter Vorgabewert, und eine `UNIQUE`-Spalte — die
+letzte ist der Gegenfall, den SQLite auch leer ablehnt und die Suite also schon
+fängt.
+
 **B229 — die fünfte Schranke, und vier Verdachte, die keine waren
 (2026-09-20).** B219 hat jedem Lauscher vier Schranken abverlangt:
 Kopfzeilenfrist, Empfangsfrist, Keep-Alive, Verbindungszahl. Sie bemessen
