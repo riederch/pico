@@ -912,6 +912,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B236 — ein Zurücksetzen ist eine Entscheidung über 48 Tabellen, und stand
+als Liste von zehn da (2026-09-20).** Ein Home-Reset ist ein handfester,
+unwiderruflicher Akt: er entfernt die Host-Identitätsschlüssel, setzt den
+Anspruchszustand zurück, löscht Mitgliedschaften, Widerrufe, Delegationen,
+Lesezugänge und Umschläge, entbindet den Betreiber und widerruft jede Sitzung.
+
+Gemessen: `resetPicoHome` räumt **neun** Tabellen und schreibt eine um. Das
+Schema hat **48**. Die Liste ist von Hand geschrieben — also steht die
+neunundvierzigste Tabelle per Vorgabe außerhalb des Resets, und niemand erfährt
+es. Das ist genau die Krankheit, für die `check-store-ceilings.mjs` geschrieben
+wurde (*„every table says how it stops growing"*), an einem anderen Akt gefragt.
+
+**Ein Reset vergisst keine Person, er nimmt einer Maschine ihr Zuhause.** Die
+38 Überlebenden sind fast alle offensichtlich richtig — Erinnerungen, das
+Log, die Auditkette, Modell- und Depot-Entscheidungen, der Beobachtungspuffer,
+die Wiederholungssperre. Das hinzuschreiben kostet nichts; teuer wäre, in ein
+paar Jahren zu merken, dass eine Tabelle geblieben ist, die hätte gehen
+müssen, weil niemand sich äußern musste.
+
+**Die eine, die Gewicht hat, ist `pico_home_device_recovery`.** Eine schwebende
+Geräte-Wiederherstellung überlebt ein Zurücksetzen. Das ist sicher — aber nicht
+von selbst, sondern weil jede Zeile das `home_id` trägt, zu dem sie gehört,
+während der Reset den Anspruchszustand und den Gründungssatz räumt: was
+überlebt, zeigt auf ein Home, das es nicht mehr gibt. Diese Begründung gilt
+genau so lange wie die Spalte, und deshalb ist die Spalte das, was der Eintrag
+bewacht.
+
+Drei Pflanzungen, drei Bisse: eine neue Tabelle ohne Entscheidung, die Spalte
+`home_id` umbenannt (*„the argument outlived what it described"*), und ein
+Reset, der eine Tabelle räumt, die es nicht gibt.
+
 **B235 — acht Türen ohne Schloss, und ein Leser, der eine davon nie sah
 (2026-09-20).** Zweiundsechzig klassifizierte Foundation-Routen, und **acht**
 erreicht ein Fremder ohne jedes Zugangsmittel: vier `public`, drei
