@@ -19,7 +19,13 @@
        non-calling app meets it denied. That default is the measurement. -->
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
   <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
-  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <!-- RECEIVE_BOOT_COMPLETED stand hier bis zum 2026-09-20 (Befund B228).
+       Es gibt keinen `<receiver>` in dieser Datei und keinen
+       BroadcastReceiver in den Quellen, also konnte die Berechtigung
+       nichts einloesen: erbeten und unbenutzbar. Ein Produkt, dessen
+       These Zurueckhaltung ist, fragt nicht nach Rechten, die es nicht
+       braucht - auch nicht in einer Messsonde. `manifest:check` haelt
+       das jetzt: jede erklaerte Berechtigung nennt ihren Beleg. -->
   <!-- ADR 0131 A5: a grant is eleven hundred characters and lives four
        minutes, so the camera is the path rather than a convenience. -->
   <uses-permission android:name="android.permission.CAMERA" />
