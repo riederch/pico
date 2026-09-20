@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B237 — acht Zahlen in dem Dokument, aus dem ein Leser den Stand nimmt
+(2026-09-20).** `progress.md` ist laut `AGENTS.md` die periodische
+Fortschrittsschätzung — und die Stelle, an der jemand nachsieht, wie es steht.
+Diese Session hat siebzehn Tore gebaut und das Dokument nie nachgeführt.
+
+Gemessen mit seinem eigenen Werkzeug, `pnpm progress:walk`: **fünf von achtzehn
+Behauptungen wichen ab.**
+
+| | sagte | gemessen |
+|---|---|---|
+| Schritte in `release:verify` | 56 | **68** |
+| klassifizierte Flächen | 84 | 85 |
+| bediente HTTP-Routen | 61 | 62 |
+| Routen mit Aufrufer | 37 | 38 |
+| exportierte Fähigkeiten | 443 | 447 |
+
+Drei davon sind Folgen dieser Session: B235 hat die Leser berichtigt, die
+Flächen und Routen zählen, und die zwölf neuen Kettenschritte sind meine. Die
+Drift ist also kein Versäumnis der Bauart — `progress:walk` steht
+**absichtlich** außerhalb der Kette, und sein eigener Kommentar sagt warum: es
+liest **Prosa**, und ein Muster über Prosa greift irgendwann daneben; ein Tor,
+das zweimal danebengreift, wird überlesen. Ein periodischer Stand, der
+periodisch nachgeführt wird, ist genau das Richtige.
+
+**Der Fund liegt bei den Zahlen, die es nicht kannte.** Drei weitere standen im
+Dokument und in keinem Muster: 265 Testdateien, 2.979 Fälle, 9.304
+Erwartungsausdrücke — richtig sind **266, 2.996 und 9.360**. Sie waren nie
+falsch gemeldet worden, weil sie nie gefragt worden waren.
+
+Das Werkzeug kennt sie jetzt, und zwar ohne seinen eigenen Grundsatz zu
+brechen: es prüft weiterhin keine *ausgeführten* Testzahlen (dafür braucht es
+einen vollen Lauf), aber `tests:check` zählt diese drei **statisch** und druckt
+sie ohnehin in seiner Erfolgszeile. Was ein Tor druckt, gehört gehalten.
+
+Und der Absatz über die Walks, den es auch nicht prüft, war ebenfalls alt:
+*„35 der 61 Routen"* heißt jetzt 35 der 63, `GET /api/home/link/continuity`
+wird nicht mehr von außerhalb `app.ts` beantwortet (sie war nur unsichtbar,
+B235), dafür `/health` (B217), und von den 27 ungegangenen sind 23 argumentiert
+und vier haben einen Aufrufer, den das Szenario nicht fährt (B232).
+
+**Bemerkenswert an dem Werkzeug**: es hat die drei neuen Behauptungen mit `?`
+gemeldet, bevor es `tests:check` mitfuhr — *„im Torlauf nicht gefunden"*, nicht
+stillschweigend als richtig gezählt. Genau das verspricht sein Kommentar, und
+genau daran hat man gesehen, dass die Regel noch fehlte.
+
+Zwei Pflanzungen, zwei Bisse: eine der neuen Zahlen verstellt, und die
+Kettenlänge verstellt.
+
 **B236 — ein Zurücksetzen ist eine Entscheidung über 48 Tabellen, und stand
 als Liste von zehn da (2026-09-20).** Ein Home-Reset ist ein handfester,
 unwiderruflicher Akt: er entfernt die Host-Identitätsschlüssel, setzt den
