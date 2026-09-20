@@ -31,7 +31,12 @@ RUN pnpm build
 # leave the packages in the virtual store, so the modules directories are
 # rebuilt from the pnpm store, which stays behind in this stage. The purge
 # confirmation is answered up front because a build has no one to ask.
-RUN rm -rf node_modules apps/*/node_modules packages/*/node_modules \
+# Der Griff ist eine *Form*, keine Liste (Befund B226, 2026-09-20). Hier
+# standen `apps/*` und `packages/*` von Hand - und `modules/*`, die dritte
+# Wurzel aus `pnpm-workspace.yaml`, fehlte. Das ist genau die Krankheit, vor
+# der der Absatz sechs Zeilen weiter oben warnt: eine Liste driftet, sobald
+# jemand eine Wurzel hinzufuegt. `*/*/node_modules` trifft jede.
+RUN rm -rf node_modules ./*/*/node_modules \
   && pnpm install --frozen-lockfile --offline --prod --config.confirmModulesPurge=false
 
 FROM base AS runtime
