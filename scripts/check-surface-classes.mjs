@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { arguedRoutes } from './argued-routes.mjs';
+import { picoRegisteredRoutes } from './registered-routes.mjs';
 import {
   picoLinkOperationsPath,
   readPicoLinkDirectOperations,
@@ -138,11 +139,19 @@ for (const [form, klass] of formRows) {
  */
 const appPath = 'apps/core/src/app.ts';
 const appSource = readFileSync(join(repoRoot, appPath), 'utf8');
-const registered = [
-  ...appSource.matchAll(
-    /accessClasses\.register\(\s*'([A-Z]+)',\s*'([^']+)',\s*'([^']+)'/gu,
-  ),
-].map(([, method, route, accessClass]) => ({ method, route, accessClass }));
+/**
+ * **Ueber den gemeinsamen Leser seit dem 2026-09-20 (Befund B235).** Hier
+ * stand ein Muster, das nur Zeichenketten kennt - und genau eine Route steht
+ * als Konstante: `PICO_LINK_CONTINUITY_READ_PATH`, und die ist `public`. Sie
+ * war nie Teil dieses Vergleichs, und dieser Pruefer war dabei gruen.
+ */
+const { registrations: registered, unreadable } = picoRegisteredRoutes();
+for (const registration of unreadable) {
+  errors.push(
+    `${appPath}: this reader cannot resolve ${registration}. A registration nobody can read is a `
+    + 'route nobody is holding.',
+  );
+}
 
 if (registered.length === 0) {
   errors.push(

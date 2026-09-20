@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { arguedRoutes } from './argued-routes.mjs';
+import { picoServedRoutes } from './registered-routes.mjs';
 
 /**
  * Welche Foundation-Routen ein laufendes Home je einem *anderen Prozess*
@@ -54,11 +55,19 @@ const traced = (tracePath) => registerLine
  * Eine Liste daneben wäre die zweite, die abweichen kann.
  */
 function servedRoutes() {
-  const source = readFileSync(appSource, 'utf8');
-  return [...new Set(
-    [...source.matchAll(/app\.(get|post|put|delete|patch)\('([^']+)'/gu)]
-      .map(([, method, route]) => `${method.toUpperCase()} ${route}`),
-  )];
+  /**
+   * **Ueber den gemeinsamen Leser seit dem 2026-09-20 (Befund B235).** Hier
+   * stand ein Muster, das eine Zeichenkette direkt hinter der Klammer
+   * verlangte. Vier von 63 bedienten Routen fielen hindurch: zwei stehen als
+   * Konstante, und zwei nur, weil ihr Pfad in der naechsten Zeile beginnt.
+   * Der Nenner dieser Messung war also vier zu klein, seit es sie gibt.
+   */
+  const { served, unreadable } = picoServedRoutes();
+  if (unreadable.length > 0) {
+    console.error(`${unreadable.length} served routes could not be read: ${unreadable.join(', ')}`);
+    process.exit(1);
+  }
+  return served;
 }
 
 const served = servedRoutes();
