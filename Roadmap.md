@@ -912,6 +912,56 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B229 — die fünfte Schranke, und vier Verdachte, die keine waren
+(2026-09-20).** B219 hat jedem Lauscher vier Schranken abverlangt:
+Kopfzeilenfrist, Empfangsfrist, Keep-Alive, Verbindungszahl. Sie bemessen
+**wann** und **wie viele gleichzeitig**. Was sie nicht bemessen, ist **wie
+groß** — und ohne das sind die vier ein Versprechen über die Uhr und keines
+über den Speicher.
+
+Gemessen, bevor die Regel geschrieben wurde: **jede** lauschende Fläche dieses
+Baums hat schon eine. Die Foundation über Fastifys `bodyLimit`
+(`MAX_PAYLOAD_BYTES + 8 KiB`), der Link-Eingang über eine Routengrenze aus der
+Umschlaggröße selbst, die beiden Relay-Ports über Konstanten in ihren
+Behandlern (128 KiB und 4 KiB), der Vault-Daemon über eine Rahmengröße. Fünf
+Flächen, fünf Grenzen, und nichts hielt sie zusammen.
+
+**Drei Formen zählen**, weil die Rahmen sich unterscheiden und eine Regel über
+Schreibweisen keine Regel wäre: eine Option namens `bodyLimit`, eine Konstante,
+deren Name Bytes sagt, oder ein begründeter Lauscher, der gar keinen Rumpf
+liest. Der Gesundheitslauscher des Relays ist der dritte Fall — er beantwortet
+GET und weist alles andere ab, sein Bound ist die Methode.
+
+Und einer ist der interessante: **der Link-Eingang bemisst selbst nichts.** Er
+reicht an die Foundation weiter, und die Route dort setzt die Grenze. Das ist
+richtig so, also zeigt die Begründung auf jene Datei — und das Tor **geht
+nachsehen**, statt den Satz zu glauben. Nimmt man der Route ihre Grenze, fällt
+der Eingang.
+
+Drei Pflanzungen, drei Bisse — beim zweiten Anlauf für eine davon: mein erster
+Schnitt hängte `+ 0` an den Ausdruck, und eine Teilstringprüfung sieht einen
+Zusatz nicht. Eine echte Drift ist eine Umbenennung oder eine Entfernung, und
+so gepflanzt fällt sie.
+
+**Vier Verdachte dieser Runde waren keine**, und das gehört aufgeschrieben,
+damit sie niemand ein zweites Mal misst:
+
+1. **Die Protokollversion** wird angekündigt und nirgends verglichen — aber ADR
+   0032s `protocolVersion`-Beispiel steht ausdrücklich unter *„Future
+   compatibility claims"*, und ADR 0134 sagt, dass Formate sich bis zur ersten
+   behaltenen Identität in place ändern. Angekündigt und nicht verglichen ist
+   hier die ehrliche Lage, nicht die Lücke.
+2. **Die Sweeps überlappen sich nicht** — ihr Taktgeber rearmiert nach dem Ende
+   statt auf einem Raster und sagt das in seinem eigenen Kommentar.
+3. **Der Aufbewahrungs-Sweep läuft synchron**, ein `setInterval` kann ihn also
+   nicht doppelt starten.
+4. **Das Rechtefenster am Daemon-Socket**, das ich für einen Fund hielt: der
+   Socket entsteht mit der Umask und wird erst danach auf `0600` gesetzt — aber
+   er liegt in `<vaultHome>/run`, und dieses Verzeichnis wird **im
+   Konstruktor**, vor `listen()`, auf `0700` und den eigenen Nutzer geprüft
+   (`vault_home_permissions`). Ohne Durchgangsrecht am Verzeichnis nützt ein
+   kurz offener Socket niemandem. Das `chmod` danach ist Gürtel zum Hosenträger.
+
 **B228 — ein Recht, das nichts einlösen konnte (2026-09-20).**
 `AndroidManifest.xml` ist das Versprechen der Sonde über sich selbst, und es
 steht zwangsläufig zweimal: einmal als Liste von Komponenten und
