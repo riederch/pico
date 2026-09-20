@@ -49,6 +49,10 @@ const gates = [
   'presence:check',
   'wire:check',
   'label:check',
+  // Befund B237: `progress.md` nennt Testdateien, Faelle und
+  // Erwartungsausdruecke, und `tests:check` zaehlt genau die - statisch, ohne
+  // Lauf, und druckt sie in seiner Erfolgszeile.
+  'tests:check',
 ];
 
 /**
@@ -82,6 +86,21 @@ const claims = [
   { phrase: 'Schreibmethoden', from: /\d+ stores, (\d+) writing methods/u },
   { phrase: 'exportierte Fähigkeiten', from: /Capability reach check passed \((\d+)/u },
   { phrase: 'Tabellen benennen ihr Wachstumsende', from: /passed \((\d+) tables/u },
+  /**
+   * **Drei Zahlen, die dieses Werkzeug nicht kannte** (Befund B237,
+   * 2026-09-20). `progress.md` nennt Testdateien, Faelle und
+   * Erwartungsausdruecke, und alle drei waren am 2026-09-20 veraltet - 265
+   * statt 266, 2.979 statt 2.996, 9.304 statt 9.360.
+   *
+   * Der Satz unten sagt weiterhin, dass dieses Werkzeug *ausgefuehrte*
+   * Testzahlen nicht prueft: dafuer braucht es einen vollen Lauf. Diese drei
+   * sind etwas anderes - `tests:check` zaehlt sie **statisch**, aus dem
+   * Bestand, und druckt sie in seiner Erfolgszeile. Was ein Tor ohnehin
+   * druckt, gehoert gehalten.
+   */
+  { phrase: 'Testdateien', from: /passed \((\d+) test files/u },
+  { phrase: 'Fällen', from: /\d+ test files, (\d+) cases/u },
+  { phrase: 'Erwartungsausdrücken', from: /(\d+) assertions, each with a matcher/u },
   {
     /**
      * Zwei Zahlen in einem Satz: vollständig beurteilte Signierstellen und
