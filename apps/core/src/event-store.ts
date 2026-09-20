@@ -76,6 +76,7 @@ import type {
 } from '@pico/protocol';
 import {
   isPicoInstant,
+  isPicoWallClockPlausible,
   evaluatePicoStorageCondition,
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
@@ -6522,8 +6523,19 @@ export class EventStore {
    * to a buffer: a snapshot older than the window comes back empty, because a
    * buffer restored from last week is worse than no buffer.
    */
+  /**
+   * ADR 0120 N5 again (finding B225): the observation buffer is deleted on the
+   * wall clock too, at boot, and a clock jumped forward empties the whole
+   * window that a derivation is supposed to read.
+   */
   public prunePicoObservations(nowIso = new Date().toISOString()): number {
     this.ensureOpen();
+    if (!isPicoWallClockPlausible({
+      nowMs: Date.parse(nowIso),
+      anchorFloorMs: this.recoveryAnchorFloorMs(),
+    })) {
+      return 0;
+    }
     const cutoff = new Date(Date.parse(nowIso) - maxPicoObservationAgeMs).toISOString();
     const removed = this.db
       .prepare('DELETE FROM pico_observation WHERE observed_at < ?')
@@ -7408,8 +7420,27 @@ export class EventStore {
    * event is the caller's question - a recovery window is days, and a floor is
    * five minutes.
    */
+  /**
+   * ADR 0120 N5, applied a second time (2026-09-20, finding B225).
+   *
+   * This deletes on the wall clock, and so does `RetentionSweeper.sweep()` -
+   * which refuses to when the clock sits implausibly far ahead of the durable
+   * floor, because "being able to run is not permission to act on nonsense".
+   * Both ran in the same tick and only one of them asked. A clock jumped by a
+   * year empties a ledger whose horizon is a day, and the rows do not come
+   * back.
+   *
+   * The question is asked here rather than at the caller, so a second caller
+   * inherits the answer instead of having to remember it.
+   */
   public prunePicoLinkPushLedger(before: string): number {
     this.ensureOpen();
+    if (!isPicoWallClockPlausible({
+      nowMs: Date.parse(before),
+      anchorFloorMs: this.recoveryAnchorFloorMs(),
+    })) {
+      return 0;
+    }
     return this.db
       .prepare('DELETE FROM pico_link_push_ledger WHERE pushed_at < ?')
       .run(before).changes;

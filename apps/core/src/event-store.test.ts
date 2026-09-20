@@ -15,6 +15,7 @@ import {
 } from '@pico/protocol';
 import { createPicoTestFirstDeviceEvidence } from './test-first-device-evidence.js';
 import { EventStore } from './event-store.js';
+import { openPicoHomeRecoveryAnchor } from './recovery-anchor.js';
 import {
   decidePicoLinkPush,
   picoLinkPushLedgerHorizonMs,
@@ -885,6 +886,85 @@ function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
  * auf das Geraet einer Person schiebt - der Batterieangriff, von ihm selbst
  * ausgefuehrt. Die Regel dagegen haelt allein das Schema.
  */
+describe('deletions on a wall clock nobody can trust (B225)', () => {
+  /**
+   * ADR 0120 N5 sagt, warum der Aufbewahrungs-Sweeper auf einer unglaubhaften
+   * Uhr **nichts** loescht: *„being able to run is not permission to act on
+   * nonsense"*. In demselben Takt liefen zwei weitere Loeschungen, die dieselbe
+   * Uhr lesen und nie gefragt haben - das Push-Register und der
+   * Beobachtungspuffer. Beide fragen jetzt dieselbe Funktion.
+   *
+   * Der Boden kommt aus dem Wiederherstellungsanker; ohne Anker gibt es keinen
+   * Boden, und „kein Boden ist kein Beweis fuer Unsinn" - dann wird geloescht
+   * wie zuvor. Genau das haelt der erste Fall fest, damit die Regel keine
+   * Aufbewahrungsstoerung aus einer fehlenden Datei macht.
+   */
+  it('prunes as before when there is no floor to compare against', async () => {
+    const databasePath = createDatabasePath();
+    const store = await EventStore.open(databasePath, {
+      backupDirectory: join(dirname(databasePath), 'backups'),
+    });
+    expect(store.recoveryAnchorFloorMs()).toBeNull();
+    // Ohne Boden faellt keine Entscheidung aus, und ein Lauf ueber eine leere
+    // Tabelle loescht null Zeilen statt zu verweigern - der Unterschied ist,
+    // dass hier nichts refused wird.
+    expect(store.prunePicoObservations(new Date('2036-01-01T00:00:00.000Z').toISOString()))
+      .toBe(0);
+    store.close();
+  });
+
+  it('deletes nothing once the clock sits a year past the durable floor', async () => {
+    const databasePath = createDatabasePath();
+    const floorAt = '2026-09-20T00:00:00.000Z';
+    const anchor = openPicoHomeRecoveryAnchor(
+      join(dirname(databasePath), 'recovery-anchor', 'anchor.json'),
+      { now: () => new Date(floorAt) },
+    );
+    if (anchor.isEmpty()) {
+      anchor.seed({ homeId: null, entries: [] });
+    }
+    const store = await EventStore.open(databasePath, {
+      backupDirectory: join(dirname(databasePath), 'backups'),
+      recoveryAnchor: anchor,
+    });
+    // Nicht auf die Millisekunde: der Boden nimmt die beobachtete Zeit dieses
+    // Prozesses mit (ADR 0120 N2), also steht er knapp hinter `floorAt`.
+    const floor = store.recoveryAnchorFloorMs();
+    expect(floor).not.toBeNull();
+    expect(Math.abs((floor ?? 0) - Date.parse(floorAt))).toBeLessThan(60_000);
+
+    // **Mit Gegenstand**, sonst prueft der Fall nichts: beide Tabellen
+    // bekommen je eine Zeile, die auf einer glaubhaften Uhr faellig waere.
+    const old = '2026-09-10T00:00:00.000Z';
+    expect(store.appendPicoObservations([{
+      kind: 'location_fix',
+      privacyDomain: 'home',
+      observedAt: old,
+      payload: 'x',
+    }])).toBe(1);
+    store.recordPicoLinkPush({
+      deviceSigningKeyFingerprintHex: 'ab'.repeat(32),
+      occasion: 'objection_window_closing',
+      eventId: 'cccccccc-1111-4111-8111-000000000001',
+      pushedAt: old,
+    });
+
+    // Eine Uhr, die zwei Jahre vor dem Boden steht - der Fall, gegen den N5
+    // geschrieben ist. Beide Loeschungen melden null, und zwar weil sie
+    // verweigern: die Zeilen sind faellig und bleiben.
+    const nonsense = '2028-09-20T00:00:00.000Z';
+    expect(store.prunePicoObservations(nonsense)).toBe(0);
+    expect(store.prunePicoLinkPushLedger(nonsense)).toBe(0);
+
+    // Und auf einer glaubhaften Uhr laufen beide wieder - sonst waere die
+    // Regel eine Aufbewahrungsstoerung statt einer Weigerung.
+    const sane = '2026-09-21T00:00:00.000Z';
+    expect(store.prunePicoObservations(sane)).toBe(1);
+    expect(store.prunePicoLinkPushLedger(sane)).toBe(1);
+    store.close();
+  });
+});
+
 describe('what a second Home on one database does (B222)', () => {
   /**
    * Nichts hindert einen zweiten Kern daran, dieselbe Datei zu oeffnen, und
