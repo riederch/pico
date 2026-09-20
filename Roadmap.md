@@ -912,6 +912,47 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B224 — zwei öffentliche Türen, zwei Antworten, und nur eine hat es
+aufgeschrieben (2026-09-20).** Das Relay beantwortet auf seinem öffentlichen
+Port eine unbekannte Route **genau wie** eine falsche Methode. ADR 0149 sagt
+warum — *„telling them apart is a map of the relay's own surface"* —, der
+Kommentar im Quelltext wiederholt es, und die CI vergleicht die beiden
+Antworten Byte für Byte (`/nothing-here` gegen `/health`).
+
+Der Link-Eingang eines Homes entscheidet es andersherum. Gemessen:
+
+| Anfrage | Antwort |
+|---|---|
+| ein Pfad, den er nicht bedient | `404 {"error":"Not found."}` |
+| ein Pfad, den er bedient, falsche Methode | `405 {"error":"Method not allowed."}` + `allow: POST` |
+
+Eine einzige Anfrage je Pfad trennt also die zwei bedienten Ziele von allem
+anderen, und die `allow`-Kopfzeile nennt die Methode gleich dazu. Wer den Port
+anspricht, erfährt in einem Zug: *hier läuft ein Pico Home, und es hört auf
+diesen beiden Pfaden.* Das ist genau der Satz, den PK3 beim Relay verhindern
+soll.
+
+**Beides ist Absicht — aber nur eine der beiden Absichten steht in einem
+Entscheidungsdokument.** ADR 0149 argumentiert für das Relay; für den Eingang
+sagt kein ADR etwas, und ADR 0107 (sein eigenes) schweigt zu Statuscodes. Die
+Home-Seite steht ausschließlich in zwei Testzeilen — `expect(refused.status)
+.toBe(405)` und `expect(refused.headers.get('allow')).toBe('POST')`. Eine
+Entscheidung, die nur in einem Test steht, ist eine Entscheidung, die niemand
+getroffen hat; sie ist nur nicht mehr zu ändern, ohne dass etwas rot wird. Das
+ist immerhin die bessere Hälfte.
+
+Das Netz ist wieder ein Test, der **beschreibt und nicht billigt** (wie B222,
+in der Form des `connectionTimeout`-Tests): er spricht aus, was ein Fremder
+lernt, und fällt, sobald jemand die beiden Antworten zusammenlegt. Gepflanzt:
+den Eingang auf die Relay-Antwort umgestellt — `expected 404 to be 405`.
+
+Ich habe die Verhaltensänderung **nicht** vorgenommen. Sie ist konservativ
+(sie verrät weniger) und wendet nur ein Argument an, das dieses Haus schon
+geschrieben hat, aber sie nimmt einer falsch konfigurierten Gegenstelle den
+einzigen Hinweis, den sie bekommt, und öffentliche Flächen sind nicht der Ort
+für einen Alleingang. Sie steht als Entscheidung 19 im Handoff, mit
+Empfehlung.
+
 **B223 — ein Versprechen, das niemand gegeben hat (2026-09-19).** Dieser Baum
 argumentiert in Zitaten: `ADR 0119 Q4`, `ADR 0104 S5`, `ADR 0121 J1`,
 `ADR 0153 PK3`. Die Nummer sagt, welches Dokument gemeint ist; die **Marke**
