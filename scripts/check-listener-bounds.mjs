@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,60 @@ const ts = createRequire(import.meta.url)('typescript');
 
 /** What an HTTP listener owes, and the reason is B78's: a bound that is not set is not there. */
 const httpBounds = ['headersTimeout', 'requestTimeout', 'keepAliveTimeout', 'maxConnections'];
+
+/**
+ * The fifth bound, added 2026-09-20 (finding B229): how many bytes a listener
+ * will read before it stops.
+ *
+ * The first four bound *when* and *how many at once*; this one bounds *how
+ * big*, and without it the other four are a promise about the clock rather
+ * than about memory. Measured before it was required: every listening surface
+ * in this tree already has one - the Foundation through Fastify's `bodyLimit`,
+ * the Link intake through a route limit derived from the envelope's own size,
+ * the relay's two ports through constants compared in their handlers, and the
+ * daemon through a maximum frame. Five surfaces, five bounds, and nothing held
+ * them.
+ *
+ * **Three shapes count**, because the frameworks differ and pretending they do
+ * not would be a rule about spelling: an option named `bodyLimit`, a constant
+ * whose name says bytes, or an argued listener that reads no body at all.
+ */
+const bytesBoundPattern = /\bbodyLimit\b|\bMAX_[A-Z0-9_]*(BODY|FRAME|PAYLOAD|ENVELOPE)[A-Z0-9_]*\b/u;
+
+/**
+ * A listener that reads no body, so there is nothing to bound.
+ *
+ * Verified rather than believed: the file has to still say the method it
+ * answers, so a surface that grows a POST fails here instead of keeping an
+ * exemption it earned when it had none.
+ */
+/**
+ * A listener whose byte bound is enforced by what it forwards into.
+ *
+ * The Link intake does not read a body at all - it hands the request to the
+ * Foundation app, and the route sets `bodyLimit` from the envelope's own
+ * maximum size. The bound is real and it is one file over, so the argument
+ * names that file and this check goes and looks rather than taking the
+ * sentence for it.
+ */
+const boundedElsewhere = [
+  {
+    file: 'apps/core/src/link-intake-listener.ts',
+    carriedBy: 'apps/core/src/app.ts',
+    requires: 'bodyLimit: MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES',
+    why: 'the intake forwards into the Foundation app through `app.routing`, and the route it '
+      + 'forwards to bounds the body at the envelope size plus a kilobyte',
+  },
+];
+
+const bodiless = [
+  {
+    file: 'apps/relay/src/health.ts',
+    requires: "request.method !== 'GET'",
+    why: 'the health listener answers GET and refuses everything else, so no request body is '
+      + 'ever read. Its answer is two words and its bound is the method',
+  },
+];
 
 /**
  * A listener that does not owe the four, and what has to stay true for that.
@@ -92,6 +146,8 @@ function importedFrom(source) {
 }
 
 const failures = [];
+const bodiless_used = new Set();
+const forwarded_used = new Set();
 const bounded = [];
 const excused = [];
 const used = new Set();
@@ -164,6 +220,36 @@ for (const path of shipped) {
     );
     continue;
   }
+  const bodiless_entry = bodiless.find((one) => one.file === path);
+  const forwarded = boundedElsewhere.find((one) => one.file === path);
+  if (bodiless_entry !== undefined) {
+    if (!text.includes(bodiless_entry.requires)) {
+      failures.push(
+        `${path} is argued as reading no body because of \`${bodiless_entry.requires}\`, which `
+        + 'the file no longer says. A surface that grew a body needs a bound on it.',
+      );
+      continue;
+    }
+    bodiless_used.add(path);
+  } else if (forwarded !== undefined) {
+    const carrier = join(repoRoot, forwarded.carriedBy);
+    const carried = existsSync(carrier) ? readFileSync(carrier, 'utf8') : '';
+    if (!carried.includes(forwarded.requires)) {
+      failures.push(
+        `${path} is argued as bounded by ${forwarded.carriedBy}, and that file does not say `
+        + `\`${forwarded.requires}\`. The bound moved and the argument stayed.`,
+      );
+      continue;
+    }
+    forwarded_used.add(path);
+  } else if (!bytesBoundPattern.test(text)) {
+    failures.push(
+      `${path} opens an HTTP listener and bounds no number of bytes. The other four bounds are `
+      + 'about the clock and the socket count; without this one a single request may be as '
+      + 'large as the machine allows.',
+    );
+    continue;
+  }
   const missing = httpBounds.filter((bound) => !new RegExp(`\\b${bound}\\b`, 'u').test(text));
   if (missing.length > 0) {
     failures.push(
@@ -176,6 +262,16 @@ for (const path of shipped) {
   bounded.push(`${path} (${listeners.length} listener(s))`);
 }
 
+for (const entry of boundedElsewhere) {
+  if (!forwarded_used.has(entry.file)) {
+    failures.push(`${entry.file} is argued as bounded elsewhere and opens no HTTP listener any more`);
+  }
+}
+for (const entry of bodiless) {
+  if (!bodiless_used.has(entry.file)) {
+    failures.push(`${entry.file} is argued as reading no body and opens no HTTP listener any more`);
+  }
+}
 for (const entry of argued) {
   if (!used.has(entry.file)) {
     failures.push(`${entry.file} is argued here and opens no listener any more`);
@@ -195,7 +291,9 @@ if (failures.length > 0) {
 } else {
   console.log(
     `Listener bound check passed (${bounded.length + excused.length} files open a listener; `
-    + `${bounded.length} set all of ${httpBounds.join(', ')}; ${excused.length} argued, each `
+    + `${bounded.length} set all of ${httpBounds.join(', ')} and bound the bytes they read `
+    + `(${bodiless_used.size} by answering no body at all, ${forwarded_used.size} by what they `
+    + `forward into); ${excused.length} argued, each `
     + 'against something the file must still contain rather than against its own say-so).',
   );
   for (const line of bounded) console.log(`  bounded: ${line}`);
