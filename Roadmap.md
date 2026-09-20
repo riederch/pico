@@ -912,6 +912,51 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B227 — dieselbe Haltung, zweimal begründet, einmal vergessen
+(2026-09-20).** Dieser Baum startet an sechs Stellen ein fremdes Programm, und
+an zweien steht die Haltung dazu ausgeschrieben. `supplier-host.ts` gibt einem
+Lieferanten `{ PATH }`: *„a supplier that could read this process's environment
+would have the configuration channel the manifest's missing `env` field exists
+to deny"*. `depot-fetch.ts` wiederholt es für `git`: *„`git` gets what it needs
+to run and nothing about this process"*. Beide nennen ADR 0143 DP3.
+
+Die dritte Stelle im Kern — der TPM-Anschluss, der den Plattform-Anker zählt —
+reichte `{ ...process.env }` durch. Das ist die ganze Umgebung eines Homes, und
+darin steht `PICO_FOUNDATION_TOKEN` neben jedem Pfad, an dem dieses Home seine
+Schlüssel hält.
+
+**Geleckt ist auch hier nichts**, und das gehört hingeschrieben: `tpm2_*` ist
+ein vertrautes Systemprogramm auf derselben Maschine unter demselben Nutzer.
+Was fehlte, ist der Grund. Ein Kind bekommt, was es braucht, und der Token ist
+es nicht. Jetzt bekommt es `PATH` und den **eigenen Namensraum des Werkzeugs**
+(`TPM2TOOLS_*`), weil eine Betreiberin, die dort etwas gesetzt hat, es so
+meinte — und sonst nichts.
+
+**Drei Pflanzungen, und die erste hat zweimal nicht gebissen.** Das ist der
+eigentliche Ertrag dieser Runde:
+
+1. Beim ersten Anlauf verglich mein Tor die Umgebung als **Text** und kannte
+   `process.env` und `{...process.env}`. Die Pflanzung schrieb
+   `{ ...process.env, TPM2TOOLS_TCTI: tcti }` — eine Streuung mit Beiwerk, und
+   genau die Schreibweise, von der der Befund ausging. Sie ging durch. Jetzt
+   fragt es den Syntaxbaum: eine Streuung ist eine Streuung, egal wie viele
+   Eigenschaften daneben stehen.
+2. Die zweite Begründung hing am Programmnamen `notify-send` — der steht auch
+   in der Prosa darüber, also überlebte er das Umbenennen. Jetzt hängt sie am
+   Argument der Anrufung selbst.
+3. Und die Pflanzung ging **immer noch** durch, weil sie eine Funktion früher
+   sitzt: der Zähler baut die Umgebung und reicht sie hinunter, am `spawnSync`
+   steht nur ein Bezeichner. Das kann ein Leser des Aufrufs nicht sehen, und
+   das Tor sagt es jetzt selbst. Gefangen wird dieser Fall vom **Test**, der
+   dem Zähler sein `run` unterschiebt und fragt, was das Kind wirklich bekam.
+
+Zwei Netze, zwei Fragen. `children:check` hält die Form an jeder Startstelle —
+drei bauen dem Kind eine eigene Umgebung, drei reichen die Sitzung der Person
+weiter und sagen warum (Benachrichtigung braucht den Bus, Drucken die
+CUPS-Konfiguration, und eine Hülle, die sich selbst neu startet, misst genau
+die Umgebung, mit der sie startete). Der Test hält den Inhalt dort, wo die
+Umgebung eine Etage höher entsteht.
+
 **B226 — die Liste, vor der die Datei sechs Zeilen vorher warnt
 (2026-09-20).** Beide Container-Abbilder bauen den ganzen Workspace und
 installieren danach die Produktionsabhängigkeiten neu, bevor die Laufzeitstufe
