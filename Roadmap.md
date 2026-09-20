@@ -912,6 +912,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B228 — ein Recht, das nichts einlösen konnte (2026-09-20).**
+`AndroidManifest.xml` ist das Versprechen der Sonde über sich selbst, und es
+steht zwangsläufig zweimal: einmal als Liste von Komponenten und
+Berechtigungen, einmal als das Java, das sie benutzt.
+
+Gemessen: **vierzehn** Komponenten erklärt, **vierzehn** konkrete
+Komponentenklassen, Name für Name — die eine Hälfte stimmt. Und **elf**
+Berechtigungen, von denen eine nichts einlösen konnte:
+`RECEIVE_BOOT_COMPLETED`. Es gibt keinen `<receiver>` im Manifest und keinen
+`BroadcastReceiver` in den Quellen. Nichts hätte den Rundruf je empfangen
+können.
+
+Eine Messsonde ist nicht das ausgelieferte Produkt, und kaputt war dadurch
+nichts. Aber ein Produkt, dessen These Zurückhaltung ist, fragt Android nicht
+nach einem Recht, mit dem es nichts zu tun hat — und das Manifest ist genau
+die Stelle, an der diese Zurückhaltung für jeden sichtbar ist, der das Ding
+installiert. Die Zeile ist weg, ihr Grund steht an ihrer Stelle.
+
+`manifest:check` hält jetzt beide Hälften, und **jede Berechtigung nennt ihren
+Beleg samt Korpus**: `startForeground` im Java, `foregroundServiceType` im
+Manifest, und so weiter. Verschwindet der Beleg, fällt die Berechtigung.
+
+**Vier Pflanzungen, und drei haben beim ersten Anlauf nicht gebissen** — die
+zweite Runde hintereinander, in der das der eigentliche Ertrag ist:
+
+1. Die Pflanzung gegen eine fehlende Komponente **war selbst kaputt**: mein
+   Muster nahm ein einzeiliges, selbstschließendes Tag an, und die Dienste
+   stehen über vier Zeilen mit einem `<property>` darin. Sie hat nichts
+   entfernt, und ein Tor, dem man nichts wegnimmt, meldet zu Recht grün.
+2. Der Beleg für `USE_FULL_SCREEN_INTENT` überlebte das Umbenennen im Java,
+   weil mein Korpus **alles** war, worin die Sonde geschrieben ist — und
+   `run-reachability-probe.sh` nennt dasselbe Wort, während es einen App-Op
+   schaltet. **Ein Skript, das ein Recht gewährt, ist keine Benutzung davon.**
+   Jetzt sagt jeder Eintrag, in welchem Korpus sein Beleg zu stehen hat.
+3. Und eine neue Komponentenklasse ging durch, bis ich sie stagte — Regel 22
+   aus B223, eine Runde später am eigenen Werkzeug bestätigt: ein Tor, das
+   `git ls-files` liest, sieht nur, was im Baum steht.
+
 **B227 — dieselbe Haltung, zweimal begründet, einmal vergessen
 (2026-09-20).** Dieser Baum startet an sechs Stellen ein fremdes Programm, und
 an zweien steht die Haltung dazu ausgeschrieben. `supplier-host.ts` gibt einem
