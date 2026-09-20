@@ -912,6 +912,54 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B226 — die Liste, vor der die Datei sechs Zeilen vorher warnt
+(2026-09-20).** Beide Container-Abbilder bauen den ganzen Workspace und
+installieren danach die Produktionsabhängigkeiten neu, bevor die Laufzeitstufe
+`/app` kopiert. Der Grund steht im Kommentar: *„the TypeScript compiler, vitest
+and tsx are build tools and must not ship in a published image"*. Gut gedacht
+und gut geschrieben.
+
+Sechs Zeilen darüber steht in derselben Datei die Warnung, warum der Bau den
+ganzen Workspace auf einmal installiert statt einzelner Manifeste: *„that list
+silently drifts whenever a workspace package is added, which is exactly how
+packages/identity and packages/vault once went missing from the image"*.
+
+Und dann schrieb sie eine Liste:
+
+    RUN rm -rf node_modules apps/*/node_modules packages/*/node_modules
+
+`pnpm-workspace.yaml` erklärt **drei** Wurzeln. Die dritte, `modules`, wurde
+nicht gefegt — vier Paketverzeichnisse überlebten die Bereinigung und fuhren
+mit ins Abbild.
+
+**Geleckt ist nichts**, und das gehört genauso hingeschrieben wie der Fund: die
+vier Module haben heute **keine** Dev-Abhängigkeiten, es waren 32 kB
+Workspace-Verknüpfungen auf Pakete, die ohnehin mitfahren. Genau das ist der
+Punkt — die Regel hielt, weil noch niemand eine hinzugefügt hatte.
+
+Der Griff ist jetzt eine **Form statt einer Liste**: `*/*/node_modules` trifft
+jede Wurzel. Und `purge:check` hält beides zusammen — jede in
+`pnpm-workspace.yaml` erklärte Wurzel muss von jedem veröffentlichten Abbild
+gefegt werden, vor einer Neuinstallation nur mit Produktionsabhängigkeiten, und
+beides vor dem `COPY --from=build`. Ein Platzhalter, der eine Wurzel deckt,
+zählt als Deckung: geprüft wird die Form, nicht die Schreibweise.
+
+Vier Pflanzungen, und die vierte ist die interessante. Die alte Liste
+zurückgesetzt: fällt. Die Bereinigung ganz entfernt: fällt. Eine vierte Wurzel
+in den Workspace gesetzt: **bleibt grün** — weil die Form sie mitnimmt, was die
+ganze Änderung ist. Erst die Kombination aus alter Liste *und* neuer Wurzel
+fällt, und dann zweimal, einmal je ungedeckter Wurzel.
+
+**Was dabei gemessen wurde und offen bleibt.** `COPY --from=build /app /app`
+nimmt die ganze Baustufe mit: alle Quellen, **269 Testdateien**, `docs/`
+(16 MB) und `tools/`. Kein Geheimnis — `.dockerignore` hält Datenverzeichnis,
+Recovery-Card-PDFs, `.env` und `.git` draußen, und zwei Befunde haben daran
+schon gearbeitet (B91). Aber der Satz, der die Bauwerkzeuge aus dem Abbild
+hält, gilt für die Testsuiten genauso, und für sie hat ihn niemand gesagt.
+`closure:check` stellt diese Frage für das Debian-Paket; für das Abbild stellt
+sie keiner. Das ist eine Paketierungsentscheidung und kein Messfehler, also
+steht sie hier und nicht in einem Alleingang.
+
 **B225 — ein Wächter, der auf halbem Weg stehen bleibt (2026-09-20).**
 `isPicoWallClockPlausible` steht im Protokoll und sagt in seinem eigenen
 Kommentar, wofür es da ist: *„deletion under ADR 0070's crypto-shredding is not
