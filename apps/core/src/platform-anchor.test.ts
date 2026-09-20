@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   openPicoTpm2AnchorCounter,
+  picoTpm2Environment,
   picoPlatformAnchorVerdicts,
   verifyPicoPlatformAnchorGeneration,
   type PicoPlatformAnchorCounter,
@@ -298,5 +299,62 @@ describe('ADR 0120 N2 mit B214 - die Rechte des Ankers', () => {
     });
 
     expect(statSync(anchorPath).mode & 0o777).toBe(0o600);
+  });
+});
+
+describe('what tpm2 gets to see of this Home (B227)', () => {
+  /**
+   * `supplier-host.ts` gibt einem Lieferanten `{ PATH }` und sagt warum;
+   * `depot-fetch.ts` wiederholt es fuer `git`. Dieser Anschluss reichte
+   * `{ ...process.env }` durch - die ganze Umgebung eines Homes, in der
+   * `PICO_FOUNDATION_TOKEN` steht.
+   */
+  it('hands over PATH and the tool\'s own namespace, and nothing of the Home', () => {
+    const previous = { ...process.env };
+    try {
+      process.env.PICO_FOUNDATION_TOKEN = 'a-token-nobody-else-should-read';
+      process.env.PICO_KEY_STORE_PATH = '/data/keys';
+      process.env.TPM2TOOLS_TCTI = 'device:/dev/tpmrm0';
+
+      const env = picoTpm2Environment();
+
+      expect(Object.keys(env).sort()).toEqual(['PATH', 'TPM2TOOLS_TCTI']);
+      expect(env.TPM2TOOLS_TCTI).toBe('device:/dev/tpmrm0');
+      // Der Punkt, in einer Zeile: nichts von diesem Home faehrt mit.
+      expect(Object.keys(env).some((name) => name.startsWith('PICO_'))).toBe(false);
+
+      // Und eine ausdrueckliche Wahl schlaegt die der Betreiberin, ohne den
+      // Rest der Umgebung mitzunehmen.
+      expect(picoTpm2Environment('mssim:host=localhost').TPM2TOOLS_TCTI)
+        .toBe('mssim:host=localhost');
+
+      // **Und die Verdrahtung, nicht nur der Helfer.** Beim Pflanzen hat sich
+      // gezeigt, dass `children:check` diese Stelle nicht halten kann: die
+      // Umgebung wird eine Funktion frueher gebaut, und am `spawnSync` steht
+      // nur noch ein Bezeichner. Also wird hier gegangen, was dort nicht zu
+      // sehen ist - der Zaehler bekommt sein `run` untergeschoben und sagt,
+      // was er dem Kind wirklich mitgibt.
+      const handed: NodeJS.ProcessEnv[] = [];
+      const counter = openPicoTpm2AnchorCounter({
+        tcti: 'device:/dev/tpmrm0',
+        run: (_command, _args, spawnOptions) => {
+          handed.push(spawnOptions.env);
+          const stdout = Buffer.alloc(8);
+          stdout.writeBigUInt64BE(7n, 0);
+          return { status: 0, stdout, stderr: Buffer.alloc(0) };
+        },
+      });
+      counter.read();
+      expect(handed.length).toBeGreaterThan(0);
+      for (const given of handed) {
+        expect(Object.keys(given).some((name) => name.startsWith('PICO_'))).toBe(false);
+        expect(Object.keys(given).sort()).toEqual(['PATH', 'TPM2TOOLS_TCTI']);
+      }
+    } finally {
+      for (const name of Object.keys(process.env)) {
+        if (!(name in previous)) delete process.env[name];
+      }
+      Object.assign(process.env, previous);
+    }
   });
 });

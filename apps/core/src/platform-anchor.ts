@@ -125,14 +125,48 @@ export const picoTpm2CommandTimeoutMs = 10_000;
  * needs, which is why the adapter is this small - the security does not live in
  * this file, it lives in the hardware refusing.
  */
+/**
+ * What `tpm2_*` gets to see of this process (2026-09-20, finding B227).
+ *
+ * **The posture is written twice in this tree already** and was missing here.
+ * `supplier-host.ts` gives a supplier `{ PATH }` and says why: *"a supplier
+ * that could read this process's environment would have the configuration
+ * channel the manifest's missing `env` field exists to deny"*. `depot-fetch.ts`
+ * repeats it for `git`: *"`git` gets what it needs to run and nothing about
+ * this process"*. This adapter handed over `{ ...process.env }` - the whole
+ * environment of a Home, which is where `PICO_FOUNDATION_TOKEN` lives, beside
+ * every path this Home keeps its keys at.
+ *
+ * `tpm2_*` is a trusted system binary and does not exfiltrate anything, so
+ * nothing was leaking. What was missing is the reason: a child gets what it
+ * needs, and the token is not it. The exposure that remains is ordinary - the
+ * same user, the same machine - and the rule is cheap enough that arguing
+ * about the size of the hole is more expensive than closing it.
+ *
+ * **The tool's own namespace passes through**, because that is how tpm2-tools
+ * is configured (`TPM2TOOLS_TCTI` and its siblings) and an operator who set
+ * one meant it. `PATH` passes because the command is resolved through it.
+ * Nothing else does.
+ */
+export function picoTpm2Environment(tcti?: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PATH: process.env.PATH ?? '' };
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name.startsWith('TPM2TOOLS_') && value !== undefined) {
+      env[name] = value;
+    }
+  }
+  if (tcti !== undefined) {
+    env.TPM2TOOLS_TCTI = tcti;
+  }
+  return env;
+}
+
 export function openPicoTpm2AnchorCounter(
   options: PicoTpm2CounterOptions = {},
 ): PicoPlatformAnchorCounter {
   const nvIndex = options.nvIndex ?? picoTpm2AnchorNvIndex;
   const run = options.run ?? defaultTpm2Spawn;
-  const env: NodeJS.ProcessEnv = options.tcti === undefined
-    ? { ...process.env }
-    : { ...process.env, TPM2TOOLS_TCTI: options.tcti };
+  const env = picoTpm2Environment(options.tcti);
 
   const call = (command: string, args: readonly string[]): Buffer => {
     const result = run(command, args, {
