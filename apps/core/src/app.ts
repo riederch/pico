@@ -307,7 +307,7 @@ import {
   type PicoLinkDirectExecution,
   type PicoLinkDirectPrincipal,
 } from './link-direct.js';
-import { PICO_LINK_CONTINUITY_READ_PATH } from './link-intake-listener.js';
+import { PICO_LINK_CONTINUITY_READ_PATH, PICO_LINK_INTAKE_PATH } from './link-intake-listener.js';
 import {
   PicoShareEnvelopeIssuer,
   type PicoShareEnvelopePrepareInput,
@@ -3130,7 +3130,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // would become a prerequisite for the principal that outranks it.
   accessClasses.register('POST', '/api/auth/bootstrap', 'setup-bootstrap');
   // ADR 0107: one route, envelopes only. Every class above it stays local.
-  accessClasses.register('POST', '/api/home/link', 'link-intake');
+  accessClasses.register('POST', PICO_LINK_INTAKE_PATH, 'link-intake');
   // ADR 0115 U4: honestly `public`, not `link-intake` - there is no
   // authentication one layer in, and there must not be: the read exists for
   // clients the sealed channel refuses. It serves only self-authenticating
@@ -6638,7 +6638,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       }
   };
 
-  app.post('/api/home/link', {
+  app.post(PICO_LINK_INTAKE_PATH, {
     bodyLimit: MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES,
   }, async (request, reply) => {
     // ADR 0115 U3. The reply to a host-rotation submit is the last message of
