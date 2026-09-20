@@ -912,6 +912,51 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B233 — zwei Prozesse, die miteinander reden und sich nie begegnet sind
+(2026-09-20).** B232 hinterließ drei Routen, die `route:walk` als ungegangen
+meldete, obwohl sie einen Aufrufer haben. Der Aufrufer ist der **Vault-Daemon**
+— die Komponente, die Personenschlüssel hält. Also die Frage: wird die je gegen
+ein echtes Home gefahren?
+
+Gemessen: **kein Test dieses Baums baut ein Home und fährt den Daemon.** Nicht
+einer. `apps/vault-daemon` führt `@pico/core` als Dev-Abhängigkeit im Manifest,
+und **keine Zeile importiert sie**.
+
+**Sie war auch nicht benutzbar, und mein erster fehlgeschlagener Lauf hat das
+bewiesen statt vermutet.** `main` des Kernpakets zeigt auf
+`dist/index.js` — den Einstiegspunkt, der ein Home *startet* und nichts
+exportiert. Der Import lieferte `buildApp is not a function` und hinterließ:
+
+    apps/vault-daemon/apps/core/data/pico.sqlite
+    apps/vault-daemon/apps/core/data/home-host-keys/home_host_signing.key.json
+    apps/vault-daemon/apps/core/data/home-host-keys/home_host_key_agreement.key.json
+
+Ein Import hat ein Home hochgefahren und **Hostschlüssel erzeugt**, im
+Verzeichnis eines fremden Pakets. Entfernt; sie waren ungetrackt und ganz aus
+diesem Lauf.
+
+**Das Relay hat diese Trennung, der Kern hatte sie nicht.** ADR 0153 PK2 gab
+dem Relay ein `main.ts`, das läuft, und ein `index.ts`, das nur exportiert —
+deshalb kann der Kern in seinen Tests ein echtes Relay fahren
+(`link-push-sweep.test.ts`), und niemand ein echtes Home. Eine Richtung
+gebaut, die andere nicht.
+
+`@pico/core` bekommt jetzt eine Tür: ein `exports`-Feld mit `./app` neben dem
+bisherigen Wurzeleintrag. Was läuft, bleibt unangetastet — der Container ruft
+`node apps/core/dist/index.js` über den Pfad, nicht über den Paketnamen. Ob der
+Kern das ganze Muster des Relays bekommen sollte (ein Fass und ein Läufer), ist
+die größere Frage und steht hier, statt im Alleingang beantwortet zu werden.
+
+Das Netz ist die erste Begegnung selbst: ein echtes Home über `buildApp`, der
+echte `picoFoundationRequest` des Daemons, und dazwischen der **Vertrag** —
+`/api/system/status` liefert ein Objekt mit `service`, und die beiden
+Autoritätsrouten liefern wortwörtlich
+`foundation_rejected:401:Current Pico Home authority relay session is required.`
+Benennt das Home seine Ablehnung um, fällt es hier; ändert es seinen
+Dienstnamen, auch. Beides gepflanzt, beides gebissen — die zweite Pflanzung erst
+im zweiten Anlauf, weil ich den Dienstnamen an einer von drei Stellen geändert
+hatte und nicht an der, die diese Route schickt.
+
 **B232 — zwei benachbarte Fragen und ein Satz, der sie verwischt
 (2026-09-20).** `route:walk` fährt ein echtes Home gegen einen anderen Prozess
 und zählt, welche Foundation-Routen dabei je erfolgreich geantwortet haben.
