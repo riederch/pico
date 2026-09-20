@@ -84,6 +84,40 @@ describe('restricted Pico Link intake listener (ADR 0107 D4)', () => {
     });
   });
 
+  /**
+   * Was ein Fremder an diesem Port ueber dieses Home erfaehrt (Befund B224).
+   *
+   * Das Relay beantwortet auf seinem oeffentlichen Port eine unbekannte Route
+   * **genau wie** eine falsche Methode, und ADR 0149 sagt warum: *„telling them
+   * apart is a map of the relay's own surface"*. Die CI vergleicht die beiden
+   * Antworten dort Byte fuer Byte.
+   *
+   * Dieser Eingang entscheidet es andersherum, und das steht in keinem ADR,
+   * sondern nur in den beiden Tests darueber. Eine einzige Anfrage je Pfad
+   * trennt die zwei bedienten Ziele von allem anderen, und `allow` nennt sogar
+   * die Methode dazu.
+   *
+   * Dieser Test **beschreibt und billigt nicht** - dieselbe Form wie der
+   * `connectionTimeout`-Test in `app.test.ts`. Solange niemand entschieden
+   * hat, ob dieser Port so antworten soll, faellt hier jede Aenderung auf,
+   * statt unbemerkt zu passieren.
+   */
+  it('tells a stranger which two paths it serves', async () => {
+    await withListener(async (baseUrl) => {
+      const unknown = await fetch(`${baseUrl}/nothing-here`, { method: 'GET' });
+      const served = await fetch(`${baseUrl}${PICO_LINK_INTAKE_PATH}`, { method: 'GET' });
+
+      // Verschiedener Status, verschiedener Rumpf, und eine Kopfzeile, die es
+      // ausspricht: der Pfad existiert hier.
+      expect(unknown.status).toBe(404);
+      expect(served.status).toBe(405);
+      expect(await unknown.json()).toEqual({ error: 'Not found.' });
+      expect(await served.json()).toEqual({ error: 'Method not allowed.' });
+      expect(unknown.headers.get('allow')).toBeNull();
+      expect(served.headers.get('allow')).toBe('POST');
+    });
+  });
+
   it('applies the Link-specific body limit before envelope cryptography', async () => {
     await withListener(async (baseUrl) => {
       const response = await fetch(`${baseUrl}${PICO_LINK_INTAKE_PATH}`, {
