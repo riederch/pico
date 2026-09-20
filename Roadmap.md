@@ -912,6 +912,51 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B234 — eine Suche, die nach dem falschen Wort fragte (2026-09-20).**
+B233 stand auf zwei Suchen: `buildApp` in den Tests des Daemons, `@pico/core`
+in seinen Quellen. Beide fanden nichts, beide waren wahr, und beide fragten das
+Falsche. **Dieses Haus fährt einen Nachbarn nicht durch einen Import, sondern
+durch einen Prozessstart auf seinen gebauten Einstiegspunkt** — und danach hat
+keine meiner Suchen gefragt.
+
+`apps/vault-daemon/src/claim-ceremony.test.ts` sind **2.459 Zeilen**, die genau
+das tun. Der Daemon und ein echtes Home sind einander oft begegnet. Der
+zentrale Satz von B233 ist falsch und steht dort jetzt berichtigt.
+
+Das ist Regel 17 an mir selbst: *ein Messgerät ist gerichtet.* Ich habe nach
+der Redewendung gesucht, die ich gebaut hätte, und nicht nach der, die dasteht.
+
+**Richtig gemessen sind es sechs Kopplungen über einen Pfad**, in drei Paketen:
+
+| von | startet | erklärt? |
+|---|---|---|
+| `apps/companion-shell` | `vault-daemon/dist/cli.js` | ja |
+| `apps/companion-shell` | `core/dist/index.js` | ja |
+| `apps/companion-shell` | `core/dist/test-model-provider-host.js` | ja |
+| `apps/companion-shell` | `relay/dist/main.js` | **nein** |
+| `apps/vault-daemon` | `core/dist/index.js` | ja |
+| `apps/web` | `core/dist/index.js` | **nein** |
+
+Zwei Paare starten einander, ohne dass ein Manifest sie je erwähnt. Wer den
+Einstiegspunkt des Relays umbenennt, bricht einen Test in einem Paket, dessen
+Manifest das Relay nicht kennt — und erfährt es als *„cannot find module"*.
+
+`neighbour:check` hält das jetzt: jeder gestartete Pfad muss eine Quelle haben,
+die dieses Repository führt (dieselbe Regel, die `check-addon-config.mjs` auf
+das `CMD` eines Containers anwendet, an die Stelle gebracht, wo Tests dasselbe
+tun), und jede Kopplung ist erklärt oder begründet. Die beiden Begründungen
+ruhen **nicht** auf ihrem eigenen Wort: sie ruhen darauf, dass die Kette baut,
+bevor sie testet, und das liest das Tor aus `package.json`. Verschwindet
+`pnpm build` aus `verify:gates`, fallen sie.
+
+Eine erklärte Abhängigkeit wäre die andere Lösung, und sie wäre hier
+Dekoration: `apps/companion-shell` führt `@pico/core` schon als
+Dev-Abhängigkeit und importiert sie nirgends — und gemessen hält die
+Baureihenfolge auch ohne sie, weil sie über `@pico/vault-daemon` kommt.
+
+Vier Pflanzungen, vier Bisse: ein umgezogener Einstiegspunkt, eine entfernte
+Erklärung, ein Pfad ins Leere, und `pnpm build` aus der Kette genommen.
+
 **B233 — zwei Prozesse, die miteinander reden und sich nie begegnet sind
 (2026-09-20).** B232 hinterließ drei Routen, die `route:walk` als ungegangen
 meldete, obwohl sie einen Aufrufer haben. Der Aufrufer ist der **Vault-Daemon**
@@ -921,6 +966,14 @@ ein echtes Home gefahren?
 Gemessen: **kein Test dieses Baums baut ein Home und fährt den Daemon.** Nicht
 einer. `apps/vault-daemon` führt `@pico/core` als Dev-Abhängigkeit im Manifest,
 und **keine Zeile importiert sie**.
+
+> **Berichtigt am 2026-09-20, noch am selben Tag (B234).** Der fettgedruckte
+> Satz ist falsch. Ich habe nach `buildApp` und nach `@pico/core` gesucht —
+> beide Suchen waren wahr und beide fragten das Falsche. Dieses Haus fährt
+> einen Nachbarn, indem es **seinen gebauten Einstiegspunkt per Pfad startet**,
+> und `apps/vault-daemon/src/claim-ceremony.test.ts` tut das auf 2.459 Zeilen,
+> seit langem. Die beiden sind einander oft begegnet. Was von B233 steht,
+> steht unten; was fällt, fällt hier.
 
 **Sie war auch nicht benutzbar, und mein erster fehlgeschlagener Lauf hat das
 bewiesen statt vermutet.** `main` des Kernpakets zeigt auf
