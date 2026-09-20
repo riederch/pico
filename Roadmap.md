@@ -912,6 +912,55 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B235 — acht Türen ohne Schloss, und ein Leser, der eine davon nie sah
+(2026-09-20).** Zweiundsechzig klassifizierte Foundation-Routen, und **acht**
+erreicht ein Fremder ohne jedes Zugangsmittel: vier `public`, drei
+`setup-bootstrap`, eine `link-intake`. Klein und absichtlich — und nichts hielt
+die Menge zusammen.
+
+**Meine erste Zählung sagte sieben**, weil mein Muster nur Zeichenketten nahm.
+Die achte steht als Konstante: `accessClasses.register('GET',
+PICO_LINK_CONTINUITY_READ_PATH, 'public')`. Ausgerechnet die eine öffentliche
+Route, die *nicht* unter `/api/auth/` liegt — die interessante also.
+
+Und damit war die Spur gelegt, denn **ich war nicht der erste Leser mit diesem
+Muster.** `check-surface-classes.mjs` liest Registrierungen genauso, und
+`measure-route-walk.mjs` liest bediente Routen als `app.get('…'` mit der
+Zeichenkette direkt hinter der Klammer. Gemessen, was ihnen entging:
+
+| Leser | sah | sieht jetzt | fehlte |
+|---|---|---|---|
+| Registrierungen | 60 | 62 | beide Link-Pfade, als Konstante |
+| bediente Routen | 59 | 63 | zwei als Konstante, **zwei nur wegen eines Zeilenumbruchs** |
+
+Die zwei Reader-Custody-Routen standen als `app.post(\n  '/api/…'` — der Pfad
+beginnt in der nächsten Zeile, und das Muster verlangte ihn hinter der Klammer.
+Sie sind nie gezählt worden, seit es die Messung gibt.
+
+**Und dann fiel ein echter Fund heraus.** Mit dem berichtigten Leser meldet
+`surface:check`:
+
+> `GET /api/home/link/continuity` (public) is served and appears nowhere in
+> this document.
+
+Eine **öffentliche** Route, die ADR 0134 Pflicht 4 nie klassifiziert hat — nicht
+weil jemand sie vergaß, sondern weil ihr Prüfer sie nicht sehen konnte. Sie
+steht jetzt in `public-surfaces.md`, mit ihrem Grund (ADR 0115 U4: ein Gerät,
+das sein Home verloren hat, kann nichts beweisen, weil das Beweismittel genau
+das Verlorene ist) und mit dem Satz, warum sie so lange fehlte.
+
+Alle drei Leser teilen sich jetzt `scripts/registered-routes.mjs`, das den
+Syntaxbaum fragt und einen Bezeichner nachschlägt — und was es **nicht**
+auflösen kann, meldet es, statt es zu überspringen. Der Eingangspfad stand
+nebenbei dreimal (einmal Konstante, zweimal Literal), während sein Geschwister
+in derselben Datei viermal als Konstante steht; jetzt beide.
+
+Fünf Pflanzungen, fünf Bisse: eine öffentliche Route ohne Anmeldezweck, eine
+`setup-bootstrap`-Route ohne Begrenzung im Haken, ein Eingangspfad, der vom
+Lauscher wegdriftet, eine Registrierung aus einem Ausdruck, den kein Leser
+auflösen kann — und zur Gegenprobe eine Route mit Zeilenumbruch, die der neue
+Leser sieht und der alte nicht sah.
+
 **B234 — eine Suche, die nach dem falschen Wort fragte (2026-09-20).**
 B233 stand auf zwei Suchen: `buildApp` in den Tests des Daemons, `@pico/core`
 in seinen Quellen. Beide fanden nichts, beide waren wahr, und beide fragten das
