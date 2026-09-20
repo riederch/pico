@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url';
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const ts = createRequire(import.meta.url)('typescript');
+import { picoRegisteredRoutes, picoStringConstants } from './registered-routes.mjs';
 const appPath = join('apps', 'core', 'src', 'app.ts');
 const text = readFileSync(join(repoRoot, appPath), 'utf8');
 const source = ts.createSourceFile(appPath, text, ts.ScriptTarget.Latest, true);
@@ -53,62 +54,13 @@ const argued = [
   },
 ];
 
-/**
- * **Ein Argument kann eine Konstante sein, und das hat diesen Leser schon
- * einmal belogen.** Der erste Entwurf nahm nur Zeichenketten und uebersah
- * damit `accessClasses.register('GET', PICO_LINK_CONTINUITY_READ_PATH,
- * 'public')` - also ausgerechnet die eine oeffentliche Route, die nicht unter
- * `/api/auth/` liegt. Sieben statt acht, und die fehlende war die
- * interessante. Wer einen Bezeichner sieht, schlaegt ihn nach.
- */
-function literalOf(node, imported) {
-  if (ts.isStringLiteralLike(node)) return node.text;
-  if (ts.isIdentifier(node)) return imported.get(node.text);
-  return undefined;
-}
-
-/** Jede importierte oder hier erklaerte Zeichenketten-Konstante, mit ihrem Wert. */
-const constants = new Map();
-for (const path of ['apps/core/src/link-intake-listener.ts', appPath]) {
-  const other = ts.createSourceFile(
-    path,
-    readFileSync(join(repoRoot, path), 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
+const { registrations, unreadable } = picoRegisteredRoutes();
+for (const registration of unreadable) {
+  errors.push(
+    `${appPath} registers an access class this reader cannot resolve: ${registration}. A `
+    + 'registration it cannot read is a route it is not holding.',
   );
-  (function collect(node) {
-    if (ts.isVariableDeclaration(node)
-      && ts.isIdentifier(node.name)
-      && node.initializer !== undefined
-      && ts.isStringLiteralLike(node.initializer)) {
-      constants.set(node.name.text, node.initializer.text);
-    }
-    node.forEachChild(collect);
-  })(other);
 }
-
-const registrations = [];
-(function scan(node) {
-  if (ts.isCallExpression(node)
-    && ts.isPropertyAccessExpression(node.expression)
-    && node.expression.name.text === 'register'
-    && /accessClasses$/u.test(node.expression.expression.getText())
-    && node.arguments.length === 3) {
-    const [method, route, accessClass] = node.arguments.map(
-      (argument) => literalOf(argument, constants),
-    );
-    if (method !== undefined && route !== undefined && accessClass !== undefined) {
-      registrations.push({ method, route, accessClass });
-    } else {
-      failures.push(
-        `${appPath} registers an access class this reader cannot resolve: `
-        + `${node.getText().replace(/\s+/gu, ' ').slice(0, 90)}. A registration it cannot read is `
-        + 'a route it is not holding.',
-      );
-    }
-  }
-  node.forEachChild(scan);
-})(source);
 
 /** The routes the request hook scopes for `setup-bootstrap`, from its own branch. */
 const scoped = new Set();
@@ -171,10 +123,10 @@ if (intake.length !== 1) {
     `${intake.length} routes carry the link-intake class and there is exactly one intake. Each `
     + 'one is a door that authenticates inside the envelope rather than at the door.',
   );
-} else if (intake[0].route !== constants.get('PICO_LINK_INTAKE_PATH')) {
+} else if (intake[0].route !== picoStringConstants.get('PICO_LINK_INTAKE_PATH')) {
   errors.push(
     `${intake[0].route} carries the link-intake class and PICO_LINK_INTAKE_PATH is `
-    + `${constants.get('PICO_LINK_INTAKE_PATH') ?? '(unreadable)'}. The listener forwards one path `
+    + `${picoStringConstants.get('PICO_LINK_INTAKE_PATH') ?? '(unreadable)'}. The listener forwards one path `
     + 'and the app classes another, so the published door leads to a 404.',
   );
 }
