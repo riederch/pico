@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B232 — zwei benachbarte Fragen und ein Satz, der sie verwischt
+(2026-09-20).** `route:walk` fährt ein echtes Home gegen einen anderen Prozess
+und zählt, welche Foundation-Routen dabei je erfolgreich geantwortet haben.
+Gemessen heute: **34 von 60** — B43 hielt 26 von 61, es ist also gewachsen.
+Fünfundzwanzig blieben ungegangen, und der Lauf schloss mit:
+
+> 25 did not, and `check-surface-classes` says which of them are argued
+
+Das stimmt nur ungefähr, und ich bin selbst darauf hereingefallen. Jener
+Prüfer argumentiert Routen **ohne Aufrufer im Produkt**; dieser Lauf zählt
+Routen, die **in seinem Szenario** niemand erreicht hat. Zwei benachbarte
+Fragen — eine Route mit einem Aufrufer, den das Szenario nicht fährt, steht in
+der einen Menge und nicht in der anderen.
+
+**Wie oft ich die Schnittmenge falsch hatte, gehört dazu**: erst 3
+argumentierte (mein Muster fand nur die drei exakten Einträge und keinen der
+zwölf Präfixe), dann 20 (Präfixe dazu, aber ohne die Methodenregel), und
+richtig sind **22** — was erst herauskam, als der Lauf die Liste des Prüfers
+**selbst liest** statt sie nachzubauen. Regel 18s Zwilling: wer eine Menge
+nachbaut, misst seinen Nachbau.
+
+Dafür liegt die Liste jetzt in `scripts/argued-routes.mjs`, die beide
+importieren. In den Prüfer hineinzuimportieren ging nicht: er endet auf
+`process.exit(1)`, und ein Messgerät, das beim Lesen einer Liste das Programm
+beendet, ist keines.
+
+Der Lauf sagt den Unterschied jetzt selbst: *25 ungegangen, 22 davon ohne
+Aufrufer argumentiert, 3 dort nicht argumentiert.* Die drei sind
+`GET`/`POST /api/home/reader-custody/kek-rotations` und
+`POST /api/home/membership-lifecycle`.
+
+Regel 22 hat sich dabei zum dritten Mal gemeldet: `docs:check` sah die neue
+Datei erst, als sie gestaged war.
+
+**Und die Pflanzung hat meine Beschriftung berichtigt, nicht das Werkzeug.**
+Ich hatte den zweiten Korb „hat einen Aufrufer im Produkt" genannt. Nimmt man
+der Liste ein Argument, fällt `surface:check` — und dieselben Routen landen in
+demselben Korb, ohne dass ein Aufrufer existiert. Der Satz war nur wahr,
+solange das andere Tor grün ist, und genau so steht er jetzt da.
+
 **B231 — die Schwärzung lief immer und behauptete sie nie (2026-09-20).**
 Eine URL ist der Teil einer Anfrage, der aufgeschrieben wird — von diesem Home
 selbst und von allem dazwischen. Die Foundation weiß das: ihr
