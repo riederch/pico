@@ -912,6 +912,42 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B225 — ein Wächter, der auf halbem Weg stehen bleibt (2026-09-20).**
+`isPicoWallClockPlausible` steht im Protokoll und sagt in seinem eigenen
+Kommentar, wofür es da ist: *„deletion under ADR 0070's crypto-shredding is not
+recoverable, so a wall clock jumped forward would expire items that had years
+left. Being able to run is not permission to act on nonsense."* Gemessen: **ein
+einziger Aufrufer**, der Aufbewahrungs-Sweeper.
+
+Und in derselben Funktion, drei Zeilen darüber, steht eine zweite Löschung, die
+dieselbe Uhr liest:
+
+    const prunedPushes = store.prunePicoLinkPushLedger(now - 24 h);   // fragt nicht
+    const result = retentionSweeper.sweep();                          // fragt
+
+Eine dritte läuft beim Start: `prunePicoObservations()` löscht alles, was älter
+ist als 48 Stunden. Auch ungefragt. Eine Uhr, die ein Jahr vorgestellt ist,
+leert damit ein Register mit Tageshorizont und einen Puffer mit
+Zweitagefenster — vollständig, und nichts davon kommt zurück. Das Kriterium im
+Kommentar der Funktion, *„work that cannot be undone"*, trifft auf alle drei zu;
+gefragt hat nur eine.
+
+Die Frage steht jetzt **bei der Löschung statt beim Aufrufer**, so wie
+`sweep()` sie auch selbst stellt: ein zweiter Aufrufer erbt die Antwort, statt
+sich an sie erinnern zu müssen. Ohne Anker gibt es keinen Boden, und „kein
+Boden ist kein Beweis für Unsinn" — dann wird gelöscht wie zuvor, weil eine
+fehlende Datei keine Aufbewahrungsstörung werden darf.
+
+Gepflanzt und gebissen: je eine der beiden Fragen wieder entfernt, beide Male
+`expected 1 to be +0`.
+
+**Und ein Fehler von mir, der fast durchgegangen wäre.** Der erste Entwurf des
+Tests prüfte beide Löschungen auf **leeren** Tabellen — null gelöscht, egal ob
+verweigert oder nichts da. Ein Test ohne Gegenstand, genau die Krankheit, die
+B166 benannt hat, und er wäre grün geblieben, während die Regel wieder
+verschwindet. Jetzt bekommt jede Tabelle eine fällige Zeile: auf der
+unglaubhaften Uhr bleiben beide stehen, auf der glaubhaften fallen beide.
+
 **B224 — zwei öffentliche Türen, zwei Antworten, und nur eine hat es
 aufgeschrieben (2026-09-20).** Das Relay beantwortet auf seinem öffentlichen
 Port eine unbekannte Route **genau wie** eine falsche Methode. ADR 0149 sagt
