@@ -912,6 +912,45 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B231 — die Schwärzung lief immer und behauptete sie nie (2026-09-20).**
+Eine URL ist der Teil einer Anfrage, der aufgeschrieben wird — von diesem Home
+selbst und von allem dazwischen. Die Foundation weiß das: ihr
+Protokoll-Serialisierer schneidet `ticket` aus der aufgezeichneten Adresse,
+weil eine Eintrittskarte ein Zugangsmittel ist.
+
+Am **laufenden** Home gemessen, mit einer Senke als Protokollziel und einem
+Blick hinein:
+
+    /api/system/version?ticket=%5Bredacted%5D&limit=5
+
+Das Geheimnis steht in keiner Zeile. Die Schwärzung greift also — sie ist nur
+nie **behauptet** worden. Die Suiten reichen eine Senke durch und sehen nicht
+hin, und `redactTicketQueryValue` war schon einmal Gegenstand eines Befundes
+(B175-Familie), weil sich ihr Fehlschlag nicht messen lässt: sie sitzt im
+Protokollpfad, und dort verträgt nichts einen Fehler.
+
+Und nichts brachte den **nächsten** Parameter dazu, sich derselben Frage zu
+stellen.
+
+`query:check` zählt jetzt jeden Abfrageparameter, den ausgeliefertes Produkt
+liest, und verlangt zu jedem ein Urteil: trägt er ein Zugangsmittel, muss der
+Serialisierer ihn herausschneiden; trägt er keines, darf er es **nicht** — eine
+Begründung, die „nichts Geheimes" sagt, während der Code schwärzt, sind zwei
+Leser, die sich in einer Datei widersprechen.
+
+**Und der Syntaxbaum hat sofort einen gefunden, den meine Regex übersah.** Ich
+hatte drei gezählt (`ticket`, `limit`, `domainAuthorityId`); es sind **vier**.
+`after` — der Blätter-Cursor — stand in einer Typliste, die mein Muster nicht
+traf. B188s Satz, diesmal zu meinen Gunsten: eine Regex ist kein Leser von
+Quelltext.
+
+Zwei Pflanzungen, zwei Bisse, und jede fiel bei dem Netz, das für sie gebaut
+ist. Den Aufruf der Schwärzung entfernt: der **Test** fällt (`expected … not to
+contain 'ein-geheimnis'`), das Tor bleibt grün — es liest die Quelle des
+Serialisierers, und die Funktion steht ja noch da. Einen `accessToken`-Parameter
+eingefügt: das **Tor** fällt, der Test kennt ihn nicht. Das steht so im Tor,
+damit niemand es für den ganzen Schutz hält.
+
 **B230 — was die Suite nie sieht, weil sie immer leer anfängt
 (2026-09-20).** Jeder Test dieses Baums migriert eine **frische** Datenbank.
 Und SQLite ist mit einer leeren Tabelle nachsichtiger als mit einer vollen.
