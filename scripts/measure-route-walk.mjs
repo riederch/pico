@@ -3,6 +3,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { arguedRoutes } from './argued-routes.mjs';
 
 /**
  * Welche Foundation-Routen ein laufendes Home je einem *anderen Prozess*
@@ -167,9 +168,44 @@ if (answeredElsewhere.length > 0) {
 if (refusedOnly.size > 0) {
   console.log(`${refusedOnly.size} were reached and only ever refused: ${[...refusedOnly].sort().join(', ')}`);
 }
-console.log(`\n${unanswered.length} did not, and \`check-surface-classes\` says which of them are argued:`);
-for (const route of unanswered.sort()) {
+/**
+ * **Und was davon argumentiert ist, sagt dieser Lauf selbst** (Befund B232).
+ *
+ * Hier stand: *„`check-surface-classes` says which of them are argued"*, und
+ * das stimmte nur ungefaehr. Jener Pruefer argumentiert Routen **ohne Aufrufer
+ * im Produkt**; dieser Lauf zaehlt Routen, die **in seinem Szenario** niemand
+ * erreicht hat. Zwei benachbarte Fragen - eine Route mit einem Aufrufer, den
+ * dieses Szenario nicht faehrt, steht in der einen Liste und nicht in der
+ * anderen. Gemessen am 2026-09-20: 25 ungegangen, 20 argumentiert, 5 nicht.
+ *
+ * Der Unterschied ist keine Luecke, sondern die Auskunft - **solange
+ * `surface:check` gruen ist**. Dann hat jede nicht argumentierte Route einen
+ * Aufrufer im Produkt, und die Restmenge heisst genau: es gibt einen, und
+ * dieses Szenario hat ihn nicht gefahren. Faellt jenes Tor, steht in derselben
+ * Menge auch, was weder Argument noch Aufrufer hat - der Satz unten sagt
+ * deshalb, was gezaehlt wurde, und der Schluss daraus steht hier.
+ */
+const argumentFor = (route) => arguedRoutes.find((entry) => {
+  const [method, path] = route.split(' ');
+  return (entry.route === undefined ? path.startsWith(entry.prefix) : entry.route === path)
+    && (entry.method === undefined || entry.method === method);
+});
+const arguedUnanswered = unanswered.filter((route) => argumentFor(route) !== undefined);
+const unarguedUnanswered = unanswered.filter((route) => argumentFor(route) === undefined);
+
+console.log(`\n${unanswered.length} did not. ${arguedUnanswered.length} of them are argued in \`check-surface-classes\` as having no product caller at all:`);
+for (const route of arguedUnanswered.sort()) {
   console.log(`  ${route}`);
+}
+if (unarguedUnanswered.length > 0) {
+  console.log(
+    `\n${unarguedUnanswered.length} are not argued there at all. While \`surface:check\` is `
+    + 'green that means a caller exists and this scenario never drove it, which is exactly what '
+    + 'the two questions differ about:',
+  );
+  for (const route of unarguedUnanswered.sort()) {
+    console.log(`  ${route}`);
+  }
 }
 console.log('\nRoadmap.md findings B43 and B44 hold the last count and what it meant.');
 if (failed !== undefined) {
