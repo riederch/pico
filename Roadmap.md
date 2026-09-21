@@ -912,6 +912,66 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B241 — die Grenze vor 67 Tueren ist nie gegangen worden, und sie hat es
+selbst dazugesagt (2026-09-21).** Die IPC-Kanaele der Schale sind gut
+gehalten: 68, auf beiden Seiten gleich benannt, 68 vom Hauptprozess
+beantwortet, 68 vom Fenster gerufen. Da war nichts zu holen.
+
+Der Fund stand im Kopfkommentar des Tors, das sie haelt:
+
+> **Was diese Regel nicht kann.** `main.ts` wird von keinem Test ausgefuehrt
+> […] Diese Pruefung haelt deshalb fest, dass die Zeile *dasteht*, nicht dass
+> sie laeuft. Das ist weniger, als ein Gang waere, und es steht hier, statt
+> dass jemand es fuer einen Gang haelt.
+
+Das ist die ehrliche Bauart dieses Projekts — und es ist eine offene Rechnung.
+`assertRendererSender` ist die Grenze aus ADR 0113 C2: sie entscheidet, ob ein
+IPC-Aufruf vom eigenen Fenster kommt. Sie steht vor **67**
+`ipcMain`-Registrierungen. Kein Test hat sie je ausgefuehrt. Eine
+Sicherheitsgrenze, die niemand geht, ist eine Behauptung.
+
+**Ein Negativ vorweg, und es ist ein gutes.** Ueber den Syntaxbaum gezaehlt:
+67 Registrierungen, **67** rufen die Pruefung, und zwar als *erste* Anweisung.
+Keine offene Tuer. Aber auch das hielt nichts fest — die 68. haette sie
+vergessen duerfen, und eine einzige ungeschuetzte Registrierung ist die ganze
+Grenze.
+
+**Jetzt hat sie einen Gegenstand.** Die Entscheidung steht in
+`renderer-sender.ts` statt in `main.ts`, das kein Test ausfuehren kann (es
+zieht Electron beim Import). Kein Electron darin, also kann ein Test ihr acht
+fremde Absender hinhalten: ein fremder Frame in unserem Fenster, unsere Adresse
+aus fremden WebContents, beides fremd, gar kein Frame, ein abgeraeumter Frame,
+ein Frame ohne Adresse, gar kein Absender, und eine Adresse, die unsere nur
+praefixiert. Beide Haelften einzeln, weil jede allein erreichbar ist: ein
+zweiter Frame teilt die WebContents, und ein anderes Fenster laesst sich auf
+dieselbe Datei-URL richten.
+
+**Eine fail-open Form, nicht erreichbar, trotzdem falsch.** Verglichen wurde
+gegen `window?.webContents` — ohne Fenster also gegen `undefined`, und ein
+Ereignis ohne `sender` haette das getroffen. Electron setzt die Eigenschaft
+immer, es war also keine Tuer, durch die jemand gehen konnte. Aber sie war
+durch den *Besucher* zu und nicht durch das Schloss, und das ist bei einer
+Grenze der falsche Grund. Ohne Fenster wird jetzt ausdruecklich niemand
+beantwortet.
+
+**Was ein Gang nicht sehen kann, prueft das Tor weiter** — und praeziser als
+vorher. Die Spurzeile muss die Anweisung *unmittelbar vor* dem Wurf sein.
+Meine erste Fassung verglich Zeichenpositionen, und die Pflanzung ging
+hindurch: ein `trace(...)` in einem toten Zweig steht auch „vorher". Der
+Syntaxbaum fragt jetzt nach der Reihenfolge im Block. Dieselbe Lehre wie
+B188, zum dritten Mal in dieser Session.
+
+Dazu neu: **jede** `ipcMain`-Registrierung muss die Pruefung als erste
+Anweisung rufen. Auch das ueber den Baum, denn ein Handler, der erst nach
+einer Bedingung prueft, hat schon gehandelt, und ein Muster ueber die naechste
+Zeile saehe keinen Unterschied.
+
+**Fuenf Pflanzungen, fuenf Bisse.** Nur noch die Adresse pruefen → Gang faellt.
+Die Spur traegt die Adresse des Absenders → Gang *und* Tor fallen. Spur in
+einen toten Zweig → Tor faellt (erst in der zweiten Fassung). Eine 68. Tuer
+ohne Grenze → Tor nennt sie. Die Grenze eine Bedingung nach hinten geschoben →
+Tor nennt den Kanal.
+
 **B240 — die Woerter sind in den Kern gezogen, der Verstand darueber blieb
 zurueck (2026-09-21).** `conditions` ist das fuenfte Feld eines
 Darstellungszustands, und laut Vertrag unabhaengig von `kind`: mehrere duerfen
