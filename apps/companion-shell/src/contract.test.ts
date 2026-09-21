@@ -26,6 +26,7 @@ import {
   parsePicoCompanionRecoveryCardSetupInput,
   picoCompanionIdlePresentation,
   picoCompanionIpcChannels,
+  picoCompanionPresentationSymbol,
   picoCompanionRelayLines,
   picoCompanionRelayAccountIssued,
   parsePicoCompanionRelays,
@@ -99,6 +100,29 @@ describe('companion renderer presentation contract', () => {
       ...valid,
       decision: 'begin_first_run',
     })).toThrow('invalid_companion_presentation_decision_binding');
+  });
+
+  it('refuses a sign that is not the one its severity stands for', () => {
+    const valid = picoCompanionIdlePresentation(new Date('2026-09-21T12:00:00Z'));
+    // Every severity has exactly one sign, and every other sign is refused -
+    // including the two that are weaker than the state they would stand for.
+    const table = [
+      { severity: 'active', symbol: '\u25cf' },
+      { severity: 'warning', symbol: '!' },
+      { severity: 'blocked', symbol: '\u00d7' },
+    ] as const;
+    for (const row of table) {
+      expect(picoCompanionPresentationSymbol(row.severity)).toBe(row.symbol);
+      expect(parsePicoCompanionPresentation({ ...valid, ...row }).symbol)
+        .toBe(row.symbol);
+      for (const wrong of ['\u25cf', '!', '\u00d7'].filter((s) => s !== row.symbol)) {
+        expect(() => parsePicoCompanionPresentation({
+          ...valid,
+          severity: row.severity,
+          symbol: wrong,
+        })).toThrow('invalid_companion_presentation_symbol_binding');
+      }
+    }
   });
 
   it('binds the first-run decision to its own kind and closes the scan sources', () => {

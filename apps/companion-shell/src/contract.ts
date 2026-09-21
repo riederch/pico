@@ -482,6 +482,24 @@ const severities = new Set<PicoCompanionPresentationSeverity>([
   'blocked',
 ]);
 const symbols = new Set<PicoCompanionPresentation['symbol']>(['●', '!', '×']);
+
+/**
+ * ADR 0133. The symbol is a flattened view of the severity, and a flattened
+ * view is a cache rather than an authority: it may be replaced, and two
+ * consumers of the same severity must not be able to disagree because one of
+ * them was handed a copy. Producers still write it, so the shape that crosses
+ * to the renderer stays what it was, but this table is the source it has to
+ * agree with, and the parser is the correction point.
+ */
+export function picoCompanionPresentationSymbol(
+  severity: PicoCompanionPresentationSeverity,
+): PicoCompanionPresentation['symbol'] {
+  return severity === 'blocked'
+    ? '×'
+    : severity === 'warning'
+      ? '!'
+      : '●';
+}
 const decisions = new Set<PicoCompanionPresentationDecision>([
   'none',
   'veto_recovery',
@@ -871,6 +889,13 @@ export function parsePicoCompanionPresentation(value: unknown): PicoCompanionPre
     record.kind as PicoCompanionPresentationKind,
     record.decision as PicoCompanionPresentationDecision,
   );
+  if (record.symbol !== picoCompanionPresentationSymbol(
+    record.severity as PicoCompanionPresentationSeverity,
+  )) {
+    // A person reads the sign before the words. A sign that is weaker than the
+    // severity it stands for is the one drift this shape cannot absorb.
+    throw new Error('invalid_companion_presentation_symbol_binding');
+  }
   assertDisplayText(record.title, 160);
   assertDisplayText(record.body, 4_000);
   if (typeof record.observedAt !== 'string'
