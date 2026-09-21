@@ -29,6 +29,25 @@ const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 export const picoLinkOperationsPath = 'packages/protocol/src/index.ts';
 
 /**
+ * Die Gestalt eines Operationsnamens, fuer einen Leser, der **Prosa** absucht.
+ *
+ * **Warum das hier steht und nicht in jedem Leser** (2026-09-21, Befund B243).
+ * B13 hat genau diesen Fehler schon einmal gefunden: eine Zeichenklasse ohne
+ * Bindestrich, und `home.domain.read-grant.submit` - die einzige Operation,
+ * die einen traegt - war fuer den Pruefer unsichtbar. Behoben wurde damals die
+ * Leseseite, dieses Modul. Die *Prosa*-Seite blieb jedem Pruefer selbst
+ * ueberlassen, und `check-docs-structure.mjs`, spaeter geschrieben, hat den
+ * Fehler wortgleich wiederholt: `[a-z][a-z0-9_]*`, wieder ohne Bindestrich.
+ * Drei Dokumente nennen die Operation, und keines davon wurde je geprueft.
+ *
+ * Ein Muster, das seine eigene Liste nicht lesen kann, ist kaputt - und das
+ * laesst sich fragen, statt es zu glauben. `readPicoLinkDirectOperations`
+ * haelt jeden Namen dagegen und wirft, bevor irgendein Pruefer mit einer
+ * Menge weiterarbeitet, die kleiner ist als die Wahrheit.
+ */
+export const picoLinkOperationPattern = /home(?:\.[a-z][a-z0-9_-]*){2,}/u;
+
+/**
  * Every operation name in declaration order, or an empty list if the block
  * cannot be read. Callers decide what an empty list means for them, and both
  * of today's callers refuse it: a reader that finds nothing has looked at
@@ -44,5 +63,19 @@ export function readPicoLinkDirectOperations() {
   // Whole lines only. A quoted token anywhere in the block would also match
   // the apostrophes in the doc comments between the entries, which is how the
   // other reader could have gone wrong in the opposite direction.
-  return [...block[1].matchAll(/^\s*'([a-z][a-z0-9_.-]*)',$/gmu)].map(([, name]) => name);
+  const names = [...block[1].matchAll(/^\s*'([a-z][a-z0-9_.-]*)',$/gmu)]
+    .map(([, name]) => name);
+  const unreadable = names.filter(
+    (name) => new RegExp(`^${picoLinkOperationPattern.source}$`, 'u').test(name) === false,
+  );
+  if (unreadable.length > 0) {
+    // Befund B243. Ein Leser, der einen Namen dieser Liste nicht buchstabieren
+    // kann, sieht ihn in keinem Dokument und in keiner Quelle - und bleibt
+    // dabei gruen, weil ihm nichts fehlt, wovon er nichts weiss.
+    throw new Error(
+      `picoLinkOperationPattern cannot spell ${unreadable.join(', ')} - `
+      + 'a reader of this list that cannot read it will pass over what it never saw.',
+    );
+  }
+  return names;
 }

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { picoLinkDirectOperations } from '../packages/protocol/dist/index.js';
+import { picoLinkOperationPattern } from './link-operations.mjs';
 
 /**
  * Documents that claim to enumerate something, checked against the something.
@@ -611,7 +612,13 @@ let operationNamesChecked = 0;
 const operationsFound = new Set();
 for (const file of markdownFiles) {
   readFileSync(join(repoRoot, file), 'utf8').split('\n').forEach((line, index) => {
-    for (const [, name] of line.matchAll(/`(home(?:\.[a-z][a-z0-9_]*){2,})`/gu)) {
+    // Befund B243: das Muster kommt aus `link-operations.mjs`, das prueft,
+    // dass es jeden erklaerten Namen buchstabieren kann. Hier stand es
+    // ausgeschrieben und ohne Bindestrich, und damit war
+    // `home.domain.read-grant.submit` in jedem Dokument unsichtbar.
+    for (const [, name] of line.matchAll(
+      new RegExp(`\`(${picoLinkOperationPattern.source})\``, 'gu'),
+    )) {
       operationNamesChecked += 1;
       operationsFound.add(name);
       if (knownOperations.has(name) || arguedOperations.has(name)) {
