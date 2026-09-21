@@ -83,15 +83,17 @@ const argued = new Map([
       + 'keines darf das andere importieren - ein Home, das Geraetecode '
       + 'ausliefert, oder umgekehrt. Ein Home, das laenger praegt als ein '
       + 'Geraet ehrt, verschickt Pushes, die tot ankommen',
+    holds: { condition: 'noMutualImport' },
   }],
   ['picoCompanionConditionKinds', {
     files: [
       'apps/companion/src/conditions.ts',
       'apps/companion-shell/src/contract.ts',
     ],
-    reason: 'ADR 0113 C2: `contract.ts` ist rendererseitig und haelt genau '
-      + 'einen Import, und der ist typ-only. Ein Wertimport zoege den '
-      + 'Modulgraphen des Companions in den Renderer',
+    reason: 'ADR 0113 C2: `contract.ts` ist rendererseitig, und jeder seiner '
+      + 'Imports ist typ-only. Ein Wertimport zoege den Modulgraphen des '
+      + 'Companions in den Renderer',
+    holds: { condition: 'typeOnlyBareImports', paths: ['apps/companion-shell/src/contract.ts'] },
   }],
   ['picoCompanionExclusiveConditions', {
     files: [
@@ -104,6 +106,7 @@ const argued = new Map([
       + 'Gebunden durch `condition-vocabulary.test.ts`, das beide Listen '
       + 'elementweise gleichsetzt - dieselbe Anordnung, die fuer die Namen '
       + 'schon gilt',
+    holds: { condition: 'typeOnlyBareImports', paths: ['apps/companion-shell/src/contract.ts'] },
   }],
   ['picoCompanionDeviceAuthorityWarningDays', {
     files: [
@@ -111,6 +114,7 @@ const argued = new Map([
       'apps/companion-shell/src/contract.ts',
     ],
     reason: 'ADR 0113 C2, derselbe Grund wie bei den Zustandsarten daneben',
+    holds: { condition: 'typeOnlyBareImports', paths: ['apps/companion-shell/src/contract.ts'] },
   }],
   ['memoryRetentionModes', {
     files: [
@@ -120,6 +124,7 @@ const argued = new Map([
     reason: 'Das Dashboard wird als blanke ES-Module ausgeliefert; ein blosser '
       + 'Spezifizierer wie `@pico/protocol` loest im Browser nicht auf und '
       + 'reisst den ganzen Modulgraphen mit',
+    holds: { condition: 'typeOnlyBareImports', paths: ['apps/web/src'] },
   }],
   ['picoHomeClaimStates', {
     files: [
@@ -127,6 +132,7 @@ const argued = new Map([
       'apps/web/src/protocol-values.ts',
     ],
     reason: 'derselbe Grund wie bei den Aufbewahrungsarten daneben',
+    holds: { condition: 'typeOnlyBareImports', paths: ['apps/web/src'] },
   }],
   ['realtimeMessageType', {
     files: [
@@ -134,6 +140,7 @@ const argued = new Map([
       'apps/web/src/protocol-values.ts',
     ],
     reason: 'derselbe Grund wie bei den Aufbewahrungsarten daneben',
+    holds: { condition: 'typeOnlyBareImports', paths: ['apps/web/src'] },
   }],
   ['picoTokens', {
     files: [
@@ -143,6 +150,7 @@ const argued = new Map([
     reason: 'beide von `scripts/generate-design-tokens.mjs` aus einer Quelle '
       + 'geschrieben; kein Mensch tippt sie, und dieser Vergleich sagt, ob '
       + 'ein Lauf nur die Haelfte erneuert hat',
+    holds: { condition: 'generatedBoth', by: 'scripts/generate-design-tokens.mjs' },
   }],
 ]);
 
@@ -394,6 +402,152 @@ const withoutProse = (text) => text
   .filter((line) => line.trim() !== '')
   .join('\n');
 /**
+ * Befund B248. Eine Begruendung ist ein Satz, und ein Satz driftet.
+ *
+ * Acht Konstanten stehen zweimal, jede mit einem Grund daneben. Die Gruende
+ * waren Prosa - gelesen von Menschen, gehalten von niemandem. Gemessen am
+ * 2026-09-21: der Satz fuer `picoCompanionConditionKinds` sagte,
+ * `contract.ts` halte *genau einen* Import. Es hielt vier. Alle vier waren
+ * `import type`, die tragende Haelfte stimmte also - aber der Satz stand
+ * falsch da, und ein falscher Satz in einer Begruendung ist genau so viel
+ * wert wie gar keiner.
+ *
+ * Neben jedem Grund steht jetzt die **eine Bedingung, die ihn traegt**, in
+ * einer Form, die dieser Pruefer selbst nachrechnen kann. Die Prosa bleibt
+ * fuer einen Menschen; die Bedingung ist fuer die Kette.
+ *
+ * Drei Gestalten reichen fuer alle acht:
+ *
+ * `typeOnlyBareImports` - die Datei oder das Verzeichnis darf aus einem
+ * fremden Paket nur *typ-only* importieren. Das ist die Eigenschaft, die
+ * `contract.ts` rendererseitig und `apps/web` als blanke ES-Module
+ * auslieferbar haelt: ein Typimport wird nicht emittiert, also loest im
+ * Browser nichts auf und der Modulgraph bleibt draussen. Ein Wertimport
+ * bricht beides, und dann ist die Kopie nicht mehr begruendet, sondern nur
+ * noch eine Kopie.
+ *
+ * `noMutualImport` - die beiden Dateien duerfen einander nicht importieren.
+ * Der Grund bei `maxPicoLinkPushLifetimeMs` sagt genau das: ein Home, das
+ * Geraetecode ausliefert, oder umgekehrt.
+ *
+ * `generatedBoth` - beide Dateien tragen die Marke ihres Erzeugers, und der
+ * Erzeuger nennt beide Pfade. Dann stimmt "kein Mensch tippt sie".
+ */
+function importsOf(path) {
+  const source = ts.createSourceFile(
+    path,
+    readFileSync(join(repoRoot, path), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const found = [];
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement)
+      || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    const specifier = statement.moduleSpecifier.text;
+    const line = source.getLineAndCharacterOfPosition(statement.getStart(source)).line + 1;
+    const clause = statement.importClause;
+    const typeOnly = clause?.isTypeOnly === true
+      || (clause?.namedBindings !== undefined
+        && ts.isNamedImports(clause.namedBindings)
+        && clause.namedBindings.elements.length > 0
+        && clause.namedBindings.elements.every((element) => element.isTypeOnly));
+    found.push({ specifier, typeOnly, line });
+  }
+  return found;
+}
+
+const filesUnder = (target) => (target.endsWith('.ts')
+  ? [target]
+  : trackedFiles.filter(
+    (path) => path.startsWith(`${target}/`) && !path.endsWith('.test.ts'),
+  ));
+
+function checkHolds(name, entry) {
+  const holds = entry.holds;
+  if (holds === undefined) {
+    errors.push(
+      `${name} steht mehrfach und traegt einen Grund, aber keine nachpruefbare Bedingung. `
+      + 'Ein Satz allein driftet (Befund B248): nenne die eine Eigenschaft, die den Grund '
+      + 'traegt, damit sie in der Kette steht statt nur im Text.',
+    );
+    return;
+  }
+  if (holds.condition === 'typeOnlyBareImports') {
+    let looked = 0;
+    for (const target of holds.paths) {
+      for (const path of filesUnder(target)) {
+        looked += 1;
+        for (const entryImport of importsOf(path)) {
+          if (entryImport.specifier.startsWith('.') || entryImport.specifier.startsWith('node:')) {
+            continue;
+          }
+          if (!entryImport.typeOnly) {
+            errors.push(
+              `${path}:${entryImport.line} importiert Werte aus \`${entryImport.specifier}\`, `
+              + `und der Grund fuer die Kopie von ${name} beruht darauf, dass hier nur `
+              + 'typ-only importiert wird. Ein Wertimport wird emittiert - er zieht den '
+              + 'fremden Modulgraphen mit und loest im Browser nicht auf.',
+            );
+          }
+        }
+      }
+    }
+    if (looked === 0) {
+      errors.push(
+        `Die Bedingung fuer ${name} nennt ${holds.paths.join(', ')}, und darunter liegt keine `
+        + 'Datei. Eine Bedingung ohne Gegenstand ist keine (B166).',
+      );
+    }
+    return;
+  }
+  if (holds.condition === 'noMutualImport') {
+    const [one, other] = entry.files;
+    const packageOf = (path) => path.split('/').slice(0, 2).join('/');
+    for (const [from, to] of [[one, other], [other, one]]) {
+      const stem = to.slice(to.lastIndexOf('/') + 1).replace(/\.ts$/u, '');
+      const foreign = packageOf(to);
+      for (const entryImport of importsOf(from)) {
+        if (entryImport.specifier.includes(stem)
+          || (packageOf(from) !== foreign && entryImport.specifier.includes(foreign.split('/')[1]))) {
+          errors.push(
+            `${from}:${entryImport.line} importiert \`${entryImport.specifier}\`, und der Grund `
+            + `fuer die Kopie von ${name} ist, dass diese beiden Seiten einander nicht `
+            + 'importieren duerfen.',
+          );
+        }
+      }
+    }
+    return;
+  }
+  if (holds.condition === 'generatedBoth') {
+    const generator = readFileSync(join(repoRoot, holds.by), 'utf8');
+    for (const path of entry.files) {
+      const head = readFileSync(join(repoRoot, path), 'utf8').split('\n').slice(0, 3).join('\n');
+      if (!/Generated from /u.test(head)) {
+        errors.push(
+          `${path} traegt keine Erzeugermarke in den ersten Zeilen, und der Grund fuer die `
+          + `Kopie von ${name} ist, dass kein Mensch sie tippt.`,
+        );
+      }
+      const leaf = path.slice(path.lastIndexOf('/') + 1);
+      if (!generator.includes(leaf) && !generator.includes(path)) {
+        errors.push(
+          `${holds.by} nennt ${path} nicht, und der Grund fuer die Kopie von ${name} ist, `
+          + 'dass dieser Erzeuger beide schreibt. Ein Lauf koennte nur die Haelfte erneuern.',
+        );
+      }
+    }
+    return;
+  }
+  errors.push(`${name} nennt die unbekannte Bedingung \`${holds.condition}\`.`);
+}
+
+for (const [name, entry] of argued) {
+  checkHolds(name, entry);
+}
+
+/**
  * Befund B247. Die Regel darueber stuetzt sich auf einen Satz: *eine Fassung
  * ist geprueft, und solange sie gleich sind, gilt der Beweis fuer beide*.
  * Geprueft wurde davon bisher nur die zweite Haelfte.
@@ -510,7 +664,9 @@ const definitionCount = [...definitions.values()]
 console.log(
   `Constant-copies check passed (${definitionCount} exported constants across `
   + `${sourceFiles.length} files; ${copies.length} names stand more than once, `
-  + `each argued, each agreed; ${closedLists.size} closed lists, and `
+  + 'each argued, each agreed, and each carrying the one condition its reason rests on '
+  + `(${[...new Set([...argued.values()].map((entry) => entry.holds?.condition))].sort().join(', ')}), `
+  + `checked here rather than only written down; ${closedLists.size} closed lists, and `
   + `${unionSites} of them written out by hand as a union; `
   + `${mirroredModules.length} Modulpaar(e) stehen zweimal und tragen denselben Code, und `
   + `die ${mirroredModules.reduce((sum, pair) => sum + exportedNames(pair.proven).length, 0)} `
