@@ -912,6 +912,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B248 — eine Begruendung ist ein Satz, und ein Satz driftet (2026-09-21).**
+Fortsetzung von B247, eine Ebene breiter. Acht Konstanten stehen in diesem
+Baum zweimal, jede mit einem Grund daneben. Die Gruende sind Prosa — gelesen
+von Menschen, gehalten von niemandem.
+
+**Einer stand falsch da.** Der Grund fuer `picoCompanionConditionKinds` sagte,
+`contract.ts` halte *genau einen* Import, und der sei typ-only. Gemessen:
+**vier** Imports. Alle vier sind `import type`, die tragende Haelfte stimmt
+also — aber die Zahl war seit irgendwann falsch, und ein falscher Satz in
+einer Begruendung ist so viel wert wie gar keiner. Er ist jetzt das, was
+wirklich gilt: *jeder* Import dieser Datei ist typ-only.
+
+**Die anderen sieben stimmen**, und das ist das Negativ dieses Befunds: das
+Dashboard importiert aus `@pico/protocol` nur typ-only (zwei Stellen, beide
+`import type`, also nicht emittiert und im Browser nie aufgeloest); Push-Praeger
+und Push-Ehrer importieren einander nicht; beide Token-Dateien tragen die Marke
+ihres Erzeugers, und der Erzeuger nennt beide.
+
+**Der Fund ist, dass keiner der acht Saetze geprueft wurde.** Jeder von ihnen
+behauptet etwas ueber den Baum, das sich nachrechnen laesst — und keiner wurde
+nachgerechnet. Neben jedem Grund steht jetzt die **eine Bedingung, die ihn
+traegt**, in einer Form, die das Tor selbst pruefen kann. Die Prosa bleibt
+fuer einen Menschen; die Bedingung ist fuer die Kette. Ein neuer Eintrag ohne
+Bedingung wird abgewiesen.
+
+**Drei Gestalten reichen fuer alle acht.** `typeOnlyBareImports`: aus einem
+fremden Paket darf nur typ-only importiert werden — das ist die Eigenschaft,
+die `contract.ts` rendererseitig und `apps/web` als blanke ES-Module
+auslieferbar haelt, denn ein Typimport wird nicht emittiert.
+`noMutualImport`: die beiden Seiten duerfen einander nicht importieren.
+`generatedBoth`: beide Dateien tragen die Marke ihres Erzeugers, und der
+Erzeuger nennt beide Pfade — dann stimmt „kein Mensch tippt sie".
+
+**Fuenf Pflanzungen, fuenf Bisse.** Ein Wertimport in `contract.ts` → genannt.
+Ein Wertimport im Dashboard → genannt. Die Push-Seiten importieren einander →
+genannt. Eine Token-Datei verliert ihre Erzeugermarke → genannt. Ein Eintrag
+ohne Bedingung → abgewiesen.
+
 **B247 — eine Regel, die ihre eigene Praemisse nicht prueft (2026-09-21).**
 `narrowToOwner` steht zweimal, in `apps/core` und in `apps/relay`, und das ist
 begruendet: `check-constant-copies.mjs` fuehrt das Paar und haelt beide
