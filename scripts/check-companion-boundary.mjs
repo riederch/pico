@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+const ts = createRequire(import.meta.url)('typescript');
 
 /**
  * ADR 0113: the companion service core is shell-free, and the boundary is
@@ -69,23 +72,134 @@ for (const rendererFile of ['contract.ts', 'renderer.ts']) {
  * und im Relay gestellt worden, und die Antwort war dreimal dieselbe: nach
  * aussen schweigen ist Absicht, nach innen schweigen war keine.
  *
- * **Was diese Regel nicht kann.** `main.ts` wird von keinem Test ausgefuehrt -
- * die Schale hat Prozess-Tests fuer das Fenster, aber keinen, der einen
- * fremden Absender erzeugt. Diese Pruefung haelt deshalb fest, dass die Zeile
- * *dasteht*, nicht dass sie laeuft. Das ist weniger, als ein Gang waere, und
- * es steht hier, statt dass jemand es fuer einen Gang haelt.
+ * **Seit Befund B241 wird sie gegangen.** Die Entscheidung steht in
+ * `renderer-sender.ts` statt in `main.ts`, das kein Test ausfuehrt, und
+ * `renderer-sender.test.ts` haelt ihr acht fremde Absender hin. Diese Pruefung
+ * haelt weiterhin fest, was ein Gang nicht sehen kann: dass die Spur *vor* dem
+ * Wurf steht und die Adresse des Absenders nicht traegt.
+ *
+ * **Und dass sie vor jeder Tuer steht.** 67 `ipcMain`-Registrierungen, jede
+ * mit `assertRendererSender(event)` als erster Zeile. Die 68. wuerde sie sonst
+ * vergessen duerfen, und eine einzige ungeschuetzte Registrierung ist die
+ * ganze Grenze.
  */
 const mainSource = readFileSync(join(shellRoot, 'src', 'main.ts'), 'utf8');
-const senderGuard = /function assertRendererSender\([\s\S]*?\n\}/u.exec(mainSource)?.[0] ?? '';
-if (!/process\.stderr\.write\(/.test(senderGuard)) {
+const guardSource = readFileSync(join(shellRoot, 'src', 'renderer-sender.ts'), 'utf8');
+const guardTree = ts.createSourceFile(
+  'renderer-sender.ts',
+  guardSource,
+  ts.ScriptTarget.Latest,
+  true,
+);
+let senderGuard = '';
+let tracedBeforeThrow = false;
+(function walkGuard(node) {
+  if (ts.isFunctionDeclaration(node)
+    && node.name?.text === 'assertPicoCompanionRendererSender'
+    && node.body !== undefined) {
+    senderGuard = node.body.getText(guardTree);
+    /**
+     * Die Spur muss die Anweisung **unmittelbar vor** dem Wurf sein.
+     *
+     * Ein Vergleich von Zeichenpositionen genuegt nicht: ein `trace(...)` in
+     * einem toten Zweig steht auch "vorher" und haette diese Regel erfuellt,
+     * ohne je zu laufen. Gefragt ist die Reihenfolge im Block.
+     */
+    const statements = node.body.statements;
+    const at = statements.findIndex(ts.isThrowStatement);
+    const before = at > 0 ? statements[at - 1] : undefined;
+    tracedBeforeThrow = before !== undefined
+      && ts.isExpressionStatement(before)
+      && ts.isCallExpression(before.expression)
+      && ts.isIdentifier(before.expression.expression)
+      && before.expression.expression.text === 'trace';
+  }
+  node.forEachChild(walkGuard);
+})(guardTree);
+if (senderGuard === '') {
   errors.push(
-    'apps/companion-shell assertRendererSender must leave a trace before it throws: '
-    + 'a refused sender is told, and nobody else is.',
+    'apps/companion-shell: assertPicoCompanionRendererSender was not found in '
+    + 'renderer-sender.ts, so the rest of this rule ran over nothing.',
+  );
+}
+if (senderGuard !== '' && !tracedBeforeThrow) {
+  errors.push(
+    'apps/companion-shell assertPicoCompanionRendererSender must leave its trace before it '
+    + 'throws: a refused sender is told, and nobody else is.',
   );
 }
 if (/senderFrame\?\.url\}|\$\{[^}]*url/u.test(senderGuard)) {
   errors.push(
-    'apps/companion-shell assertRendererSender must not put the sender URL in that trace.',
+    'apps/companion-shell assertPicoCompanionRendererSender must not put the sender URL '
+    + 'in that trace.',
+  );
+}
+
+/**
+ * Die Grenze steht vor jeder Tuer, oder sie steht vor keiner.
+ *
+ * Gelesen ueber den Syntaxbaum und nicht ueber die Zeile darunter: ein
+ * Handler, der erst nach einer Bedingung prueft, hat schon gehandelt, und ein
+ * Muster ueber die naechste Zeile saehe keinen Unterschied. Verlangt wird die
+ * **erste Anweisung** des Handlers.
+ */
+const mainTree = ts.createSourceFile(
+  'main.ts',
+  mainSource,
+  ts.ScriptTarget.Latest,
+  true,
+);
+const registrations = [];
+(function walkMain(node) {
+  if (ts.isCallExpression(node)
+    && ts.isPropertyAccessExpression(node.expression)
+    && ts.isIdentifier(node.expression.expression)
+    && node.expression.expression.text === 'ipcMain'
+    && ['handle', 'handleOnce', 'on', 'once'].includes(node.expression.name.text)) {
+    const channel = node.arguments[0] !== undefined
+      && ts.isPropertyAccessExpression(node.arguments[0])
+      ? node.arguments[0].name.text
+      : node.arguments[0]?.getText(mainTree) ?? '(unbenannt)';
+    const handler = node.arguments[1];
+    const body = handler !== undefined
+      && (ts.isArrowFunction(handler) || ts.isFunctionExpression(handler))
+      && handler.body !== undefined
+      && ts.isBlock(handler.body)
+      ? handler.body
+      : undefined;
+    const first = body?.statements[0];
+    const guardsFirst = first !== undefined
+      && ts.isExpressionStatement(first)
+      && ts.isCallExpression(first.expression)
+      && ts.isIdentifier(first.expression.expression)
+      && first.expression.expression.text === 'assertRendererSender';
+    registrations.push({
+      channel,
+      method: node.expression.name.text,
+      guardsFirst,
+      readable: body !== undefined,
+      line: mainTree.getLineAndCharacterOfPosition(node.getStart(mainTree)).line + 1,
+    });
+  }
+  node.forEachChild(walkMain);
+})(mainTree);
+
+if (registrations.length === 0) {
+  errors.push(
+    'apps/companion-shell: read no ipcMain registrations from main.ts, so the sender '
+    + 'boundary was compared against nothing.',
+  );
+}
+for (const registration of registrations) {
+  if (registration.guardsFirst) {
+    continue;
+  }
+  errors.push(
+    `apps/companion-shell main.ts:${registration.line}: `
+    + `\`ipcMain.${registration.method}(${registration.channel})\` does not call `
+    + '`assertRendererSender(event)` as its first statement'
+    + (registration.readable ? '' : ' (and its handler is not a block this check can read)')
+    + '. One unguarded door is the whole boundary.',
   );
 }
 
@@ -684,6 +798,7 @@ console.log(
   + ` ${contractChannels.size} IPC channels, named identically on both sides,`
   + ` ${channelsAnswered} answered or pushed by the main process and`
   + ` ${exposedMethods.length} offered methods each called by the window,`
+  + ` ${registrations.length} ipcMain registrations, each guarding its sender before it acts;`
   + ` ${requiredIds.length} elements the window requires and index.html declares;`
   + ` ${namedCaps} field caps, each a name rather than a number;`
   + ` ${guardedClients} calls that reach a Link client`
