@@ -5,6 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { picoRelayOperatorResetMarkerPath } from './operator-claim.js';
+import { MIN_PICO_LINK_PACKET_PAYLOAD_BYTES } from '@pico/protocol/link-packet';
+
+/**
+ * Befund B244: ein Nutzinhalt unter dem Aufschlag der Versiegelung ist
+ * beweisbar keine Huelle und wird an der Tuer abgewiesen. Aus der Konstante
+ * gerechnet statt getippt.
+ */
+const payloadOfBytes = (seed: string): string => Buffer.from(
+  Buffer.concat([Buffer.from(seed), Buffer.alloc(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES)])
+    .subarray(0, MIN_PICO_LINK_PACKET_PAYLOAD_BYTES),
+).toString('base64');
+
 
 /**
  * ADR 0153 PK3 with ADR 0154 - the relay as the thing an operator installs.
@@ -232,7 +244,7 @@ describe('the relay process an operator installs', () => {
       to: `${mailbox}@relay.example.test`,
       tag,
       expiresAt,
-      payload: 'aGVsbG8gcGljbw==',
+      payload: payloadOfBytes('hello pico'),
     })).body).toEqual({ outcome: 'accepted' });
 
     const collected = await post(relay.mailboxPort, '/relay/collect', { mailbox },
@@ -241,7 +253,7 @@ describe('the relay process an operator installs', () => {
       tag,
       expiresAt,
       // Opaque here and only here: the relay carries bytes it cannot read.
-      payload: 'aGVsbG8gcGljbw==',
+      payload: payloadOfBytes('hello pico'),
     }]);
 
     // ADR 0149 RS5. Collecting removes nothing; acknowledging does.
@@ -261,7 +273,7 @@ describe('the relay process an operator installs', () => {
         to: `${mailbox}@relay.example.test`,
         tag: hex32(),
         expiresAt,
-        payload: 'aGk=',
+        payload: payloadOfBytes('hi'),
       });
     }
     expect((await post(relay.operatorPort, '/operator/accounts/revoke', { accountRef },

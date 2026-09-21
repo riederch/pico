@@ -8,7 +8,11 @@ import {
   type PicoLinkMailboxRegistration,
   type PicoLinkQueuedPacket,
 } from './link-delivery.js';
-import { parsePicoLinkPacket, picoLinkPacketSchema } from './link-packet.js';
+import {
+  MIN_PICO_LINK_PACKET_PAYLOAD_BYTES,
+  parsePicoLinkPacket,
+  picoLinkPacketSchema,
+} from './link-packet.js';
 
 /**
  * ADR 0147 RY4/RY5/RY6. What a relay answers, and the two answers it has no
@@ -19,6 +23,10 @@ const mailbox = 'a'.repeat(32);
 const to = `${mailbox}@relay.example.invalid`;
 const nowMs = Date.parse('2026-08-12T11:00:00.000Z');
 const expiresAt = '2026-08-12T12:00:00.000Z';
+/** Aus der Konstante gerechnet, nicht getippt - siehe Befund B244. */
+const smallestPayload = Buffer
+  .from(new Uint8Array(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES))
+  .toString('base64');
 
 function packet(over: Record<string, unknown> = {}) {
   return parsePicoLinkPacket({
@@ -26,7 +34,7 @@ function packet(over: Record<string, unknown> = {}) {
     to,
     tag: 'b'.repeat(32),
     expiresAt,
-    payload: 'AAAA',
+    payload: smallestPayload,
     ...over,
   });
 }

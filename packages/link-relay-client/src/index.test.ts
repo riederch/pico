@@ -9,6 +9,19 @@ import {
 } from '@pico/protocol/link-packet';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PicoLinkRelayClient } from './index.js';
+import { MIN_PICO_LINK_PACKET_PAYLOAD_BYTES } from '@pico/protocol/link-packet';
+
+/**
+ * Befund B244: ein Nutzinhalt unter dem Aufschlag der Versiegelung ist
+ * beweisbar keine Huelle und wird an der Tuer abgewiesen. Aus der Konstante
+ * gerechnet statt getippt.
+ */
+const payloadOfBytes = (seed: string): string => Buffer.from(
+  Buffer.concat([Buffer.from(seed), Buffer.alloc(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES)])
+    .subarray(0, MIN_PICO_LINK_PACKET_PAYLOAD_BYTES),
+).toString('base64');
+const smallestPayload = payloadOfBytes('');
+
 
 /**
  * ADR 0149, the client - tested against the **real** server rather than a
@@ -59,7 +72,7 @@ const packet = (over: Record<string, unknown> = {}) => parsePicoLinkPacket({
   to: `${mailbox}@${operator}`,
   tag,
   expiresAt,
-  payload: 'AAAA',
+  payload: smallestPayload,
   ...over,
 });
 
@@ -77,7 +90,7 @@ describe('ADR 0149 - the relay client, against the real relay', () => {
 
     const collected = await relay.collect(mailbox);
     expect(collected.ok && collected.value.packets)
-      .toEqual([{ tag, expiresAt, payload: 'AAAA' }]);
+      .toEqual([{ tag, expiresAt, payload: smallestPayload }]);
     expect(collected.ok && collected.value.more).toBe(false);
 
     // ADR 0149 RS5: the read removed nothing, so the same packets come back.

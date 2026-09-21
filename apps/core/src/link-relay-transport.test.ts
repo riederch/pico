@@ -20,6 +20,16 @@ import {
 import { Writable } from 'node:stream';
 import { buildApp } from './app.js';
 import type { PicoLinkMailboxRecord } from './event-store.js';
+import { MIN_PICO_LINK_PACKET_PAYLOAD_BYTES } from '@pico/protocol/link-packet';
+
+/**
+ * Befund B244: ein Nutzinhalt unter dem Aufschlag der Versiegelung ist
+ * beweisbar keine Huelle. Aus der Konstante gerechnet statt getippt.
+ */
+const smallestPayload = Buffer
+  .from(new Uint8Array(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES))
+  .toString('base64');
+
 
 interface HomeWithSweep {
   picoSweepLinkRelayMailboxes(): Promise<void>;
@@ -118,7 +128,7 @@ describe('ADR 0149 - the collector over the real surface', () => {
     });
     // Delivered as a stranger would - no account, ADR 0149 RS3.
     expect(store.deliver({
-      packet: packet('1'.repeat(32), 'AAAA'),
+      packet: packet('1'.repeat(32), smallestPayload),
       nowMs: Date.now(),
       acceptedAt: new Date().toISOString(),
     })).toBe('accepted');
@@ -137,7 +147,7 @@ describe('ADR 0149 - the collector over the real surface', () => {
     });
 
     expect(result).toEqual({ handled: 1, refused: 0, deferred: 0 });
-    expect(handled).toEqual(['AAAA']);
+    expect(handled).toEqual([smallestPayload]);
 
     // Acknowledged over the wire, so a second pass finds nothing.
     const second = await collectPicoLinkRelayPackets({
@@ -159,7 +169,7 @@ describe('ADR 0149 - the collector over the real surface', () => {
       capacity: defaultPicoLinkMailboxCapacity,
     });
     store.deliver({
-      packet: packet('1'.repeat(32), 'AAAA'),
+      packet: packet('1'.repeat(32), smallestPayload),
       nowMs: Date.now(),
       acceptedAt: new Date().toISOString(),
     });
@@ -186,7 +196,7 @@ describe('ADR 0149 - the collector over the real surface', () => {
       },
     });
     expect(second.handled).toBe(1);
-    expect(handled).toEqual(['AAAA']);
+    expect(handled).toEqual([smallestPayload]);
   });
 
   it('throws a named refusal rather than reporting a registration failure', async () => {
@@ -257,7 +267,7 @@ describe('ADR 0149 - the collector over the real surface', () => {
     const { baseUrl } = await startRelay();
     const transport = createPicoLinkRelayTransport({ baseUrl, accountId: account });
 
-    await expect(transport.deliver(packet('f'.repeat(32), 'AAAA')))
+    await expect(transport.deliver(packet('f'.repeat(32), smallestPayload)))
       .resolves.toBe('mailbox_unknown');
   });
 

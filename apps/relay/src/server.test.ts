@@ -10,6 +10,19 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 import { PicoRelayStore } from './store.js';
 import { startPicoRelayServer, type PicoRelayServer } from './server.js';
+import { MIN_PICO_LINK_PACKET_PAYLOAD_BYTES } from '@pico/protocol/link-packet';
+
+/**
+ * Befund B244: ein Nutzinhalt unter dem Aufschlag der Versiegelung ist
+ * beweisbar keine Huelle und wird an der Tuer abgewiesen. Aus der Konstante
+ * gerechnet statt getippt.
+ */
+const payloadOfBytes = (seed: string): string => Buffer.from(
+  Buffer.concat([Buffer.from(seed), Buffer.alloc(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES)])
+    .subarray(0, MIN_PICO_LINK_PACKET_PAYLOAD_BYTES),
+).toString('base64');
+const smallestPayload = payloadOfBytes('');
+
 
 /**
  * ADR 0149, the surface. Five exact routes, all POST, the mailbox always in
@@ -79,7 +92,7 @@ const packet = (over: Record<string, unknown> = {}) => ({
   to: `${mailbox}@${operator}`,
   tag,
   expiresAt,
-  payload: 'AAAA',
+  payload: smallestPayload,
   ...over,
 });
 
@@ -173,7 +186,7 @@ describe('ADR 0149 - the relay surface', () => {
 
     const collected = await post(base, picoLinkRelayRoutes.collect, { mailbox }, account);
     expect(collected.status).toBe(200);
-    expect(collected.body.packets).toEqual([{ tag, expiresAt, payload: 'AAAA' }]);
+    expect(collected.body.packets).toEqual([{ tag, expiresAt, payload: smallestPayload }]);
     expect(collected.body.more).toBe(false);
 
     // ADR 0149 RS5: collecting removed nothing.

@@ -5,6 +5,19 @@ import { parsePicoLinkPacket, picoLinkPacketSchema } from '@pico/protocol/link-p
 import { afterEach, describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
 import { PicoRelayStore } from './store.js';
+import { MIN_PICO_LINK_PACKET_PAYLOAD_BYTES } from '@pico/protocol/link-packet';
+
+/**
+ * Befund B244: ein Nutzinhalt unter dem Aufschlag der Versiegelung ist
+ * beweisbar keine Huelle und wird an der Tuer abgewiesen. Aus der Konstante
+ * gerechnet statt getippt.
+ */
+const payloadOfBytes = (seed: string): string => Buffer.from(
+  Buffer.concat([Buffer.from(seed), Buffer.alloc(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES)])
+    .subarray(0, MIN_PICO_LINK_PACKET_PAYLOAD_BYTES),
+).toString('base64');
+const smallestPayload = payloadOfBytes('');
+
 
 /**
  * ADR 0149. A relay holds mailboxes for accounts and never learns a Pico.
@@ -40,7 +53,7 @@ function packet(over: { mailbox?: string; tag?: string; expiresAt?: string; payl
     to: `${over.mailbox ?? mailboxOf('a')}@${operator}`,
     tag: over.tag ?? mailboxOf('b'),
     expiresAt: over.expiresAt ?? expiresAt,
-    payload: over.payload ?? 'AAAA',
+    payload: over.payload ?? smallestPayload,
   });
 }
 
@@ -156,7 +169,7 @@ describe('ADR 0149 RS3 - delivery takes no credential', () => {
       to: `${mailboxOf('a')}@other.relay.invalid`,
       tag: mailboxOf('b'),
       expiresAt,
-      payload: 'AAAA',
+      payload: smallestPayload,
     });
     expect(store.deliver({ packet: foreign, nowMs, acceptedAt })).toBe('mailbox_unknown');
     store.close();
@@ -230,7 +243,7 @@ describe('ADR 0149 RS5 - a collected packet is not a delivered one', () => {
     const first = store.collect({ accountId: 'account-1', mailbox: mailboxOf('a'), nowMs });
     const second = store.collect({ accountId: 'account-1', mailbox: mailboxOf('a'), nowMs });
     expect(first).toEqual(second);
-    expect(first.ok && first.packets[0]?.payload).toBe('AAAA');
+    expect(first.ok && first.packets[0]?.payload).toBe(smallestPayload);
     store.close();
   });
 

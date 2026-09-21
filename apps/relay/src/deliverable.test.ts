@@ -21,6 +21,19 @@ import {
   picoRelayMailboxDeliveriesPerMinute,
   picoRelayUnattributedRequestsPerMinute,
 } from './rate-limit.js';
+import { MIN_PICO_LINK_PACKET_PAYLOAD_BYTES } from '@pico/protocol/link-packet';
+
+/**
+ * Befund B244: ein Nutzinhalt unter dem Aufschlag der Versiegelung ist
+ * beweisbar keine Huelle und wird an der Tuer abgewiesen. Aus der Konstante
+ * gerechnet statt getippt.
+ */
+const payloadOfBytes = (seed: string): string => Buffer.from(
+  Buffer.concat([Buffer.from(seed), Buffer.alloc(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES)])
+    .subarray(0, MIN_PICO_LINK_PACKET_PAYLOAD_BYTES),
+).toString('base64');
+const smallestPayload = payloadOfBytes('');
+
 
 /**
  * ADR 0153 PK2/PK3. The difference between a server and a deliverable.
@@ -257,7 +270,7 @@ describe('ADR 0149 RS7 - a bound on the mailbox port', () => {
             to: `${to}@relay.example`,
             tag: String(tagCounter).padStart(32, '0'),
             expiresAt: picoLinkExpiryBucketFor(clockMs + 60 * 60 * 1_000),
-            payload: 'AAAA',
+            payload: smallestPayload,
           }),
         });
       },

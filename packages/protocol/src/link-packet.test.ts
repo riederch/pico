@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_PICO_LINK_PACKET_PAYLOAD_BYTES,
+  MIN_PICO_LINK_PACKET_PAYLOAD_BYTES,
+  PICO_LINK_SEALED_ENVELOPE_OVERHEAD_BYTES,
   formatPicoLinkPacketAddress,
   isPicoLinkExpiryOnBucket,
   maxPicoLinkPacketLifetimeMs,
@@ -26,6 +28,16 @@ const operator = 'relay.example.invalid';
 const to = `${mailbox}@${operator}`;
 const tag = 'b'.repeat(32);
 
+/**
+ * Der kleinste Nutzinhalt, den es ueberhaupt geben kann - aus der Konstante
+ * gerechnet statt getippt. Hier stand `'AAAA'`, drei Byte, und drei Byte sind
+ * keine versiegelte Huelle (Befund B244): vierzehn Faelle sprachen ueber ein
+ * Paket, das das Produkt nie bauen kann.
+ */
+const payloadOfBytes = (bytes: number): string =>
+  Buffer.from(new Uint8Array(bytes)).toString('base64');
+const smallestPayload = payloadOfBytes(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES);
+
 /** 2026-08-12T12:00:00.000Z sits exactly on the quarter-hour grid. */
 const expiresAt = '2026-08-12T12:00:00.000Z';
 const nowMs = Date.parse('2026-08-12T11:00:00.000Z');
@@ -36,10 +48,40 @@ function packet(over: Record<string, unknown> = {}): Record<string, unknown> {
     to,
     tag,
     expiresAt,
-    payload: 'AAAA',
+    payload: smallestPayload,
     ...over,
   };
 }
+
+describe('ADR 0107 - a payload too small to be a sealed envelope', () => {
+  /**
+   * Befund B244. Das Paket war nach oben begrenzt und nach unten gar nicht.
+   * Base64, nicht leer, Laenge durch vier - das prueft die Kodierung, und das
+   * Relay schreibt ueber dieselbe Spalte, was dort liege, sei Chiffrat. Diese
+   * Grenze ist die eine Aussage ueber den Inhalt, die diese Schicht wirklich
+   * treffen kann: die Konstruktion hat einen Boden.
+   */
+  it('refuses anything shorter than the sealing costs, and accepts one byte more', () => {
+    expect(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES)
+      .toBe(PICO_LINK_SEALED_ENVELOPE_OVERHEAD_BYTES + 1);
+    for (const bytes of [3, 12, PICO_LINK_SEALED_ENVELOPE_OVERHEAD_BYTES - 1,
+      PICO_LINK_SEALED_ENVELOPE_OVERHEAD_BYTES]) {
+      const tooSmall = payloadOfBytes(bytes);
+      expect(picoLinkPacketPayloadBytes(tooSmall), `${bytes} bytes`).toBe(bytes);
+      expect(() => parsePicoLinkPacket(packet({ payload: tooSmall }), nowMs), `${bytes} bytes`)
+        .toThrow('pico_link_payload_too_small');
+    }
+    expect(parsePicoLinkPacket(packet({ payload: smallestPayload }), nowMs).payload)
+      .toBe(smallestPayload);
+  });
+
+  it('keeps the encoding rules it already had, which say nothing about size', () => {
+    // Eine leere Zeichenkette faellt weiterhin als ungueltige Kodierung durch,
+    // nicht als zu klein: die alte Regel bleibt die naehere.
+    expect(() => parsePicoLinkPacket(packet({ payload: '' }), nowMs))
+      .toThrow('invalid_pico_link_payload');
+  });
+});
 
 describe('ADR 0147 RY1 - the envelope a relay reads', () => {
   it('accepts the four fields that survive the test', () => {
@@ -48,7 +90,7 @@ describe('ADR 0147 RY1 - the envelope a relay reads', () => {
       to,
       tag,
       expiresAt,
-      payload: 'AAAA',
+      payload: smallestPayload,
     });
   });
 

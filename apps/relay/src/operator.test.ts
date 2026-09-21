@@ -21,6 +21,19 @@ import {
 import { startPicoRelayOperatorListener } from './operator.js';
 import { startPicoRelayServer } from './server.js';
 import { PicoRelayStore } from './store.js';
+import { MIN_PICO_LINK_PACKET_PAYLOAD_BYTES } from '@pico/protocol/link-packet';
+
+/**
+ * Befund B244: ein Nutzinhalt unter dem Aufschlag der Versiegelung ist
+ * beweisbar keine Huelle und wird an der Tuer abgewiesen. Aus der Konstante
+ * gerechnet statt getippt.
+ */
+const payloadOfBytes = (seed: string): string => Buffer.from(
+  Buffer.concat([Buffer.from(seed), Buffer.alloc(MIN_PICO_LINK_PACKET_PAYLOAD_BYTES)])
+    .subarray(0, MIN_PICO_LINK_PACKET_PAYLOAD_BYTES),
+).toString('base64');
+const smallestPayload = payloadOfBytes('');
+
 
 /**
  * ADR 0154. Claiming a relay and administering it, without it learning a Pico.
@@ -295,7 +308,7 @@ describe('ADR 0154 RO5 - an account can be taken back', () => {
       to: `${mailbox}@relay.example`,
       tag: '5'.repeat(32),
       expiresAt: picoLinkExpiryBucketFor(nowMs + 3_600_000),
-      payload: 'AAAA',
+      payload: smallestPayload,
     }, nowMs);
     // Three packets in one mailbox, so the count below tells "counted the
     // deletes" apart from "counted the mailboxes" - with one of each, a
@@ -312,7 +325,7 @@ describe('ADR 0154 RO5 - an account can be taken back', () => {
           to: `${mailbox}@relay.example`,
           tag: tag.repeat(32),
           expiresAt: picoLinkExpiryBucketFor(nowMs + 3_600_000),
-          payload: 'AAAA',
+          payload: smallestPayload,
         }, nowMs),
         nowMs,
         acceptedAt: '2026-08-16T12:00:00.000Z',
@@ -340,7 +353,7 @@ describe('ADR 0154 RO5 - an account can be taken back', () => {
         to: `${mailbox}@relay.example`,
         tag: '6'.repeat(32),
         expiresAt: picoLinkExpiryBucketFor(nowMs + 3_600_000),
-        payload: 'AAAA',
+        payload: smallestPayload,
       }, nowMs),
       nowMs,
       acceptedAt: '2026-08-16T12:00:00.000Z',

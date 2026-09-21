@@ -83,6 +83,39 @@ export const maxPicoLinkPacketLifetimeMs = 7 * 24 * 60 * 60 * 1_000;
 export const MAX_PICO_LINK_PACKET_PAYLOAD_BYTES = 64 * 1024;
 
 /**
+ * Was die Versiegelung selbst kostet, unabhaengig davon, was darin steht.
+ *
+ * ADR 0107 versiegelt mit `crypto_box_seal`: ein fluechtiger oeffentlicher
+ * Schluessel (32 Byte) und ein Authentifizierungsmerkmal (16 Byte) liegen vor
+ * dem Chiffrat. `crypto_box_SEALBYTES` nennt dieselbe Zahl, und
+ * `link-packet-floor.test.ts` bindet diese Konstante daran - dieses Paket
+ * haengt nicht an libsodium, also ist sie hier genannt und dort geprueft,
+ * dieselbe Anordnung wie bei jeder anderen Abschrift in diesem Baum.
+ */
+export const PICO_LINK_SEALED_ENVELOPE_OVERHEAD_BYTES = 48;
+
+/**
+ * Befund B244. Die Untergrenze eines Nutzinhalts, **abgeleitet statt
+ * geschaetzt**.
+ *
+ * Das Paket war nach oben begrenzt und nach unten gar nicht: Base64, nicht
+ * leer, Laenge durch vier. Das prueft die *Kodierung*. Das Relay schreibt
+ * ueber dieselbe Spalte "the payload is ciphertext this relay has no key
+ * for" - eine Aussage ueber den *Inhalt*, die an der Tuer niemand haelt. Vier
+ * Zeichen Base64 sind drei Byte, und drei Byte koennen keine versiegelte
+ * Huelle sein.
+ *
+ * Genau so weit geht diese Regel und keinen Schritt weiter: ueber den Inhalt
+ * der Huelle weiss diese Schicht nichts und soll nichts wissen. Aber die
+ * *Konstruktion* hat einen Boden, und der ist nachrechenbar - Aufschlag plus
+ * mindestens ein Byte Klartext. Alles darunter ist beweisbar keine Huelle,
+ * und was beweisbar falsch ist, gehoert an der Tuer abgewiesen statt im Fach
+ * eines Menschen abgelegt.
+ */
+export const MIN_PICO_LINK_PACKET_PAYLOAD_BYTES =
+  PICO_LINK_SEALED_ENVELOPE_OVERHEAD_BYTES + 1;
+
+/**
  * ADR 0147 RY6. How many live packets one mailbox holds before it refuses.
  *
  * Thirty-two, and the figure follows from what a mailbox is *for*: one
@@ -268,6 +301,9 @@ export function parsePicoLinkPacket(value: unknown, nowMs?: number): PicoLinkPac
   }
   if (picoLinkPacketPayloadBytes(record.payload) > MAX_PICO_LINK_PACKET_PAYLOAD_BYTES) {
     throw new Error('pico_link_payload_too_large');
+  }
+  if (picoLinkPacketPayloadBytes(record.payload) < MIN_PICO_LINK_PACKET_PAYLOAD_BYTES) {
+    throw new Error('pico_link_payload_too_small');
   }
 
   if (nowMs !== undefined) {
