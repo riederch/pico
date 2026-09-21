@@ -216,6 +216,28 @@ export const picoCompanionConditionKinds = [
 export type PicoCompanionConditionKind = typeof picoCompanionConditionKinds[number];
 
 /**
+ * ADR 0077 C4 / ADR 0131 A7. Pairs that must not stand next to each other,
+ * because the second only says the first again: two rungs of one ladder, or a
+ * Home that is unreachable *because* there is no network.
+ *
+ * The second copy that cannot be an import, for the same reason as the names
+ * above - a parser needs its vocabulary before anything arrives, and this file
+ * loads in the renderer. `picoCompanionExclusiveConditions` in the shell-free
+ * core is the source, and `condition-vocabulary.test.ts` binds the two.
+ *
+ * It is stated at the *boundary* rather than left to the producer, because
+ * that is where a second client's conditions arrive (finding B240). The words
+ * moved into the core so a phone would inherit them; the rule about which of
+ * them can be true together stayed behind in one producer's `if`.
+ */
+export const picoCompanionExclusiveConditions = [
+  // ADR 0119 Q5: reserved and exhausted are two rungs of one ladder.
+  ['storage_reserved', 'storage_exhausted'],
+  // ADR 0131 A7: with no network the unreachable Home is the link itself.
+  ['no_network', 'home_unreachable'],
+] as const satisfies readonly (readonly [PicoCompanionConditionKind, PicoCompanionConditionKind])[];
+
+/**
  * ADR 0113 C2. The protocol's provider states, declared here because this file
  * loads in the renderer, where a bare specifier does not resolve.
  *
@@ -1003,10 +1025,10 @@ function parseConditions(value: unknown): readonly PicoCompanionCondition[] {
       remedy: record.remedy as string,
     }));
   }
-  if (seen.has('storage_reserved') && seen.has('storage_exhausted')) {
-    // ADR 0119 Q5's states are a ladder, not a set. Showing both would leave
-    // the person to work out which one is true.
-    throw new Error('conflicting_companion_presentation_condition');
+  for (const [first, second] of picoCompanionExclusiveConditions) {
+    if (seen.has(first) && seen.has(second)) {
+      throw new Error('conflicting_companion_presentation_condition');
+    }
   }
   return Object.freeze(parsed);
 }

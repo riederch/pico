@@ -70,6 +70,34 @@ const conditionWording: Record<PicoCompanionConditionKind, { label: string; reme
   },
 };
 
+/**
+ * Paare, die nicht nebeneinander stehen duerfen, weil das zweite das erste
+ * nur noch einmal sagt.
+ *
+ * ADR 0077 C4: eine Absage darf keine Inventur sein. Zwei Zeilen, die
+ * dieselbe Tatsache melden, lassen die Person herausfinden, welche davon
+ * gilt - und genau das soll eine Bedingung ihr abnehmen.
+ *
+ * Die Regel stand bisher nur **hier**, in den `if`-Bedingungen von
+ * `picoCompanionConditionsFor` (Befund B240). Die Worte sind 2026-08-21 in
+ * den shell-freien Kern gezogen, damit ein zweiter Client sie erbt statt sie
+ * neu zu erfinden (ADR 0131 A7) - die Regel darueber, welche Kombinationen
+ * ueberhaupt zusammen wahr sein koennen, ist mitgegangen? Nein, sie blieb im
+ * Erzeuger. Ein Client, der seine Bedingungen selbst zusammenstellt, erbte
+ * die Woerter und nicht den Verstand. Jetzt steht sie neben ihnen, und der
+ * Vertrag an der Fenstergrenze weist beide Paare ab statt nur eines.
+ *
+ * Wortgleich in `apps/companion-shell/src/contract.ts` restated und dort
+ * begruendet; `check-constant-copies.mjs` haelt beide Fassungen Zeichen fuer
+ * Zeichen aneinander, `condition-vocabulary.test.ts` Eintrag fuer Eintrag.
+ */
+export const picoCompanionExclusiveConditions = [
+  // ADR 0119 Q5: reserved and exhausted are two rungs of one ladder.
+  ['storage_reserved', 'storage_exhausted'],
+  // ADR 0131 A7: with no network the unreachable Home is the link itself.
+  ['no_network', 'home_unreachable'],
+] as const satisfies readonly (readonly [PicoCompanionConditionKind, PicoCompanionConditionKind])[];
+
 export function picoCompanionCondition(kind: PicoCompanionConditionKind): PicoCompanionCondition {
   return { kind, ...conditionWording[kind] };
 }

@@ -89,6 +89,18 @@ const argued = new Map([
       + 'einen Import, und der ist typ-only. Ein Wertimport zoege den '
       + 'Modulgraphen des Companions in den Renderer',
   }],
+  ['picoCompanionExclusiveConditions', {
+    files: [
+      'apps/companion/src/conditions.ts',
+      'apps/companion-shell/src/contract.ts',
+    ],
+    reason: 'Befund B240, gleiche Lage wie `picoCompanionConditionKinds` '
+      + 'direkt darueber: die Paare gehoeren zum Vokabular, das ein Parser '
+      + 'braucht, *bevor* etwas ankommt, und `contract.ts` laedt im Renderer. '
+      + 'Gebunden durch `condition-vocabulary.test.ts`, das beide Listen '
+      + 'elementweise gleichsetzt - dieselbe Anordnung, die fuer die Namen '
+      + 'schon gilt',
+  }],
   ['picoCompanionDeviceAuthorityWarningDays', {
     files: [
       'apps/companion/src/device-lifecycle.ts',
