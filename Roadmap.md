@@ -912,6 +912,74 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B240 — die Woerter sind in den Kern gezogen, der Verstand darueber blieb
+zurueck (2026-09-21).** `conditions` ist das fuenfte Feld eines
+Darstellungszustands, und laut Vertrag unabhaengig von `kind`: mehrere duerfen
+zugleich gelten. Fuenf Bedingungen gibt es — `no_network`, `home_unreachable`,
+`no_model`, `storage_reserved`, `storage_exhausted`.
+
+**Zwei Negative zuerst.** Die Namen stehen an zwei Stellen — im shell-freien
+Kern (`apps/companion/src/conditions.ts`) und nochmal im Vertrag, weil der im
+Renderer laedt, wo ein blosser Specifier nicht aufloest. Das ist keine Drift,
+sondern die ausdrueckliche Anordnung dieses Projekts: die Kopie ist durch
+`condition-vocabulary.test.ts` an die Quelle gebunden, sogar in der
+Reihenfolge. Und der Zeichner verzweigt nicht nach Bedingung — jede bekommt
+dieselbe Zeile, Etikett und Abhilfe kommen fertig gerendert an (ADR 0113 C2).
+Beides war in Ordnung.
+
+**Der Fund liegt bei der Regel, die *nicht* mitgezogen ist.** Der Erzeuger
+schliesst zwei Kombinationen aus:
+
+```ts
+if (input.homeReachable === false && input.online !== false) { ... }
+...
+if (input.storage === 'reserved') { ... } else if (input.storage === 'exhausted') { ... }
+```
+
+Beide mit demselben Argument, und sein Kommentar sagt es fuer die erste
+woertlich: ohne Netz ist das unerreichbare Home *„the same fact told twice"*,
+und eine Absage darf keine Inventur sein (ADR 0077 C4). Der Vertrag aber wies
+nur **eine** der beiden ab:
+
+```ts
+if (seen.has('storage_reserved') && seen.has('storage_exhausted')) throw ...
+```
+
+Gemessen an einem laufenden Parser: `storage_reserved` + `storage_exhausted`
+→ abgewiesen. `no_network` + `home_unreachable` → **angenommen**.
+
+**Warum das mehr ist als eine fehlende Zeile.** Am 2026-08-21 sind die Worte
+absichtlich aus der Shell in den Kern gezogen, damit ein zweiter Client sie
+*erbt statt sie neu zu erfinden* (ADR 0131 A7) — der Kommentar dort nennt
+genau den Fall: „two clients telling one person two different things about the
+same silence". Mitgezogen sind die Etiketten und die Abhilfen. Nicht
+mitgezogen ist die Regel, welche davon ueberhaupt zusammen wahr sein koennen.
+Ein Client, der seine Bedingungen selbst zusammenstellt, erbte die Woerter und
+nicht den Verstand — und die Grenze, an der er ankommt, haette ihn
+durchgelassen. Eine Person haette den Netzausfall zweimal gelesen, in
+verschiedenen Worten.
+
+**Die Leitern stehen jetzt neben den Namen**, als
+`picoCompanionExclusiveConditions` im Kern, mit dem Grund je Paar; im Vertrag
+restated wie die Namen und durch denselben Test gebunden; und die Grenze weist
+beide ab, in jeder Reihenfolge.
+
+**Kein neues Tor dazu.** Die Bindung tut die Arbeit, und ein Tor daneben waere
+die zweite Wahrheit, gegen die dieser Befund gerade angeht. Dieselbe
+Entscheidung wie bei B239, wo der Compiler die Gegenrichtung schon sieht.
+
+**Der Erzeuger wird jetzt ganz gegangen, nicht behauptet.** Sein Eingaberaum
+ist klein — drei Tristates und vier Speicherlagen, **108** Kombinationen. Der
+Test geht alle, prueft dass keine ein verbotenes Paar baut, und laesst jede
+gebaute Liste zusaetzlich durch den Vertrag laufen: was der Erzeuger baut,
+muss die Grenze auch annehmen.
+
+**Drei Pflanzungen, drei Bisse, jede an der richtigen Stelle.** Die Grenze
+wieder auf die Speicherleiter verkuerzt → nur der Grenztest faellt. Die Kopie
+von der Quelle weggedreht → Bindungstest *und* Erzeugerlauf fallen. Dem
+Erzeuger seine eigene Regel genommen (`&& input.online !== false` entfernt) →
+nur der Erzeugerlauf faellt.
+
 **B239 — eine Entscheidung reisst das Fenster an sich, und niemand hielt fest,
 dass es dann auch etwas anzubieten hat (2026-09-21).** `decision` ist das
 vierte Feld eines Darstellungszustands. Vier Werte sind echte Entscheidungen,
