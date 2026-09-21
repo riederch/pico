@@ -196,6 +196,16 @@ wegpflanzt, braucht drei Vorkehrungen:
    gegangen aus. Am 2026-09-15 traf beides in einer Messung zu (B181). Eine
    Zaehlung ueber Namen beantwortet, *worueber gesprochen wird*; welcher Zweig
    wirklich haengt, beantwortet nur das Ausbauen **dieses Zweigs**.
+23. **Wer die Reichweite einer Aenderung paketuebergreifend misst, misst gegen
+   `dist`.** Am 2026-09-21 hat eine neue Untergrenze im Protokoll (B244) im
+   ersten Lauf 14 Testfaelle in zwei Dateien umgeworfen - und nach
+   `pnpm --filter @pico/protocol build` einundzwanzig weitere in sieben
+   anderen. Die Geschwisterpakete importieren das gebaute Paket, nicht die
+   Quelle, also sieht ein Lauf ohne Bau nur das geaenderte Paket selbst. Wer
+   fragt "was bricht das?", **baut zuerst** und faehrt dann `pnpm test`.
+   Dieselbe Blindheit wie Regel 22, eine Ebene hoeher: nicht der Index,
+   sondern das Artefakt ist veraltet.
+
 22. **Ein Tor, das den getrackten Baum liest, ist blind fuer sich selbst, bis
    es committet ist.** Am 2026-09-19 hat `citations:check` beim Schreiben gruen
    gemeldet, obwohl sein eigener Kopfkommentar das falsche Zitat als Beispiel

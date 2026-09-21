@@ -912,6 +912,70 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B244 — das Paket war nach oben begrenzt und nach unten gar nicht
+(2026-09-21).** Das Relay speichert vier Dinge ueber eine Nachricht: Postfach,
+Tag, Ablauf, Nutzinhalt. Ueber die letzte Spalte steht in seinem eigenen
+Schema:
+
+> The payload is ciphertext this relay has no key for and no reason to have
+> one.
+
+Das ist eine Aussage ueber den **Inhalt**. Was an der Tuer geprueft wurde, war
+die **Kodierung**: Base64, nicht leer, Laenge durch vier, und eine Obergrenze
+von 64 KiB. Vier Zeichen Base64 sind drei Byte, und drei Byte sind keine
+versiegelte Huelle. Der Satz im Schema hatte an der Tuer niemanden, der ihn
+haelt.
+
+**Drei Negative vorher.** Das Relay-Schema selbst ist sauber — es traegt keine
+Identitaet, und dass die Adressen nicht versiegelt sind, ist seit B120
+ausdruecklich so entschieden. `relay:check` haelt, dass das Relay keinen
+Pico-Store erreicht und keine Identitaet nennt. `authority:check` haelt zwoelf
+Autoritaetsressourcen. Da war nichts.
+
+**Die Grenze ist ableitbar, nicht geschaetzt.** ADR 0107 versiegelt mit
+`crypto_box_seal`: 32 Byte fluechtiger oeffentlicher Schluessel und 16 Byte
+Authentifizierungsmerkmal liegen vor dem Chiffrat, zusammen **48**. Eine
+Huelle mit auch nur einem Byte Klartext misst also mindestens **49**. Ueber
+den *Inhalt* der Huelle weiss diese Schicht nichts und soll nichts wissen —
+aber die *Konstruktion* hat einen Boden, und der ist nachrechenbar. Was
+beweisbar keine Huelle ist, gehoert an der Tuer abgewiesen statt im Fach eines
+Menschen abgelegt.
+
+`@pico/protocol` haengt nicht an libsodium, also nennt es die Zahl und ein
+Test dort, wo libsodium liegt, bindet sie — und zwar nicht an eine zweite
+Zahl, sondern an die Versiegelung selbst: was `crypto_box_seal` aus null Byte
+macht, *ist* der Aufschlag.
+
+**Die Reichweite war die eigentliche Ueberraschung, und ich habe sie zuerst
+falsch gemessen.** Der erste Lauf meldete 14 Faelle in zwei Dateien. Er lief
+gegen einen **alten Build** von `@pico/protocol`: die Geschwisterpakete ziehen
+`dist`, nicht die Quelle, also sah nur das Protokollpaket selbst die neue
+Grenze. Nach `pnpm --filter @pico/protocol build` kamen 21 weitere Faelle
+dazu. Zusammen **neun Testdateien in vier Paketen** — und **null
+Produktstellen**.
+
+Das ist der Befund hinter dem Befund: das Produkt baut immer eine echte
+Huelle. Nur die Fixtures taten so, als gaebe es ein Paket mit
+`payload: 'AAAA'` — drei Byte. Fuenfunddreissig Faelle sprachen ueber ein
+Paket, das dieses Produkt nie bauen kann. Keiner von ihnen war dadurch
+falsch, aber alle waren ungenauer als noetig. Die Fixtures rechnen den
+kleinsten moeglichen Nutzinhalt jetzt aus der Konstante, statt ihn zu tippen.
+
+**Und die Lehre ueber das Messen selbst:** wer die Reichweite einer Aenderung
+paketuebergreifend misst, misst gegen `dist`. Ohne Bau des geaenderten Pakets
+ist die Zahl zu klein — dieselbe Blindheit wie ein Tor, das `git ls-files`
+liest, bevor die Datei gestaged ist.
+
+**Warum das kein Vertragsbruch ist.** Die Regel weist nur zurueck, was das
+Protokoll nie erzeugen konnte, wie schon bei B240. Und `store.ts` haelt selbst
+fest, dass **nie ein Relay veroeffentlicht wurde** — es gibt keinen
+Gegenueber, der etwas anderes schickt.
+
+**Drei Pflanzungen, drei Bisse.** Die Untergrenze faellt weg → der Grenztest
+faellt. Der Aufschlag wird als 47 genannt → die Bindung an libsodium faellt,
+beide Faelle. Die Untergrenze um eins zu niedrig → *beide* Netze fallen, weil
+48 Byte eine Huelle ohne Klartext waeren.
+
 **B243 — derselbe fehlende Bindestrich, drei Jahre spaeter im dritten Leser
 (2026-09-21).** Aufgefallen an zwei Zahlen, die nebeneinander stehen:
 `progress.md` nennt **55** Pico-Link-Operationen, `docs:check` meldete **57**
