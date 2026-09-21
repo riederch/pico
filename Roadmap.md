@@ -912,6 +912,63 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B243 — derselbe fehlende Bindestrich, drei Jahre spaeter im dritten Leser
+(2026-09-21).** Aufgefallen an zwei Zahlen, die nebeneinander stehen:
+`progress.md` nennt **55** Pico-Link-Operationen, `docs:check` meldete **57**
+verschiedene Namen in Dokumenten, davon 3 als abwesend begruendet — also 54.
+Eine Operation, die das Protokoll erklaert, nannte kein Dokument.
+
+Sie wird genannt, in dreien sogar. Der Pruefer konnte sie nur nicht lesen:
+
+```js
+/`(home(?:\.[a-z][a-z0-9_]*){2,})`/gu
+```
+
+Keine Bindestriche. Genau eine der 55 traegt einen —
+`home.domain.read-grant.submit`.
+
+**Das ist Befund B13, wortgleich.** Am 2026-08-24 stand dort
+`[a-z][a-z0-9_.]*`, ebenfalls ohne Bindestrich, in
+`check-link-reachability.mjs`; zwei Pruefer zaehlten dieselbe Liste und kamen
+auf 45 und 46. Behoben wurde damals nicht der Bindestrich, sondern dass die
+Liste zweimal gelesen wird: `scripts/link-operations.mjs` liest sie einmal.
+Das war richtig — und es hat die andere Seite nicht erreicht. Die **Leseseite**
+wurde geteilt, die **Prosaseite** blieb jedem Pruefer selbst ueberlassen, und
+`check-docs-structure.mjs`, spaeter geschrieben, hat denselben Fehler neu
+gemacht.
+
+**Was dadurch nicht galt.** Die Regel dort lautet: nennt ein Dokument eine
+Operation, die das Protokoll nicht hat, ist das ein Fehler, denn ein Dokument
+wird als aktueller Stand gelesen. Mit der engen Zeichenklasse galt sie fuer
+keinen Namen mit Bindestrich — weder fuer den echten noch fuer einen
+Tippfehler darin.
+
+**Die Gegenprobe.** Ein Dokument nennt eine Operation, die es nicht gibt —
+derselbe Name wie oben, mit vertauschten Buchstaben in „grant". Alte Regex:
+*passed*. Neue: *failed*. (Er steht hier ohne Backticks, weil das Tor ihn
+sonst zu Recht als Tuer liest, die jemand suchen geht — die Regel, um die es
+geht, greift also auch in diesem Absatz.)
+
+**Die Lehre von B13, eine Ebene weiter genommen.** Ein Muster steht jetzt
+neben der Liste, in `link-operations.mjs`, und `readPicoLinkDirectOperations`
+**haelt jeden erklaerten Namen dagegen** und wirft, bevor irgendein Pruefer
+mit einer Menge weiterarbeitet, die kleiner ist als die Wahrheit. Ein Leser,
+der seine eigene Liste nicht buchstabieren kann, ist kaputt — und das laesst
+sich fragen, statt es zu glauben. Ein vierter Leser kann den Fehler nicht mehr
+neu machen, ohne dass es beim ersten Lauf auffaellt.
+
+**Die Zahlen treffen sich.** 262 → **265** Erwaehnungen, 57 → **58**
+verschiedene Namen, davon 3 begruendet abwesend: **55**. Genau die Zahl, die
+das Protokoll erklaert und `progress.md` nennt. Zwei Zaehlungen derselben
+Sache, die sich vorher um eins widersprachen, sind jetzt dieselbe Zahl — und
+das war die ganze Warnung, vier Zeilen auseinander auf demselben Bildschirm,
+genau wie bei B13.
+
+**Zwei Pflanzungen, zwei Bisse.** Der Bindestrich faellt wieder aus dem Muster
+→ der geteilte Leser wirft, und zwar in *jedem* Pruefer, der ihn benutzt. Ein
+Dokument nennt eine erfundene Operation mit Bindestrich → das Dokumenttor
+nennt sie.
+
 **B242 — der Pruefer der Testdisziplin hat sich die Endung ausgedacht, und
 vier Dateien fielen hindurch (2026-09-21).** Aufgefallen beim Nachfuehren von
 B241: `tests:check` meldete **267** Testdateien, der Lauf fuhr **271**. Zwei
