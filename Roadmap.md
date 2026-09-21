@@ -912,6 +912,46 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B250 — eine Entscheidung, die nicht mehr gilt, hat trotzdem eine Datei
+(2026-09-21).** Dritte Begruendungsmenge nach B248 und B249. `citations:check`
+haelt seit B223, dass jede zitierte ADR-Nummer ein Dokument hat und jedes
+genannte Etikett darin vorkommt. Eine **abgeloeste** Entscheidung hat beides.
+
+**Ein Negativ vorweg, und es kostete Zeit.** Ich habe zuerst die ADRs selbst
+nach einem Zustand durchsucht: es gibt keinen. Der `## Status`-Abschnitt ist
+freie Prosa mit datierten Notizen, aus der sich nichts ableiten laesst. Der
+einzige maschinenlesbare Zustand ueber eine Entscheidung steht in der
+**Statusmatrix** — und dort stehen vier Zeilen auf `superseded`: 0043, 0044,
+0063, 0065.
+
+**Zwei Saetze, beide heute wahr, beide von nichts gehalten.**
+
+*Keine der vier wird von einer Quelle zitiert.* Ein Zitat in Produktcode liest
+sich als aktuell: „ADR 0063" neben einer Zeile hiesse, diese Zeile folge einer
+Regel, die seit dem 2026-08-08 nicht mehr gilt — und bei dieser einen zeigt die
+alte Kernregel sogar *in die andere Richtung*, sie wuerde die Huelle
+zurueckweisen, die das Produkt heute verschickt. **Dokumente sind ausgenommen**,
+und das ist keine Bequemlichkeit: dieses Repository schreibt seine Historie
+absichtlich in die Prosa, und die Konformitaetsfixtures *muessen* sagen, was
+sie einmal waren. Dieselbe Trennung, die `docs:check` fuer entfernte
+Link-Operationen schon macht.
+
+*Jede der vier nennt einen Nachfolger, der existiert und selbst nicht abgeloest
+ist.* Eine Abloesung ohne Nachfolger waere eine Entscheidung, die aufgehoert
+hat zu gelten, ohne dass etwas an ihre Stelle trat — ein Loch, keine Abloesung,
+und ein Leser haette nirgendwohin zu gehen.
+
+**Der Pruefer nennt die vier Nummern nicht.** Er faengt zuerst seinen eigenen
+Kommentar, weil die Regel fuer jede Quelle gilt und er eine ist. Ich haette ihn
+als Ausnahme eintragen koennen; stattdessen stehen die Nummern jetzt hier, wo
+Historie hingehoert. Eine Regel mit einer Ausnahme fuer sich selbst ist
+schwaecher als eine ohne.
+
+**Vier Pflanzungen, vier Bisse.** Produktcode zitiert eine abgeloeste
+Entscheidung → genannt, samt Nachfolger. Eine Abloesung verliert ihren
+Nachfolgersatz → genannt. Der Nachfolger wird selbst abgeloest → die Kette
+endet nicht bei etwas, das gilt. Der Nachfolger hat gar keine Zeile → genannt.
+
 **B249 — vierundzwanzig Routen sind begruendet, und die Begruendungen waren
 Erinnerungen (2026-09-21).** Fortsetzung von B248 auf die zweite grosse
 Begruendungsmenge. 62 Foundation-Routen, 38 mit Aufrufer, **24 argumentiert
