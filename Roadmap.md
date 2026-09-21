@@ -912,6 +912,55 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B242 — der Pruefer der Testdisziplin hat sich die Endung ausgedacht, und
+vier Dateien fielen hindurch (2026-09-21).** Aufgefallen beim Nachfuehren von
+B241: `tests:check` meldete **267** Testdateien, der Lauf fuhr **271**. Zwei
+Zahlen fuer dasselbe Wort, und die vom Tor war die kleinere.
+
+Die vier sind `apps/companion-shell/scripts/*.test.mjs` — Chromium-Sandbox,
+Erreichbarkeit, Tray-Speicherbudget, Workspace-Abschluss. Vitest laeuft hier
+ohne eigene Konfiguration und nimmt darum sein Standardmuster
+`**/*.{test,spec}.?(c|m)[jt]s?(x)`. Der Pruefer stand auf
+`path.endsWith('.test.ts')` — eine Endung, die er sich ausgedacht hat.
+
+**Was dadurch nicht galt.** Fuer diese vier prueft niemand, ob ein `.only`
+eingecheckt ist, ob ein Fall ueberhaupt etwas behauptet, ob ein `expect` einen
+Matcher traegt, oder ob ein angelegtes Temp-Verzeichnis wieder verschwindet.
+Das erste davon ist das schlimmste: ein `.only` legt **jeden anderen Fall
+derselben Datei** still, und der Bericht bleibt gruen.
+
+**Gemessen, nicht vermutet.** Alle vier sind heute sauber: 43 Faelle, 67
+`expect`, kein `.only`, kein Temp-Verzeichnis. Der Defekt war der blinde
+Fleck, nicht sein Inhalt.
+
+**Die Gegenprobe ist der eigentliche Beweis.** Mit der alten Fassung und einem
+gepflanzten `.only` in einer der vier: *Test-substance check passed (267 test
+files)*. Mit der neuen Fassung, dieselbe Pflanzung: *failed*. Das Tor war
+gruen, waehrend in einer Datei, die der Lauf ausfuehrt, jeder andere Fall
+stillgelegt war.
+
+**Die Wurzel ist dieselbe wie ueberall hier: abgeleitet statt abgeschrieben.**
+Jetzt steht das Muster des Laeufers im Pruefer, nicht eine Endung — 271 gegen
+271. Aber das ist wieder eine Abschrift, und eine Abschrift darf nicht still
+veralten. Also nennt der Pruefer die Annahme, auf der sie steht, und schlaegt
+an, wenn sie faellt: setzte irgendeine `vitest.config.*` oder
+`vitest.workspace.*` ein eigenes `include`, waere das Muster falsch, und genau
+dieser Befund wuerde sich wiederholen. Der Korrekturpunkt liegt jetzt eine
+Ebene hoeher (ADR 0133).
+
+**Und die Helfererkennung ist mitgezogen.** Sie lief ueber `*.ts`; ein
+behauptender Helfer in einer `.test.mjs` waere unbekannt gewesen, und die
+Faelle, die ihn rufen, haetten als behauptungslos gegolten — ein *falscher*
+Alarm statt eines stillen Lochs, aber aus demselben Grund.
+
+**Vier Pflanzungen, vier Bisse, alle in einer `.mjs`:** eingechecktes `.only`,
+ein Fall ohne Behauptung, ein Temp-Verzeichnis ohne Aufraeumen, und ein
+`include` in einer Laeufer-Konfiguration.
+
+**Was die Zahlen angeht:** 267 → **271** Dateien, 3.005 → **3.049** Faelle,
+9.390 → **9.457** Erwartungsausdruecke. Nichts davon ist neu geschrieben
+worden; es war die ganze Zeit da und wurde nicht gezaehlt.
+
 **B241 — die Grenze vor 67 Tueren ist nie gegangen worden, und sie hat es
 selbst dazugesagt (2026-09-21).** Die IPC-Kanaele der Schale sind gut
 gehalten: 68, auf beiden Seiten gleich benannt, 68 vom Hauptprozess
