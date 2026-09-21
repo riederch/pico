@@ -912,6 +912,53 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B249 — vierundzwanzig Routen sind begruendet, und die Begruendungen waren
+Erinnerungen (2026-09-21).** Fortsetzung von B248 auf die zweite grosse
+Begruendungsmenge. 62 Foundation-Routen, 38 mit Aufrufer, **24 argumentiert
+ohne einen** — in 17 Eintraegen, weil einige ganze Praefixe decken.
+
+**Jeder Satz behauptet etwas Nachrechenbares.** Acht nennen eine **Tuer in
+Gebrauch**: eine Link-Operation, die diese Route ersetzt —
+`home.depot.attach`, `home.claim.submit`, `home.model.read.keep`,
+`home.model.providers.read`, `home.time_bound_entry.acknowledge`,
+`home.domain.read-grant.submit` und die beiden Modellanbieter-Entscheidungen.
+Vier nennen einen **Nachbarn**, der bedient wird: `/api/events/tail`, die
+Raumliste, die Aufbewahrungsliste, `DELETE /api/auth/sessions`. Drei
+behaupten eine **Abwesenheit** — fuer diese Familie gebe es ueberhaupt keine
+Tuer.
+
+**Alles stimmt heute**, und das ist wieder das Negativ: alle acht Tueren sind
+im Protokoll erklaert, alle vier Nachbarn werden bedient, keine der drei
+Abwesenheiten ist inzwischen eine Anwesenheit.
+
+**Der Fund ist die Richtung, in der jeder dieser Saetze bricht.** Verschwindet
+eine genannte Tuer, ist die Route nicht mehr *ersetzt*, sondern *verwaist* —
+und das Tor bliebe gruen, weil sie auf der Liste steht. Die
+Abwesenheitsbehauptungen sind dabei die leisesten: sie brechen, wenn jemand
+etwas **hinzufuegt**, und niemand, der eine Link-Operation ergaenzt, denkt an
+eine Routenliste.
+
+**Und dieselbe blinde Stelle wie B242.** `docs:check` prueft seit jeher, dass
+ein genannter Operationsname im Protokoll steht — aber nur in **Markdown**.
+Diese Liste ist ein Skript und lag ausserhalb des Korpus. Derselbe Name wird
+in einem Dokument geprueft und in einem Pruefer nicht.
+
+Jeder Eintrag traegt jetzt die eine Bedingung, auf der sein Satz ruht, und das
+Flaechentor rechnet sie nach. **Zwei** tragen keine maschinelle — der
+Foundation-Transport der Aufzeichnungen, dessen Satz den Weg des Fensters
+ueber eine Autoritaetsressource nennt, ohne zu sagen welche (und dieser
+Pruefer raet nicht), und `GET /api/auth/session`, wo die Abwesenheit eines
+Aufrufers selbst die Behauptung ist. Beide sagen das ausdruecklich, statt es
+zu verschweigen; ein neuer Eintrag ganz ohne Bedingung wird abgewiesen.
+
+**Vier Pflanzungen, vier Bisse.** `home.depot.attach` aus dem Protokoll
+genommen → die Tuer in Gebrauch gibt es nicht. Der genannte Nachbar
+umbenannt → wird nicht bedient. Eine erfundene Umschlag-Operation
+**hinzugefuegt** → die behauptete Abwesenheit ist keine mehr (ihr Name steht
+hier ohne Backticks, weil `docs:check` ihn sonst zu Recht als Tuer liest, die
+jemand suchen geht — dieselbe Selbstprobe wie bei B243). Ein Eintrag ohne Bedingung →
+abgewiesen.
+
 **B248 — eine Begruendung ist ein Satz, und ein Satz driftet (2026-09-21).**
 Fortsetzung von B247, eine Ebene breiter. Acht Konstanten stehen in diesem
 Baum zweimal, jede mit einem Grund daneben. Die Gruende sind Prosa — gelesen
