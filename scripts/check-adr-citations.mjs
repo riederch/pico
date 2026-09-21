@@ -117,6 +117,97 @@ if (numbers === 0) {
   );
 }
 
+/**
+ * Befund B250. Eine Entscheidung, die nicht mehr gilt, hat trotzdem eine
+ * Datei - und die Regel oben laesst jede Nummer durch, zu der es eine gibt.
+ *
+ * Vier Zeilen der Statusmatrix stehen auf `superseded` - welche, sagt die
+ * Matrix und der Befund, nicht dieser Kommentar: die Regel unten gilt fuer
+ * jede Quelle, und diese Datei ist eine. Eine Regel mit einer Ausnahme fuer
+ * sich selbst waere schwaecher als eine ohne.
+ *
+ * Es ist der einzige maschinenlesbare Zustand, den dieses Projekt ueber eine
+ * Entscheidung fuehrt - die ADRs selbst haben einen freien
+ * `## Status`-Abschnitt aus Prosa, aus dem sich nichts ableiten laesst.
+ *
+ * **Zwei Saetze, beide heute wahr, beide von nichts gehalten.**
+ *
+ * Erstens: keine der vier wird von einer Quelle zitiert. Ein Zitat in
+ * Produktcode liest sich als aktuell - es hiesse, diese Zeile folge einer
+ * Regel, die nicht mehr gilt, und bei einer der vier zeigt die alte Kernregel
+ * sogar *in die andere Richtung*. Dokumente sind ausgenommen:
+ * dieses Repository schreibt seine Historie absichtlich in die Prosa, und die
+ * Konformitaetsfixtures **muessen** sagen, was sie einmal waren.
+ *
+ * Zweitens: jede der vier nennt ihren Nachfolger, der existiert und selbst
+ * nicht abgeloest ist. Eine Abloesung ohne Nachfolger waere eine Entscheidung,
+ * die aufgehoert hat zu gelten, ohne dass etwas an ihre Stelle trat - und das
+ * waere ein Loch und keine Abloesung.
+ */
+const matrixPath = 'docs/architecture/implementation-status.md';
+const matrixStatus = new Map();
+const matrixReason = new Map();
+for (const line of readFileSync(join(repoRoot, matrixPath), 'utf8').split('\n')) {
+  if (!line.startsWith('| [')) continue;
+  const columns = line.split('|').map((column) => column.trim());
+  const number = /^\[(\d{4})\]/u.exec(columns[1]);
+  if (number === null) continue;
+  matrixStatus.set(number[1], columns[4]);
+  matrixReason.set(number[1], columns.slice(5).join(' | '));
+}
+const superseded = [...matrixStatus].filter(([, status]) => status === 'superseded').map(([n]) => n);
+if (matrixStatus.size === 0) {
+  failures.push(
+    `${matrixPath}: no rows read, so the superseded rules below ran over nothing (B166).`,
+  );
+}
+for (const number of superseded) {
+  const successor = /[Ss]uperseded by ADR (\d{4})/u.exec(matrixReason.get(number));
+  if (successor === null) {
+    failures.push(
+      `${matrixPath}: ADR ${number} is filed superseded and its row names no successor. `
+      + 'A decision that stopped holding with nothing in its place is a hole rather than a '
+      + 'supersession, and a reader has nowhere to go.',
+    );
+    continue;
+  }
+  const status = matrixStatus.get(successor[1]);
+  if (status === undefined) {
+    failures.push(
+      `${matrixPath}: ADR ${number} names ADR ${successor[1]} as its successor and the matrix `
+      + 'has no row for it.',
+    );
+  } else if (status === 'superseded') {
+    failures.push(
+      `${matrixPath}: ADR ${number} is superseded by ADR ${successor[1]}, which is itself `
+      + 'superseded. The chain has to end at a decision that holds.',
+    );
+  }
+}
+
+/**
+ * Nur Quellen, nicht Dokumente. Ein Dokument darf sagen, was einmal galt;
+ * eine Zeile Produktcode, die eine abgeloeste Entscheidung nennt, behauptet,
+ * ihr zu folgen.
+ */
+const supersededSet = new Set(superseded);
+for (const path of corpus) {
+  if (!/\.(ts|mts|cts|mjs|cjs|js)$/u.test(path)) continue;
+  const text = readFileSync(join(repoRoot, path), 'utf8');
+  for (const [, number] of text.matchAll(/\bADR (\d{4})\b/gu)) {
+    if (!supersededSet.has(number)) continue;
+    failures.push(
+      `${path} cites ADR ${number}, which the matrix files as superseded`
+      + `${/[Ss]uperseded by ADR (\d{4})/u.exec(matrixReason.get(number)) === null
+        ? ''
+        : ` by ADR ${/[Ss]uperseded by ADR (\d{4})/u.exec(matrixReason.get(number))[1]}`}. `
+      + 'A citation in code reads as the rule this line follows. Name the decision that '
+      + 'holds today, or - if the line really is about the older one - say so in prose '
+      + 'rather than as a bare citation.',
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error('ADR citation check failed:');
   for (const failure of [...new Set(failures)]) console.error(`- ${failure}`);
@@ -126,6 +217,7 @@ if (failures.length > 0) {
     `ADR citation check passed (${numbers} citations of ${records.size} decision records across `
     + `${corpus.length} tracked sources and documents, every number a record this repository has; `
     + `${labelled} of them name a gate inside their record, and every one of those gates is a `
-    + 'token that record carries).',
+    + `token that record carries; ${superseded.length} records are filed superseded, each `
+    + 'naming a successor that holds, and no source cites one).',
   );
 }
