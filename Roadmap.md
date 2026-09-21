@@ -912,6 +912,58 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B246 — dasselbe nochmal, eine Schicht tiefer: die Rechte jeder Datei, die
+dieses Produkt anlegt (2026-09-21).** Direkte Fortsetzung von B245, und sie
+hat einen aelteren Beweis hinter sich. B117 hat am 2026-09-10 *gemessen*, was
+ein Home gegen ein bestehendes Datenverzeichnis zuruecklaesst:
+
+```
+755 data
+644 data/pico.sqlite
+644 data/pico.sqlite-wal
+700 data/home-host-keys
+600 data/home-host-keys/home_host_signing.key.json
+```
+
+Die Schluessel sorgfaeltig, die Datenbank, fuer die es sie gibt, fuer jeden auf
+der Maschine lesbar. Und bei *nicht* vorhandenem Verzeichnis kam `700` heraus —
+aber nur, weil ein `mkdirSync(..., { mode: 0o700 })` fuer den Key-Store das
+Elternverzeichnis zufaellig mit anlegte. Ein Schutz, der aus Versehen haelt,
+haelt bis jemand anders installiert.
+
+**Der Bestand ist heute lueckenlos**, und das ist wieder das Negativ vorweg:
+**31** Anlagestellen, 20 Verzeichnisse `0o700` und 11 Dateien `0o600`; drei
+Schreibvorgaenge gehen in einen Deskriptor, den sein eigenes `openSync` schon
+verengt hat; dreizehn `openSync` koennen mit ihren Flags gar nichts anlegen.
+Kein einziger offener Fall.
+
+Gehalten hat es niemand. Der **naechste** Ort, an dem dieses Produkt eine Datei
+anlegt, bekommt seine Rechte von der umask des Dienstes — und niemand merkt es,
+weil keine API danach fragt. `mode:check`, Kettenschritt **72**.
+
+**Meine erste Messung war falsch, und zwar auf die inzwischen vertraute Art.**
+Sie suchte nach `mode:` und meldete neun Stellen ohne Modus — darunter drei in
+`packages/sync`, die den Modus als **dritten positionellen Parameter** an
+`openSync` uebergeben, und sechs `fsync`-Helfer im Companion, die mit
+`'r' | 'r+'` ueberhaupt nichts anlegen. Alle neun waren in Ordnung. Ein Leser,
+der eine Gestalt kennt, findet die anderen nicht (B188, zum vierten Mal in
+dieser Session).
+
+**Und eine Pflanzung hat den fertigen Leser nochmal korrigiert.** Ich loese
+einen Flag-Bezeichner ueber die Parameterannotation der umgebenden Funktion
+auf und fragte dann, ob deren *Text* ein `w`, `a` oder `x` enthaelt. Die
+Pflanzung setzte `flags: string` — und „string" enthaelt keines dieser
+Zeichen, also galt der Aufruf als reiner Leser und kam durch. Gefragt wird
+jetzt nach der **Gestalt** der Annotation: nur eine Vereinigung von
+Zeichenkettenliteralen sagt etwas, alles andere ist unentscheidbar und wird
+gemeldet.
+
+**Fuenf Pflanzungen, fuenf Bisse.** Key-Store ohne Modus → genannt. Ein
+Verzeichnis `0o755` → genannt. Der dritte positionelle Modus faellt aus
+`openSync` → genannt. Ein `fsync`-Helfer bekommt `'w'` in die Annotation →
+genannt. Die Annotation wird `string` → gemeldet als unentscheidbar (erst in
+der zweiten Fassung).
+
 **B245 — ein Beweis von damals gilt nicht fuer eine Datei von morgen
 (2026-09-21).** `secure_delete = ON` steht in beiden schreibenden Stores, und
 es steht dort, weil es **gemessen** wurde: sechzig Eintraege mit einem
