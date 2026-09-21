@@ -53,8 +53,64 @@ const tracked = execSync('git ls-files "*.ts"', { cwd: picoRepoRoot, encoding: '
   .filter((line) => line !== '');
 const sources = new Map(tracked.map((path) => [path, readFileSync(join(picoRepoRoot, path), 'utf8')]));
 
+/**
+ * Welche Dateien der **Laeufer** als Tests fuehrt - nicht, welche Endung
+ * dieser Pruefer sich ausgedacht hat.
+ *
+ * **Der Anlass** (2026-09-21, Befund B242). Hier stand
+ * `path.endsWith('.test.ts')`. Vitest laeuft ohne eigene Konfiguration und
+ * nimmt darum sein Standardmuster `**\/*.{test,spec}.?(c|m)[jt]s?(x)` - das
+ * sind vier Dateien mehr, als hier geprueft wurden: die `.test.mjs` unter
+ * `apps/companion-shell/scripts/`. Der Lauf fuehrt sie aus, dieses Tor sah sie
+ * nie. Ein eingechecktes `.only` darin haette jeden anderen Fall derselben
+ * Datei stillgelegt, und der Bericht waere gruen geblieben.
+ *
+ * Gemessen waren es 267 gegen 271. Keine der vier war schmutzig - der Defekt
+ * war der blinde Fleck, nicht sein Inhalt.
+ *
+ * Deshalb steht hier jetzt das Muster des Laeufers und nicht eine Endung. Es
+ * ist eine Abschrift, und eine Abschrift darf nicht still veralten: faellt
+ * unten die Annahme weg, dass niemand `include` setzt, schlaegt dieser Pruefer
+ * an, statt weiter ueber der falschen Menge gruen zu sein.
+ */
+const runnerTestFile = /\.(?:test|spec)\.(?:c|m)?[jt]sx?$/u;
+const allTracked = execSync('git ls-files', { cwd: picoRepoRoot, encoding: 'utf8' })
+  .split('\n')
+  .filter((line) => line !== '');
+const testFiles = allTracked.filter((path) => runnerTestFile.test(path));
+for (const path of testFiles) {
+  if (!sources.has(path)) {
+    sources.set(path, readFileSync(join(picoRepoRoot, path), 'utf8'));
+  }
+}
+
+/**
+ * Die Annahme, auf der das Muster oben steht: dieses Repository konfiguriert
+ * dem Laeufer keine eigene Dateimenge. Setzte jemand ein `include`, waere die
+ * Abschrift falsch, ohne dass irgendetwas anschluege - und genau das ist der
+ * Fehler, den dieser Befund behebt, einmal hoeher gelegt.
+ */
+const runnerConfigs = allTracked.filter(
+  (path) => /(?:^|\/)vitest(?:\.\w+)?\.config\.[cm]?[jt]s$/u.test(path)
+    || /(?:^|\/)vitest\.workspace\.[cm]?[jt]s$/u.test(path),
+);
+for (const path of runnerConfigs) {
+  if (/\binclude\s*:/u.test(readFileSync(join(picoRepoRoot, path), 'utf8'))) {
+    errors.push(
+      `${path} sets \`include\` for the test runner, and this check mirrors the runner's `
+      + 'default pattern instead. One of the two is now wrong about which files are tests, '
+      + 'and a file this check never reads is a file whose discipline nobody holds.',
+    );
+  }
+}
+
 const helpers = new Set();
-for (const path of tracked) {
+/**
+ * Auch ueber die Testdateien des Laeufers, nicht nur ueber `*.ts`: ein
+ * behauptender Helfer in einer `.test.mjs` waere sonst unbekannt, und die
+ * Faelle, die ihn rufen, wuerden als behauptungslos gemeldet (Befund B242).
+ */
+for (const path of [...new Set([...tracked, ...testFiles])]) {
   const flat = blankStringsAndComments(sources.get(path), path);
   for (const declaration of flat.matchAll(
     /(?:function\s+([A-Za-z_$][\w$]*)\s*\(|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?\()/gu,
@@ -98,7 +154,6 @@ for (const path of tracked) {
   balanced += 1;
 }
 
-const testFiles = tracked.filter((path) => path.endsWith('.test.ts'));
 let cases = 0;
 let assertions = 0;
 for (const path of testFiles) {
