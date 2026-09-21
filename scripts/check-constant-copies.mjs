@@ -1,6 +1,10 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+const ts = createRequire(import.meta.url)('typescript');
 
 /**
  * Ein Wert, der zweimal geschrieben steht, steht zweimal gleich - und jemand
@@ -161,6 +165,15 @@ const walk = (dir) => {
 for (const root of ['apps', 'packages', 'modules']) {
   walk(join(repoRoot, root));
 }
+
+/**
+ * Jeder getrackte TypeScript-Pfad, Tests eingeschlossen - `sourceFiles` oben
+ * laesst sie absichtlich weg, und die Praemissenpruefung unten braucht genau
+ * sie (Befund B247).
+ */
+const trackedFiles = execSync('git ls-files "*.ts"', { cwd: repoRoot, encoding: 'utf8' })
+  .split('\n')
+  .filter((line) => line !== '' && !line.includes('/dist/'));
 
 const definitions = new Map();
 for (const file of sourceFiles) {
@@ -369,7 +382,10 @@ for (const file of sourceFiles) {
  * Kommentare bleiben ausgenommen - jede Fassung erzaehlt ihren eigenen Fall.
  */
 const mirroredModules = [
-  ['apps/core/src/database-file-mode.ts', 'apps/relay/src/database-file-mode.ts'],
+  {
+    proven: 'apps/core/src/database-file-mode.ts',
+    mirror: 'apps/relay/src/database-file-mode.ts',
+  },
 ];
 const withoutProse = (text) => text
   .replace(/\/\*[\s\S]*?\*\//gu, '')
@@ -377,16 +393,101 @@ const withoutProse = (text) => text
   .map((line) => line.replace(/\/\/.*$/u, '').trimEnd())
   .filter((line) => line.trim() !== '')
   .join('\n');
-for (const [one, other] of mirroredModules) {
-  const left = withoutProse(readFileSync(join(repoRoot, one), 'utf8'));
-  const right = withoutProse(readFileSync(join(repoRoot, other), 'utf8'));
+/**
+ * Befund B247. Die Regel darueber stuetzt sich auf einen Satz: *eine Fassung
+ * ist geprueft, und solange sie gleich sind, gilt der Beweis fuer beide*.
+ * Geprueft wurde davon bisher nur die zweite Haelfte.
+ *
+ * Verschwaende der Test der bewiesenen Fassung - geloescht, umbenannt, oder
+ * nur noch importierend statt rufend -, blieben zwei identische Kopien
+ * **ungepruefeten** Codes, und dieser Schritt bliebe gruen, weil er sie nur
+ * gegeneinander haelt. Eine Regel, die ihre eigene Praemisse nicht prueft,
+ * ist ein Pruefer ohne Gegenstand (B166) mit einem Argument davor.
+ *
+ * Gefragt wird deshalb beides: dass die Fassungen gleich sind, **und** dass
+ * jeder Export der bewiesenen Fassung von einem Test wirklich gerufen wird.
+ * Ein Import allein genuegt nicht - ein Modul zu importieren beweist nichts
+ * ueber seine Funktionen.
+ */
+const exportedNames = (path) => {
+  const source = ts.createSourceFile(
+    path,
+    readFileSync(join(repoRoot, path), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const names = [];
+  (function walk(node) {
+    const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+    if (modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
+      if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
+        names.push(node.name.text);
+      }
+      if (ts.isVariableStatement(node)) {
+        for (const declaration of node.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name)) names.push(declaration.name.text);
+        }
+      }
+    }
+    node.forEachChild(walk);
+  })(source);
+  return names;
+};
+
+/** Ruft irgendein Test dieses Pakets diesen Namen wirklich auf? */
+const calledByATest = (modulePath, name) => {
+  const directory = modulePath.slice(0, modulePath.lastIndexOf('/'));
+  const stem = modulePath.slice(directory.length + 1).replace(/\.ts$/u, '');
+  return trackedFiles
+    .filter((candidate) => candidate.startsWith(`${directory}/`) && candidate.endsWith('.test.ts'))
+    .some((candidate) => {
+      // `git ls-files` nennt auch, was gerade nicht auf der Platte liegt.
+      // Dann fehlt der Beweis, und das ist eine Meldung wert statt eines
+      // Stapelabzugs (Befund B247, Pflanzung 1a).
+      if (!existsSync(join(repoRoot, candidate))) return false;
+      const text = readFileSync(join(repoRoot, candidate), 'utf8');
+      if (!text.includes(`./${stem}.js`)) return false;
+      const source = ts.createSourceFile(candidate, text, ts.ScriptTarget.Latest, true);
+      let called = false;
+      (function walk(node) {
+        if (ts.isCallExpression(node)
+          && ts.isIdentifier(node.expression)
+          && node.expression.text === name) {
+          called = true;
+        }
+        node.forEachChild(walk);
+      })(source);
+      return called;
+    });
+};
+
+for (const { proven, mirror } of mirroredModules) {
+  const left = withoutProse(readFileSync(join(repoRoot, proven), 'utf8'));
+  const right = withoutProse(readFileSync(join(repoRoot, mirror), 'utf8'));
   if (left !== right) {
     errors.push(
-      `${one} und ${other} tragen denselben Helfer und nicht mehr denselben Code. `
+      `${proven} und ${mirror} tragen denselben Helfer und nicht mehr denselben Code. `
       + 'Eine Fassung ist geprueft und die andere nicht; solange sie gleich sind, '
       + 'gilt der Beweis fuer beide. Gleichziehen, oder die ungepruefte Fassung mit '
       + 'eigenen Tests versehen und den Eintrag hier nehmen.',
     );
+  }
+  const exported = exportedNames(proven);
+  if (exported.length === 0) {
+    errors.push(
+      `${proven} exportiert nichts, also traegt es keinen Beweis, den ${mirror} erben `
+      + 'koennte. Der Eintrag hier steht ueber nichts.',
+    );
+  }
+  for (const name of exported) {
+    if (!calledByATest(proven, name)) {
+      errors.push(
+        `${proven} exportiert \`${name}\`, und kein Test daneben ruft es auf. `
+        + `Dieser Eintrag laesst ${mirror} den Beweis der geprueften Fassung erben - `
+        + 'gibt es den Beweis nicht, sind es zwei gleiche Kopien ungepruefeten Codes, '
+        + 'und diese Pruefung sagte das Gegenteil.',
+      );
+    }
   }
 }
 if (mirroredModules.length === 0) {
@@ -411,6 +512,8 @@ console.log(
   + `${sourceFiles.length} files; ${copies.length} names stand more than once, `
   + `each argued, each agreed; ${closedLists.size} closed lists, and `
   + `${unionSites} of them written out by hand as a union; `
-  + `${mirroredModules.length} Modulpaar(e) stehen zweimal und tragen denselben Code, `
-  + 'damit der Beweis der geprueften Fassung fuer beide gilt).',
+  + `${mirroredModules.length} Modulpaar(e) stehen zweimal und tragen denselben Code, und `
+  + `die ${mirroredModules.reduce((sum, pair) => sum + exportedNames(pair.proven).length, 0)} `
+  + 'Exporte der bewiesenen Fassung werden von einem Test daneben wirklich gerufen - '
+  + 'den Beweis, den die Spiegelung erben laesst, gibt es also).',
 );
