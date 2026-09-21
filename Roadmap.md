@@ -912,6 +912,72 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B238 — das Zeichen ist eine Sicht auf die Schwere, und es stand 43-mal
+daneben (2026-09-21).** Ein Darstellungszustand des Companions trägt vier
+Dinge, die zusammen entscheiden, was ein Mensch sieht: `kind`, `severity`,
+`symbol` und `decision`. Der Vertrag band davon **zwei** Paare — `kind` an
+`decision` (`assertDecisionKind`), und beide gegen ihre erlaubte Menge. Schwere
+und Zeichen waren zwei unabhängige Mengen:
+
+```ts
+const severities = new Set([...]);
+const symbols = new Set(['●', '!', '×']);
+```
+
+Jede für sich geprüft, keine gegen die andere. Also durfte `severity: 'blocked'`
+mit `symbol: '!'` zusammenstehen, und niemand hätte es bemerkt.
+
+**Drei Fragen vorher waren Negative, und das gehört dazu.** Die deklarierten
+Zustände (`PicoCompanionPresentationKind`, 17) und die Menge, gegen die zur
+Laufzeit geprüft wird, stimmen exakt überein. Jeder der 17 wird auch wirklich
+irgendwo erzeugt — keiner ist ein Zustand, den ein Mensch nie erreicht. Und die
+*Schwere* eines Zustands darf sehr wohl wechseln: `first_run` steht als
+`warning`, wenn es noch zu tun ist, als `active`, während es läuft, und als
+`blocked`, wenn es scheiterte. Das ist kein Drift, sondern die Lage.
+
+**Was nicht wechseln darf, ist das Zeichen zur Schwere.** Gemessen über den
+Syntaxbaum: **43 Paarungen** schreiben beide Felder von Hand nebeneinander
+(Zweige einzeln gezählt) — 17 `active ●`, 14 `warning !`, 12 `blocked ×`. Alle
+43 sind heute einig. Das ist kein Verdienst der Bauart, sondern Glück, das
+43-mal gehalten hat.
+
+Damit ist es genau der Fall aus **ADR 0133**: eine abgeflachte Darstellung ist
+ein Cache, nie eine Autorität. Das Zeichen ist die abgeflachte Schwere. Der ADR
+verlangt für frühes Materialisieren vier Angaben, und die fehlende war der
+**Korrekturpunkt**.
+
+**Zwei Netze, weil eines am falschen Ort greift.** Der Vertrag hat jetzt eine
+Ableitungstabelle (`picoCompanionPresentationSymbol`), und der Prüfer weist ein
+Zeichen zurück, das nicht zu seiner Schwere gehört
+(`invalid_companion_presentation_symbol_binding`). Aber der Vertrag prüft erst,
+wenn der Zustand einem Menschen *gezeigt* werden soll — eine Zurückweisung in
+genau dem Moment, in dem jemand etwas erfahren muss, ist keine Rettung. Also
+zusätzlich `symbol:check` (`scripts/check-presentation-symbols.mjs`), das
+dieselbe Tabelle an den Bauplatz hält, bevor irgendetwas läuft. Kettenschritt
+**69**.
+
+**Der Leser ist ein Leser, keine Regex** (B188). Drei Stellen entscheiden
+Schwere und Zeichen in *Zweigen* — `approved ? 'active' : 'blocked'` neben
+`approved ? '●' : '×'`. Dort ist die Drift am wahrscheinlichsten: dieselbe
+Bedingung steht zweimal da, und wer einen Zweig dreht, dreht den anderen leicht
+nicht mit. Ein zeilenweiser Blick hatte diese drei zunächst als
+„nicht entscheidbar" übersprungen — also genau dort weggesehen, wo es brennt.
+Der Prüfer zerlegt sie jetzt und hält Zweig gegen Zweig, samt der Bedingung
+selbst: entscheiden beide an *verschiedenen* Bedingungen, gibt es einen Fall,
+in dem sie nicht dasselbe meinen, und auch das schlägt an. Nebenbei zeigte
+dasselbe: eine Zeilensuche zählte 33 Paarungen, der Syntaxbaum 43 — mehrzeilige
+Stellen und `'\u25cf'` als Escape fallen durch jedes Muster.
+
+**Vier Pflanzungen, vier Bisse.** Die Vertragsbindung entfernt → der Vertrags-
+test fällt. Eine einzeilige Fehlpaarung (`blocked ×` → `blocked !`) → Tor
+schlägt an. Ein *einzelner* Zweig gedreht → Tor nennt den Zweig
+(„im Zweig `approved : `"). Zeichen an eine andere Bedingung gehängt
+(`rotated.repinned` gegen `rotated.rekeyed`) → Tor nennt beide Bedingungen.
+
+Genau **eine** Stelle bleibt unentscheidbar: der Vertragstest selbst, der die
+falschen Paare absichtlich durchprobiert. Der Prüfer nennt sie, statt sie
+stillschweigend als geprüft zu zählen (B166).
+
 **B237 — acht Zahlen in dem Dokument, aus dem ein Leser den Stand nimmt
 (2026-09-20).** `progress.md` ist laut `AGENTS.md` die periodische
 Fortschrittsschätzung — und die Stelle, an der jemand nachsieht, wie es steht.
