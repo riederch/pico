@@ -912,6 +912,74 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B239 — eine Entscheidung reisst das Fenster an sich, und niemand hielt fest,
+dass es dann auch etwas anzubieten hat (2026-09-21).** `decision` ist das
+vierte Feld eines Darstellungszustands. Vier Werte sind echte Entscheidungen,
+je an genau einen Zustand gebunden (`assertDecisionKind`), der fuenfte heisst
+`none`. Und eine Entscheidung ist kein Hinweis:
+
+```ts
+picoCompanionPresentationTakesTheWindow(p)
+  => p.decision !== 'none' || p.severity === 'blocked'
+```
+
+Sie **nimmt der Person das Fenster** — mitten in dem, was sie gerade tat. Der
+Kommentar daneben sagt warum, und er hat recht: etwas, das auf eine Antwort
+wartet, ist das wert.
+
+**Dann muss es aber auch eine Antwort entgegennehmen.** Gemessen: alle vier
+Entscheidungen steuern heute ein Element, und an jedem haengt ein Handler —
+zwei direkt (`veto`, `approve`/`deny`), zwei ueber Abschnitte
+(`recovery-card-form`, `first-run`), deren Knoepfe darin haengen. Nichts davon
+war kaputt. Aber nichts **haelt** es: TypeScript kennt das Fenster nicht, das
+Fenster kennt keinen Typ, und zwischen der Menge und dem HTML liegt nichts. Ein
+fuenfter Wert in der Union, und eine Person steht vor einem Fenster, das ihr
+etwas abverlangt und nichts anbietet, worauf sie druecken kann. Kein Test faellt
+dabei.
+
+`check-companion-boundary.mjs` haelt die **Gegenrichtung** — jedes Element, das
+das Skript verlangt, steht im HTML — und sagt von sich selbst, wo es aufhoert.
+Neu ist `decision:check`, Kettenschritt **70**.
+
+**Was TypeScript doch sieht, und wofuer hier nichts gebaut wurde.** Ein
+Vergleich gegen eine Zeichenkette, die keine Entscheidung ist
+(`decision !== 'approve_or_denny'`), ist ein Typfehler — der Knopf waere fuer
+immer versteckt, aber der Compiler sagt es. Diese Richtung braucht kein Tor,
+und ein Tor, das sie nochmal prueft, waere eine zweite Wahrheit.
+
+**Der Leser musste dreimal tiefer, als es aussah.**
+
+*Erstens*, in den Behaelter: zwei Entscheidungen zeigen keinen Knopf, sondern
+einen Abschnitt. Ein Abschnitt traegt keinen Handler; seine Knoepfe tun es.
+Geprueft wird der Teilbaum im HTML.
+
+*Zweitens*, durch die Schleife: zwei Knoepfe haengen nicht einzeln am Handler,
+sondern ueber
+
+```ts
+for (const [button, source] of [[joinCamera, 'camera'], [joinTyped, 'typed']])
+  button.addEventListener(...)
+```
+
+Eine Suche nach `joinCamera.addEventListener` findet nichts und haette sie als
+tote Knoepfe gemeldet.
+
+*Drittens* — und das war mein eigener Fehler, gefunden durch die Pflanzung:
+Ich loeste die Schleife zuerst in einer **Tabelle nach Namen** auf. `renderer.ts`
+hat **zwei** solche Schleifen, und beide nennen ihre Bindung `button`. Die
+zweite ueberschrieb die erste, `joinCamera`/`joinTyped` gingen still verloren,
+und der Pruefer zaehlte *eine* aufgeloeste Bindung statt zwei. Aufgefallen ist
+es nur, weil eine Pflanzung fiel, die haette halten muessen. Ein Name ist kein
+Bezeichner — er ist einer **je Geltungsbereich**, und aufgeloest wird an der
+Verwendungsstelle, nicht in einer Tabelle. Dieselbe Lehre wie B234/B235, eine
+Ebene tiefer.
+
+**Fuenf Pflanzungen.** Eine fuenfte Entscheidung ohne Element → Tor nennt sie.
+Handler am Veto weg → Tor nennt den toten Knopf. Die direkten Handler des
+Abschnitts weg, Schleife bleibt → Tor **haelt**, denn die Schleife traegt.
+Danach auch die Schleife weg → Tor schlaegt an. Und die Bindungstabelle gegen
+die Verwendungsstelle: nur die zweite Fassung zaehlt beide Schleifen.
+
 **B238 — das Zeichen ist eine Sicht auf die Schwere, und es stand 43-mal
 daneben (2026-09-21).** Ein Darstellungszustand des Companions trägt vier
 Dinge, die zusammen entscheiden, was ein Mensch sieht: `kind`, `severity`,
