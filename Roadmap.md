@@ -912,6 +912,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B247 — eine Regel, die ihre eigene Praemisse nicht prueft (2026-09-21).**
+`narrowToOwner` steht zweimal, in `apps/core` und in `apps/relay`, und das ist
+begruendet: `check-constant-copies.mjs` fuehrt das Paar und haelt beide
+Fassungen Zeichen fuer Zeichen aneinander. Die Fehlermeldung nennt auch das
+Argument dahinter:
+
+> Eine Fassung ist geprueft und die andere nicht; solange sie gleich sind,
+> gilt der Beweis fuer beide.
+
+Das ist zwei Aussagen. Geprueft wurde davon nur die zweite.
+
+**Die erste stimmt heute.** `apps/core/src/database-file-mode.test.ts` ruft
+`narrowToOwner` in drei Faellen: es haelt Datenbank und Begleitdateien beim
+Eigentuemer, es verengt nur und weitet nie, und es nimmt jedem anderen das
+Lesen. Ein Export, drei Faelle, alle gegangen. Wieder ein Negativ am Bestand.
+
+**Aber das Tor haelt die beiden Dateien nur gegeneinander.** Verschwaende der
+Test — geloescht, umbenannt, oder nur noch importierend statt rufend —, blieben
+zwei identische Kopien **ungepruefeten** Codes, und dieser Schritt bliebe
+gruen, weil beide Kopien ja weiterhin gleich sind. Das Argument waere dann
+falsch, und es stuende weiterhin in der Fehlermeldung eines gruenen Tors. Ein
+Pruefer ohne Gegenstand (B166), mit einem Argument davor.
+
+Gefragt wird jetzt beides: dass die Fassungen gleich sind, **und** dass jeder
+Export der bewiesenen Fassung von einem Test daneben wirklich **gerufen**
+wird. Ein Import allein genuegt nicht — ein Modul zu importieren beweist
+nichts ueber seine Funktionen, und genau diese Spielart war der leiseste der
+vier Faelle.
+
+**Vier Pflanzungen, und die erste hat wieder Regel 22 vorgefuehrt.** Den Test
+nur von der Platte genommen → *nichts*, denn `git ls-files` nennt ihn
+weiterhin, und der Leser stuerzte beim Lesen ab statt zu melden. Aus dem Index
+genommen → genannt. Der Absturz ist jetzt eine Meldung: ein Indexeintrag ohne
+Datei ist ein fehlender Beweis, und das gehoert gesagt statt als Stapelabzug
+ausgeworfen. Danach: Test ruft nicht mehr, nur noch importieren → genannt. Ein
+zweiter Export, den niemand ruft → genannt. Die Spiegelung driftet
+(`0o600` gegen `0o640`) → die alte Regel greift weiter.
+
 **B246 — dasselbe nochmal, eine Schicht tiefer: die Rechte jeder Datei, die
 dieses Produkt anlegt (2026-09-21).** Direkte Fortsetzung von B245, und sie
 hat einen aelteren Beweis hinter sich. B117 hat am 2026-09-10 *gemessen*, was
