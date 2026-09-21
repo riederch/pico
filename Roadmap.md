@@ -912,6 +912,53 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B245 — ein Beweis von damals gilt nicht fuer eine Datei von morgen
+(2026-09-21).** `secure_delete = ON` steht in beiden schreibenden Stores, und
+es steht dort, weil es **gemessen** wurde: sechzig Eintraege mit einem
+eindeutigen Satz, alle geloescht, der Store geschlossen — und der Satz stand
+**einundsechzigmal** noch in der Datei. Nur ein `VACUUM` bekam ihn heraus, und
+keiner laeuft hier je. Das ist der Unterschied zwischen „geloescht" und „nicht
+mehr aufgelistet", an den Erinnerungen einer Person.
+
+Gehalten hat das niemand.
+
+**Vier Negative auf dem Weg dorthin**, und sie sagen etwas Gutes ueber diesen
+Baum. Die Kapazitaet eines Postfachs zaehlt nur *lebende* Pakete
+(`prunePicoLinkQueue` laeuft vor der Entscheidung), also kann ein Fach nicht
+mit Abgelaufenem verstopfen. Eine Untergrenze fuer die Paketlebensdauer waere
+sogar falsch: sie wuerde ein echtes Paket abweisen, das kurz vor einer
+Viertelstundengrenze losgeschickt wurde. `sqlite-backup.ts` oeffnet zweimal
+`readonly` und sichert ueber die Backup-API, die nur lebende Seiten kopiert —
+geloeschte Bytes reisen dort nicht mit. Und das Relay setzt `foreign_keys`
+nicht, was richtig ist: sein Schema kennt kein `REFERENCES`, und ein Pragma
+ohne Gegenstand ist ein Pruefer ohne Gegenstand (B166) — der Home-Store sagt
+das in seinem eigenen Kommentar.
+
+**Der Fund ist also nicht, dass etwas falsch steht, sondern dass ein bewiesenes
+Ergebnis von nichts getragen wird.** Ein dritter Store, oder eine Umstellung im
+Konstruktor, und der Beweis von damals gilt fuer die neue Datei nicht — ohne
+dass ein Test faellt, denn keine API sagt, ob ein geloeschtes Byte noch
+dasteht. Genau die Art Eigenschaft, die ein Tor braucht: wahr, wichtig und von
+innen unsichtbar.
+
+`pragma:check`, Kettenschritt **71**. Drei Pragmas, jedes mit eigenem Grund:
+`secure_delete` ist die Aussage oben; `journal_mode = WAL` ist die
+Haltbarkeitsseite; `foreign_keys` wird **nur dort verlangt, wo ein Schema
+ueberhaupt ein `REFERENCES` erklaert**.
+
+**Die Reihenfolge ist Teil der Regel**, und das ist der Teil, den ein Blick auf
+die Datei nicht sieht: ein Pragma wirkt ab dem Moment, in dem es gesetzt wird.
+Stuende `secure_delete` hinter den Migrationen, waeren deren Loeschungen nicht
+gedeckt. Gelesen wird deshalb die **Anweisungsreihenfolge im Block**, nicht die
+Zeilennummer in der Datei.
+
+**Fuenf Pflanzungen, fuenf Bisse — und die dritte hat mich korrigiert.** Pragma
+weg → genannt. `journal_mode = DELETE` → genannt. Pragma in eine andere Methode
+verschoben → genannt, aber als *fehlend*: die Reihenfolgenregel war damit gar
+nicht gegangen. Erst die Pflanzung, die es *im Konstruktor* hinter das Schema
+schiebt, trifft sie: „sets `secure_delete` after `this.db.exec` on line 102".
+Ein dritter Store ohne alles → zwei Meldungen.
+
 **B244 — das Paket war nach oben begrenzt und nach unten gar nicht
 (2026-09-21).** Das Relay speichert vier Dinge ueber eine Nachricht: Postfach,
 Tag, Ablauf, Nutzinhalt. Ueber die letzte Spalte steht in seinem eigenen
