@@ -615,6 +615,83 @@ for (const entry of arguedRoutes) {
   }
 }
 
+/**
+ * Befund B249. Jede dieser Begruendungen behauptet etwas ueber den Baum - und
+ * geprueft wurde davon bisher nichts.
+ *
+ * Acht nennen eine **Tuer in Gebrauch**: eine Link-Operation, die diese Route
+ * ersetzt. Verschwindet sie, ist die Route nicht mehr begruendet, sondern
+ * verwaist - und dieses Tor bliebe gruen, weil sie auf der Liste steht. Vier
+ * nennen einen **Nachbarn**, der bedient wird. Drei behaupten eine
+ * **Abwesenheit**: fuer diese Familie gebe es ueberhaupt keine Tuer. Das ist
+ * die Sorte Satz, die am leisesten falsch wird, denn sie bricht, wenn jemand
+ * etwas *hinzufuegt*.
+ *
+ * `docs:check` prueft genannte Operationsnamen - aber nur in Markdown. Diese
+ * Liste ist ein Skript und lag ausserhalb (dieselbe blinde Stelle wie B242).
+ *
+ * Zwei Eintraege tragen keine maschinelle Bedingung, und beide sagen das
+ * ausdruecklich statt es zu verschweigen. Ein neuer Eintrag ohne `holds` wird
+ * abgewiesen (B248).
+ */
+const operationNames = new Set(operations);
+const servedNames = new Set(registered.map((route) => `${route.method} ${route.route}`));
+let conditionsChecked = 0;
+for (const entry of arguedRoutes) {
+  const where = `${entry.method === undefined ? '' : `${entry.method} `}${entry.route ?? entry.prefix}`;
+  const holds = entry.holds;
+  if (holds === undefined) {
+    errors.push(
+      `${where} is argued without a caller and names no condition its reason rests on. `
+      + 'A reason is a sentence and a sentence drifts (B248/B249): name the door, the '
+      + 'sibling or the absence it stands on, so the chain holds it rather than a reader.',
+    );
+    continue;
+  }
+  conditionsChecked += 1;
+  if (holds.doorInUse !== undefined) {
+    if (!operationNames.has(holds.doorInUse)) {
+      errors.push(
+        `${where} is argued because \`${holds.doorInUse}\` is the door in use, and the `
+        + 'protocol declares no such operation. Then this route is not replaced, it is '
+        + 'orphaned - and nobody would notice, because it is on this list.',
+      );
+    }
+    continue;
+  }
+  if (holds.siblingInUse !== undefined) {
+    if (!servedNames.has(holds.siblingInUse)) {
+      errors.push(
+        `${where} is argued because \`${holds.siblingInUse}\` beside it is the one in use, `
+        + 'and no such route is served.',
+      );
+    }
+    continue;
+  }
+  if (holds.noDoorAnywhere !== undefined) {
+    const matching = operations.filter(
+      (operation) => new RegExp(holds.noDoorAnywhere, 'u').test(operation),
+    );
+    if (matching.length > 0) {
+      errors.push(
+        `${where} is argued because this family has no Link door at all, and the protocol `
+        + `now declares ${matching.join(', ')}. An absence that stopped being one is the `
+        + 'quietest way an argument turns false: it breaks when somebody *adds* something.',
+      );
+    }
+    continue;
+  }
+  if (holds.humanOnly !== undefined || holds.absenceIsTheClaim === true) {
+    continue;
+  }
+  errors.push(`${where} names a condition this check does not know: ${JSON.stringify(holds)}.`);
+}
+if (conditionsChecked === 0) {
+  errors.push(
+    'No argued route carried a condition, so this step ran over nothing (B166).',
+  );
+}
+
 if (errors.length > 0) {
   console.error('Surface-class check failed:');
   for (const error of errors) {
@@ -628,5 +705,6 @@ console.log(
   + `${formRows.length} canonical forms, all classed; `
   + `${registered.length} served routes and ${operations.length} Link `
   + `operations, each named; ${registered.length - routesArgued} of those routes have a `
-  + `caller and ${routesArgued} are argued without one).`,
+  + `caller and ${routesArgued} are argued without one, each naming the door, the sibling `
+  + 'or the absence its reason rests on, checked here rather than only written down).',
 );

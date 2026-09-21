@@ -41,12 +41,14 @@ export const arguedRoutes = [
     why: 'ADR 0030. Der Blättern-Zwilling von `/api/events/tail`: die Fläche liest den '
       + 'Schwanz und schreibt mit `POST`, und niemand blättert. Kein Client, keine Tür '
       + 'woanders - gefunden am 2026-09-02, Befund B55',
+    holds: { siblingInUse: 'GET /api/events/tail' },
   },
   {
     method: 'GET',
     route: '/api/memory/domains/:privacyDomain/items/:memoryItemId',
     why: 'ADR 0071. Das Einzelstück neben `/items`: die Fläche listet einen Raum und zeigt '
       + 'aus der Liste. Kein Client - gefunden am 2026-09-02, Befund B55',
+    holds: { siblingInUse: 'GET /api/memory/domains/:privacyDomain/items' },
   },
   {
     method: 'GET',
@@ -54,6 +56,7 @@ export const arguedRoutes = [
     why: 'ADR 0074. Das Einzelstück neben der Liste: geändert und gelöscht wird über '
       + 'dieselbe Adresse, gelesen wird aus der Liste. Kein Client - gefunden am '
       + '2026-09-02, Befund B55',
+    holds: { siblingInUse: 'GET /api/memory/retention-policies' },
   },
   {
     prefix: '/api/home/domain-read-grant',
@@ -61,12 +64,14 @@ export const arguedRoutes = [
       + '`home.domain.read-grant.submit`, which the companion calls from the person\'s own '
       + 'device; this is the same signed evidence over a Foundation session, and no product '
       + 'opens one for it',
+    holds: { doorInUse: 'home.domain.read-grant.submit' },
   },
   {
     prefix: '/api/home/share-envelope',
     why: 'ADR 0086/0089. No companion issues or receives a share envelope, and there is no '
       + 'Link operation either - this family has no door in use at all, which is the same '
       + 'absence ADR 0130 E5 stays open on',
+    holds: { noDoorAnywhere: 'share.?envelope' },
   },
   /**
    * **Zwei Stuecke der Familie, und nicht mehr die ganze** (2026-09-02, B55).
@@ -90,33 +95,40 @@ export const arguedRoutes = [
     why: 'ADR 0086/0117 mit ADR 0130 E5. Schreibzugaenge fuer einen fremden Schreiber gibt '
       + 'es als Fläche und in keinem Produktweg - weder ueber Link noch hier. Diese '
       + 'Abwesenheit ist dieselbe, auf der ADR 0130 E5 offen steht (2026-09-02, B55)',
+    holds: { noDoorAnywhere: 'writer.?grant' },
   },
   {
     prefix: '/api/home/reader-custody/items',
     why: 'ADR 0086/0117. Der Foundation-Transport der Aufzeichnungen selbst: das Fenster '
       + 'schreibt und liest sie ueber eine Autoritaetsressource, nicht ueber diese Routen '
       + '(2026-09-02, B55)',
+    holds: { humanOnly: 'Die Fläche nennt keine Tür und keine Abwesenheit, sondern den Weg des Fensters über eine Autoritätsressource. Welche es ist, steht im Satz nicht, und dieser Prüfer rät nicht.' },
   },
   {
     prefix: '/api/auth/bootstrap',
     why: 'ADR 0130. A Home is claimed from the Client over Link (`home.claim.submit`), and '
       + 'the Foundation bootstrap is what the tool used before that walk existed',
+    holds: { doorInUse: 'home.claim.submit' },
   },
   {
     prefix: '/api/depot/attachments',
     why: 'ADR 0143. `home.depot.attach` is the door in use',
+    holds: { doorInUse: 'home.depot.attach' },
   },
   {
     prefix: '/api/model/jobs/',
     why: 'ADR 0117/0151. `home.model.read.keep` is the door in use',
+    holds: { doorInUse: 'home.model.read.keep' },
   },
   {
     prefix: '/api/model/providers/mine',
     why: 'ADR 0151. `home.model.providers.read` is the door in use',
+    holds: { doorInUse: 'home.model.providers.read' },
   },
   {
     prefix: '/api/memory/time-bound-entries/',
     why: 'ADR 0118 O1. `home.time_bound_entry.acknowledge` is the door in use',
+    holds: { doorInUse: 'home.time_bound_entry.acknowledge' },
   },
   {
     route: '/api/auth/session',
@@ -125,6 +137,7 @@ export const arguedRoutes = [
       + 'offen ist, und fragt niemanden, ob sie noch gilt - ein Aufruf, der scheitert, sagt '
       + 'es ihr an der Stelle, an der es zählt. Gefunden am 2026-08-29, als der Aufrufertest '
       + 'anfing, das Verb zu lesen (Befund B44)',
+    holds: { absenceIsTheClaim: true },
   },
   {
     route: '/api/auth/session',
@@ -133,6 +146,7 @@ export const arguedRoutes = [
       + '`DELETE /api/auth/sessions` -, weil eine Person, die aufhört, nicht meint '
       + '„dieser Reiter" sondern „dieses Home". Die Einzelsitzungs-Hälfte hat keinen '
       + 'Aufrufer (Befund B44)',
+    holds: { siblingInUse: 'DELETE /api/auth/sessions' },
   },
   {
     route: '/api/model/providers/:entryId/decision',
@@ -142,6 +156,7 @@ export const arguedRoutes = [
       + 'das Fenster vom Gerät der Person aus ruft; das hier ist dieselbe Entscheidung über '
       + 'eine Foundation-Sitzung, und keine öffnet dafür eine. `/narrowing` liegt unter '
       + 'demselben Präfix und wird gerufen, deshalb steht das Verb daneben',
+    holds: { doorInUse: 'home.model.provider.decision.submit' },
   },
   {
     route: '/api/model/providers/:entryId/decision',
@@ -149,11 +164,13 @@ export const arguedRoutes = [
     method: 'DELETE',
     why: 'ADR 0152 SE6, die Rücknahme derselben Entscheidung: '
       + '`home.model.provider.decision.revoke` ist die Tür in Gebrauch',
+    holds: { doorInUse: 'home.model.provider.decision.revoke' },
   },
   {
     prefix: '/api/system/version',
     why: 'ADR 0075. A diagnostic a person never asks for and no client polls; it exists so '
       + 'somebody with a terminal can tell what is running. The only route here with '
       + 'neither a caller nor a Link twin',
+    holds: { noDoorAnywhere: 'system.?version|\\bversion\\b' },
   },
 ];
