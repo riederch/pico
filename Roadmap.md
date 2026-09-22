@@ -912,6 +912,62 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B252 — drei Tabellen halten Personeninhalt, und das Netz kannte eine
+(2026-09-22).** B251 hat `memory_item` Spalte fuer Spalte entschieden.
+`domain-shred.ts` sagt selbst, dass ein Shred **drei** Dinge erreichen muss,
+und nennt sie: den Erinnerungsspeicher, den Beobachtungspuffer (ADR 0129 SR2)
+und die Modelljob-Warteschlange (ADR 0049 mit ADR 0071, seit B17 und einem
+externen Review am 2026-09-09).
+
+**Zwei Gestalten, und der Unterschied ist die Sache selbst.**
+
+`clears` — die Zeile bleibt stehen, einzelne Spalten werden geleert. Dann ist
+*jede* Spalte eine Entscheidung. Das gilt fuer `memory_item` und fuer
+`pico_model_job_queue`, deren `forgetRecall` seit B17 drei Spalten leert: die
+Frage, die Antwort und das erinnerte Material. Die uebrigen **fuenfzehn** waren
+unentschieden; sie sind es jetzt.
+
+`deletes` — die Zeile verschwindet. Der Beobachtungspuffer wird ganz geloescht,
+und der Kommentar sagt warum: fuer Daten, die ihr Fenster nicht ueberleben
+sollen, ist Entfernen staerker als Unlesbarmachen, weil nichts uebrigbleibt,
+was spaeter entschluesselt werden koennte. Das ist von Bauart vollstaendig und
+braucht keine Spaltenliste — gefragt wird nur, ob es wirklich ein `DELETE` ist.
+**Ein `UPDATE`, das sich als Loeschen ausgibt, ist genau der Unterschied, um
+den es hier geht.**
+
+**Gemessen: 42 Spalten ueber drei Tabellen**, 7 vom Vergessenspfad geleert, 35
+begruendet behalten. Geleert heisst dabei auf `NULL` oder auf ein leeres
+Literal — `job_json = '{}'` ist ein Leeren, `forgotten_at = ?` ist ein
+Schreiben und muss begruendet sein.
+
+⚠ **Sechs Spalten tragen eine offene Frage**, vier aus B251 und zwei neue:
+`kept_memory_item_id` und `kept_privacy_domain` sagen, dass eine Antwort
+behalten wurde und welche. Der Verweis bleibt, auch wenn die Worte gehen —
+dieselbe Lage wie `source_ref`. Das entscheidet ein Mensch; die Frage steht im
+Handoff.
+
+**Fuenf Pflanzungen, fuenf Bisse.** Der Vergessenspfad laesst das erinnerte
+Material stehen → genannt. Eine neue Spalte in der Warteschlange → nicht
+klassifiziert. Der Puffer wird geleert statt geloescht → **zwei** Meldungen,
+kein `DELETE` und ein `UPDATE`, wo keines sein darf. Die genannte Methode
+verschwindet → der Pfad wurde gegen nichts verglichen.
+
+**Und ein anderes Tor hat mich sofort gefangen.** `column:check` haelt, dass
+jede Spalte von irgendeiner Abfrage gelesen wird oder begruendet ist — und
+zaehlte die Begruendungsliste meines neuen Pruefers als Abfrage, also meldete
+es einen Eintrag zu Unrecht als ueberfluessig. Sein Kopfkommentar hatte das
+Argument seit jeher, nur fuer sich selbst: *ein Pruefer, der sich selbst
+liest, findet jede Spalte „abgefragt"*. Das gilt fuer **jedes** Tor: ein
+Pruefer nennt eine Spalte, um ueber sie zu urteilen, nie um sie zu lesen.
+Gemessen, bevor es geaendert wurde — der Ausschluss aller `check-*.mjs` laesst
+jedes Urteil dort unveraendert: 437 Spalten, 409 gelesen, 28 begruendet.
+
+Und die erste Pflanzung traf zuerst daneben: derselbe `SET`-Satz steht in
+**beiden** Vergessenswegen, und ein Ersetzen ueber die ganze Datei aenderte
+auch den, den dieser Pruefer gar nicht liest. Er liest den Text **dieser
+Methode** — das war schon in B251 so gebaut, und die Pflanzung musste sich
+danach richten.
+
 **B251 — geloescht war der Inhalt, nicht der Ort (2026-09-22).** Ein
 Erinnerungsstueck wird geloescht, und seine Zeile bleibt absichtlich stehen:
 der Store soll weiterhin sagen koennen, was aus einer Referenz wurde. Geleert
