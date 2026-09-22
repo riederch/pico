@@ -44,8 +44,22 @@ export const accessClasses = [
 
 export type AccessClass = typeof accessClasses[number];
 
-/** Classes the principal-less static token may satisfy (ADR 0075: its ceiling). */
-export const staticTokenCeiling: readonly AccessClass[] = ['public', 'foundation-diagnostic'];
+/**
+ * Die Decke des statischen Tokens stand hier als Konstante und ist am
+ * 2026-09-22 entfernt worden (Befund B195, Nutzerentscheidung 15).
+ *
+ * Sie nannte zwei Klassen, kam im ganzen Baum genau einmal vor - in ihrer
+ * eigenen Zeile - und war ausserdem ungenau: bei `public` *erfuellt* ein Token
+ * nichts, es wird ignoriert. Gezogen wurde die Grenze immer von der
+ * Reihenfolge der Kette in `app.ts`, und eine Konstante daneben ist eine
+ * zweite Wahrheit, die niemand liest.
+ *
+ * An ihrer Stelle steht ein **Gang** in `app.test.ts`: ein statisches Token
+ * gegen je eine Route jeder Klasse, und die Aussage ist ein Satz ueber
+ * Verhalten - *genau eine Klasse antwortet mit ihm anders als ohne*. Er faellt
+ * in beide Richtungen, wenn die Kette sich aendert, und das konnte die
+ * Konstante nie.
+ */
 
 export const FOUNDATION_API_PREFIX = '/api/';
 

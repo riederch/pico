@@ -6,6 +6,7 @@ import { Writable } from 'node:stream';
 import Database from 'better-sqlite3';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { accessClasses, type AccessClass } from './access-classes.js';
 import {
   actionEventTypes,
   avatarIntensities,
@@ -1432,6 +1433,80 @@ describe('Pico Home Core app', () => {
 
     expect(oversizedPost.statusCode).toBe(401);
     expect(oversizedPost.json()).toEqual({ error: 'Foundation credential is required.' });
+
+    await app.close();
+  });
+
+  it('changes exactly one access class, which is the whole ceiling of a static token', async () => {
+    /**
+     * ADR 0075, Befund B195, Nutzerentscheidung 15 vom 2026-09-22.
+     *
+     * Hier stand eine Konstante, `staticTokenCeiling`, die zwei Klassen nannte
+     * und im ganzen Baum genau einmal vorkam: in ihrer eigenen Zeile. Gezogen
+     * wurde die Grenze von der Reihenfolge einer `if`-Kette, und eine Konstante
+     * neben einer Kette ist eine zweite Wahrheit, die niemand liest.
+     *
+     * **Sie war ausserdem ungenau.** Gemessen antwortet nur `public` und
+     * `link-intake` ohne Ruecksicht auf ein Token - dort *erfuellt* es nichts,
+     * es wird ignoriert -, und `setup-bootstrap` hat seine eigene
+     * Zugangspruefung. Was ein statisches Token wirklich kann, ist ein Satz
+     * ueber Verhalten: **genau eine Klasse antwortet mit ihm anders als ohne.**
+     *
+     * Der Gang laeuft ueber `accessClasses`, nicht ueber eine Liste hier: eine
+     * zehnte Klasse muss ihn erweitern statt an ihm vorbeizugehen.
+     */
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+
+    const oneRoutePerClass: Record<AccessClass, { method: 'GET' | 'POST' | 'DELETE'; url: string }> = {
+      'public': { method: 'GET', url: '/api/home/link/continuity' },
+      'setup-bootstrap': { method: 'POST', url: '/api/auth/bootstrap' },
+      'foundation-diagnostic': { method: 'GET', url: '/api/system/version' },
+      'authenticated': { method: 'GET', url: '/api/auth/session' },
+      'domain-content': { method: 'GET', url: '/api/memory/domains/domain-private/items' },
+      'home-authority-relay': { method: 'POST', url: '/api/home/memberships' },
+      'host-admin': { method: 'DELETE', url: '/api/auth/sessions' },
+      'host-admin-destructive': { method: 'POST', url: '/api/memory/domains/domain-private/shred' },
+      'link-intake': { method: 'POST', url: '/api/home/link' },
+    };
+    // Ein Pruefer ohne Gegenstand ist kaputt: fehlt eine Klasse in der Tabelle,
+    // faellt das hier und nicht erst still im Lauf.
+    expect(Object.keys(oneRoutePerClass).sort()).toEqual([...accessClasses].sort());
+
+    const changedByTheToken: AccessClass[] = [];
+    for (const accessClass of accessClasses) {
+      const route = oneRoutePerClass[accessClass];
+      const withToken = await app.inject({
+        ...route,
+        headers: { authorization: 'Bearer dev-token' },
+        payload: {},
+      });
+      const without = await app.inject({ ...route, payload: {} });
+      if (withToken.statusCode !== without.statusCode) {
+        changedByTheToken.push(accessClass);
+      }
+    }
+
+    expect(changedByTheToken).toEqual(['foundation-diagnostic']);
+
+    // Und die Gegenseite beim Namen: was das Token nicht erfuellt, sagt das
+    // auch, statt eine Route stillschweigend anders zu beantworten.
+    for (const refused of [
+      'authenticated', 'domain-content', 'home-authority-relay',
+      'host-admin', 'host-admin-destructive',
+    ] as const) {
+      const response = await app.inject({
+        ...oneRoutePerClass[refused],
+        headers: { authorization: 'Bearer dev-token' },
+        payload: {},
+      });
+      expect(response.statusCode, refused).toBe(401);
+    }
 
     await app.close();
   });
