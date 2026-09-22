@@ -912,6 +912,59 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B254 — die Datei, die Material abweist, das ein Shred nicht erreicht,
+schrieb selbst welches (2026-09-22).**
+
+**Zwei Negative zuerst, und das zweite hat mich fast einen Fehlbefund
+gekostet.** Der Beobachtungspuffer ist dicht: `privacy_domain TEXT NOT NULL`,
+ein einziger Schreiber, eine Spalte — kein zweiter Ort wie bei B253. Und:
+dass ein Krypto-Shred unverschluesselten Inhalt **nicht** erreicht, ist kein
+Defekt, sondern die entschiedene Lage. ADR 0070/0071 sagen es woertlich —
+*„content is plaintext at rest today"*, `domain_encrypted` steht hinter einem
+standardmaessig **ausgeschalteten** `PICO_MEMORY_ENCRYPTION` —, und die
+Shred-Route weist ohne Krypto-Anbieter ab, mit genau dem richtigen Satz:
+*„Content is plaintext at rest, so destroying keys would protect nothing."*
+Ich hatte das schon gemessen und haette es fast als Fund geschrieben.
+
+**Der Fund liegt eine Ebene tiefer: die Verweigerung haengt am Store, die
+Haltung aber am einzelnen Stueck.** Vier Wege schreiben in den
+Erinnerungsspeicher. Einer — der HTTP-Weg in `app.ts` — setzt
+`contentPosture: 'domain_encrypted'`, wenn ein Krypto-Anbieter da ist. Zwei
+sind Modul-Oberflaechen ohne Aufrufer (offene Entscheidung 14). Der vierte,
+`state-crossing.ts`, setzt sie **gar nicht** — und er ist der lebende Weg, auf
+dem ein Mensch eine Rueckrufantwort *behaelt*.
+
+Dieselbe Datei weist eine Kreuzung ohne Domaene ab und begruendet es so:
+
+> *the first of ADR 0129's five places, asked at the boundary: a shred […]
+> material a shred could not reach. Refusing here is cheaper than discovering
+> it during a deletion somebody was relying on.*
+
+Und schreibt danach Material, das ein Shred nicht erreicht.
+
+**Gemessen bei eingeschalteter Verschluesselung**, mit dem echten
+Kreuzungsaufruf: die Haltung kam als `plaintext_foundation` heraus, und nach
+einem Krypto-Shred derselben Domaene gab die API die behaltene Antwort weiter
+heraus. Die Verweigerung an der Route war passiert — der Store *hatte* einen
+Schluessel —, und das Stueck lag trotzdem im Klartext.
+
+**Behoben, wo die Antwort bekannt ist.** Dieselbe Bedingung an vier Stellen zu
+wiederholen ist die Drift, die dieser Baum immer wieder findet. Jetzt steht sie
+einmal, im Store: ohne Anbieter `plaintext_foundation`, mit Anbieter
+`domain_encrypted`. Ein neuer Schreibweg kann sie nicht mehr falsch treffen,
+weil er sie nicht mehr trifft.
+
+**Was die Aenderung sichtbar gemacht hat.** Zwei Wiederherstellungstests
+fielen: sie stellten in einen Store **ohne** Krypto wieder her, waehrend der
+Schluesselordner unberuehrt danebenlag. Mit Klartext ging das durch. Beide
+fragen, ob Moduldaten und Konnektor-Stuecke die Sicherung des Kerns mitfahren
+— nicht, ob sie einen Schluesselverlust ueberleben —, also bekommen sie
+denselben Schluesselordner zurueck, den eine echte Wiederherstellung auch
+mitbraechte.
+
+**Eine Pflanzung, ein Biss.** Die Haltung faellt wieder auf Klartext zurueck →
+der Gang faellt, und zwar an der Stelle, die sagt, was ein Shred bedeutet.
+
 **B253 — der Shred suchte die Domaene an zwei von drei Orten (2026-09-22).**
 B252 hat gefragt, ob beide Vergessenswege dieselben Spalten leeren. Sie tun es.
 Die Frage darunter war eine andere: `forgetDomainRecalls` **findet** seine
