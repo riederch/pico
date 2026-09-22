@@ -579,6 +579,92 @@ das Telefon trägt den Kern und ist am 2026-08-21 vollständig in ein echtes
 Home eingezogen — drei Codes, zwei Geräte, die Sätze aus dem Kern —, aber die
 Fläche ist ein Laborartefakt und keine ausgelieferte App.
 
+## Siebzehn Entscheidungen, 2026-09-22
+
+Alle offenen Punkte aus `.agent-context.md` sind an diesem Tag vom Nutzer
+entschieden worden, in vier Durchgängen mit vorgelegter Messung. Sie stehen
+hier, weil hier die Begründungen stehen; der Handoff trägt nur noch die
+Reihenfolge.
+
+**Zwei Vorlagen musste ich dabei berichtigen, beide zu meinen Lasten.**
+
+*Erstens:* Ich hatte bei der Lamport-Frage „braucht eine Migration" als Kosten
+geführt. Pico ist im vollständigen Entwicklungsmodus — eine Schemaänderung wird
+in die konsolidierte Grundlinie gefaltet und die Datenbank neu angelegt.
+`migrations.ts` sagt das selbst und hat zwei solche Faltungen hinter sich.
+„Braucht eine Migration" ist hier kein Argument.
+
+*Zweitens, und schwerer:* Ich hatte empfohlen, beim Löschen alle drei Verweise
+mitzunehmen. Nachgemessen ist `kept_memory_item_id` der **Nachschlageschlüssel
+der Vergessens-Tür**: `home.memory.forget` findet damit die Domäne des Stücks
+und weist sonst mit `not_kept_by_you` ab. Wer den Rückruf vergisst, hätte
+danach sein Erinnerungsstück nicht mehr vergessen können — die eine Löschung
+hätte die andere weggenommen. `domain-shred.ts` schreibt genau dafür seine
+Begründung hin. Die Entscheidung wurde mit dieser Messung noch einmal
+vorgelegt und geändert.
+
+### Was entschieden ist
+
+| # | Frage | Entschieden |
+|---|---|---|
+| 1 | Wurzelrotation | `rotationBootstrap` als dritte Zeile derselben Tabelle |
+| 5 | Push ohne Empfänger | Senden abschalten, bis der Empfang steht |
+| 6 | Drei primärblaue Knöpfe | eine bleibt primär, zwei werden leiser |
+| 7 | Postfachbuch | behalten; verdrahtet wird es mit der Empfangsseite |
+| 8 | Zehn Suite-Vergleiche | entfernen |
+| 9 | Zustimmungszeitpunkt | zeigen |
+| 10 | `synchronous` | `FULL` in beiden Stores |
+| 11 | `relay_mailbox` | zweite Quote über alle Zeilen eines Kontos |
+| 12 | Web-Banner | volle Satztabelle wie in der Schale |
+| 13 | Reader-Custody-Ende | host-lokale Zerstörung bauen |
+| 14 | Modul-Oberflächen | `spatial-recall` zuerst, an der Ableitung |
+| 15 | `staticTokenCeiling` | Konstante entfernen |
+| 16 | Depot-Adresse | wirksame Adresse messen, bei Abweichung ablehnen |
+| 18 | Zweiter Kern | `UNIQUE (device_id, lamport)` |
+| 19 | Link-Eingang | 404 und 405 zusammenlegen wie im Relay |
+| 20 | Löschung | `source_ref` leeren; `kept_*` und die drei Zeitpunkte bleiben |
+| — | Schlüsselexport (B255) | jetzt bauen |
+
+### Drei Dinge, die aus den Antworten folgen
+
+**5 und 7 sind dieselbe Arbeit.** Das Postfachbuch ist kein Regelmodell,
+sondern der Postfachspeicher der Empfangsseite (`issue`/`read`/`write`/`clear`/
+`exchange`); der Sweep nimmt die Postfachadresse als Parameter, und das Buch
+liefert sie. Buch, Sweep und `handlePush` sind drei Teile eines Weges, und
+keiner läuft. „Senden abschalten" ist damit eine **vorübergehende Maßnahme mit
+benannter Bedingung**, kein Rückbau — und „das Buch verdrahten" ist keine
+eigene Aufgabe, sondern fällt an, wenn die Empfangsseite gebaut wird.
+
+**12 baut die Drift, gegen die es `one-voice:check` gibt**, und ist trotzdem
+richtig: Worte für Menschen sind keine Prüfung. Die Entscheidung kommt mit
+einer Pflicht — das Tor muss die Dashboard-Tabelle mitlesen, sonst steht die
+zweite Wahrheit ohne Netz.
+
+**15 beseitigt die zweite Wahrheit, nicht die Fragilität.** Die Grenze wird
+weiterhin von der Reihenfolge einer `if`-Kette gezogen; ohne die Konstante
+steht nur nichts Falsches mehr daneben. Der Ersatz ist ein **Gang** statt einer
+Konstante: ein statisches Token gegen je eine Route jeder Klasse. Das prüft
+Verhalten, und genau das konnte die Konstante nie.
+
+### Reihenfolge
+
+Der Schlüsselexport steht an zweiter Stelle, nicht am Ende, und der Grund ist
+nicht seine Größe: er ist der einzige Posten, bei dem **Warten Kosten
+anhäuft**. Seit B254 versiegelt jeder Schreibweg; jeder Tag mit eingeschalteter
+Verschlüsselung und ohne Export ist ein Tag, an dem jemand Erinnerungen
+verlieren kann, die er nicht schützen konnte. Alle anderen Punkte stehen still.
+Dass er groß ist, spricht dabei für früh: Befund 13 erbt danach seine
+Begründung (ADR 0033 — nur Domänen-KEKs, zwei bewusste Artefakte), wird also
+billiger.
+
+1. **15, 8, 6, 20, 5, 19** und die Browser-Frist — sechs kleine, unabhängig
+2. **Schlüsselexport**
+3. **18, 10** — Store-Integrität, liegt neben der Schlüsselarbeit
+4. **16, 11** — die zwei Grenzen nach außen
+5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`
+6. **13** — nach dem Export
+7. **1, 14** — die zwei Verdrahtungen
+
 ## Zukunft
 
 Zielmarke, vom Nutzer am 2026-08-09 festgelegt: **nützlich im Alltag** — ein
