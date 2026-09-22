@@ -912,6 +912,49 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B255 — die gefaehrlichste Frage dieser Session, und die Antwort war
+viermal ja (2026-09-22).** B254 hat die Inhaltshaltung verschoben, und das
+warf sofort eine Betriebsfrage auf: eine SQLite-Sicherung bringt die Datenbank,
+der Schluesselspeicher liegt daneben. Gemessen, Schritt fuer Schritt:
+
+**Der Domaenenschluessel ist `randomBytes` auf der Platte**, nicht aus der
+Identitaetswurzel abgeleitet — keine Recovery Card bringt ihn zurueck.
+
+**`pico_home/config.yaml` schliesst `keys/**` ausdruecklich aus der
+Add-on-Sicherung aus.** Eine Sicherung nimmt also genau das nicht mit, was sie
+lesbar macht.
+
+Das klingt nach einem Fund und ist keiner. **Vier Stellen sagen es, und zwar
+besser als ich es gefunden haette:**
+
+*ADR 0072 R6* macht es zur Regel — *„KEKs must never live in the SQLite
+database file and never in the same backup artifact as the ciphertext they
+protect. Without R6, crypto-shredding is a false promise."*
+
+*ADR 0072 Punkt 5* nennt die Folge beim Namen: *„Restoring a database backup
+without the key store leaves every `domain_encrypted` item permanently
+unreadable. **That is the designed behaviour, not a failure mode**."*
+
+*Die Statusmatrix* haelt die Minderung, auf die jener Punkt zeigt, ehrlich als
+unfertig: *„the passphrase-protected key export and TPM/keystore anchor remain
+future work."* Kein verstecktes Loch.
+
+*Der Betreibervertrag* sagt es dem Menschen, der es im Ernstfall braucht, und
+nennt es *„the largest operational hazard in the current design"*.
+
+**Nichts zu beheben.** Das gehoert genauso aufgeschrieben wie ein Defekt: eine
+Frage, die nach einem schweren Fund aussah, viermal gemessen und viermal
+beantwortet.
+
+**Eine Zeile ist trotzdem faellig geworden, und zwar durch B254 selbst.** Der
+Betreibervertrag sagte *welche* Erinnerung unlesbar wird (`domain_encrypted`),
+aber nicht **wie viel** das ist — und das hat sich heute geaendert. Vorher
+versiegelte nur der HTTP-Weg; was ueber eine Kreuzung behalten wurde, blieb
+Klartext und ueberlebte eine schluessellose Wiederherstellung *aus Versehen*.
+Jetzt versiegelt jeder Weg. Die Gefahr ist dieselbe; der Anteil an der
+Erinnerung eines Menschen, den sie betrifft, ist groesser. Das steht jetzt
+dort.
+
 **B254 — die Datei, die Material abweist, das ein Shred nicht erreicht,
 schrieb selbst welches (2026-09-22).**
 
