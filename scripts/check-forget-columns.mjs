@@ -90,10 +90,9 @@ keptByTable.set('memory_item', new Map([
   ['derived_pin_covers_content', 'Herkunftsmarke: ob der Anker den Inhalt mit abdeckte'],
   // Die vier mit offener Frage. Sie bleiben heute, und dass sie bleiben, ist
   // eine Entscheidung, die ein Mensch treffen muss - sie steht im Handoff.
-  ['source_ref', 'Offene Frage (B251): eine Referenz auf die Herkunft. Sie sagt, woher etwas kam, und das kann verraten, was jemand gelesen hat. Bleibt heute, weil der Store "was aus einer Referenz wurde" beantworten koennen soll'],
-  ['due_at', 'Offene Frage (B251): wann etwas faellig war. Ein Zeitpunkt ohne Inhalt, aber ein Zeitpunkt, den eine Person gesetzt hat'],
-  ['raised_at', 'Offene Frage (B251): wann es vorgelegt wurde, dieselbe Lage'],
-  ['announced_at', 'Offene Frage (B251): wann es angekuendigt wurde, dieselbe Lage'],
+  ['due_at', 'Nutzerentscheidung 20 (2026-09-22): ein Zeitpunkt bleibt, sonst kann die Zeile nicht mehr erklaeren, warum sie einmal faellig war'],
+  ['raised_at', 'Nutzerentscheidung 20: wann es vorgelegt wurde, dieselbe Lage'],
+  ['announced_at', 'Nutzerentscheidung 20: wann es angekuendigt wurde, dieselbe Lage'],
 ]));
 
 /**
@@ -118,8 +117,8 @@ keptByTable.set('pico_model_job_queue', new Map([
   ['derived_pin_value', 'Herkunftsmarke: der Anker selbst, ein Hash oder eine Commit-Id'],
   ['derived_pin_covers_content', 'Herkunftsmarke: ob der Anker den Inhalt mit abdeckte'],
   // Dieselbe offene Frage wie `source_ref` bei `memory_item`.
-  ['kept_memory_item_id', 'Offene Frage (B252): sagt, dass eine Antwort behalten wurde und welche. Der Verweis bleibt, auch wenn die Worte gehen'],
-  ['kept_privacy_domain', 'Offene Frage (B252): und in welchem Raum sie behalten wurde'],
+  ['kept_memory_item_id', 'Nutzerentscheidung 20, gemessen: Nachschlageschluessel von `home.memory.forget`. Geleert, koennte eine Person ihr Erinnerungsstueck nicht mehr vergessen'],
+  ['kept_privacy_domain', 'Nutzerentscheidung 20: dieselbe Abfrage liest die Domaene aus dieser Spalte'],
 ]));
 
 const errors = [];

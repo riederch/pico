@@ -571,11 +571,24 @@ export class MemoryStore {
      *
      * `secure_delete` (finding B245) takes the bytes out of the page on this
      * write, so the coordinates leave the file rather than only the answer.
+     *
+     * **`source_ref` geht mit** (Nutzerentscheidung 20 vom 2026-09-22). Eine
+     * Herkunftsreferenz sagt, woher etwas kam, und das kann verraten, was
+     * jemand gelesen hat - sie ist naeher am Inhalt als an der Gestalt. Heute
+     * schreibt sie kein Produktweg; das Leeren kostet also nichts und bindet
+     * den, der sie spaeter fuellt.
+     *
+     * **`kept_memory_item_id` bleibt**, und zwar gemessen: es ist der
+     * Nachschlageschluessel von `home.memory.forget`, das damit die Domaene
+     * des Stuecks findet und sonst mit `not_kept_by_you` abweist. Wer den
+     * Rueckruf vergisst, koennte danach sein Erinnerungsstueck nicht mehr
+     * vergessen - die eine Loeschung naehme der Person die andere weg.
      */
     this.db
       .prepare(`
         UPDATE memory_item
         SET content = NULL,
+            source_ref = NULL,
             latitude_deg = NULL,
             longitude_deg = NULL,
             accuracy_m = NULL,
