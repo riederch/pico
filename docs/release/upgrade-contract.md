@@ -139,7 +139,12 @@ Honest limits, because rollback is where the exclusions bite.
   therefore does not restore keys.** Restoring a backup onto an instance whose
   key store is gone leaves `domain_encrypted` memory permanently unreadable —
   that is crypto-shredding working as intended, and it is also the largest
-  operational hazard in the current design.
+  operational hazard in the current design. **How much memory that is:** with a
+  crypto provider configured, every write path seals (finding B254, 2026-09-22)
+  — including a recall answer a person chose to keep. Before that only the HTTP
+  write path did, and anything kept through a state crossing stayed plaintext
+  and survived a keyless restore by accident. Nothing about the hazard changed;
+  the share of a person's memory it covers did.
 - **Reset markers**: `home-reset`, `recovery-anchor-reseed` and `operator-reset`
   are files a person creates by hand so that the next start does something
   once, and each is deleted the moment it is read. They are `backup_exclude`d
