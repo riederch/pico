@@ -959,19 +959,42 @@ function defaultBasePath(location: BrowserLocation): string {
  * anderes als ein 409, und das gehoert dorthin, wo der Unterschied etwas
  * bedeutet. Gefaltet ist nur, was ueberall dasselbe war.
  *
- * **Hier gehoert auch die Frist hin**, wenn sie entschieden ist: die dreizehn
- * Aufrufe dieser Datei haben keine, und ein Browser bricht `fetch` von sich
- * aus nicht ab (Befund B160, offener Punkt 4 im Handoff). Ein Signal an dieser
- * einen Stelle deckt sie alle.
+ * **Und hier steht jetzt die Frist** (Befund B160, Nutzerentscheidung 4 vom
+ * 2026-09-22). Ein Browser bricht `fetch` von sich aus nicht ab: ohne Signal
+ * wartet eine Person vor einer Flaeche, die nichts sagt, bis sie neu laedt.
+ * Ein Signal an dieser einen Stelle deckt alle dreizehn Aufrufe.
+ *
+ * **Und es ist ein eigener Satz, kein zweiter Transportfehler.** "Nicht
+ * erreichbar" und "hat nicht geantwortet" sind verschiedene Auskuenfte -
+ * dieselbe Unterscheidung, die ADR 0131 A7 fuer "nichts wartet" gegen
+ * "niemand hat nachgesehen" verlangt.
  */
+/**
+ * Dreissig Sekunden, dieselbe Zahl, die die Daemon-Wege nehmen
+ * (`DEFAULT_REQUEST_TIMEOUT_MS` in `apps/vault-daemon/src/reader-access.ts`).
+ *
+ * **Eigene Konstante statt eines Imports, und das ist kein Versehen:** diese
+ * Datei wird als blankes ES-Modul ausgeliefert, und ein Wertimport aus einem
+ * fremden Paket loest im Browser nicht auf - genau die Bedingung, die
+ * `check-constant-copies.mjs` fuer `apps/web` haelt. Es ist dasselbe Home am
+ * anderen Ende, also dieselbe Frist.
+ */
+const foundationDeadlineMs = 30_000;
+
 async function reachFoundation(
   url: URL,
   init: RequestInit,
   label: string,
 ): Promise<Response> {
   try {
-    return await fetch(url, init);
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(foundationDeadlineMs) });
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error(
+        `The ${label} endpoint at ${url.toString()} did not answer within `
+        + `${foundationDeadlineMs / 1000} seconds.`,
+      );
+    }
     throw new Error(
       `Could not reach the ${label} endpoint at ${url.toString()}: ${formatUnknownError(error)}`,
     );
