@@ -2720,12 +2720,29 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       }],
       request: async () => {
         try {
-          // Both halves of talking to a relay, on one timer: read what is
-          // waiting, then say what is worth waking somebody for. Collecting
-          // first because an answer already at the operator is older than
-          // anything this Home is about to notice.
+          /**
+           * **Nur noch die eine Haelfte: lesen, was wartet.**
+           *
+           * Hier stand auch `sweepPicoLinkPushes()`. Gemessen (Befund B82,
+           * nachgemessen am 2026-09-22): dieses Home versiegelt und verschickt
+           * Pushes, und auf der Geraeteseite wird der Sweep **nie gestartet**
+           * - `startPicoCompanionLinkRelaySweep` hat keinen Aufrufer -, und
+           * liefe er, waere `handlePush` ein optionaler Rueckruf, den kein
+           * Produktweg uebergibt. Jedes Paket kaeme als `not_a_push` zurueck.
+           *
+           * Ein Push ging also in ein Postfach und blieb dort bis zum Ablauf.
+           * Das kostet Platz bei einem Betreiber (Befund B189) und sieht von
+           * aussen aus wie eine eingeloeste Zusage.
+           *
+           * **Voruebergehend, mit benannter Bedingung** (Nutzerentscheidung 5
+           * vom 2026-09-22): nichts verschicken, was niemand holt, bis die
+           * Empfangsseite steht. Nichts ist zurueckgebaut - `sendPicoLinkPush`,
+           * das Ledger, die Lebensdauerregel und die Kandidatenwahl bleiben
+           * und werden weiter gegangen: `app.picoSweepLinkPushes()` ist
+           * dekoriert und von acht Faellen belegt. Wenn der Empfang gebaut
+           * wird, kommt eine Zeile zurueck.
+           */
           await sweepPicoLinkRelayMailboxes();
-          await sweepPicoLinkPushes();
         } catch (error) {
           // An operator that cannot be reached is the world failing, not this
           // Home. Nothing was acknowledged, so the next sweep tries again.
