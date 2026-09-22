@@ -8,8 +8,11 @@ import { EventStore } from './event-store.js';
 import {
   PicoModelJobQueue,
   picoModelJobFinalRefusals,
+  picoModelJobKinds,
   picoModelJobRefusalIsFinal,
+  type PicoModelJobKind,
 } from './model-job-queue.js';
+import { picoLibraryReadJob } from './library-read.js';
 
 /**
  * ADR 0049. The queue makes one judgement, and it is which refusals are worth
@@ -24,7 +27,15 @@ afterEach(() => {
   }
 });
 
-function job(jobId = 'job_queue_0001') {
+/**
+ * Befund B253: die Domäne gehört an die Referenz und nicht als feste
+ * Zeichenkette in jede Vorlage. Vorher trug *jeder* Job hier
+ * `privacyDomain: 'household'` in seiner Referenz - auch der, dessen
+ * Rückrufkontext `private` sagte. Das war nur stimmig, solange niemand in die
+ * Referenzen sah; seit der Shred es tut, ist so eine Zeile ein Job mit
+ * Haushaltsmaterial, der sich privat nennt.
+ */
+function job(jobId = 'job_queue_0001', privacyDomain = 'household') {
   return parsePicoModelJob({
     schema: 'pico.model.job.v1',
     jobId,
@@ -35,7 +46,7 @@ function job(jobId = 'job_queue_0001') {
       contextRefId: `ref_${jobId}`,
       jobId,
       originClass: 'own_pico',
-      privacyDomain: 'household',
+      privacyDomain,
       excerpt: 'The boiler service is due in March.',
       materializedAt: '2026-08-14T11:59:00.000Z',
       expiresAt: '2026-08-14T12:05:00.000Z',
@@ -440,7 +451,7 @@ describe('ADR 0071 mit ADR 0049 - ein Domänen-Shred erreicht die Warteschlange'
       ['job_private_1', 'private', 'the spare key is under the third pot'],
     ] as const) {
       opened.queue.enqueue({
-        job: job(jobId),
+        job: job(jobId, privacyDomain),
         picoIdentityFingerprintHex: 'aa'.repeat(32),
         entryId: `entry_${jobId}`,
         at: '2026-08-14T12:00:00.000Z',
@@ -466,6 +477,71 @@ describe('ADR 0071 mit ADR 0049 - ein Domänen-Shred erreicht die Warteschlange'
     jobJson: string; resultJson: string | null; recallContextJson: string | null;
     forgottenAt: string | null; outcome: string | null; keptMemoryItemId: string | null;
   };
+
+  it('erreicht eine Zeile jeder Jobart, nicht nur die mit Rückrufkontext', async () => {
+    /**
+     * Befund B253. Eine Domäne kann an **drei** Orten in dieser Zeile stehen -
+     * im `recallContext`, in `kept_privacy_domain` und an einer Referenz *im
+     * Job selbst*. Gesucht wurde an zweien, und `picoLibraryContextRef` legt
+     * sie an den dritten: ein Shred erreichte null Bibliotheks-Lesejobs,
+     * während die Frage der Person und der Auszug aus ihrem Depot in
+     * `job_json` stehenblieben.
+     *
+     * Der Gang geht über `picoModelJobKinds`, nicht über eine Liste hier:
+     * eine dritte Jobart soll diesen Test erweitern statt an ihm vorbeizugehen.
+     */
+    const opened = await queue();
+    const nowMsHere = Date.parse('2026-08-14T12:00:00.000Z');
+    const enqueued = new Map<PicoModelJobKind, string>();
+
+    for (const kind of picoModelJobKinds) {
+      const jobId = `job_kind_${kind}`;
+      enqueued.set(kind, jobId);
+      if (kind === 'recall') {
+        opened.queue.enqueue({
+          job: job(jobId, 'household'),
+          picoIdentityFingerprintHex: 'aa'.repeat(32),
+          entryId: 'entry_kind',
+          at: '2026-08-14T12:00:00.000Z',
+          kind,
+          recallContext: { privacyDomain: 'household', memoryItemIds: [] },
+        });
+        continue;
+      }
+      // Der echte Bauer, nicht ein von Hand gebautes Objekt: wo die Domäne
+      // landet, ist genau die Frage, und ein Nachbau würde sie beantworten,
+      // statt sie zu stellen.
+      opened.queue.enqueue({
+        job: picoLibraryReadJob({
+          jobId,
+          contextRefId: `ref_${jobId}`,
+          privacyDomain: 'household',
+          excerpt: { path: 'notes.md', text: 'the boiler service is due in March', commit: 'c'.repeat(40) },
+          expects: [{ name: 'month', type: 'token' }],
+          question: 'What is due?',
+          nowMs: nowMsHere,
+        }),
+        picoIdentityFingerprintHex: 'aa'.repeat(32),
+        entryId: 'entry_kind',
+        at: '2026-08-14T12:00:00.000Z',
+        derivedFrom: { supplierIdentifier: 'supplier', commit: 'c'.repeat(40), pinCoversContent: true },
+      });
+    }
+
+    expect(enqueued.size).toBe(picoModelJobKinds.length);
+    expect(opened.queue.forgetDomainRecalls({
+      privacyDomain: 'household',
+      at: '2026-08-15T09:00:00.000Z',
+    })).toBe(picoModelJobKinds.length);
+
+    for (const [kind, jobId] of enqueued) {
+      const row = rowOf(opened.db, jobId);
+      expect(row.forgottenAt, kind).toBe('2026-08-15T09:00:00.000Z');
+      expect(row.jobJson, kind).not.toContain('What is due?');
+      expect(row.jobJson, kind).not.toContain('boiler service');
+    }
+    opened.close();
+  });
 
   it('nimmt die Worte der geschredderten Domäne und lässt die andere unberührt', async () => {
     const { queue: jobs, db, close } = await queueWithTwoDomains();

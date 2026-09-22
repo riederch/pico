@@ -518,6 +518,22 @@ export class PicoModelJobQueue {
    * Auskunft an genau dem Ort, den ADR 0049 als Verlauf für Menschen
    * beschreibt.
    */
+  /**
+   * **Drei Orte, an denen eine Domäne in dieser Zeile stehen kann** (Befund
+   * B253, 2026-09-22). Gesucht wurde an zweien.
+   *
+   * Ein Rückruf nennt seine Domäne im `recallContext`, und ein Job, dessen
+   * Antwort behalten wurde, in `kept_privacy_domain`. Ein **Bibliotheks-
+   * Lesejob** nennt sie in keinem von beiden: `picoLibraryContextRef` legt sie
+   * als `privacyDomain` an die Referenz *im Job selbst*. Gemessen mit dem
+   * echten Bauer: ein Shred von `domain-private` erreichte **null** Zeilen,
+   * und die Frage der Person samt dem Auszug aus ihrem Depot stand weiter in
+   * `job_json` - in einer Zeile, die den geschredderten Raum ausdrücklich
+   * nennt.
+   *
+   * Das ist derselbe Befund wie B17, durch eine zweite Tür. Dort war die
+   * Tabelle gar nicht erreicht; hier ist sie erreicht und eine Jobart nicht.
+   */
   public forgetDomainRecalls(input: { privacyDomain: string; at: string }): number {
     const result = this.db.prepare(`
       UPDATE pico_model_job_queue
@@ -527,8 +543,18 @@ export class PicoModelJobQueue {
           outcome = COALESCE(outcome, 'domain_shredded')
       WHERE forgotten_at IS NULL
         AND (json_extract(recall_context_json, '$.privacyDomain') = ?
-             OR kept_privacy_domain = ?)
-    `).run(input.at, input.at, input.privacyDomain, input.privacyDomain);
+             OR kept_privacy_domain = ?
+             OR EXISTS (
+               SELECT 1 FROM json_each(job_json, '$.references')
+               WHERE json_extract(json_each.value, '$.privacyDomain') = ?
+             ))
+    `).run(
+      input.at,
+      input.at,
+      input.privacyDomain,
+      input.privacyDomain,
+      input.privacyDomain,
+    );
     return result.changes;
   }
 
