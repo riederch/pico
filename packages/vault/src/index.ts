@@ -2368,7 +2368,6 @@ function assertPicoReaderCustodyDomainRecord(
 ): void {
   const domain = record.domain;
   if (record.schema !== picoReaderCustodyDomainRecordSchema
-    || domain.suite !== picoMemoryContentSuite
     || domain.custodyClass !== 'reader_custody'
     || !isCanonicalInstant(record.receivedAt)) {
     throw new Error('invalid_reader_custody_domain');
@@ -2405,7 +2404,6 @@ function assertPicoReaderCustodyDomainRecord(
       !== record.ownerIdentityKeyRecord.keyRole
     || ownerEnvelope.issuerIdentityKeyRecord.publicKeyHex
       !== record.ownerIdentityKeyRecord.publicKeyHex
-    || envelope.suite !== picoShareSuite
     || envelope.grantId !== domain.domainAuthorityId
     || envelope.domainId !== domain.domainId
     || envelope.kekVersion !== domain.kekVersion
@@ -2447,7 +2445,6 @@ function assertPicoReaderCustodyReaderGrantRecord(
   const domain = domainRecord.domain;
   const grant = record.grant;
   if (record.schema !== picoReaderCustodyReaderGrantRecordSchema
-    || grant.suite !== picoMemoryContentSuite
     || grant.domainAuthorityId !== domain.domainAuthorityId
     || grant.homeId !== domain.homeId
     || grant.hostSigningKeyFingerprintHex
@@ -2513,7 +2510,6 @@ function assertPicoReaderCustodyReaderGrantLifecycleRecord(
   const domain = domainRecord.domain;
   const lifecycle = record.lifecycle;
   if (record.schema !== picoReaderCustodyReaderGrantLifecycleRecordSchema
-    || lifecycle.suite !== picoMemoryContentSuite
     || lifecycle.domainAuthorityId !== domain.domainAuthorityId
     || lifecycle.homeId !== domain.homeId
     || lifecycle.hostSigningKeyFingerprintHex
@@ -2547,7 +2543,6 @@ function assertPicoReaderCustodyWriterGrantLifecycleRecord(
   const domain = domainRecord.domain;
   const lifecycle = record.lifecycle;
   if (record.schema !== picoReaderCustodyWriterGrantLifecycleRecordSchema
-    || lifecycle.suite !== picoMemoryContentSuite
     || lifecycle.domainAuthorityId !== domain.domainAuthorityId
     || lifecycle.homeId !== domain.homeId
     || lifecycle.hostSigningKeyFingerprintHex
@@ -2581,7 +2576,6 @@ function assertPicoReaderCustodyKekRotationRecord(
   const domain = domainRecord.domain;
   const rotation = record.rotation;
   if (record.schema !== picoReaderCustodyKekRotationRecordSchema
-    || rotation.suite !== picoMemoryContentSuite
     || rotation.domainAuthorityId !== domain.domainAuthorityId
     || rotation.homeId !== domain.homeId
     || rotation.hostSigningKeyFingerprintHex
@@ -2665,7 +2659,6 @@ function assertPicoReaderCustodyWriterGrantRecord(
   const domain = domainRecord.domain;
   const grant = record.grant;
   if (record.schema !== picoReaderCustodyWriterGrantRecordSchema
-    || grant.suite !== picoMemoryContentSuite
     || grant.domainAuthorityId !== domain.domainAuthorityId
     || grant.homeId !== domain.homeId
     || grant.hostSigningKeyFingerprintHex
@@ -2716,7 +2709,6 @@ function assertPicoReaderCustodyItemRecord(
   const grant = writerGrantRecord.grant;
   const item = record.item;
   if (record.schema !== picoReaderCustodyItemRecordSchema
-    || item.suite !== picoMemoryContentSuite
     || item.domainAuthorityId !== domain.domainAuthorityId
     || item.writerGrantId !== grant.writerGrantId
     || item.homeId !== domain.homeId
@@ -2974,7 +2966,6 @@ function assertPicoReaderCustodyEnvelope(
   const record = input.envelope;
   const envelope = record.envelope;
   if (record.schema !== picoShareEnvelopeRecordSchema
-    || envelope.suite !== picoShareSuite
     || envelope.grantId !== input.grantId
     || envelope.domainId !== input.domain.domainId
     || envelope.kekVersion !== input.kekVersion
