@@ -912,6 +912,66 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B251 — geloescht war der Inhalt, nicht der Ort (2026-09-22).** Ein
+Erinnerungsstueck wird geloescht, und seine Zeile bleibt absichtlich stehen:
+der Store soll weiterhin sagen koennen, was aus einer Referenz wurde. Geleert
+wurde davon genau **eine** Spalte, `content`.
+
+**Gemessen an einem laufenden Store**, nicht gelesen: Stueck anlegen, Ort
+setzen, loeschen, in die Zeile und in die Datei sehen.
+
+| | nach dem Loeschen |
+|---|---|
+| `content` | `NULL`, und die Bytes sind aus der Datei weg |
+| `latitude_deg` / `longitude_deg` / `accuracy_m` | **stehen noch da** |
+| `picoMemoryItemPlace('mem_x')` | **antwortet mit den Koordinaten** |
+
+Der Ort war also nicht nur in der Datei liegengeblieben — er war ueber die
+**oeffentliche API des Produkts** weiter abrufbar. Eine Person loescht, was sie
+aufgeschrieben hat, und wo sie war, bleibt.
+
+**Niemand hat etwas falsch gemacht, und das ist der Punkt.** ADR 0129 SR3 hat
+die drei Spalten spaeter dazugestellt und in seinem eigenen Satz behauptet,
+ein Ort werde *„von den Pfaden regiert, die ein Erinnerungsstueck ohnehin
+regieren"*. Zwei der vier Pfade taten es: der Schreiber verlangt
+`deletion_state = 'active'`, der raeumliche Abruf auch. Der direkte Leser und
+der Loeschpfad nicht. Eine Spalte kam dazu, und der Pfad, der sie haette
+kennen muessen, liegt in einer anderen Datei.
+
+**Behoben, und der Byte-Nachweis gehoert dazu.** Die Loeschung nullt jetzt die
+drei Spalten, und ein Test sucht die Koordinate als IEEE-754-Doppel in der
+Datei — sie ist weg, weil `secure_delete` (B245) sie aus der Seite nimmt. Der
+Leser filtert zusaetzlich nach dem Zustand; das ist Tiefenverteidigung, und sie
+ist **eigens gegangen**: die erste Pflanzung dagegen blieb gruen, weil die
+Loeschung sie zudeckt. Der Test schreibt deshalb direkt eine Zeile, wie sie aus
+einer anderswo wiederhergestellten Datenbank kaeme — genau der Fall, den der
+Kommentar am Leser selbst nennt.
+
+**Das Netz, das es gefangen haette:** `forget:check`, Kettenschritt **73**.
+Jede der 24 Spalten von `memory_item` ist entweder beim Loeschen geleert (4)
+oder ausdruecklich als behalten begruendet (20). Eine **neue** Spalte zwingt zu
+einer Entscheidung, statt stillschweigend zu bleiben. Gelesen wird der Text
+*dieser Methode*, nicht der Datei: eine andere Methode, die dieselbe Spalte
+nullt, beweist nichts ueber diesen Pfad, und `WHERE latitude_deg IS NOT NULL`
+ist kein Leeren.
+
+⚠ **Vier Spalten tragen eine offene Frage, keine Entscheidung** —
+`source_ref`, `due_at`, `raised_at`, `announced_at`. Eine Herkunftsreferenz
+kann verraten, was jemand gelesen hat; ein Faelligkeitszeitpunkt ist ein
+Zeitpunkt, den eine Person gesetzt hat. Sie bleiben heute, und ob das richtig
+ist, entscheidet ein Mensch. Die Frage steht im Handoff.
+
+**Sechs Pflanzungen, sechs Bisse.** Loeschung nullt den Ort nicht mehr → zwei
+Tests. `secure_delete` weg → der Byte-Nachweis. Der Leserfilter weg → erst
+nach dem eigenen Test dafuer. Eine neue Spalte → nicht klassifiziert. Eine
+Spalte geleert *und* als behalten begruendet → beides kann nicht stimmen. Eine
+Begruendung fuer eine Spalte, die es nicht gibt → beschreibt nichts.
+
+Und der Leser des Tors hat mich zuerst belogen: sein Tabellenende verlangte
+eine eigene Zeile fuer `);`, `memory_item` endet aber mit
+`accuracy_m REAL NULL);` — er lief in die naechste Tabelle und meldete deren
+sechs Spalten als unklassifiziert.
+
 **B250 — eine Entscheidung, die nicht mehr gilt, hat trotzdem eine Datei
 (2026-09-21).** Dritte Begruendungsmenge nach B248 und B249. `citations:check`
 haelt seit B223, dass jede zitierte ADR-Nummer ein Dokument hat und jedes
