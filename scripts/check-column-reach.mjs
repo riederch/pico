@@ -188,11 +188,22 @@ for (const [path, text] of schemaTexts) {
  * This file is not part of its own corpus. The argued list below names every
  * column it excuses, so a checker that reads itself finds each of them
  * "queried" and passes over nothing - which is exactly what the first run did.
+ *
+ * **Und kein anderes Tor ist es** (2026-09-22, Befund B252). Das Argument
+ * darueber gilt fuer jedes Tor, nicht nur fuer dieses: ein Pruefer nennt eine
+ * Spalte, um **ueber** sie zu urteilen, nie um sie zu lesen. Als
+ * `forget:check` seine Spalten begruendete, zaehlte dieser Schritt das als
+ * Abfrage und meldete einen Eintrag zu Unrecht als ueberfluessig. Gemessen,
+ * bevor es geaendert wurde: der Ausschluss aller `check-*.mjs` laesst jedes
+ * Urteil hier unveraendert - 437 Spalten, 409 gelesen, 28 begruendet.
  */
 const self = fileURLToPath(import.meta.url);
+const gateScript = /(?:^|\/)check-[a-z-]+\.mjs$/u;
 const sources = [];
 for (const root of ['apps', 'packages', 'modules', 'scripts']) {
-  sources.push(...sourceFiles(join(repoRoot, root)).filter((path) => path !== self));
+  sources.push(...sourceFiles(join(repoRoot, root)).filter(
+    (path) => path !== self && !gateScript.test(path),
+  ));
 }
 /**
  * Masked per file, not on one joined string: a span is a position in the file

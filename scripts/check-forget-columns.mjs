@@ -30,13 +30,48 @@ const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const ts = createRequire(import.meta.url)('typescript');
 
 /**
+ * **Erweitert am 2026-09-22, Befund B252.** Dieses Produkt hat nicht eine
+ * Tabelle mit Personeninhalt, sondern drei - und `domain-shred.ts` sagt selbst
+ * welche, weil ein Shred alle drei erreichen muss. Zwei Gestalten:
+ *
+ * `clears` - die Zeile bleibt stehen und einzelne Spalten werden geleert. Dann
+ * ist **jede** Spalte eine Entscheidung, und genau dort ist B251 passiert.
+ *
+ * `deletes` - die Zeile verschwindet. Das ist von Bauart vollstaendig und
+ * braucht keine Spaltenliste; gefragt wird nur, ob es wirklich ein `DELETE`
+ * ist. Ein `UPDATE`, das sich als Loeschen ausgibt, waere der Unterschied, um
+ * den es hier geht.
+ */
+const tables = [
+  {
+    table: 'memory_item',
+    shape: 'clears',
+    source: join('apps', 'core', 'src', 'memory-store.ts'),
+    method: 'deleteInDomain',
+  },
+  {
+    table: 'pico_model_job_queue',
+    shape: 'clears',
+    source: join('apps', 'core', 'src', 'model-job-queue.ts'),
+    method: 'forgetRecall',
+  },
+  {
+    table: 'pico_observation',
+    shape: 'deletes',
+    source: join('apps', 'core', 'src', 'event-store.ts'),
+    method: 'deletePicoObservationsInDomain',
+  },
+];
+
+/**
  * Warum eine Spalte eine Loeschung ueberlebt.
  *
  * Drei Sorten: **Identitaet** (ohne sie ist die Zeile nicht mehr die Antwort
  * auf eine Referenz), **Zustand** (sie sagt gerade, dass geloescht wurde) und
  * **Gestalt** (sie beschreibt das Stueck, nicht seinen Inhalt).
  */
-const kept = new Map([
+const keptByTable = new Map();
+keptByTable.set('memory_item', new Map([
   ['memory_item_id', 'Identitaet: ohne sie beantwortet die Zeile keine Referenz mehr, und genau dafuer bleibt sie stehen'],
   ['privacy_domain', 'Identitaet: eine Referenz ist auf einen Raum bezogen, und ohne ihn ist sie nicht aufloesbar'],
   ['deletion_state', 'Zustand: diese Spalte *ist* die Auskunft, dass geloescht wurde'],
@@ -59,12 +94,38 @@ const kept = new Map([
   ['due_at', 'Offene Frage (B251): wann etwas faellig war. Ein Zeitpunkt ohne Inhalt, aber ein Zeitpunkt, den eine Person gesetzt hat'],
   ['raised_at', 'Offene Frage (B251): wann es vorgelegt wurde, dieselbe Lage'],
   ['announced_at', 'Offene Frage (B251): wann es angekuendigt wurde, dieselbe Lage'],
-]);
+]));
+
+/**
+ * ADR 0049 mit ADR 0116 W3. Die Warteschlange ist kein Protokoll neben dem
+ * Produkt - sie *ist* die Rueckrufgeschichte, die einem Menschen gezeigt wird,
+ * und haelt die Frage, die Antwort und das erinnerte Material (Befund B17).
+ * `forgetRecall` leert diese drei; die uebrigen fuenfzehn sind hier
+ * entschieden (Befund B252).
+ */
+keptByTable.set('pico_model_job_queue', new Map([
+  ['job_id', 'Identitaet: die Zeile bleibt als Auskunft, dass es den Job gab'],
+  ['pico_identity_fingerprint_hex', 'Identitaet: wessen Job es war - ohne sie beantwortet die Zeile niemandem etwas'],
+  ['entry_id', 'Gestalt: welcher Modellanbieter-Eintrag ihn ausfuehrte, nicht was gefragt wurde'],
+  ['kind', 'Gestalt: welche Art Job, eine von wenigen Klassen'],
+  ['attempts', 'Gestalt: wie oft es versucht wurde'],
+  ['outcome', 'Zustand: wie er endete - der Vergessenspfad setzt ihn selbst auf `taken_back`, wenn er offen war'],
+  ['forgotten_at', 'Zustand: diese Spalte *ist* die Auskunft, dass vergessen wurde'],
+  ['enqueued_at', 'Gestalt: wann der Job in die Schlange kam'],
+  ['settled_at', 'Zustand: wann er endete; der Vergessenspfad fuellt ihn, wenn er offen war'],
+  ['last_attempt_at', 'Gestalt: wann zuletzt versucht wurde'],
+  ['derived_from_supplier', 'Herkunftsmarke: welcher Zulieferer, nicht was er lieferte'],
+  ['derived_pin_value', 'Herkunftsmarke: der Anker selbst, ein Hash oder eine Commit-Id'],
+  ['derived_pin_covers_content', 'Herkunftsmarke: ob der Anker den Inhalt mit abdeckte'],
+  // Dieselbe offene Frage wie `source_ref` bei `memory_item`.
+  ['kept_memory_item_id', 'Offene Frage (B252): sagt, dass eine Antwort behalten wurde und welche. Der Verweis bleibt, auch wenn die Worte gehen'],
+  ['kept_privacy_domain', 'Offene Frage (B252): und in welchem Raum sie behalten wurde'],
+]));
 
 const errors = [];
 
-/** Jede Spalte, die `memory_item` je bekommen hat. */
-function columnsOfMemoryItem() {
+/** Jede Spalte, die eine Tabelle je bekommen hat. */
+function columnsOf(table) {
   const text = readFileSync(join(repoRoot, 'apps', 'core', 'src', 'migrations.ts'), 'utf8');
   const found = [];
   /**
@@ -72,9 +133,9 @@ function columnsOfMemoryItem() {
    * mit einer: `memory_item` endet mit `accuracy_m REAL NULL);` auf derselben
    * Zeile wie seine letzte Spalte, und eine Endemarke, die eine eigene Zeile
    * verlangt, lief in die naechste Tabelle hinein und meldete deren sechs
-   * Spalten als unklassifiziert.
+   * Spalten als unklassifiziert (Befund B251).
    */
-  const created = /CREATE TABLE memory_item \(([\s\S]*?)\);/u.exec(text);
+  const created = new RegExp(`CREATE TABLE ${table} \\(([\\s\\S]*?)\\);`, 'u').exec(text);
   if (created !== null) {
     for (const line of created[1].split('\n')) {
       const head = /^\s*,?\s*([a-z_]+) (?:TEXT|REAL|INTEGER|BLOB)\b/u.exec(line);
@@ -84,80 +145,135 @@ function columnsOfMemoryItem() {
       }
     }
   }
-  for (const added of text.matchAll(/ALTER TABLE memory_item\s*\n?\s*ADD COLUMN ([a-z_]+)/gu)) {
-    found.push(added[1]);
-  }
+  const added = new RegExp(`ALTER TABLE ${table}\\s*\\n?\\s*ADD COLUMN ([a-z_]+)`, 'gu');
+  for (const match of text.matchAll(added)) found.push(match[1]);
   return [...new Set(found)];
 }
 
-/** Welche Spalten `deleteInDomain` auf NULL setzt. */
-function clearedByDelete() {
-  const path = join('apps', 'core', 'src', 'memory-store.ts');
+/**
+ * Was eine Methode mit einer Tabelle tut: welche Spalten sie **leert**, und ob
+ * sie die Zeile ganz entfernt.
+ *
+ * Geleert heisst auf `NULL` oder auf ein leeres Literal - `job_json = '{}'` ist
+ * ein Leeren, `forgotten_at = ?` ist ein Schreiben und muss begruendet sein.
+ */
+function forgetPathOf(entry) {
   const source = ts.createSourceFile(
-    path,
-    readFileSync(join(repoRoot, path), 'utf8'),
+    entry.source,
+    readFileSync(join(repoRoot, entry.source), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   );
-  const cleared = new Set();
+  let text;
   (function walk(node) {
-    if (ts.isMethodDeclaration(node)
+    if ((ts.isMethodDeclaration(node) || ts.isFunctionDeclaration(node))
+      && node.name !== undefined
       && ts.isIdentifier(node.name)
-      && node.name.text === 'deleteInDomain') {
-      /**
-       * Gelesen wird der Text der Methode, nicht der ganzen Datei: eine
-       * andere Methode, die dieselbe Spalte nullt, beweist nichts ueber
-       * diesen Pfad. Und gesucht wird die Zuweisung, nicht der Spaltenname -
-       * `WHERE latitude_deg IS NOT NULL` ist kein Leeren.
-       */
-      for (const [, column] of node.getText(source).matchAll(/([a-z_]+)\s*=\s*NULL/gu)) {
-        cleared.add(column);
-      }
+      && node.name.text === entry.method) {
+      text = node.getText(source);
     }
     node.forEachChild(walk);
   })(source);
-  return cleared;
+  if (text === undefined) {
+    return undefined;
+  }
+  const cleared = new Set();
+  for (const [, column] of text.matchAll(/([a-z_]+)\s*=\s*(?:NULL|'\{\}'|'')/gu)) {
+    cleared.add(column);
+  }
+  return {
+    cleared,
+    deletes: new RegExp(`DELETE FROM ${entry.table}\\b`, 'u').test(text),
+    updates: new RegExp(`UPDATE ${entry.table}\\b`, 'u').test(text),
+  };
 }
 
-const columns = columnsOfMemoryItem();
-const cleared = clearedByDelete();
+let columnsChecked = 0;
+let clearedTotal = 0;
+let keptTotal = 0;
+let openTotal = 0;
 
-if (columns.length < 20 || cleared.size === 0) {
-  errors.push(
-    `Read ${columns.length} columns and ${cleared.size} cleared by the delete path; the `
-    + 'table has twenty-four and the path clears four. A check that has lost its subject is '
-    + 'broken rather than satisfied (B166).',
-  );
-}
+for (const entry of tables) {
+  const path = forgetPathOf(entry);
+  if (path === undefined) {
+    errors.push(
+      `${entry.source}: \`${entry.method}\` was not found, so the forget path for `
+      + `\`${entry.table}\` was compared against nothing (B166).`,
+    );
+    continue;
+  }
 
-for (const column of columns) {
-  if (cleared.has(column)) {
-    if (kept.has(column)) {
+  if (entry.shape === 'deletes') {
+    if (!path.deletes) {
       errors.push(
-        `\`${column}\` is both cleared by \`deleteInDomain\` and argued as kept. One of the `
-        + 'two is out of date, and a reader cannot tell which.',
+        `\`${entry.method}\` is listed as removing rows from \`${entry.table}\` and issues `
+        + 'no DELETE. A row that stays needs every one of its columns decided; that is what '
+        + 'the other shape is for.',
+      );
+    }
+    if (path.updates) {
+      errors.push(
+        `\`${entry.method}\` is listed as removing rows from \`${entry.table}\` and also `
+        + 'updates it. An update that passes for a deletion is exactly the difference this '
+        + 'check exists for.',
       );
     }
     continue;
   }
-  if (!kept.has(column)) {
+
+  const columns = columnsOf(entry.table);
+  const kept = keptByTable.get(entry.table) ?? new Map();
+  if (columns.length === 0 || path.cleared.size === 0) {
     errors.push(
-      `\`memory_item.${column}\` is neither cleared by \`deleteInDomain\` nor argued as kept. `
-      + 'The row survives a deletion on purpose, so every column in it is a decision: say '
-      + 'whether a person deleting this item meant to keep that value, and why. This is the '
-      + 'check that ADR 0129 SR3 would have needed when it added three place columns and '
-      + 'nobody asked the delete path (B251).',
+      `\`${entry.table}\`: read ${columns.length} columns and ${path.cleared.size} cleared `
+      + 'by its forget path. A check that has lost its subject is broken rather than '
+      + 'satisfied (B166).',
     );
+    continue;
+  }
+  columnsChecked += columns.length;
+  clearedTotal += path.cleared.size;
+  keptTotal += kept.size;
+  for (const reason of kept.values()) {
+    if (reason.startsWith('Offene Frage')) openTotal += 1;
+  }
+
+  for (const column of columns) {
+    if (path.cleared.has(column)) {
+      if (kept.has(column)) {
+        errors.push(
+          `\`${entry.table}.${column}\` is both cleared by \`${entry.method}\` and argued as `
+          + 'kept. One of the two is out of date, and a reader cannot tell which.',
+        );
+      }
+      continue;
+    }
+    if (!kept.has(column)) {
+      errors.push(
+        `\`${entry.table}.${column}\` is neither cleared by \`${entry.method}\` nor argued as `
+        + 'kept. The row survives on purpose, so every column in it is a decision: say '
+        + 'whether a person forgetting this meant to keep that value, and why. This is the '
+        + 'check ADR 0129 SR3 would have needed when it added three place columns and '
+        + 'nobody asked the delete path (B251).',
+      );
+    }
+  }
+  for (const column of kept.keys()) {
+    if (!columns.includes(column)) {
+      errors.push(
+        `\`${entry.table}.${column}\` is argued as kept and the table has no such column. `
+        + 'An argument about a column that is gone describes nothing.',
+      );
+    }
   }
 }
 
-for (const column of kept.keys()) {
-  if (!columns.includes(column)) {
-    errors.push(
-      `\`${column}\` is argued as kept on deletion and \`memory_item\` has no such column. `
-      + 'An argument about a column that is gone describes nothing.',
-    );
-  }
+if (columnsChecked < 40) {
+  errors.push(
+    `Only ${columnsChecked} columns classified across the tables that hold person content, `
+    + 'and 42 were measured on 2026-09-22. A check that has lost its subject is broken '
+    + 'rather than satisfied (B166).',
+  );
 }
 
 if (errors.length > 0) {
@@ -166,9 +282,11 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-const open = [...kept.values()].filter((reason) => reason.startsWith('Offene Frage')).length;
 console.log(
-  `Forget-column check passed (${columns.length} columns of \`memory_item\`, ${cleared.size} `
-  + `cleared by \`deleteInDomain\` and ${kept.size} argued as kept - of those, ${open} carry an `
-  + 'open question for a person rather than a settled reason).',
+  `Forget-column check passed (${tables.length} tables hold person content, as `
+  + `\`domain-shred.ts\` itself names them; ${tables.filter((entry) => entry.shape === 'deletes').length} `
+  + `remove the row outright and ${tables.filter((entry) => entry.shape === 'clears').length} keep it, `
+  + `so their ${columnsChecked} columns are each decided: ${clearedTotal} cleared by the forget `
+  + `path and ${keptTotal} argued as kept - of those, ${openTotal} carry an open question for a `
+  + 'person rather than a settled reason).',
 );
