@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LamportClock } from '@pico/sync';
@@ -64,6 +64,98 @@ function createItem(store: EventStore, memoryItemId: string, options: {
     ...(options.encrypted === true ? { contentPosture: 'domain_encrypted' as const } : {}),
   });
 }
+
+describe('ADR 0070 with SR3 - deleting takes the place with it (B251)', () => {
+  /**
+   * Befund B251. SR3 sagt, ein Ort werde "von den Pfaden regiert, die ein
+   * Erinnerungsstueck ohnehin regieren". Genau dieser Pfad tat es nicht:
+   * Loeschen nullte `content` und liess die Koordinaten stehen - lesbar ueber
+   * die oeffentliche API, nicht nur vorhanden in der Datei.
+   */
+  it('clears the coordinates, not only the content', () => {
+    const { store } = openStore('delete-clears');
+    createItem(store, 'mem_a');
+    expect(store.setPicoMemoryItemPlace({ memoryItemId: 'mem_a', place })).toBe(true);
+    expect(store.picoMemoryItemPlace('mem_a')).toEqual(place);
+
+    expect(store.memory().deleteInDomain('mem_a', 'domain-private')).toBe('deleted');
+    expect(store.picoMemoryItemPlace('mem_a')).toBeUndefined();
+
+    const row = (store as unknown as {
+      db: { prepare(query: string): { get(...args: unknown[]): unknown } };
+    }).db
+      .prepare('SELECT latitude_deg, longitude_deg, accuracy_m, content FROM memory_item WHERE memory_item_id = ?')
+      .get('mem_a') as Record<string, unknown>;
+    // Die Zeile bleibt, damit eine Referenz weiterhin beantwortet werden kann -
+    // aber leer an jeder Stelle, die einen Menschen verortet.
+    expect(row.content).toBeNull();
+    expect(row.latitude_deg).toBeNull();
+    expect(row.longitude_deg).toBeNull();
+    expect(row.accuracy_m).toBeNull();
+  });
+
+  it('takes the coordinates out of the file, not only out of the answer', () => {
+    /**
+     * `secure_delete` (Befund B245) ist der Grund, warum das hier ueberhaupt
+     * zu messen ist: ohne das Pragma stuenden die alten Bytes weiter in der
+     * Seite, und eine geloeschte Koordinate waere eine Koordinate, die nur
+     * niemand mehr erfragt.
+     */
+    const { store, databasePath } = openStore('delete-bytes');
+    createItem(store, 'mem_a');
+    store.setPicoMemoryItemPlace({
+      memoryItemId: 'mem_a',
+      place: { latitudeDeg: 48.2081743, longitudeDeg: 16.3738189, accuracyM: 7 },
+    });
+    store.close();
+    const before = readFileSync(databasePath).toString('latin1');
+    expect(before).toContain('domain-private');
+
+    const reopened = new EventStore(databasePath, {});
+    stores.push(reopened);
+    expect(reopened.memory().deleteInDomain('mem_a', 'domain-private')).toBe('deleted');
+    reopened.close();
+
+    const after = readFileSync(databasePath);
+    // Die Koordinate steht als IEEE-754-Doppel in der Seite, nicht als Text.
+    const needle = Buffer.alloc(8);
+    needle.writeDoubleBE(48.2081743);
+    expect(after.includes(needle)).toBe(false);
+  });
+
+  it('answers nobody for a row that carries a place it should not, however it got there', () => {
+    /**
+     * Tiefenverteidigung, und darum eigens gegangen: die Loeschung oben nullt
+     * die Koordinaten, also deckt sie diesen Filter zu - eine Pflanzung, die
+     * ihn entfernt, blieb gruen. Der Kommentar am Leser sagt selbst, wogegen
+     * er steht: "eine Datenbank, die von woanders wiederhergestellt wurde, ist
+     * nicht das Versprechen dieses Codes". Hier ist genau so eine Zeile.
+     */
+    const { store } = openStore('restored-row');
+    createItem(store, 'mem_a');
+    const db = (store as unknown as {
+      db: { prepare(query: string): { run(...args: unknown[]): unknown } };
+    }).db;
+    db.prepare(`
+      UPDATE memory_item
+      SET deletion_state = 'deleted', content = NULL,
+          latitude_deg = ?, longitude_deg = ?, accuracy_m = ?
+      WHERE memory_item_id = ?
+    `).run(place.latitudeDeg, place.longitudeDeg, place.accuracyM, 'mem_a');
+
+    expect(store.picoMemoryItemPlace('mem_a')).toBeUndefined();
+  });
+
+  it('answers nobody for a place on a tombstoned item either', () => {
+    const { store } = openStore('tombstoned');
+    createItem(store, 'mem_a');
+    store.setPicoMemoryItemPlace({ memoryItemId: 'mem_a', place });
+    expect(store.memory().deleteInDomain('mem_a', 'domain-private')).toBe('deleted');
+    expect(store.picoMemoryItemPlace('mem_a')).toBeUndefined();
+    // Und ein Setzen danach greift auch nicht mehr - beide Seiten derselben Regel.
+    expect(store.setPicoMemoryItemPlace({ memoryItemId: 'mem_a', place })).toBe(false);
+  });
+});
 
 describe('ADR 0129 SR3 the column is generic and attaches to an item', () => {
   it('records and reads a place back', () => {

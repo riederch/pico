@@ -6387,6 +6387,7 @@ export class EventStore {
                accuracy_m AS accuracyM
         FROM memory_item
         WHERE memory_item_id = ?
+          AND deletion_state = 'active'
       `)
       .get(memoryItemId) as
         | { latitudeDeg: number | null; longitudeDeg: number | null; accuracyM: number | null }

@@ -541,10 +541,26 @@ export class MemoryStore {
       return 'already_deleted';
     }
 
+    /**
+     * ADR 0070 with ADR 0129 SR3, finding B251. The place goes with the
+     * content.
+     *
+     * SR3 says a place is "governed by the paths that already govern a memory
+     * item". This was the path that did not: deleting cleared `content` and
+     * left the coordinates standing - readable through
+     * `picoMemoryItemPlace`, not only present in the file. A person who
+     * deletes what they wrote down does not mean "keep where I was".
+     *
+     * `secure_delete` (finding B245) takes the bytes out of the page on this
+     * write, so the coordinates leave the file rather than only the answer.
+     */
     this.db
       .prepare(`
         UPDATE memory_item
         SET content = NULL,
+            latitude_deg = NULL,
+            longitude_deg = NULL,
+            accuracy_m = NULL,
             deletion_state = 'deleted',
             updated_at = ?
         WHERE memory_item_id = ? AND privacy_domain = ?
