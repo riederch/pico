@@ -42,8 +42,8 @@ describe('restricted Pico Link intake listener (ADR 0107 D4)', () => {
         const refused = await fetch(`${baseUrl}${PICO_LINK_CONTINUITY_READ_PATH}`, {
           method,
         });
-        expect(refused.status, method).toBe(405);
-        expect(refused.headers.get('allow')).toBe('GET');
+        expect(refused.status, method).toBe(404);
+        expect(refused.headers.get('allow')).toBeNull();
         expect(refused.headers.get('cache-control')).toBe('no-store');
       }
     });
@@ -77,8 +77,8 @@ describe('restricted Pico Link intake listener (ADR 0107 D4)', () => {
 
       for (const method of ['GET', 'PUT', 'OPTIONS']) {
         const response = await fetch(`${baseUrl}${PICO_LINK_INTAKE_PATH}`, { method });
-        expect(response.status, method).toBe(405);
-        expect(response.headers.get('allow')).toBe('POST');
+        expect(response.status, method).toBe(404);
+        expect(response.headers.get('allow')).toBeNull();
         expect(response.headers.get('cache-control')).toBe('no-store');
       }
     });
@@ -92,29 +92,40 @@ describe('restricted Pico Link intake listener (ADR 0107 D4)', () => {
    * apart is a map of the relay's own surface"*. Die CI vergleicht die beiden
    * Antworten dort Byte fuer Byte.
    *
-   * Dieser Eingang entscheidet es andersherum, und das steht in keinem ADR,
-   * sondern nur in den beiden Tests darueber. Eine einzige Anfrage je Pfad
-   * trennt die zwei bedienten Ziele von allem anderen, und `allow` nennt sogar
-   * die Methode dazu.
+   * Dieser Eingang entschied es bis zum 2026-09-22 andersherum, und das stand
+   * in keinem ADR, sondern nur in den Tests darueber: eine einzige Anfrage je
+   * Pfad trennte die zwei bedienten Ziele von allem anderen, und `allow`
+   * nannte sogar die Methode dazu.
    *
-   * Dieser Test **beschreibt und billigt nicht** - dieselbe Form wie der
-   * `connectionTimeout`-Test in `app.test.ts`. Solange niemand entschieden
-   * hat, ob dieser Port so antworten soll, faellt hier jede Aenderung auf,
-   * statt unbemerkt zu passieren.
+   * **Nutzerentscheidung 19 hat es zusammengelegt.** Jetzt gilt hier dasselbe
+   * Argument wie im Relay, und diese Tests halten es: eine unbekannte Adresse
+   * und ein bedienter Pfad mit falscher Methode sind von aussen nicht mehr zu
+   * unterscheiden - nicht im Status, nicht im Rumpf und nicht in den
+   * Kopfzeilen.
    */
-  it('tells a stranger which two paths it serves', async () => {
+  it('tells a stranger nothing about which two paths it serves', async () => {
+    /**
+     * Befund B224, entschieden am 2026-09-22 (Nutzerentscheidung 19). Vorher
+     * stand hier das Gegenteil: verschiedener Status, verschiedener Rumpf und
+     * eine `allow`-Kopfzeile, die es aussprach. Eine Anfrage je Pfad trennte
+     * damit die zwei echten Ziele von allem anderen - auf einem Port, den ein
+     * Fremder erreicht.
+     *
+     * Das Relay legt beides zusammen und ADR 0149 sagt warum; jetzt gilt hier
+     * dasselbe Argument. Gemessen wird die Ununterscheidbarkeit, nicht nur der
+     * Status: Rumpf und Kopfzeilen muessen ebenfalls gleich sein, sonst ist
+     * die Fläche über einen anderen Kanal wieder lesbar.
+     */
     await withListener(async (baseUrl) => {
       const unknown = await fetch(`${baseUrl}/nothing-here`, { method: 'GET' });
       const served = await fetch(`${baseUrl}${PICO_LINK_INTAKE_PATH}`, { method: 'GET' });
 
-      // Verschiedener Status, verschiedener Rumpf, und eine Kopfzeile, die es
-      // ausspricht: der Pfad existiert hier.
       expect(unknown.status).toBe(404);
-      expect(served.status).toBe(405);
-      expect(await unknown.json()).toEqual({ error: 'Not found.' });
-      expect(await served.json()).toEqual({ error: 'Method not allowed.' });
+      expect(served.status).toBe(404);
+      expect(await served.json()).toEqual(await unknown.json());
+      expect(served.headers.get('allow')).toBeNull();
       expect(unknown.headers.get('allow')).toBeNull();
-      expect(served.headers.get('allow')).toBe('POST');
+      expect(served.headers.get('content-type')).toBe(unknown.headers.get('content-type'));
     });
   });
 

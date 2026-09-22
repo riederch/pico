@@ -61,13 +61,26 @@ export async function startPicoLinkIntakeListener(
     const allowedMethod = request.url === undefined
       ? undefined
       : allowedMethodByTarget.get(request.url);
-    if (allowedMethod === undefined) {
+    /**
+     * **Eine Antwort fuer beide Faelle** (Nutzerentscheidung 19 vom
+     * 2026-09-22, Befund B224).
+     *
+     * Hier standen zwei: 404 fuer eine unbekannte Adresse, 405 samt `allow`
+     * fuer einen bedienten Pfad mit falscher Methode. Eine Anfrage je Pfad
+     * trennte damit die zwei Ziele, die dieser Port wirklich bedient, von
+     * allem anderen - auf einem Port, den ein Fremder erreicht.
+     *
+     * Das Relay legt beides zusammen, und ADR 0149 schreibt hin warum. Fuer
+     * diesen Eingang sagte kein ADR etwas; die Entscheidung stand nur in zwei
+     * Testzeilen. Jetzt gilt hier dasselbe Argument, das dieses Haus schon
+     * geschrieben hat.
+     *
+     * Ein ehrlicher Client verliert dabei den `allow`-Hinweis. Er braucht ihn
+     * nicht: die zwei Ziele stehen in `docs/protocol/public-surfaces.md`, und
+     * wer sie kennt, schickt die richtige Methode.
+     */
+    if (allowedMethod === undefined || request.method !== allowedMethod) {
       refuse(request, response, 404, 'Not found.');
-      return;
-    }
-    if (request.method !== allowedMethod) {
-      response.setHeader('allow', allowedMethod);
-      refuse(request, response, 405, 'Method not allowed.');
       return;
     }
 

@@ -1105,7 +1105,18 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       const response = await fetch(`${linkBaseUrl}${path}`);
       expect(response.status, path).toBe(404);
     }
-    expect((await fetch(`${linkBaseUrl}/api/home/link`)).status).toBe(405);
+    /**
+     * Auch der bediente Pfad antwortet 404, und zwar ununterscheidbar von
+     * einem unbekannten (Nutzerentscheidung 19 vom 2026-09-22). Hier stand
+     * `405`, was diesen Port genau das verraten liess, was er verbergen soll:
+     * welche zwei Ziele er wirklich bedient.
+     *
+     * Dass der Pfad trotzdem da ist, beweist die Zeremonie unmittelbar
+     * darunter - sie laeuft ueber ihn und endet mit einem beanspruchten Home.
+     * Ein Statuscode als Existenzbeweis war ohnehin der schwaechere.
+     */
+    const servedButHidden = await fetch(`${linkBaseUrl}/api/home/link`);
+    expect(servedButHidden.status).toBe(404);
 
     const run = await runLinkCeremony(daemon, core);
     expect(run.code).toBe(0);
