@@ -216,7 +216,16 @@ describe('ADR 0128 H4 custody is the core\'s, with no integration-specific handl
     store.close();
 
     restoreSqliteBackup(backup.backupPath, databasePath, { overwrite: true });
-    const restored = new EventStore(databasePath);
+    /**
+     * Mit demselben Schluesselordner, der neben der Datenbank lag und nie
+     * angefasst wurde: seit Befund B254 schreibt ein Store mit Krypto
+     * verschluesselt, und dieser Test fragt, ob ein Konnektor-Stueck die
+     * Sicherung des Kerns mitfaehrt - nicht, ob es einen Schluesselverlust
+     * ueberlebt.
+     */
+    const restored = new EventStore(databasePath, {
+      memoryCrypto: new MemoryContentCrypto(sodium, new KeyStore(join(dir, 'keys'))),
+    });
     stores.push(restored);
     const memory = restored.memory();
 

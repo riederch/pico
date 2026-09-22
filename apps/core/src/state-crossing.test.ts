@@ -1,10 +1,14 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import sodium from 'libsodium-wrappers-sumo';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { picoStateCrossedEventType } from '@pico/protocol/state-crossing';
 import { EventStore } from './event-store.js';
 import { crossPicoStateBoundary } from './state-crossing.js';
+import { KeyStore } from './key-store.js';
+import { MemoryContentCrypto } from './memory-content-crypto.js';
+import { shredDomainWithAudit } from './domain-shred.js';
 
 /**
  * ADR 0126 P3. The door, and the property that makes it a door rather than a
@@ -50,6 +54,64 @@ function crossing(store: EventStore, over: Record<string, unknown> = {}) {
   } as Parameters<typeof crossPicoStateBoundary>[0]);
   return { result, appended };
 }
+
+describe('ADR 0071 - what a crossing writes is what a shred can reach (B254)', () => {
+  /**
+   * Befund B254. Diese Datei weist eine Kreuzung ohne Domäne ab und begründet
+   * es mit *„material a shred could not reach"* - und schrieb danach selbst
+   * Material, das ein Shred nicht erreicht: die Haltung fiel auf
+   * `plaintext_foundation` zurück, auch wenn der Store einen Schlüssel hatte.
+   *
+   * Gemessen bei eingeschalteter Verschlüsselung: nach einem Krypto-Shred
+   * derselben Domäne gab die API die behaltene Antwort weiter heraus. Genau
+   * der Weg, auf dem ein Mensch eine Rückrufantwort *behält*.
+   */
+  async function openedWithCrypto(): Promise<EventStore> {
+    await sodium.ready;
+    const dir = mkdtempSync(join(tmpdir(), 'pico-crossing-sealed-'));
+    dirs.push(dir);
+    const store = await EventStore.open(join(dir, 'pico.sqlite'), {
+      memoryCrypto: new MemoryContentCrypto(sodium, new KeyStore(join(dir, 'keys'))),
+    });
+    stores.push(store);
+    return store;
+  }
+
+  it('seals what it writes when the store holds a key, so a shred reaches it', async () => {
+    const store = await openedWithCrypto();
+    const { result } = crossing(store, { memoryItemId: 'mem_sealed_crossing' });
+    expect(result.ok).toBe(true);
+
+    const item = store.memory().getInDomain('mem_sealed_crossing', 'domain-private');
+    expect(item?.contentPosture).toBe('domain_encrypted');
+    expect(item?.content).toBe('You parked on Bergstrasse.');
+
+    shredDomainWithAudit(
+      store.memory(),
+      () => undefined,
+      { privacyDomain: 'domain-private' },
+      () => 0,
+      () => 0,
+    );
+    // Der Schlüssel ist weg, also sind es die Worte: das ist, was ein
+    // Krypto-Shred bedeutet, und vorher galt es für diesen Weg nicht.
+    expect(store.memory().getInDomain('mem_sealed_crossing', 'domain-private')?.content)
+      .toBeUndefined();
+  });
+
+  it('stays plaintext where there is no key, because keys would protect nothing', async () => {
+    /**
+     * Der von ADR 0070 beschriebene Foundation-Zustand. Die Shred-Route weist
+     * hier ohnehin ab - *„destroying keys would protect nothing"* -, und ein
+     * Store ohne Anbieter kann gar nicht verschlüsseln.
+     */
+    const store = await opened();
+    const { result } = crossing(store, { memoryItemId: 'mem_plain_crossing' });
+    expect(result.ok).toBe(true);
+    expect(store.memory().getInDomain('mem_plain_crossing', 'domain-private')?.contentPosture)
+      .toBe('plaintext_foundation');
+  });
+});
 
 describe('ADR 0126 P3 - promoting is recording', () => {
   it('writes the item and the record in one act', async () => {

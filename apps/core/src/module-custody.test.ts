@@ -52,14 +52,19 @@ afterEach(() => {
   }
 });
 
-function openEncryptedStore(prefix: string): { store: EventStore; databasePath: string } {
+function openEncryptedStore(prefix: string): {
+  store: EventStore;
+  databasePath: string;
+  keyDirectory: string;
+} {
   const dir = mkdtempSync(join(tmpdir(), `pico-module-custody-${prefix}-`));
   tempDirs.push(dir);
   const databasePath = join(dir, 'pico.sqlite');
-  const crypto = new MemoryContentCrypto(sodium, new KeyStore(join(dir, 'keys')));
+  const keyDirectory = join(dir, 'keys');
+  const crypto = new MemoryContentCrypto(sodium, new KeyStore(keyDirectory));
   const store = new EventStore(databasePath, { memoryCrypto: crypto });
   stores.push(store);
-  return { store, databasePath };
+  return { store, databasePath, keyDirectory };
 }
 
 /** An ordinary memory item: the control. */
@@ -227,7 +232,7 @@ describe('ADR 0127 M1 module data is retained by the core, with no module handli
 
 describe('ADR 0127 M1 module data is restored by the core, with no module handling', () => {
   it('brings a calendar entry back with its due instant and its raised state', async () => {
-    const { store, databasePath } = openEncryptedStore('restore');
+    const { store, databasePath, keyDirectory } = openEncryptedStore('restore');
     const backupDirectory = join(dirnameOf(databasePath), 'backups');
 
     createCalendarEntry(store, {
@@ -259,7 +264,17 @@ describe('ADR 0127 M1 module data is restored by the core, with no module handli
 
     restoreSqliteBackup(backup.backupPath, databasePath, { overwrite: true });
 
-    const restored = new EventStore(databasePath);
+    /**
+     * Mit demselben Schluesselordner, denn der lag neben der Datenbank und
+     * wurde nie angefasst. Seit Befund B254 schreibt ein Store mit Krypto
+     * verschluesselt, also ist ein Wiederherstellen *ohne* Schluessel ein
+     * anderer Fall als der, den dieser Test stellt - er fragt, ob Moduldaten
+     * die Sicherung des Kerns mitfahren, nicht ob sie einen Schluesselverlust
+     * ueberleben.
+     */
+    const restored = new EventStore(databasePath, {
+      memoryCrypto: new MemoryContentCrypto(sodium, new KeyStore(keyDirectory)),
+    });
     stores.push(restored);
     const entries = restored.picoTimeBoundEntries();
     const byId = new Map(entries.map((entry) => [entry.memoryItemId, entry]));

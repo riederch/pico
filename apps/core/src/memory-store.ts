@@ -174,7 +174,25 @@ export class MemoryStore {
       throw new Error('pico_memory_item_ceiling_reached');
     }
 
-    const posture: MemoryContentPosture = input.contentPosture ?? 'plaintext_foundation';
+    /**
+     * **Der Store entscheidet, weil er als einziger weiss, ob er einen
+     * Schluessel hat** (Befund B254, 2026-09-22).
+     *
+     * Vorher fiel jede Schreibstelle ohne Angabe auf `plaintext_foundation`
+     * zurueck, und *eine* von vier setzte die Haltung ausdruecklich. Gemessen
+     * mit eingeschalteter Verschluesselung: `crossPicoStateBoundary` - der
+     * Weg, auf dem ein Mensch eine Rueckrufantwort **behaelt** - schrieb im
+     * Klartext, und nach einem Krypto-Shred derselben Domaene gab die API die
+     * Antwort weiter heraus. Dieselbe Bedingung an vier Stellen zu wiederholen
+     * ist die Drift, die dieser Baum immer wieder findet; hier steht sie
+     * einmal, an der Stelle, die die Antwort kennt.
+     *
+     * Ohne Krypto-Anbieter bleibt es `plaintext_foundation` - das ist der von
+     * ADR 0070 beschriebene Foundation-Zustand, und die Shred-Route weist dort
+     * ohnehin ab, weil Schluessel zu zerstoeren nichts schuetzen wuerde.
+     */
+    const posture: MemoryContentPosture = input.contentPosture
+      ?? (this.crypto === undefined ? 'plaintext_foundation' : 'domain_encrypted');
     if (posture === 'domain_encrypted' && this.crypto === undefined) {
       throw new Error('Cannot store domain_encrypted content without a crypto provider.');
     }
