@@ -912,6 +912,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B253 — der Shred suchte die Domaene an zwei von drei Orten (2026-09-22).**
+B252 hat gefragt, ob beide Vergessenswege dieselben Spalten leeren. Sie tun es.
+Die Frage darunter war eine andere: `forgetDomainRecalls` **findet** seine
+Zeilen ueber ein JSON-Feld — und eine Domaene kann in dieser Zeile an drei
+Orten stehen.
+
+```sql
+WHERE forgotten_at IS NULL
+  AND (json_extract(recall_context_json, '$.privacyDomain') = ?
+       OR kept_privacy_domain = ?)
+```
+
+Ein Rueckruf nennt sie im `recallContext`. Ein Job, dessen Antwort behalten
+wurde, in `kept_privacy_domain`. Ein **Bibliotheks-Lesejob** in keinem von
+beiden: `picoLibraryContextRef` legt sie als `privacyDomain` an die Referenz
+*im Job selbst*, also nach `job_json`.
+
+**Gemessen mit dem echten Bauer**, nicht mit einem nachgebauten Objekt — denn
+*wo* die Domaene landet, ist genau die Frage, und ein Nachbau haette sie
+beantwortet statt sie zu stellen:
+
+| | |
+|---|---|
+| `json_extract(job_json, '$.references[0].privacyDomain')` | `domain-private` |
+| vom Shred erreichte Zeilen | **0** |
+| Frage der Person steht noch in `job_json` | **ja** |
+| Auszug aus dem Depot steht noch darin | **ja** |
+
+Eine Zeile, die den geschredderten Raum ausdruecklich nennt, ueberlebt seinen
+Shred. Das ist derselbe Befund wie **B17**, durch eine zweite Tuer: dort war
+die Tabelle gar nicht erreicht, hier ist sie erreicht und eine Jobart nicht.
+Und ein Shred ist der Akt, bei dem das am meisten wiegt — er zerstoert die
+Schluessel einer Domaene, damit ihr Inhalt unlesbar wird, und hier bleibt eine
+Kopie derselben Worte im Klartext stehen.
+
+**Der Gang geht ueber `picoModelJobKinds`, nicht ueber eine Liste im Test.**
+Eine dritte Jobart soll diesen Test *erweitern* statt an ihm vorbeizugehen —
+genau das ist hier passiert, als die zweite dazukam.
+
+**Die Testvorlage war nur stimmig, solange niemand in die Referenzen sah.**
+`job()` schrieb `privacyDomain: 'household'` in **jede** Referenz, auch in den
+Job, dessen Rueckrufkontext `private` sagte. Mit dem Fix erreichte der Shred
+ihn zu Recht, und vier Tests fielen. Die Vorlage nimmt die Domaene jetzt als
+Parameter: ein Job mit Haushaltsmaterial, der sich privat nennt, ist keine
+Lage, die es gibt.
+
+**Zwei Pflanzungen, beide Richtungen.** Der dritte Ort faellt wieder aus dem
+Shred → der Gang faellt. Der Shred greift jede Domaene statt der genannten →
+vier Tests fallen, darunter *„laesst die andere unberuehrt"*. Bei einem
+Loeschen sind Luecke und Uebergriff zwei Fehler, und beide muessen beissen.
+
 **B252 — drei Tabellen halten Personeninhalt, und das Netz kannte eine
 (2026-09-22).** B251 hat `memory_item` Spalte fuer Spalte entschieden.
 `domain-shred.ts` sagt selbst, dass ein Shred **drei** Dinge erreichen muss,
