@@ -500,11 +500,27 @@ export function renderPicoCompanionDevices(
       offers.append(offerItem);
     }
 
-    // The whole-device switch, beside the per-affordance ones rather than
-    // among them: "not this device" is a different statement, and it keeps
-    // meaning that after the device gains something new.
+    /**
+     * The whole-device switch, beside the per-affordance ones rather than
+     * among them: "not this device" is a different statement, and it keeps
+     * meaning that after the device gains something new.
+     *
+     * **Leiser als die Schalter darueber** (Befund B123, Nutzerentscheidung 6
+     * vom 2026-09-22). Auf dieser Zeile standen drei gleich laute Knoepfe
+     * uebereinander - *„Do not use this"*, *„Allow this again"*, *„Do not use
+     * this device"* -, und die Gestaltung sagte damit nicht, welche die
+     * gewoehnliche Handlung ist. Jetzt sagt sie es in drei Stufen: der
+     * Schalter je Faehigkeit ist der alltaegliche und bleibt der Hauptknopf,
+     * dieser hier gilt dem ganzen Geraet und tritt zurueck, und *„Forget this
+     * device…"* ist der leiseste.
+     *
+     * Leiser, nicht roter: eine Warnfarbe macht die folgenreiche Handlung
+     * auffaelliger als die harmlose, was das Gegenteil dessen ist, was eine
+     * ruhige Flaeche will.
+     */
     const deviceToggle = root.document.createElement('button');
     deviceToggle.type = 'button';
+    deviceToggle.className = 'secondary';
     deviceToggle.textContent = line.deviceActionLabel;
     deviceToggle.addEventListener('click', () => act({
       action: 'switch',
