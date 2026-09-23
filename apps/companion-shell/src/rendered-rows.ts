@@ -5,6 +5,7 @@ import {
 } from '@pico/protocol/when-display';
 import type { PicoCompanionDeviceView } from '@pico/companion/presence';
 import type { PicoCompanionDeviceAuthorityView } from '@pico/companion/device-lifecycle';
+import type { PicoCompanionModuleConsentView } from '@pico/companion/suppliers';
 import type {
   PicoCompanionHomeMember as PicoCompanionCoreHomeMember,
   PicoCompanionDomainReadership as PicoCompanionCoreDomainReadership,
@@ -15,6 +16,7 @@ import type {
   PicoCompanionDomainReadershipRow,
   PicoCompanionHomeMember,
   PicoCompanionModelProvider,
+  PicoCompanionModuleConsentRow,
 } from './contract.js';
 
 /**
@@ -106,4 +108,23 @@ export function picoCompanionRenderedDomainReadership(
       validUntilDisplay: picoDisplayDate(reader.validUntil),
     })),
   }));
+}
+
+/**
+ * Wann diese Person diesem Modul zugestimmt hat - als Kalendertag, nicht als
+ * Instant (Nutzerentscheidung 9 vom 2026-09-22).
+ *
+ * Steht hier aus demselben Grund wie die fuenf Zeichnungen darueber: die
+ * Umrechnung ist eine Darstellung, und der Zeichner kann `picoDisplayDate`
+ * nicht erreichen, weil renderer-erreichbare Dateien keine blossen Spezifizierer
+ * aufloesen (`browser:check` hat genau diesen Versuch gefangen). Der rohe
+ * Instant geht nicht mit hinueber: was das Fenster nicht bekommt, kann es auch
+ * nicht versehentlich zeigen.
+ */
+export function picoCompanionRenderedModuleConsent(
+  modules: readonly PicoCompanionModuleConsentView[],
+): readonly PicoCompanionModuleConsentRow[] {
+  return modules.map(({ consentedAt, ...rest }) => (consentedAt === undefined
+    ? rest
+    : { ...rest, agreedOnDisplay: picoDisplayDate(consentedAt) }));
 }

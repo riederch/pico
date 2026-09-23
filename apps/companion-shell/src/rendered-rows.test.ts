@@ -3,6 +3,7 @@ import { picoDisplayDate } from '@pico/protocol/when-display';
 import {
   picoCompanionRenderedDeviceAuthority,
   picoCompanionRenderedHomeMembers,
+  picoCompanionRenderedModuleConsent,
 } from './rendered-rows.js';
 
 const original = process.env.TZ;
@@ -48,5 +49,38 @@ describe('ADR 0113 C2 - what the window is handed', () => {
     // And the name a person reads is not the name the ending call needs.
     expect(member?.picoIdentityDisplay).toBe('cdcdcdcd…cdcdcdcd');
     expect(member?.picoIdentityFingerprintHex).toBe('cd'.repeat(32));
+  });
+});
+
+describe('Nutzerentscheidung 9 - der Tag der frueheren Zustimmung', () => {
+  it('zeichnet ihn hier und laesst den Instant auf dieser Seite der Naht', () => {
+    process.env.TZ = 'Pacific/Kiritimati';
+    const [row] = picoCompanionRenderedModuleConsent([{
+      identifier: 'calendar',
+      drift: { added: [], removed: [], changed: ['read your appointments'] },
+      declares: [{ name: 'read', description: 'read your appointments', risk: 'low' }],
+      consentedAt: '2026-08-13T17:43:04.923Z',
+    }]);
+
+    expect(row?.agreedOnDisplay).toBe(picoDisplayDate('2026-08-13T17:43:04.923Z'));
+    // Was nicht hinueberreicht, kann drueben nicht gezeigt werden. Der
+    // Zeichner bekam bis zum 2026-09-23 den rohen Instant und haette ihn
+    // durch `picoDisplayDate` schicken muessen - eine Regel, die er nicht
+    // erreichen kann, weil `@pico/protocol` im Browser kein Modul ist.
+    expect(Object.keys(row ?? {})).not.toContain('consentedAt');
+    expect(JSON.stringify(row)).not.toContain('2026-08-13T17:43:04.923Z');
+  });
+
+  it('haengt nichts an ein Modul, das zum ersten Mal fragt', () => {
+    const [row] = picoCompanionRenderedModuleConsent([{
+      identifier: 'calendar',
+      drift: { added: ['read your appointments'], removed: [], changed: [] },
+      declares: [{ name: 'read', description: 'read your appointments', risk: 'low' }],
+    }]);
+
+    // Ein erfundener Tag waere eine Behauptung ueber eine Zustimmung, die es
+    // nie gab.
+    expect(row?.agreedOnDisplay).toBeUndefined();
+    expect(Object.keys(row ?? {})).not.toContain('agreedOnDisplay');
   });
 });

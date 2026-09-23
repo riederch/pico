@@ -440,6 +440,65 @@ function fakeDocument(): { document: Document; list: HTMLElement; section: HTMLE
   };
 }
 
+describe('ADR 0139 AC4 - when a module changed, the window says when you agreed (B184)', () => {
+  /**
+   * Befund B184, Nutzerentscheidung 9 vom 2026-09-22.
+   * `pico_module_effect_consent.consented_at` wurde seit jeher geschrieben und
+   * von nichts gelesen - was geschrieben und nie gelesen wird, sieht aus wie
+   * eine Zusage.
+   *
+   * Gezeigt wird er **nur bei einer Aenderung**, und das ist die ganze
+   * Zurueckhaltung: eine Zeile "du hast zugestimmt" unter jedem Modul waere
+   * ein staendiges Moebel, das den gewoehnlichen Fall meldet. Bei einer
+   * Aenderung dagegen wird eine Person erneut gefragt, und wann sie zuletzt ja
+   * gesagt hat, gehoert zu dem, was sie zum Antworten braucht.
+   */
+  const texts = (root: { list: HTMLElement }): string[] => (root.list as unknown as {
+    children: Array<{ children: Array<{ textContent: string }> }>;
+  }).children.flatMap((item) => item.children.map((child) => child.textContent));
+
+  it('says the day it was handed, and holds no instant of its own', () => {
+    const root = fakeDocument();
+    renderPicoCompanionModuleConsent(root, [{
+      identifier: 'calendar',
+      drift: { added: [], removed: [], changed: ['read your appointments'] },
+      declares: [{ name: 'read', description: 'read your appointments', risk: 'low' }],
+      agreedOnDisplay: picoDisplayDate('2026-08-13T17:43:04.923Z'),
+    }], () => undefined);
+
+    const shown = texts(root);
+    expect(shown).toContain(`You agreed to this on ${picoDisplayDate('2026-08-13T17:43:04.923Z')}.`);
+    // Der rohe Instant erreicht keinen Menschen - hier deshalb, weil er die
+    // Naht gar nicht ueberquert; `rendered-rows.test.ts` begeht die Seite,
+    // die ihn stehen laesst.
+    expect(shown.join(' ')).not.toContain('2026-08-13T17:43:04.923Z');
+  });
+
+  it('stays quiet for a module that is asking for the first time', () => {
+    const root = fakeDocument();
+    renderPicoCompanionModuleConsent(root, [{
+      identifier: 'calendar',
+      drift: { added: ['read your appointments'], removed: [], changed: [] },
+      declares: [{ name: 'read', description: 'read your appointments', risk: 'low' }],
+    }], () => undefined);
+
+    expect(texts(root).join(' ')).not.toContain('You agreed to this on');
+  });
+
+  it('stays quiet when the module changed but nobody ever agreed', () => {
+    // Die Haelfte, die eine Zeile ohne Zeitpunkt erfinden wuerde: geaendert
+    // ja, zugestimmt nie - dann gibt es keinen Tag zu nennen.
+    const root = fakeDocument();
+    renderPicoCompanionModuleConsent(root, [{
+      identifier: 'calendar',
+      drift: { added: [], removed: [], changed: ['read your appointments'] },
+      declares: [{ name: 'read', description: 'read your appointments', risk: 'low' }],
+    }], () => undefined);
+
+    expect(texts(root).join(' ')).not.toContain('You agreed to this on');
+  });
+});
+
 describe('ADR 0152 SE2 - the control is on the line, and it acts', () => {
   it('puts the labelled button on the line and reports what was pressed', () => {
     // A button built and never appended is a decision surface that cannot

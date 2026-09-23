@@ -10,9 +10,12 @@ import { fileURLToPath } from 'node:url';
  * down, about the data itself: a column that is written and never queried is
  * something a person's Home keeps for nobody. Of 418 columns, 28 were in that
  * state, and 27 of them turned out to be copies with a second home. The
- * twenty-eighth was not: `pico_module_effect_consent.consented_at` records
+ * twenty-eighth was not: `pico_module_effect_consent.consented_at` recorded
  * *when* a person agreed to a module effect, and nothing - not the person, not
- * a surface, not an auditor - can read it back.
+ * a surface, not an auditor - could read it back. Seit dem 2026-09-23 liest es
+ * der Zustimmungsschirm der Schale: wer erneut gefragt wird, weil ein Modul
+ * jetzt etwas anderes will, sieht daneben den Tag seiner frueheren Zusage
+ * (Nutzerentscheidung 9). Damit hat dieser Pruefer keine offene Frage mehr.
  *
  * **What counts as a column is derived**: the `CREATE TABLE` blocks in
  * `apps/core/src/migrations.ts`, which is where this repository's schema
@@ -91,13 +94,6 @@ const argued = [
     why: 'the row references pico_event, and the instant is readable there as '
       + 'created_at',
     columns: ['pico_audit_record.recorded_at'],
-  },
-  {
-    kind: 'open_question',
-    why: 'B184: the only record of when a person agreed to a module effect, and '
-      + 'nothing can read it back. Decision 9 in .agent-context.md - show it, '
-      + 'drop it, or say in the schema that nobody reads it',
-    columns: ['pico_module_effect_consent.consented_at'],
   },
 ];
 

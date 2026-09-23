@@ -5219,6 +5219,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                   declares: shippedModuleManifests
                     .find((manifest) => manifest.identifier === entry.identifier)?.effects ?? [],
                 })),
+              /**
+               * Befund B184, Nutzerentscheidung 9: was schon zugestimmt ist,
+               * und wann. `awaiting` allein beantwortet nur, was noch fragt -
+               * *"wann habe ich dem zugestimmt"* stand nirgends, obwohl der
+               * Zeitpunkt seit jeher geschrieben wird.
+               */
+              agreed: store.picoModuleConsentInstants(),
             } as unknown as Record<string, unknown>,
           };
         }

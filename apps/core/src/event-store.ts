@@ -7938,6 +7938,38 @@ export class EventStore {
   }
 
   /**
+   * ADR 0139 AC4. Wann eine Person zugestimmt hat, je Modul (Befund B184,
+   * Nutzerentscheidung 9 vom 2026-09-22).
+   *
+   * `consented_at` wurde seit jeher geschrieben und von nichts gelesen - was
+   * geschrieben und nie gelesen wird, sieht aus wie eine Zusage. *"Wann habe
+   * ich dem zugestimmt"* ist genau die Art Frage, die dieses Produkt
+   * beantworten koennen soll.
+   *
+   * Ein Zeitpunkt je Modul, nicht je Wirkung: die Zustimmung wird in einer
+   * Transaktion geschrieben, also tragen alle Zeilen eines Moduls denselben.
+   * `MIN` sagt das und bleibt richtig, falls das je auseinanderfaellt.
+   */
+  public picoModuleConsentInstants(): ReadonlyArray<{
+    identifier: string;
+    consentedAt: string;
+  }> {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare(`
+        SELECT identifier, MIN(consented_at) AS consentedAt
+        FROM pico_module_effect_consent
+        GROUP BY identifier
+        ORDER BY identifier
+      `)
+      .all() as Array<{ identifier: string; consentedAt: string }>;
+    return Object.freeze(rows.map((row) => Object.freeze({
+      identifier: row.identifier,
+      consentedAt: row.consentedAt,
+    })));
+  }
+
+  /**
    * ADR 0139 AC4. Which modules now declare something other than what was
    * agreed to, and what moved.
    *

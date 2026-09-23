@@ -50,6 +50,7 @@ import {
   forgetPicoCompanionRule,
   readPicoCompanionDepots,
   readPicoCompanionModuleConsent,
+  type PicoCompanionModuleConsentView,
   readPicoCompanionPendingApprovals,
   readPicoCompanionSuppliers,
   recordPicoCompanionModuleConsent,
@@ -268,8 +269,14 @@ export interface PicoCompanionShellRuntime {
     presenceSessionId: string;
     approved: boolean;
   }): Promise<{ outcome: string; ran: boolean; succeeded?: boolean }>;
-  /** ADR 0139 AC4. What the parts of Pico declare they will do, and consent. */
-  readModuleConsent(): Promise<readonly unknown[]>;
+  /**
+   * ADR 0139 AC4. What the parts of Pico declare they will do, and consent.
+   *
+   * Named rather than `unknown[]`, aus demselben Grund wie `readDevices`
+   * darunter: der Hauptprozess muss `consentedAt` erreichen, um daraus einen
+   * Kalendertag zu zeichnen (Nutzerentscheidung 9 vom 2026-09-22).
+   */
+  readModuleConsent(): Promise<readonly PicoCompanionModuleConsentView[]>;
   recordModuleConsent(identifier: string): Promise<void>;
   /** ADR 0126 P2/P6. The person's own devices, as their Home knows them. */
   /**

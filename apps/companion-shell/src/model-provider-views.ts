@@ -1083,6 +1083,20 @@ export function renderPicoCompanionModuleConsent(
     headline.textContent = line.headline;
     item.append(headline);
 
+    /**
+     * Wann diese Person zuletzt ja gesagt hat - nur bei einer Aenderung, wo
+     * sie erneut gefragt wird (Befund B184, Nutzerentscheidung 9). Schon als
+     * Kalendertag, gezeichnet im Hauptprozess: ein roher Instant kaeme hier
+     * gar nicht erst an, und `instant:check` laesst auch keinen zu einem
+     * Menschen durch.
+     */
+    if (line.agreedOnDisplay !== undefined) {
+      const agreedOn = root.document.createElement('p');
+      agreedOn.className = 'detail';
+      agreedOn.textContent = `You agreed to this on ${line.agreedOnDisplay}.`;
+      item.append(agreedOn);
+    }
+
     // One line per effect, in the module's own words - the sentences somebody
     // is agreeing to, not a count of them.
     for (const effectLine of line.effectLines) {

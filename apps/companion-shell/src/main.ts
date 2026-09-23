@@ -52,6 +52,7 @@ import {
   picoCompanionRenderedDevices,
   picoCompanionRenderedDomainReadership,
   picoCompanionRenderedHomeMembers,
+  picoCompanionRenderedModuleConsent,
   picoCompanionRenderedProviders,
 } from './rendered-rows.js';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
@@ -1366,7 +1367,7 @@ function registerIpc(): void {
         return [];
       }
       try {
-        return await runtime.readModuleConsent();
+        return picoCompanionRenderedModuleConsent(await runtime.readModuleConsent());
       } catch {
         return [];
       }

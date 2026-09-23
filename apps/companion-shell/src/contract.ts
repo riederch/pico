@@ -3080,20 +3080,34 @@ export function picoCompanionDepotLines(
  * things to be told, and the second is the one ADR 0127 M4 says must never
  * pass silently.
  */
+/**
+ * Was ueber die IPC-Naht kommt: ein wartendes Modul, wie das Fenster es
+ * bekommt. Der Zeitpunkt der frueheren Zustimmung steht hier schon als
+ * Kalendertag, gezeichnet im Hauptprozess (`rendered-rows.ts`, ADR 0113 C2).
+ */
+export interface PicoCompanionModuleConsentRow {
+  identifier: string;
+  drift: { added: readonly string[]; removed: readonly string[]; changed: readonly string[] };
+  declares: ReadonlyArray<{ name: string; description: string; risk: string }>;
+  agreedOnDisplay?: string;
+}
+
 export interface PicoCompanionModuleConsentLine {
   identifier: string;
   headline: string;
   /** One line per declared effect, in the module's own words. */
   effectLines: readonly string[];
   actionLabel: string;
+  /**
+   * Der Tag, an dem diese Person diesem Modul zugestimmt hat - nur, wenn es
+   * jetzt etwas anderes will als damals (Befund B184). Schon gezeichnet, vom
+   * Hauptprozess (`rendered-rows.ts`); hier steht nie ein roher Instant.
+   */
+  agreedOnDisplay?: string;
 }
 
 export function picoCompanionModuleConsentLines(
-  awaiting: ReadonlyArray<{
-    identifier: string;
-    drift: { added: readonly string[]; removed: readonly string[]; changed: readonly string[] };
-    declares: ReadonlyArray<{ name: string; description: string; risk: string }>;
-  }>,
+  awaiting: readonly PicoCompanionModuleConsentRow[],
 ): readonly PicoCompanionModuleConsentLine[] {
   return Object.freeze(awaiting.map((entry) => {
     const changed = entry.drift.changed.length > 0;
@@ -3104,6 +3118,29 @@ export function picoCompanionModuleConsentLines(
         : `${entry.identifier} would like to do this.`,
       effectLines: Object.freeze(entry.declares.map((effect) => effect.description)),
       actionLabel: changed ? 'Agree to the change' : 'Agree',
+      /**
+       * **Wann das frueher war** (Befund B184, Nutzerentscheidung 9 vom
+       * 2026-09-22). `consented_at` wurde seit jeher geschrieben und von
+       * nichts gelesen.
+       *
+       * Nur bei einer Aenderung, und das ist die ganze Zurueckhaltung: eine
+       * Zeile *"du hast zugestimmt"* unter jedem Modul waere ein staendiges
+       * Moebel, das den gewoehnlichen Fall meldet - der Zeichner nebenan sagt
+       * genau das ueber seinen eigenen Abschnitt. Hier dagegen wird eine
+       * Person erneut gefragt, und *wann sie das letzte Mal ja gesagt hat*
+       * ist Teil dessen, was sie zum Antworten braucht.
+       *
+       * **Schon gezeichnet, bevor es hier ankommt** (ADR 0113 C2). Diese
+       * Datei laedt im Renderer und haelt nur typ-only Importe: ein
+       * Wertimport zoege den Modulgraphen des Protokolls mit hinein, was
+       * `check-constant-copies.mjs` und `browser:check` nacheinander gefangen
+       * haben. Die Umrechnung in einen Kalendertag steht darum im
+       * Hauptprozess, dort wo schon Fingerabdruecke und Fristen gezeichnet
+       * werden, und der rohe Instant ueberquert die Naht gar nicht erst.
+       */
+      ...(changed && entry.agreedOnDisplay !== undefined
+        ? { agreedOnDisplay: entry.agreedOnDisplay }
+        : {}),
     });
   }));
 }
@@ -3143,11 +3180,9 @@ export function picoCompanionApprovalLines(
   })));
 }
 
-export function parsePicoCompanionModuleConsent(value: unknown): ReadonlyArray<{
-  identifier: string;
-  drift: { added: readonly string[]; removed: readonly string[]; changed: readonly string[] };
-  declares: ReadonlyArray<{ name: string; description: string; risk: string }>;
-}> {
+export function parsePicoCompanionModuleConsent(
+  value: unknown,
+): readonly PicoCompanionModuleConsentRow[] {
   if (!Array.isArray(value)) {
     throw new Error('invalid_pico_companion_module_consent');
   }
@@ -3184,6 +3219,15 @@ export function parsePicoCompanionModuleConsent(value: unknown): ReadonlyArray<{
           risk: shape.risk,
         });
       })),
+      /**
+       * Wann zuletzt zugestimmt wurde, wenn das Home es mitschickt (Befund
+       * B184). Fehlend ist ein Zustand und kein Fehler: ein Modul, das zum
+       * ersten Mal fragt, hat keinen Zeitpunkt, und ein erfundener waere eine
+       * Behauptung ueber eine Zustimmung, die es nie gab.
+       */
+      ...(typeof record.agreedOnDisplay === 'string' && record.agreedOnDisplay !== ''
+        ? { agreedOnDisplay: record.agreedOnDisplay }
+        : {}),
     });
   }));
 }

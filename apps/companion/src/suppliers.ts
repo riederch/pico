@@ -346,6 +346,16 @@ export interface PicoCompanionModuleConsentView {
   identifier: string;
   drift: { added: readonly string[]; removed: readonly string[]; changed: readonly string[] };
   declares: ReadonlyArray<{ name: string; description: string; risk: string }>;
+  /**
+   * Wann diese Person diesem Modul zugestimmt hat - falls sie es schon einmal
+   * tat (Befund B184, Nutzerentscheidung 9 vom 2026-09-22).
+   *
+   * Fehlt bei einem Modul, das zum ersten Mal fragt, und das ist der
+   * Unterschied, den das Fenster zeigt: bei einer Aenderung liest eine Person
+   * *"dem hattest du am … zugestimmt"*, und das beantwortet die Frage genau
+   * dort, wo sie entsteht.
+   */
+  consentedAt?: string;
 }
 
 export async function readPicoCompanionModuleConsent(input: {
@@ -359,7 +369,26 @@ export async function readPicoCompanionModuleConsent(input: {
   if (!Array.isArray(awaiting)) {
     throw new Error('invalid_pico_module_consent_read');
   }
-  return Object.freeze(awaiting as PicoCompanionModuleConsentView[]);
+  /**
+   * Der Zeitpunkt wird hier angeheftet statt vom Home in den wartenden
+   * Eintrag geschrieben: das Home antwortet mit zwei Listen, weil das zwei
+   * Fragen sind - was fragt noch, und wozu wurde schon ja gesagt. Was ein
+   * Fenster daraus macht, ist die Sache des Fensters.
+   */
+  const agreed = new Map(
+    (Array.isArray((read.result as { agreed?: unknown }).agreed)
+      ? (read.result as { agreed: unknown[] }).agreed
+      : [])
+      .filter((entry): entry is { identifier: string; consentedAt: string } => typeof entry === 'object'
+        && entry !== null
+        && typeof (entry as { identifier?: unknown }).identifier === 'string'
+        && typeof (entry as { consentedAt?: unknown }).consentedAt === 'string')
+      .map((entry) => [entry.identifier, entry.consentedAt]),
+  );
+  return Object.freeze((awaiting as PicoCompanionModuleConsentView[]).map((entry) => {
+    const consentedAt = agreed.get(entry.identifier);
+    return Object.freeze(consentedAt === undefined ? entry : { ...entry, consentedAt });
+  }));
 }
 
 /**
