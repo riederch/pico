@@ -533,6 +533,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#handleDeviceBootstrap(socket, request);
         return;
       }
+      case picoVaultDaemonRequestFamilies.rotationBootstrap: {
+        this.#handleRotationBootstrap(socket, request);
+        return;
+      }
       case picoVaultDaemonRequestFamilies.lock: {
         // Locking is never privileged and stays coarse on purpose: any
         // connection may end every session at once as a safety valve.
@@ -1597,8 +1601,15 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
           this.keyfilesPath,
           `${role}-${created.keyFingerprintHex}.json`,
         );
-        writePicoVaultKeyfile(path, created.keyfile);
+        // Named before written, not after. `writePicoVaultKeyfile` is
+        // `writeFileSync` with `wx` - not an atomic rename - so a write that
+        // dies partway leaves a file behind, and a path this list learns only
+        // on success is a path the cleanup below cannot reach. A corrupt
+        // keyfile is worse than a missing one: `#listKeyfiles` reads every
+        // file in the directory, so one unreadable leftover takes the whole
+        // vault with it.
         paths.push(path);
+        writePicoVaultKeyfile(path, created.keyfile);
       }
       this.#audit('recovery_bootstrap', {
         outcome: 'ok',
@@ -1694,8 +1705,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
           this.keyfilesPath,
           `${role}-${created.keyFingerprintHex}.json`,
         );
-        writePicoVaultKeyfile(path, created.keyfile);
         paths.push(path);
+        writePicoVaultKeyfile(path, created.keyfile);
       }
       this.#audit('founding_bootstrap', {
         outcome: 'ok',
@@ -1769,8 +1780,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
           this.keyfilesPath,
           `${role}-${created.keyFingerprintHex}.json`,
         );
-        writePicoVaultKeyfile(path, created.keyfile);
         paths.push(path);
+        writePicoVaultKeyfile(path, created.keyfile);
       }
       this.#audit('device_bootstrap', {
         outcome: 'ok',
@@ -1793,6 +1804,87 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         ? messageOf(error)
         : 'device_bootstrap_failed';
       this.#audit('device_bootstrap', { outcome: 'error', reason });
+      this.#respondError(socket, request.requestId, reason);
+    }
+  }
+
+  /**
+   * ADR 0114. The successor root of a rotation, made in the living vault.
+   *
+   * The third row of the table `#handleFoundingBootstrap` and
+   * `#handleDeviceBootstrap` share, and the one whose freshness rule points
+   * the other way. Its twins refuse a vault that already holds keys; this
+   * one *requires* a root to be there, because a rotation is a succession
+   * and there is nothing to succeed in an empty vault.
+   *
+   * **Exactly one successor, exactly once.** A vault with no root is sent to
+   * the founding door; a vault that already holds two is refused, because the
+   * second is a staged successor that a ceremony has not yet spent. Without
+   * that second half this would be a way to fill a vault with roots, which is
+   * how a person loses track of which one is theirs.
+   *
+   * **Unlocked sessions are not in the rule**, and that is the one place this
+   * differs on purpose. Its twins read `#unlockedSessions.size !== 0` as
+   * evidence that a vault is not fresh. A rotation happens in a vault that is
+   * in use - the current root will sign over what this makes - so requiring
+   * a locked vault would refuse the only situation this exists for.
+   *
+   * **It creates no authority.** What comes back is a keyfile and a public
+   * key. A successor becomes the person's root when the current root signs a
+   * rotation record over it, and that signature is approval-gated where every
+   * other one is. Same split as the device twin: this makes keys, the
+   * ceremony gives them a place.
+   */
+  #handleRotationBootstrap(
+    socket: Socket,
+    request: Extract<PicoVaultDaemonRequest, {
+      family: typeof picoVaultDaemonRequestFamilies.rotationBootstrap;
+    }>,
+  ): void {
+    const roots = readdirSync(this.keyfilesPath)
+      .filter((name) => name.startsWith('pico_identity-') && name.endsWith('.json'));
+    if (roots.length === 0) {
+      this.#respondError(socket, request.requestId, 'rotation_bootstrap_requires_existing_root');
+      return;
+    }
+    if (roots.length > 1) {
+      this.#respondError(socket, request.requestId, 'rotation_bootstrap_successor_already_staged');
+      return;
+    }
+
+    const paths: string[] = [];
+    try {
+      const successor = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'pico_identity',
+        passphrase: request.passphrase,
+      });
+      const path = join(
+        this.keyfilesPath,
+        `pico_identity-${successor.keyFingerprintHex}.json`,
+      );
+      paths.push(path);
+      writePicoVaultKeyfile(path, successor.keyfile);
+      this.#audit('rotation_bootstrap', {
+        outcome: 'ok',
+        identityKeyFingerprintHex: successor.keyFingerprintHex,
+      });
+      this.#respondOk(socket, request.requestId, {
+        identity: {
+          keyFingerprintHex: successor.keyFingerprintHex,
+          publicKeyHex: successor.publicKeyHex,
+        },
+      });
+    } catch (error) {
+      // The same cleanup as the twins, for a reason this case makes sharper:
+      // a half-written successor would count as the second root above and
+      // lock the person out of ever staging a real one.
+      for (const path of paths) {
+        rmSync(path, { force: true });
+      }
+      const reason = snakeCaseReasonPattern.test(messageOf(error))
+        ? messageOf(error)
+        : 'rotation_bootstrap_failed';
+      this.#audit('rotation_bootstrap', { outcome: 'error', reason });
       this.#respondError(socket, request.requestId, reason);
     }
   }

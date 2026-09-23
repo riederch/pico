@@ -89,6 +89,29 @@ export const picoVaultDaemonRequestFamilies = {
    * be making a second person.
    */
   deviceBootstrap: 'pico.vault.daemon.device.bootstrap.v1',
+  /**
+   * ADR 0114. The successor root of a rotation, made where it will live.
+   *
+   * The third row of the same table, and the one that inverts the freshness
+   * rule its twins share. `foundingBootstrap` and `deviceBootstrap` refuse a
+   * vault that already holds keys, because a half-written vault is worse than
+   * none. A rotation is the opposite case by definition: it happens *in* a
+   * living vault, and the whole point is that the old root is still there
+   * while the new one is made.
+   *
+   * So the rule is not relaxed, it is stated the other way round: this
+   * refuses a vault with no root (that door is `foundingBootstrap`) and
+   * refuses a vault that already holds a second one. Exactly one successor,
+   * exactly once - which is what keeps this from becoming a way to fill a
+   * vault with roots.
+   *
+   * **It creates no authority.** A keyfile is not a Pico Identity; what makes
+   * a successor root mean anything is the rotation record the *current* root
+   * signs over it, and that signature is approval-gated like every other one
+   * this catalog does not exempt. The same split as `deviceBootstrap`: this
+   * makes keys, the ceremony gives them a place.
+   */
+  rotationBootstrap: 'pico.vault.daemon.rotation.bootstrap.v1',
 } as const;
 
 /**
@@ -489,6 +512,31 @@ export interface PicoVaultDaemonDeviceBootstrapResult {
   };
 }
 
+/**
+ * No delegation id and no card: a successor root names no authority of its
+ * own and is restored from nothing. One input, the passphrase it will be
+ * sealed under - which may be a different one from the current root's, and
+ * that is the person's to choose.
+ */
+export interface PicoVaultDaemonRotationBootstrapRequest {
+  family: typeof picoVaultDaemonRequestFamilies.rotationBootstrap;
+  requestId: string;
+  passphrase: string;
+}
+
+/**
+ * Only the root. No device keys, because a rotation replaces who the person
+ * is to their Home and not which machines they are at - the delegations are
+ * re-signed by the successor in the ceremony, from the devices that already
+ * hold their own keys.
+ */
+export interface PicoVaultDaemonRotationBootstrapResult {
+  identity: {
+    keyFingerprintHex: string;
+    publicKeyHex: string;
+  };
+}
+
 export interface PicoVaultDaemonApprovalWaitRequest {
   family: typeof picoVaultDaemonRequestFamilies.approvalWait;
   requestId: string;
@@ -534,7 +582,8 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonCeremonyIssueRecoveryCardRequest
   | PicoVaultDaemonRecoveryBootstrapRequest
   | PicoVaultDaemonFoundingBootstrapRequest
-  | PicoVaultDaemonDeviceBootstrapRequest;
+  | PicoVaultDaemonDeviceBootstrapRequest
+  | PicoVaultDaemonRotationBootstrapRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -828,6 +877,27 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       }
       return {
         family: picoVaultDaemonRequestFamilies.deviceBootstrap,
+        requestId,
+        passphrase,
+      };
+    }
+    case picoVaultDaemonRequestFamilies.rotationBootstrap: {
+      /**
+       * ADR 0114. One input, and `assertExactKeys` carries the same weight as
+       * in the twins: a request that could also carry a card payload, a PIN
+       * or a delegation id would be a second door into restoring an identity
+       * or naming an authority. This door makes one key and says nothing
+       * about what it may do.
+       */
+      assertExactKeys(parsed, ['family', 'requestId', 'passphrase'], 'invalid_request');
+      const passphrase = parsed.passphrase;
+      if (typeof passphrase !== 'string'
+        || passphrase.length === 0
+        || passphrase.length > MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.rotationBootstrap,
         requestId,
         passphrase,
       };

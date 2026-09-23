@@ -23,6 +23,8 @@ import {
   type PicoVaultDaemonCeremonyRotateDomainResult,
   type PicoVaultDaemonDeviceBootstrapRequest,
   type PicoVaultDaemonDeviceBootstrapResult,
+  type PicoVaultDaemonRotationBootstrapRequest,
+  type PicoVaultDaemonRotationBootstrapResult,
   type PicoVaultDaemonFoundingBootstrapRequest,
   type PicoVaultDaemonFoundingBootstrapResult,
   type PicoVaultDaemonRecoveryBootstrapRequest,
@@ -86,6 +88,10 @@ export interface PicoVaultDaemonClient {
   deviceBootstrap(
     input: Omit<PicoVaultDaemonDeviceBootstrapRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonDeviceBootstrapResult>;
+  /** ADR 0114. The successor root of a rotation, in a vault that has one. */
+  rotationBootstrap(
+    input: Omit<PicoVaultDaemonRotationBootstrapRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonRotationBootstrapResult>;
   close(): Promise<void>;
 }
 
@@ -246,6 +252,10 @@ export async function connectPicoVaultDaemonClient(
       family: picoVaultDaemonRequestFamilies.deviceBootstrap,
       ...bootstrapInput,
     }) as unknown as PicoVaultDaemonDeviceBootstrapResult,
+    rotationBootstrap: async (bootstrapInput) => await request({
+      family: picoVaultDaemonRequestFamilies.rotationBootstrap,
+      ...bootstrapInput,
+    }) as unknown as PicoVaultDaemonRotationBootstrapResult,
     close: async () => {
       if (closed) {
         return;
