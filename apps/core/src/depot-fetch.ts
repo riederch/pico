@@ -119,6 +119,55 @@ export function fetchPicoDepot(options: PicoDepotFetchOptions): PicoDepotFetchOu
   const path = options.into;
   const gitDir = join(path, '.git');
 
+  /**
+   * **Die Adresse, die wirklich gilt - vor jedem Pfad, der sie benutzt**
+   * (Befund B208, Nutzerentscheidung 16 vom 2026-09-22).
+   *
+   * `picoDepotRemotePattern` verbietet einen blanken Pfad mit dem Satz, eine
+   * Adresse muesse *einen* Ort benennen - und dieser Abruf reicht `HOME`
+   * durch, damit `git` seine Zugangsdaten findet. Eine `~/.gitconfig` mit
+   * `insteadOf` schreibt die Adresse damit um, bevor irgendetwas geholt wird.
+   * Gemessen: mit `HOME` ging der Abruf zu `umgeleitet.example`, ohne zu der
+   * genannten Adresse.
+   *
+   * Die Commit-Pinnung blieb dabei wirksam - man bekommt den Hash, den man
+   * nannte -, die **Herkunft** nicht: derselbe Hash kann aus einem anderen
+   * Depot kommen, und ADR 0136 BR6s Provenienz waere eine Aussage ueber einen
+   * Ort, an dem nichts geholt wurde.
+   *
+   * Hier oben und nicht beim Holen, weil auch der Kopf-Abruf einer
+   * Umschreibung folgen wuerde - und der laeuft auf dem Pfad, der gar nicht
+   * erst holt, weil die Arbeitskopie schon auf der Anheftung steht.
+   *
+   * `--get-url` loest die Umschreibung auf und fragt **nichts im Netz**.
+   */
+  // Das Verzeichnis muss vor der Messung da sein: `git` braucht ein
+  // Arbeitsverzeichnis, das existiert, auch fuer eine Frage, die nichts holt.
+  // Befund B120 fuer den Modus, wie beim Arbeitsverzeichnis daneben.
+  mkdirSync(path, { recursive: true, mode: 0o700 });
+
+  let effectiveRemote: string;
+  try {
+    effectiveRemote = run(['ls-remote', '--get-url', pin.remote], path).trim();
+  } catch (error) {
+    // Kein `git` da ist die Welt, nicht die Konfiguration - dieselbe Antwort
+    // wie fuer jeden anderen Fehlschlag des Programms.
+    return {
+      status: 'condition',
+      condition: 'unreachable',
+      detail: error instanceof Error ? error.message.split('\n')[0]! : 'git_failed',
+    };
+  }
+  if (effectiveRemote !== pin.remote) {
+    /**
+     * Kein Zustand, sondern eine Ablehnung - dieselbe Form wie der
+     * Pin-Mismatch unten: die Maschine widerspricht einer Entscheidung, die
+     * ein Mensch getroffen hat. Wer `insteadOf` absichtlich nutzt, entscheidet
+     * es dann, statt es geschehen zu lassen.
+     */
+    throw new Error('pico_depot_remote_rewritten');
+  }
+
   try {
     if (existsSync(gitDir) && headCommit(run, path) === pin.commit) {
       // Already there. A scheduled fetch over an unchanged depot must not cost
@@ -127,8 +176,6 @@ export function fetchPicoDepot(options: PicoDepotFetchOptions): PicoDepotFetchOu
     }
 
     if (!existsSync(gitDir)) {
-      // Befund B120, wie beim Arbeitsverzeichnis daneben.
-      mkdirSync(path, { recursive: true, mode: 0o700 });
       run(['init', '--quiet'], path);
     }
 

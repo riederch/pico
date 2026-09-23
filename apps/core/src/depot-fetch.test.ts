@@ -101,9 +101,17 @@ describe('ADR 0143 DP1 - the fetch brings the accepted commit', () => {
     expect(readFileSync(join(into, 'index.js'), 'utf8')).toContain('changed');
   });
 
-  it('costs nothing when the working copy is already at the pin', () => {
-    // A scheduled fetch over an unchanged depot must not cost a clone, or the
-    // schedule becomes the reason to lengthen the interval.
+  it('costs two local commands when the working copy is already at the pin', () => {
+    /**
+     * A scheduled fetch over an unchanged depot must not cost a clone, or the
+     * schedule becomes the reason to lengthen the interval.
+     *
+     * Seit Nutzerentscheidung 16 sind es **zwei** statt einer, und beide
+     * fragen nichts im Netz: `ls-remote --get-url` loest nur auf, was eine
+     * `~/.gitconfig` aus der Adresse machen wuerde, und `rev-parse` liest die
+     * Arbeitskopie. Die Zusicherung dieses Gangs ist damit unveraendert - er
+     * zaehlt sie beide auf, damit ein dritter Befehl auffaellt.
+     */
     const { remote, first } = makeRemote();
     const into = join(temp('into'), 'depot');
     fetchPicoDepot({ pin: { remote, commit: first }, into });
@@ -118,7 +126,10 @@ describe('ADR 0143 DP1 - the fetch brings the accepted commit', () => {
       },
     });
     expect(outcome.status).toBe('fetched');
-    expect(calls).toEqual([['rev-parse', 'HEAD']]);
+    expect(calls).toEqual([
+      ['ls-remote', '--get-url', remote],
+      ['rev-parse', 'HEAD'],
+    ]);
   });
 });
 
@@ -174,6 +185,89 @@ describe('ADR 0143 DP1 - what arrived is verified against what was accepted', ()
       into,
     });
     expect(outcome).toMatchObject({ status: 'condition', condition: 'unreachable' });
+  });
+
+  it('refuses a remote a gitconfig rewrites on the way, before it fetches anything', () => {
+    /**
+     * Befund B208, Nutzerentscheidung 16 vom 2026-09-22.
+     *
+     * `picoDepotRemotePattern` verbietet einen blanken Pfad mit dem Satz, eine
+     * Adresse muesse *einen* Ort benennen - und der Abruf reicht `HOME` durch,
+     * damit `git` seine Zugangsdaten findet. Eine `~/.gitconfig` mit
+     * `insteadOf` schreibt die Adresse damit um, bevor irgendetwas geholt
+     * wird: die Commit-Pinnung blieb wirksam, die Herkunft nicht.
+     *
+     * Gemessen mit einem echten `HOME`, in dem eine echte Umschreibung steht -
+     * nicht mit einem nachgestellten `run`, denn *ob git die Umschreibung
+     * anwendet* ist genau die Frage, und ein Nachbau haette sie beantwortet
+     * statt sie zu stellen.
+     */
+    const { remote, first } = makeRemote();
+    const elsewhere = makeRemote();
+    const home = temp('home');
+    writeFileSync(
+      join(home, '.gitconfig'),
+      `[url "${elsewhere.remote}"]\n\tinsteadOf = ${remote}\n`,
+      { mode: 0o600 },
+    );
+    const into = join(temp('into'), 'depot');
+
+    const withRewrite = (args: readonly string[], cwd: string): string => execFileSync('git', [...args], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: home,
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_ADVICE: '0',
+      },
+    });
+
+    // Erst die Messung, die den Befund traegt: git *folgt* der Umschreibung.
+    expect(withRewrite(['ls-remote', '--get-url', remote], home).trim()).toBe(elsewhere.remote);
+
+    expect(() => fetchPicoDepot({ pin: { remote, commit: first }, into, run: withRewrite }))
+      .toThrow('pico_depot_remote_rewritten');
+    // Und nichts liegt auf der Platte: abgelehnt wird, bevor geholt wird.
+    expect(existsSync(join(into, '.git'))).toBe(false);
+  });
+
+  it('fetches when the same gitconfig leaves this remote alone', () => {
+    /**
+     * Die Gegenseite, damit die Regel nicht mehr verbietet als sie soll: eine
+     * `~/.gitconfig` darf da sein und Regeln fuer *andere* Adressen tragen.
+     * Nur die genannte muss die genannte bleiben.
+     */
+    const { remote, first } = makeRemote();
+    const other = makeRemote();
+    const home = temp('home-benign');
+    writeFileSync(
+      join(home, '.gitconfig'),
+      `[url "${other.remote}"]\n\tinsteadOf = https://nothing.invalid/x\n`,
+      { mode: 0o600 },
+    );
+    const into = join(temp('into'), 'depot');
+
+    const outcome = fetchPicoDepot({
+      pin: { remote, commit: first },
+      into,
+      run: (args, cwd) => execFileSync('git', [...args], {
+        cwd,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          PATH: process.env.PATH ?? '',
+          HOME: home,
+          GIT_TERMINAL_PROMPT: '0',
+          GIT_CONFIG_NOSYSTEM: '1',
+          GIT_ADVICE: '0',
+        },
+      }),
+    });
+
+    expect(outcome.status).toBe('fetched');
   });
 
   it('refuses a pin that asks to follow a ref before it touches the disk', () => {
