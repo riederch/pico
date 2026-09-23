@@ -661,7 +661,8 @@ billiger.
 2. **Schlüsselexport**
 3. **18, 10** — Store-Integrität, liegt neben der Schlüsselarbeit
 4. **16, 11** — die zwei Grenzen nach außen
-5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`
+5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`; erledigt am
+   2026-09-23, und dabei fielen B256 und B257 an
 6. **13** — nach dem Export
 7. **1, 14** — die zwei Verdrahtungen
 
@@ -997,6 +998,51 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B257 — die Zeichnung stand im Zeichner, wo sie ihre eigene Regel nicht
+erreichen kann (2026-09-23).** Nutzerentscheidung 9 sollte unter einem Modul,
+das jetzt etwas anderes will, den Tag der frueheren Zusage zeigen. Der erste
+Bau legte `picoDisplayDate` in den Vertrag — `check-constant-copies.mjs` wies
+das ab, weil ein Wertimport dort den Modulgraphen des Protokolls in den
+Renderer zoege. Der zweite Bau schob den Aufruf in den Zeichner, und
+`browser:check` wies auch das ab, aus demselben Grund eine Ebene tiefer: ein
+blosser Spezifizierer loest im Browser nicht auf.
+
+Zwei Pruefer, ein Satz — und der stand schon seit dem 2026-08-20 im Baum, in
+`rendered-rows.ts`: *das Fenster bekommt gezeichneten Darstellungszustand, und
+ein auf einen Kalendertag gekuerzter Instant ist eine Zeichnung.* Fuenf
+Zeilenarten wurden dort bereits auf dem Weg hinueber gezeichnet; die sechste
+fehlte. Jetzt zeichnet der Hauptprozess auch die Zustimmung, und der rohe
+Instant ueberquert die IPC-Naht gar nicht mehr — was das Fenster nicht bekommt,
+kann es auch nicht versehentlich zeigen.
+
+Nebenbei faellt damit die letzte offene Frage aus `column:check`:
+`pico_module_effect_consent.consented_at` wurde seit jeher geschrieben und von
+nichts gelesen. **27 argumentierte Spalten, 0 offene Fragen.**
+
+**B256 — dieselbe Ablehnung erreichte eine Person auf zwei Arten, je
+nachdem, ob sie gelesen oder geschrieben hatte (2026-09-23).** Nutzer-
+entscheidung 12 verlangte fuer das Dashboard dieselbe volle Satztabelle wie in
+der Schale. Beim Verdrahten stellte sich heraus, dass die Flaeche selbst schon
+zweigeteilt war: **12 Schreibaufrufe** liefen ueber `describeFailure` und
+bekamen einen Satz, **9 Leseaufrufe** ueber `fetchJson` endeten auf
+`… endpoint returned HTTP 401.` und warfen den Grund weg, den das Home
+mitgeschickt hatte.
+
+Gefunden hat das nicht der Blick, sondern ein Test, der es fuer selbst-
+verstaendlich hielt: derselbe Name `no_founding_record`, einmal beim Speichern
+und einmal beim Lesen, und nur einer der beiden Wege kannte den Satz dazu.
+Wer eine Aufbewahrungsregel *anlegte*, erfuhr, dass dieses Home noch nicht
+gegruendet ist; wer dieselbe Liste *ansah*, bekam eine Zahl. Beide Male
+antwortete das Home dasselbe.
+
+Beide Pfade haengen jetzt an derselben Tabelle. Der Rueckfall ist selbst ein
+Satz, damit ein Name, den noch niemand aufgeschrieben hat, nicht als Name nach
+aussen dringt, und `one-voice:check` haelt die Tabelle gegen die der Schale:
+**eine geteilte Ablehnung muss in beiden Flaechen denselben Satz haben.** Die
+erste Fassung dieser Regel fragte nur, ob beide die Schuld gleich zuweisen —
+eine Pflanzung mit zwei verschiedenen Saetzen kam damit durch, und die Regel
+verlangt seither Satzgleichheit.
 
 **B255 — die gefaehrlichste Frage dieser Session, und die Antwort war
 viermal ja (2026-09-22).** B254 hat die Inhaltshaltung verschoben, und das
