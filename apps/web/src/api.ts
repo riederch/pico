@@ -662,6 +662,72 @@ async function sendJson<T>(
 }
 
 /** Surfaces the server's own reason where it sent one; the API answers in plain sentences. */
+/**
+ * **Was eine Person liest, wenn diese Flaeche abgewiesen wird** (Befund B191,
+ * Nutzerentscheidung 12 vom 2026-09-22).
+ *
+ * Gemessen: `apps/web` ruft achtzehn Routen, vier davon koennen einen rohen
+ * Ablehnungsnamen im `error`-Feld liefern, und es sind acht verschiedene
+ * Namen. Einer wurde abgefangen - **sieben erreichten das Banner
+ * uneingefasst**. Eine Person las `invalid_memory_encryption_decision` und
+ * wusste nicht, ob sie etwas falsch gemacht hat.
+ *
+ * Das Schaerfste stand in einem einzigen Handler: beim Abschalten eines
+ * Moduls bekam `pico_module_has_active_dependents` einen Satz, und die vier
+ * Geschwister derselben Route fielen drei Zeilen weiter durch. Keine
+ * vergessene Flaeche, sondern eine halb erledigte.
+ *
+ * **Dieselbe Haltung wie in der Schale**, deren Tabelle das Vorbild ist: der
+ * Satz sagt, *wessen* Fehler es ist, und der Name bleibt in Klammern stehen,
+ * damit er meldbar bleibt. Was hier nicht steht, faellt auf einen Satz zurueck,
+ * der ebenfalls einer ist.
+ *
+ * Eigene Tabelle und kein Import: diese Datei wird als blankes ES-Modul
+ * ausgeliefert, und ein Wertimport aus einem fremden Paket loest im Browser
+ * nicht auf. `one-voice:check` haelt beide Tabellen gegeneinander, damit aus
+ * zwei Flaechen nicht zwei Auskuenfte werden.
+ */
+export const picoDashboardRefusalSentences: Readonly<Record<string, string>> = Object.freeze({
+  invalid_authority_list_arguments:
+    'Pico could not read that request. That is a defect in Pico and not something '
+    + 'you did; nothing was changed.',
+  invalid_authority_submit_arguments:
+    'Pico could not read that request. That is a defect in Pico and not something '
+    + 'you did; nothing was changed.',
+  no_founding_record:
+    'This Home has not been founded yet, so there is nothing to administer here.',
+  unknown_authority_resource:
+    'Pico asked about something this Home does not administer. That is a defect '
+    + 'in Pico and not something you did; nothing was changed.',
+  pico_model_provider_entry_not_found:
+    'That model entry is gone - somebody removed it while this page was open. '
+    + 'Reload to see what is there now.',
+  invalid_pico_link_relay_identity:
+    'That relay address was not accepted. Check it and try again; nothing was '
+    + 'changed.',
+  invalid_memory_encryption_decision:
+    'That was not a decision this Home understands. Nothing was changed.',
+});
+
+/**
+ * Der Rueckfall ist selbst ein Satz - genau der Punkt, an dem die Schale
+ * vorbildlich ist: wer eine unbekannte Ablehnung ausloest, soll nicht raten,
+ * ob er etwas falsch gemacht hat.
+ */
+export function picoDashboardRefusalLine(detail: string): string {
+  const sentence = picoDashboardRefusalSentences[detail];
+  if (sentence !== undefined) {
+    return `${sentence} (${detail})`;
+  }
+  if (/^[a-z][a-z0-9_]*$/u.test(detail)) {
+    return `Pico refused what this page sent (${detail}). That is a defect in Pico `
+      + 'and not something you did; nothing was changed.';
+  }
+  // Schon ein Satz - etwa der aus einem Handler, der seine eigene Antwort
+  // schreibt. Der bleibt, wie er ist.
+  return detail;
+}
+
 async function describeFailure(response: Response, action: string): Promise<string> {
   let detail: string | undefined;
 
@@ -675,10 +741,12 @@ async function describeFailure(response: Response, action: string): Promise<stri
   }
 
   if (response.status === 401) {
-    return detail ?? 'An operator session is required.';
+    return detail === undefined ? 'An operator session is required.' : picoDashboardRefusalLine(detail);
   }
 
-  return detail ?? `${action} failed with HTTP ${response.status}.`;
+  return detail === undefined
+    ? `${action} failed with HTTP ${response.status}.`
+    : picoDashboardRefusalLine(detail);
 }
 
 export async function mintRealtimeTicket(baseUrl: string, options: FoundationAccessOptions): Promise<string> {
@@ -764,7 +832,13 @@ async function fetchJson<T>(
   }, label);
 
   if (!response.ok) {
-    throw new Error(`${label} endpoint returned HTTP ${response.status}.`);
+    // Derselbe Weg wie im Schreibpfad. Bis zum 2026-09-23 sagte der Lesepfad
+    // hier `... endpoint returned HTTP 401.` und warf den Grund weg, den das
+    // Home mitgeschickt hatte: dieselbe Ablehnung erreichte eine Person also
+    // als Satz, wenn sie etwas gespeichert hatte, und als Statuscode, wenn sie
+    // etwas gelesen hatte. Der Koerper ist hier unverbraucht, weil dieser Zweig
+    // sofort wirft.
+    throw new Error(await describeFailure(response, `Reading the ${label}`));
   }
 
   let data: unknown;

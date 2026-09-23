@@ -18,6 +18,7 @@ import {
   loginOperator,
   mintRealtimeTicket,
   normalizePicoHomeUrl,
+  picoDashboardRefusalSentences,
   shredPrivacyDomain,
 } from './api.js';
 
@@ -429,6 +430,82 @@ describe('ADR 0148 - a refused relay account change', () => {
 
     await expect(readRelayIdentity('http://localhost:3100', {}))
       .resolves.toEqual({ mailboxes: 0 });
+  });
+});
+
+/**
+ * Entscheidung 12 vom 2026-09-22: das Dashboard bekommt dieselbe volle
+ * Satztabelle wie die Schale. Vorher reichte es den Namen einer Ablehnung
+ * unveraendert nach aussen - `invalid_authority_submit_arguments` stand in der
+ * Meldung, und wer sie las, wusste nicht, ob er etwas falsch getippt hatte.
+ *
+ * Begangen wird beides: dass ein benannter Grund seinen Satz bekommt und der
+ * Name trotzdem meldbar bleibt, und dass die drei Wege ohne Eintrag
+ * (unbekannter Name, fertiger Satz, gar kein Grund) ebenfalls bei einem Satz
+ * enden. `one-voice:check` haelt die Tabelle zusaetzlich gegen die der Schale.
+ */
+describe('Entscheidung 12 - jede Ablehnung erreicht das Dashboard als Satz', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sagt bei einem benannten Grund den Satz und laesst den Namen stehen', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(400, { error: 'invalid_authority_submit_arguments' })));
+
+    await expect(createRetentionPolicy('http://localhost:3100', {}, {
+      retentionPolicyId: 'household',
+      displayName: 'Household',
+      mode: 'delete_after_max_age',
+      maxAgeDays: 30,
+    })).rejects.toThrow(
+      'Pico could not read that request. That is a defect in Pico and not something '
+      + 'you did; nothing was changed. (invalid_authority_submit_arguments)',
+    );
+  });
+
+  it('faellt bei einem unbekannten Namen auf einen Satz zurueck, nicht auf den Namen', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(409, { error: 'some_refusal_nobody_has_written_yet' })));
+
+    await expect(shredPrivacyDomain('http://localhost:3100', {}, {
+      privacyDomain: 'household',
+      confirm: 'household',
+    })).rejects.toThrow(
+      'Pico refused what this page sent (some_refusal_nobody_has_written_yet). '
+      + 'That is a defect in Pico and not something you did; nothing was changed.',
+    );
+  });
+
+  it('laesst einen Grund, der schon ein Satz ist, unveraendert', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(400, { error: 'This Home does not keep that domain.' })));
+
+    await expect(shredPrivacyDomain('http://localhost:3100', {}, {
+      privacyDomain: 'household',
+      confirm: 'household',
+    })).rejects.toThrow('This Home does not keep that domain.');
+  });
+
+  it('gibt auch der abgelaufenen Sitzung ihren Satz', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(401, { error: 'no_founding_record' })));
+
+    await expect(listRetentionPolicies('http://localhost:3100', {}))
+      .rejects.toThrow(
+        'This Home has not been founded yet, so there is nothing to administer '
+        + 'here. (no_founding_record)',
+      );
+  });
+
+  it('haelt jeden Eintrag der Tabelle auf der Form eines Satzes', () => {
+    // Ein Fragment mit einem Namen daneben waere wieder das, was vorher stand.
+    for (const [name, sentence] of Object.entries(picoDashboardRefusalSentences)) {
+      expect(sentence, name).toMatch(/^[A-Z][^]*[.]$/u);
+      expect(sentence, name).not.toContain(name);
+    }
+
+    expect(Object.keys(picoDashboardRefusalSentences).length).toBeGreaterThan(0);
   });
 });
 

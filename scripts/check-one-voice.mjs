@@ -209,6 +209,9 @@ if (stepMethods.length > 0 && localSteps === 0) {
  * also darf nur der Erzeuger sie nennen und die eine Stelle, die sie in Sätze
  * übersetzt.
  */
+let dashboardRefusals = 0;
+let sharedRefusals = 0;
+
 const serviceReasons = [
   'companion_profile_unavailable',
   'companion_profile_invalid',
@@ -274,6 +277,83 @@ if (bodiesRead === 0) {
   }
 }
 
+/**
+ * **Zwei Flaechen, zwei Tabellen, eine Stimme** (Befund B191,
+ * Nutzerentscheidung 12 vom 2026-09-22).
+ *
+ * Die Schale fasst ihre Ablehnungen seit jeher in Saetze; das Dashboard tat es
+ * an vier Stellen und sonst gar nicht, also las eine Person
+ * `invalid_memory_encryption_decision`. Die Entscheidung war, dem Dashboard
+ * eine **eigene** Tabelle zu geben - Worte fuer eine Person sind keine
+ * Pruefung, und ein Wertimport loest in einem blanken ES-Modul ohnehin nicht
+ * auf.
+ *
+ * Genau dafuer gibt es diesen Pruefer: **eine zweite Tabelle ist erlaubt, eine
+ * zweite Auskunft nicht.** Nennt eine Ablehnung beide Tabellen, muessen beide
+ * dasselbe sagen - nicht Wort fuer Wort, aber sie duerfen sich nicht
+ * widersprechen, und genau das ist hier pruefbar: derselbe Name, zwei Saetze,
+ * und einer davon behauptet etwas anderes ueber die Schuld.
+ *
+ * Geprueft wird die Ueberschneidung, weil nur sie eine Aussage traegt: was nur
+ * eine Flaeche kennt, kann nicht driften.
+ */
+{
+  const shellTable = readFileSync(join(root, 'apps/companion-shell/src/contract.ts'), 'utf8');
+  const dashboardPath = 'apps/web/src/api.ts';
+  const dashboard = readFileSync(join(root, dashboardPath), 'utf8');
+  const block = /picoDashboardRefusalSentences[^{]*\{([\s\S]*?)\n\}\);/u.exec(dashboard);
+  if (block === null) {
+    failures.push(
+      `${dashboardPath}: keine Satztabelle gefunden, also lief diese Regel ueber nichts. `
+      + 'Der Pruefer ohne Gegenstand ist kaputt und nicht zufrieden (B166)');
+  } else {
+    const names = [...block[1].matchAll(/^\s{2}([a-z][a-z0-9_]*):/gmu)].map(([, name]) => name);
+    if (names.length === 0) {
+      failures.push(`${dashboardPath}: die Satztabelle ist leer`);
+    }
+    dashboardRefusals = names.length;
+    for (const name of names) {
+      if (!shellTable.includes(`${name}:`)) {
+        continue;
+      }
+      sharedRefusals += 1;
+      /**
+       * **Beide kennen ihn, also sagen beide dasselbe.** Nicht "sie
+       * widersprechen sich nicht" - *dasselbe*. Das ist der Name dieses
+       * Pruefers: eine zweite Tabelle ist erlaubt, eine zweite Stimme nicht.
+       *
+       * Die erste Fassung dieser Regel fragte nur, ob beide die Schuld gleich
+       * zuweisen, und eine Pflanzung kam damit durch: "This device may not
+       * read that space" gegen "Check what you typed" - zwei Auskuenfte, keine
+       * davon nannte Pico, also fand die Regel nichts. Zwei Saetze fuer eine
+       * Ablehnung sind die Drift, egal worin sie sich unterscheiden.
+       */
+      const sentenceOf = (text) => {
+        const found = new RegExp(
+          `(?:^|\\n)\\s{2,4}${name}:\\s*\\n?\\s*((?:'[^']*'\\s*(?:\\+\\s*)?)+),`,
+          'u',
+        ).exec(text);
+        return found === null
+          ? undefined
+          : [...found[1].matchAll(/'([^']*)'/gu)].map(([, part]) => part).join('').trim();
+      };
+      const shellSentence = sentenceOf(shellTable);
+      const dashboardSentence = sentenceOf(block[1]);
+      if (shellSentence === undefined || dashboardSentence === undefined) {
+        failures.push(
+          `${name}: steht in beiden Tabellen und dieser Pruefer kann mindestens einen der `
+          + 'beiden Saetze nicht lesen. Ein Vergleich, der seinen Gegenstand nicht findet, '
+          + 'ist keiner (B166)');
+      } else if (shellSentence !== dashboardSentence) {
+        failures.push(
+          `${name}: die Schale sagt "${shellSentence}" und das Dashboard "${dashboardSentence}". `
+          + 'Zwei Flaechen, eine Ablehnung, zwei Saetze - eine Person, die beide sieht, '
+          + 'bekommt zwei Auskuenfte');
+      }
+    }
+  }
+}
+
 if (failures.length > 0) {
   for (const failure of failures) {
     process.stderr.write(`  ${failure}\n`);
@@ -286,4 +366,6 @@ process.stdout.write(
   + `${localSteps} eigene Momente der Android-Fläche `
   + `(erlaubt: ${localMoments.join(', ')}), `
   + `${serviceReasons.length} Dienstgründe mit Satz statt Code in `
-  + `${bodiesRead} Präsentationstexten (${reasonSpellings} fremde Nennungen).\n`);
+  + `${bodiesRead} Präsentationstexten (${reasonSpellings} fremde Nennungen), `
+  + `${dashboardRefusals} Ablehnungen mit Satz im Dashboard, `
+  + `${sharedRefusals} davon auch in der Schale und dort nicht widersprochen.\n`);
