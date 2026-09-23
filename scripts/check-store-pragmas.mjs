@@ -29,6 +29,14 @@ import { fileURLToPath } from 'node:url';
  * Schreiber und ein Absturz laesst eine Datei zurueck, die sich selbst wieder
  * herstellt.
  *
+ * `synchronous = FULL` ist die zweite Haelfte davon (Befund B186,
+ * Nutzerentscheidung 10 vom 2026-09-22). Was WAL ueber die Haltbarkeit
+ * entscheidet, haengt daran: unter NORMAL kommt ein Commit zurueck, bevor das
+ * Protokoll auf der Platte liegt, und ein Stromausfall kostet die zuletzt
+ * **bestaetigten** Transaktionen. NORMAL war geerbt, nicht gewaehlt - die
+ * mitgelieferte SQLite ist mit `DEFAULT_WAL_SYNCHRONOUS=1` uebersetzt.
+ * Gemessen: 1,4 ms je Commit.
+ *
  * `foreign_keys` wird **nur dort verlangt, wo es etwas durchzusetzen gibt**.
  * Der Kommentar im Home-Store sagt es selbst: ein Pragma ohne Gegenstand ist
  * ein Pruefer ohne Gegenstand (B166). Das Relay-Schema kennt kein `REFERENCES`
@@ -51,6 +59,7 @@ const ts = createRequire(import.meta.url)('typescript');
 const required = [
   { pragma: 'journal_mode', value: 'WAL', always: true },
   { pragma: 'secure_delete', value: 'ON', always: true },
+  { pragma: 'synchronous', value: 'FULL', always: true },
   {
     pragma: 'foreign_keys',
     value: 'ON',
@@ -214,7 +223,8 @@ if (errors.length > 0) {
 
 console.log(
   `Store-pragma check passed (${writable.length} writable SQLite connections, each setting `
-  + 'journal_mode = WAL and secure_delete = ON before it does anything, and foreign_keys = ON '
+  + 'journal_mode = WAL, secure_delete = ON and synchronous = FULL before it does anything, '
+  + 'and foreign_keys = ON '
   + `wherever a schema declares one; ${readOnly.length} read-only openings, which delete `
   + 'nothing and are exempt by their own flag).',
 );

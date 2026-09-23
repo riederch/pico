@@ -90,6 +90,16 @@ export class PicoRelayStore {
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
     /**
+     * Dieselbe Haltbarkeit wie im Home (Befund B186, Nutzerentscheidung 10).
+     *
+     * Ein Relay haelt nur Pakete mit Ablauf, und ein verlorenes Paket wird
+     * erneut geschickt - der Fall waere hier also milder. Trotzdem dieselbe
+     * Einstellung: eine Regel, die an zwei Stellen verschieden gilt, ist eine
+     * Regel, die jemand beim naechsten Store neu entscheiden muss. Der Preis
+     * ist derselbe, gemessen 1,4 ms je Commit.
+     */
+    this.db.pragma('synchronous = FULL');
+    /**
      * Befund B203. Anders als bei den Fremdschluesseln hat der Schalter hier
      * einen Gegenstand: dieser Store kehrt Postfaecher, und die Zeile darueber
      * sagt, warum das zaehlt - was hier liegt, ist versiegelt, die Adressen
