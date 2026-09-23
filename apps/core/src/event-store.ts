@@ -853,6 +853,22 @@ export class EventStore {
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
     /**
+     * **Was ein bestaetigtes Schreiben wert ist** (Befund B186, Mechanismus in
+     * B201, Nutzerentscheidung 10 vom 2026-09-22).
+     *
+     * Niemand hier hatte das entschieden: die mitgelieferte SQLite ist mit
+     * `DEFAULT_WAL_SYNCHRONOUS=1` uebersetzt, also stand `synchronous` auf
+     * NORMAL, geerbt statt gewaehlt. Unter WAL heisst NORMAL, dass ein
+     * Commit zurueckkommt, bevor das Schreibprotokoll auf der Platte liegt:
+     * ein Stromausfall kann die zuletzt **bestaetigten** Transaktionen
+     * kosten. Der Home hat "ja" gesagt und es ist weg.
+     *
+     * Gemessen: **1,4 ms je Commit**, nicht je Zeile - dieser Baum buendelt
+     * seine Schreibvorgaenge seit B163 in Transaktionen. Das ist der Preis
+     * dafuer, dass ein "ja" eines haelt.
+     */
+    this.db.pragma('synchronous = FULL');
+    /**
      * ADR 0121. Said rather than inherited (2026-09-18, finding B200).
      *
      * This schema declares exactly one referential constraint in 52 tables -
@@ -975,7 +991,35 @@ export class EventStore {
       );
       this.chainAuditRecord(event);
     });
-    insert();
+    try {
+      insert();
+    } catch (error) {
+      /**
+       * **Der Speicher hat eine Regel durchgesetzt, die ein Prozess nicht
+       * kennen kann** (Befund B222, Nutzerentscheidung 18).
+       *
+       * `UNIQUE (device_id, lamport)` faellt genau dann, wenn ein zweiter
+       * Kern dieselbe Datenbank mit derselben Geraete-Id offen hat: seine
+       * Lamport-Uhr wurde beim Start gesetzt und weiss nichts von den
+       * Zahlen, die der andere seither vergeben hat.
+       *
+       * Ohne diesen Satz laese ein Mensch
+       * `SQLITE_CONSTRAINT_UNIQUE: pico_event.device_id, pico_event.lamport`
+       * und suchte den Fehler in seinen Daten. Er liegt in der Aufstellung.
+       * Kein benanntes Ablehnungswort im Protokoll, weil kein Aufrufer
+       * darauf sinnvoll reagieren kann - es ist keine Antwort, es ist ein
+       * Aufbau, der so nicht laufen darf.
+       */
+      if (error instanceof Error && /UNIQUE constraint failed: pico_event\.device_id/u.test(error.message)) {
+        throw new Error(
+          'pico_event_lamport_already_used: another Pico core is writing to this database '
+          + `as device ${event.deviceId}. A Lamport clock is read once at start, so a second `
+          + 'core hands out numbers the first one already used. Run one core per database.',
+          { cause: error },
+        );
+      }
+      throw error;
+    }
 
     // ADR 0119 Q5. Counted after the transaction commits, so a rolled-back
     // insert never inflates the ceiling.

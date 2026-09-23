@@ -44,6 +44,14 @@ const { runMigrations } = await import(join(repoRoot, 'apps', 'core', 'dist', 'm
  */
 const argued = [
   {
+    name: 'pico_event_device_lamport_unique_idx',
+    kind: 'constraint',
+    why: 'Befund B222, Nutzerentscheidung 18: zwei Kerne auf einer Datenbank vergeben '
+      + 'dieselbe Lamport-Zahl, weil die Uhr einmal beim Start gesetzt wird. Dieser Index '
+      + 'sucht nichts, er laesst den zweiten Schreiber am Speicher fallen - dieselbe Form, '
+      + 'mit der pico_audit_record es ueber (writer_id, chain_position) schon tut',
+  },
+  {
     name: 'idx_pico_identity_root_rotation_one_pending',
     kind: 'constraint',
     why: 'a UNIQUE partial index saying one pending root rotation per predecessor. '

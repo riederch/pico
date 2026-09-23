@@ -315,6 +315,41 @@ export const picoModelJobForgottenMigrationId =
 export const picoLinkDirectSeenRequestMigrationId =
   '0026_pico_link_direct_seen_request' as const;
 
+/**
+ * **Zwei Kerne koennen dieselbe Datenbank oeffnen** (Befund B222,
+ * Nutzerentscheidung 18 vom 2026-09-22).
+ *
+ * Die Auditkette vertraegt das: sie liest ihren Kopf bei jedem Schreibvorgang
+ * neu, zwei Prozesse verschraenken ihre Positionen und die Kette bleibt eine.
+ * Die Lamport-Uhr vertraegt es nicht - die wird **einmal beim Start** aus
+ * `maxLamport()` gesetzt und danach nie abgeglichen. Also vergeben beide
+ * dieselbe Zahl, und die Ordnung, auf der jede Wiedergabe steht, ist still
+ * kaputt.
+ *
+ * Dieselbe Form, mit der `pico_audit_record` es eine Tabelle weiter schon
+ * verhindert: `UNIQUE (writer_id, chain_position)`. Sie faellt am Speicher
+ * und nicht an einer Absicht - eine Instanzsperre kann fehlschlagen (NFS,
+ * Container), ein Index nicht.
+ *
+ * **Warum ein Index und kein Constraint in der Tabelle** (Nutzerentscheidung
+ * vom 2026-09-23). SQLite kann einen `UNIQUE`-Constraint nicht nachtraeglich
+ * in eine Tabelle setzen, und die Grundlinie darf sich nicht aendern: sie ist
+ * in v0.2.1 ausgeliefert, und `check-migration-immutability.mjs` haelt die
+ * haerteste Regel dieses Verzeichnisses - wer den Rumpf einer ausgelieferten
+ * Wanderung aendert, erreicht damit keine Installation, die sie schon fuhr.
+ * Ein eindeutiger Index wirkt identisch, wird angehaengt statt eingegriffen,
+ * und die Faltungsnotiz oben sagt genau das: *"Future schema changes are
+ * appended as new migrations."* `pico_presence_switch_unique_idx` ist das
+ * Vorbild im selben File.
+ *
+ * **Eindeutig je Geraet, nicht global.** ADR 0014s Log wird repliziert; eine
+ * globale Eindeutigkeit ueber `lamport` wuerde den einen Schreiber behaupten,
+ * den es nicht gibt - dieselbe Begruendung, die `pico_audit_record` fuer
+ * `writer_id` gibt.
+ */
+export const picoEventDeviceLamportUniqueMigrationId =
+  '0027_pico_event_device_lamport_unique' as const;
+
 export const migrations: readonly MigrationDefinition[] = [
   {
     id: picoSchemaBaselineMigrationId,
@@ -1658,6 +1693,17 @@ export const migrations: readonly MigrationDefinition[] = [
 
         CREATE INDEX idx_pico_link_direct_seen_request_eviction
         ON pico_link_direct_seen_request (expires_at_ms, seq);
+      `);
+    },
+  },
+
+  {
+    id: picoEventDeviceLamportUniqueMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE UNIQUE INDEX pico_event_device_lamport_unique_idx
+        ON pico_event (device_id, lamport);
       `);
     },
   },

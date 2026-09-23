@@ -246,8 +246,16 @@ describe('EventStore', () => {
   it('lists events in stable Lamport order and applies the requested limit', () => {
     const store = new EventStore(createDatabasePath());
 
+    /**
+     * Der Gleichstand auf Lamport 2 steht zwischen **zwei Geraeten**, und seit
+     * Nutzerentscheidung 18 kann er nur noch dort stehen: ein Geraet vergibt
+     * eine Zahl genau einmal. Das ist auch der Fall, fuer den diese Ordnung
+     * ihren Tiebreak ueberhaupt braucht - ADR 0014s Log wird repliziert, und
+     * zwei Geraete wissen nichts voneinander.
+     */
     store.append(createEvent({
       eventId: 'event-3',
+      deviceId: 'device-2',
       lamport: 2,
       wallTime: '2026-07-04T12:02:00.000Z',
     }));
@@ -272,10 +280,13 @@ describe('EventStore', () => {
     const store = new EventStore(createDatabasePath());
 
     for (const event of [
+      // Drei Ereignisse auf Lamport 2, also drei Geraete: seit
+      // Nutzerentscheidung 18 vergibt eines seine Zahl genau einmal, und ein
+      // Gleichstand ist damit immer einer zwischen Geraeten.
       createEvent({ eventId: 'event-1', lamport: 1, wallTime: '2026-07-04T12:00:00.000Z' }),
       createEvent({ eventId: 'event-2', lamport: 2, wallTime: '2026-07-04T12:00:00.000Z' }),
-      createEvent({ eventId: 'event-3', lamport: 2, wallTime: '2026-07-04T12:00:00.000Z' }),
-      createEvent({ eventId: 'event-4', lamport: 2, wallTime: '2026-07-04T12:01:00.000Z' }),
+      createEvent({ eventId: 'event-3', deviceId: 'device-2', lamport: 2, wallTime: '2026-07-04T12:00:00.000Z' }),
+      createEvent({ eventId: 'event-4', deviceId: 'device-3', lamport: 2, wallTime: '2026-07-04T12:01:00.000Z' }),
     ]) {
       store.append(event);
     }
@@ -302,7 +313,8 @@ describe('EventStore', () => {
     for (const event of [
       createEvent({ eventId: 'event-1', lamport: 1, wallTime: '2026-07-04T12:00:00.000Z' }),
       createEvent({ eventId: 'event-2', lamport: 2, wallTime: '2026-07-04T12:00:00.000Z' }),
-      createEvent({ eventId: 'event-3', lamport: 2, wallTime: '2026-07-04T12:01:00.000Z' }),
+      // Der Gleichstand auf 2 steht zwischen zwei Geraeten (Entscheidung 18).
+      createEvent({ eventId: 'event-3', deviceId: 'device-2', lamport: 2, wallTime: '2026-07-04T12:01:00.000Z' }),
       createEvent({ eventId: 'event-4', lamport: 3, wallTime: '2026-07-04T12:02:00.000Z' }),
     ]) {
       store.append(event);
@@ -974,16 +986,15 @@ describe('what a second Home on one database does (B222)', () => {
    * frisch liest: zwei Prozesse verschraenken ihre Positionen und die Kette
    * bleibt eine. **Die Lamport-Uhr vertraegt es nicht**, weil sie beim Start
    * einmal aus `maxLamport()` gesetzt und danach nie wieder abgeglichen wird.
-   * Also vergeben beide dieselbe Zahl, und der Log nimmt beide.
    *
-   * Dieser Test **beschreibt und billigt nicht**. Er steht hier in derselben
-   * Form wie der `connectionTimeout`-Test in `app.test.ts`, der eine
-   * Auslassung festhaelt, damit sie eine Entscheidung bleibt und kein
-   * Vergessen: solange niemand entschieden hat, ob ein Home einen zweiten
-   * abweisen soll, faellt hier jede Aenderung dieser Eigenschaft auf, statt
-   * unbemerkt zu passieren.
+   * Bis zum 2026-09-22 nahm der Log darum zwei Ereignisse desselben Geraets
+   * mit derselben Zahl an, und dieser Test hielt das fest, ohne es zu
+   * billigen. **Nutzerentscheidung 18** hat es entschieden: dieselbe Form,
+   * mit der `pico_audit_record` es eine Tabelle weiter schon verhindert.
+   * Sie faellt am Speicher, nicht an einer Absicht - eine Sperre kann
+   * fehlschlagen, ein Index nicht.
    */
-  it('lets two stores hand out the same lamport for different events', async () => {
+  it('refuses the second core by name instead of taking its number', async () => {
     const databasePath = createDatabasePath();
     const backupDirectory = join(dirname(databasePath), 'backups');
 
@@ -1005,16 +1016,55 @@ describe('what a second Home on one database does (B222)', () => {
     });
 
     expect(first.append(event('aaaaaaaa-1111-4111-8111-000000000001', 'A'))).toBe('inserted');
-    // Dasselbe Geraet, dieselbe Lamport-Zahl, ein anderes Ereignis - und der
-    // Log nimmt es. `pico_event` kennt keine Eindeutigkeit ueber
-    // (device_id, lamport); `pico_audit_record` kennt sie ueber
-    // (writer_id, chain_position), und genau deshalb faellt die Kette auf und
-    // die Uhr nicht.
-    expect(second.append(event('bbbbbbbb-2222-4222-8222-000000000002', 'B'))).toBe('inserted');
 
+    // Dasselbe Geraet, dieselbe Lamport-Zahl, ein anderes Ereignis. Der Satz
+    // gehoert zum Fund: ohne ihn laese ein Mensch den rohen SQLite-Text und
+    // suchte den Fehler in seinen Daten statt in seiner Aufstellung.
+    let refused: Error | undefined;
+    try {
+      second.append(event('bbbbbbbb-2222-4222-8222-000000000002', 'B'));
+    } catch (error) {
+      refused = error as Error;
+    }
+    expect(refused?.message).toContain('pico_event_lamport_already_used');
+    expect(refused?.message).toContain('another Pico core is writing to this database');
+    expect(refused?.message).toContain('Run one core per database');
+
+    // Und nichts ist liegengeblieben: die Zahl gehoert weiterhin dem ersten.
     expect(first.maxLamport()).toBe(1);
+    expect(
+      (first as unknown as { db: { prepare(q: string): { all(...a: unknown[]): unknown[] } } })
+        .db.prepare('SELECT event_id FROM pico_event WHERE lamport = 1').all(),
+    ).toHaveLength(1);
     first.close();
     second.close();
+  });
+
+  it('lets the same core keep counting, because the rule is about two clocks', async () => {
+    /**
+     * Die Gegenseite, damit die Regel nicht mehr verbietet als sie soll: ein
+     * einzelner Kern vergibt fortlaufende Zahlen und wird von nichts
+     * aufgehalten. Und ein *zweites* Geraet darf dieselbe Zahl haben - die
+     * Eindeutigkeit gilt je Geraet, nicht global, weil ADR 0014s Log
+     * repliziert wird und eine globale Kette den einen Schreiber behaupten
+     * wuerde, den es nicht gibt.
+     */
+    const store = await EventStore.open(createDatabasePath(), {});
+    const event = (eventId: string, deviceId: string, lamport: number) => ({
+      eventId,
+      deviceId,
+      lamport,
+      wallTime: '2026-09-19T10:00:00.000Z',
+      type: 'device.seen' as const,
+      stream: 'probe',
+      payload: { note: eventId },
+    });
+
+    expect(store.append(event('cccccccc-1111-4111-8111-000000000001', 'pico-core', 1))).toBe('inserted');
+    expect(store.append(event('cccccccc-1111-4111-8111-000000000002', 'pico-core', 2))).toBe('inserted');
+    // Dasselbe Paar, anderes Geraet: erlaubt.
+    expect(store.append(event('dddddddd-2222-4222-8222-000000000001', 'other-device', 1))).toBe('inserted');
+    store.close();
   });
 });
 
