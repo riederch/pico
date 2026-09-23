@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parsePicoLinkPacket, picoLinkPacketSchema } from '@pico/protocol/link-packet';
+import { maxPicoRelayMailboxQuota } from '@pico/protocol/link-relay-operator';
 import { afterEach, describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
 import { PicoRelayStore } from './store.js';
@@ -118,6 +119,66 @@ describe('ADR 0149 RS2 - an account, never a Pico', () => {
     expect(store.register({
       accountId: 'account-1', mailbox: mailboxOf('c'), capacity: 4, registeredAt: acceptedAt,
     })).toEqual({ ok: false, refusal: 'account_mailbox_quota_reached' });
+    store.close();
+  });
+
+  it('bounds the rows an account leaves behind, not only the ones it holds', () => {
+    /**
+     * Befund B189, Nutzerentscheidung 11 vom 2026-09-22.
+     *
+     * Die Kontenquote zaehlt nur die **offenen** Postfaecher, und ein
+     * widerrufenes wird nie geloescht - ADR 0147 RY4 verlangt das, damit die
+     * widerrufene Antwort moeglich bleibt. Also konnte ein Konto innerhalb
+     * seiner eigenen Ratengrenze registrieren, widerrufen, registrieren, ohne
+     * je an eine Grenze zu stossen: gemessen 6,9 GB im Jahr aus einem Konto.
+     *
+     * Die Grenze ist abgeleitet und nicht gewaehlt: `maxPicoRelayMailboxQuota`
+     * ist die groesste Quote, die ein Betreiber ueberhaupt vergeben darf.
+     */
+    const store = openStore();
+    store.createAccount({
+      credential: 'account-1', mailboxQuota: 1, maxCapacity: 4,
+      at: '2026-01-01T00:00:00.000Z',
+    });
+
+    // Registrieren und widerrufen, bis die Lebenszeitgrenze erreicht ist. Die
+    // Quote von eins wird dabei nie ueberschritten - genau das war das Loch.
+    const nameOf = (n: number) => n.toString(16).padStart(32, '0');
+    for (let i = 0; i < maxPicoRelayMailboxQuota; i += 1) {
+      expect(store.register({
+        accountId: 'account-1', mailbox: nameOf(i), capacity: 4, registeredAt: acceptedAt,
+      }).ok, `Registrierung ${i}`).toBe(true);
+      expect(store.deregister({ accountId: 'account-1', mailbox: nameOf(i) }).ok).toBe(true);
+    }
+
+    // Kein offenes Postfach, und trotzdem abgewiesen - mit einem eigenen Wort,
+    // weil ein Betreiber hier nachsieht statt anzuheben.
+    expect(store.register({
+      accountId: 'account-1', mailbox: nameOf(maxPicoRelayMailboxQuota), capacity: 4, registeredAt: acceptedAt,
+    })).toEqual({ ok: false, refusal: 'account_mailbox_history_full' });
+
+    store.close();
+  });
+
+  it('leaves a second account alone, because the bound is per account', () => {
+    /**
+     * Die Gegenseite, damit die Regel nicht mehr verbietet als sie soll: die
+     * Lebenszeitgrenze gilt je Konto. Ein Relay mit vielen Konten waechst
+     * weiter mit seinen Konten - das ist der Betreiber seine Entscheidung,
+     * nicht die eines fremden Anrufers.
+     */
+    const store = openStore();
+    for (const credential of ['account-1', 'account-2']) {
+      store.createAccount({
+        credential, mailboxQuota: 1, maxCapacity: 4, at: '2026-01-01T00:00:00.000Z',
+      });
+    }
+    expect(store.register({
+      accountId: 'account-1', mailbox: mailboxOf('a'), capacity: 4, registeredAt: acceptedAt,
+    }).ok).toBe(true);
+    expect(store.register({
+      accountId: 'account-2', mailbox: mailboxOf('b'), capacity: 4, registeredAt: acceptedAt,
+    }).ok).toBe(true);
     store.close();
   });
 

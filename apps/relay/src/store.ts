@@ -5,6 +5,7 @@ import type {
 } from '@pico/protocol/link-relay-operator';
 import type { PicoLinkMailboxStatus } from '@pico/protocol/link-delivery';
 import {
+  maxPicoRelayMailboxQuota,
   picoRelayAccountRefLength,
   type PicoRelayAccountStatus,
 } from '@pico/protocol/link-relay-operator';
@@ -50,6 +51,24 @@ export const picoRelayRefusals = [
    * are two different things for an operator to raise.
    */
   'capacity_above_account_ceiling',
+  /**
+   * ADR 0147 RY4 mit ADR 0119 Q5. Die **dritte** Achse: nicht wie viele
+   * Postfaecher ein Konto gleichzeitig haelt, sondern wie viele Zeilen es
+   * ueber seine Lebenszeit hinterlaesst (Befund B189, Nutzerentscheidung 11
+   * vom 2026-09-22).
+   *
+   * Die Kontenquote zaehlt nur die **offenen** Postfaecher, und ein
+   * widerrufenes wird nie geloescht - RY4 verlangt das, damit die widerrufene
+   * Antwort moeglich bleibt: wer ein Ende als eigenen Tippfehler liest,
+   * versucht es wieder. Also konnte ein Konto innerhalb seiner eigenen
+   * Ratengrenze registrieren, widerrufen, registrieren - gemessen **6,9 GB im
+   * Jahr aus einem einzigen Konto**.
+   *
+   * Eigener Name, weil es fuer einen Betreiber etwas anderes ist als eine
+   * erreichte Quote: die eine hebt er an, bei der anderen sieht er nach, was
+   * dieses Konto tut.
+   */
+  'account_mailbox_history_full',
   'mailbox_not_yours',
   'mailbox_already_registered',
 ] as const;
@@ -467,6 +486,29 @@ export class PicoRelayStore {
       // ADR 0119 Q5's posture, in somebody else's machine: a ceiling refuses
       // and never makes room by dropping what is already there.
       return { ok: false, refusal: 'account_mailbox_quota_reached' };
+    }
+
+    /**
+     * **Die Zeilen ueber die Lebenszeit, nicht die offenen** (Befund B189,
+     * Nutzerentscheidung 11).
+     *
+     * Ein widerrufenes Postfach bleibt stehen, weil ADR 0147 RY4 die
+     * widerrufene Antwort moeglich halten will - und die Quote darueber
+     * zaehlt es nicht mit. Ein Konto konnte also registrieren, widerrufen,
+     * registrieren, ohne je an eine Grenze zu stossen.
+     *
+     * **Die Zahl ist abgeleitet, nicht gewaehlt:**
+     * `maxPicoRelayMailboxQuota` ist die groesste Quote, die ein Betreiber
+     * ueberhaupt vergeben *darf*. Kein Konto haelt je mehr Zeilen, als die
+     * groesste vergebbare Quote gross ist - damit braucht es keine neue Zahl,
+     * keine Spalte und keine Wanderung, und ein Konto mit einer Quote von
+     * fuenf hat trotzdem Raum fuer zweihundert Neuausstellungen.
+     */
+    const everHeld = this.db
+      .prepare('SELECT COUNT(*) AS ever FROM relay_mailbox WHERE account_digest = ?')
+      .get(account.digest) as { ever: number };
+    if (everHeld.ever >= maxPicoRelayMailboxQuota) {
+      return { ok: false, refusal: 'account_mailbox_history_full' };
     }
 
     this.db
