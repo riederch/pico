@@ -664,7 +664,10 @@ billiger.
 5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`; erledigt am
    2026-09-23, und dabei fielen B256 und B257 an
 6. **13** — nach dem Export
-7. **1, 14** — die zwei Verdrahtungen
+7. **1, 14** — die zwei Verdrahtungen. **1 erledigt am 2026-09-23**
+   (`rotationBootstrap`, dabei B259 und B260); **14 blockiert**: die
+   Antwort braucht eine Quelle auf dem Geraet, und das ist die
+   Erfassungsentscheidung, die der Nutzer zurueckgestellt hat
 
 ## Zukunft
 
@@ -998,6 +1001,70 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B260 — eine Aufraeumung, die genau die Datei nicht erreichen konnte, fuer
+die sie da war (2026-09-23).** Beim Bau von `rotationBootstrap` (Entscheidung 1)
+hat eine Pflanzung nicht gebissen: die Aufraeumung im Fangblock zu entfernen
+aenderte nichts. Nachgemessen war der Grund kein Testfehler, sondern die
+Reihenfolge zweier Zeilen — und sie stand so in **allen drei** Bootstraps:
+
+```
+writePicoVaultKeyfile(path, created.keyfile);
+paths.push(path);
+```
+
+`writePicoVaultKeyfile` ist `writeFileSync` mit `wx`, kein atomares Umbenennen.
+Ein Schreiben, das unterwegs stirbt, laesst eine Datei zurueck — und `paths`
+lernt den Pfad erst, wenn das Schreiben gelungen ist. Die Aufraeumung sah also
+jede Datei ausser der einen, die uebrig blieb.
+
+Bei den Zwillingen faellt das nur beim **letzten** der drei bzw. zwei
+Keyfiles an; bei der Rotation, die genau eine Datei schreibt, war die
+Aufraeumung damit vollstaendig gegenstandslos. Und die Folgen sind dort am
+groessten: eine halb geschriebene Wurzel zaehlt als zweite Wurzel und sperrt
+eine Person aus, je wieder eine echte anzulegen — ein misslungener Wechsel, der
+den Wechsel unmoeglich macht. `#listKeyfiles` liest ausserdem *jede* Datei im
+Verzeichnis, also nimmt ein unlesbarer Rest den ganzen Tresor mit.
+
+Die zwei Zeilen sind in allen drei getauscht. Ein zerrissenes Schreiben braucht
+eine volle Platte und ist im Test nicht herstellbar; begangen wird darum die
+Eigenschaft, auf die es ankommt — nach einem gescheiterten Schreiben ist der
+Tresor unveraendert und oeffnet noch —, ueber ein schreibgeschuetztes
+Schluesselverzeichnis, das den Fangblock wirklich erreicht.
+
+**B259 — kein Tor kennt die Wire-Labels des Vault-Daemons (2026-09-23).**
+Gemessen beim Anlegen von `pico.vault.daemon.rotation.bootstrap.v1`: `wire:check`
+zaehlte danach unveraendert 137 Labels. Es liest Deklarationen ausschliesslich
+aus `packages/protocol/src`, und `apps/vault-daemon/src/protocol.ts` steht bei
+ihm in der Liste der Dateien, die ein Label ausschreiben *duerfen* — aus einem
+guten Grund, aber der Nebeneffekt ist, dass die Familienliste des Daemons
+niemandem gehoert. `refusal:check` sieht die Ablehnungen des Daemons ebenfalls
+nicht als deklariert: sein Muster liest `reason: 'a' | 'b'`, und der Daemon
+antwortet mit einem Literal an `#respondError`. Die geworfenen Ablehnungen
+zaehlt es (1.035 auf 1.038), die Namen nicht.
+
+Kein Fehler, aber eine unbewachte Flaeche: 24 Anfragefamilien ueber einen
+Socket, jede mit einer Version im Namen, und nichts haelt sie darauf, einmal
+geschrieben und in der Version zu stehen, die der Daemon kennt. Notiert, nicht
+gebaut.
+
+**B258 — ein Test, der eine entsperrte Sitzung ueber Minuten haelt, misst die
+Geschwindigkeit der Maschine mit (2026-09-23).** `display-zone:check` fiel in
+`Pacific/Kiritimati` mit `link_device_signing_key_not_unlocked` aus
+`claim-ceremony.test.ts`. Allein laufend geht derselbe Fall in derselben Zone
+in 10,8 s durch, und der zweite volle Lauf war gruen — also kein Zonenfehler.
+
+Die Ursache ist gemessen und liegt im Produkt, wo sie richtig ist: der Daemon
+schliesst eine Sitzung nach fuenf Minuten Leerlauf
+(`PICO_VAULT_DAEMON_IDLE_LOCK_CEILING_MS`, `nowMs - lastUsedAtMs`). Der Fall
+entsperrt die Wurzel des lebenden Tresors am Anfang, laeuft dann durch eine
+ganze Wiederherstellungszeremonie, haelt den Kern an und startet ihn neu — und
+greift erst danach wieder zum Signierschluessel. Unter vier Forks reicht das
+ueber die fuenf Minuten.
+
+Das Produkt verhaelt sich richtig; die Annahme des Tests ist falsch. Was ein
+echtes Geraet tut, steht im Companion: `ensureUnlocked()` vor jedem Aufruf. Die
+Reparatur hat dieselbe Form und ist noch nicht gebaut.
 
 **B257 — die Zeichnung stand im Zeichner, wo sie ihre eigene Regel nicht
 erreichen kann (2026-09-23).** Nutzerentscheidung 9 sollte unter einem Modul,
