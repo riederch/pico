@@ -1,5 +1,6 @@
 import { canonicalJson } from '@pico/protocol/canonical-transport';
 import type { PicoPlace } from '@pico/protocol/place';
+import { picoParkingEventContentType } from '@pico/protocol/spatial-recall';
 import type {
   PicoLocationFix,
   PicoMobilitySample,
@@ -60,7 +61,12 @@ export interface PicoCompanionDerivedObservation {
   consumedThrough: string;
 }
 
-export const picoCompanionParkingEventContentType = 'application/vnd.pico.parking-event' as const;
+/**
+ * Seit dem 2026-09-23 der Protokollwert, nicht mehr eine zweite Schreibweise:
+ * die Lesehaelfte im Kern braucht dieselbe Art, und zwei Seiten, die eine
+ * Zeichenkette je selbst buchstabieren, laufen auseinander.
+ */
+export const picoCompanionParkingEventContentType = picoParkingEventContentType;
 
 /**
  * Verdichtet, was das Gerät hält - oder gibt nichts zurück.

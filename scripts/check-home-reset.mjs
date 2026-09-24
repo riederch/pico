@@ -167,6 +167,18 @@ const surviving = [
       + 'and a reset does not send them away',
   },
   {
+    table: 'pico_parking_decision',
+    requires: 'memory_item_id',
+    why: 'ADR 0129 SR4. The person\'s own word about a place, and it stays for the reason '
+      + 'their memories do: a reset un-homes a machine, it does not delete the person. The '
+      + 'row names the `memory_item_id` it is about, and that item survives a reset like '
+      + 'every other memory - so what stays is a statement with its subject still there, not '
+      + 'an orphan. One row per person, replaced on the next decision, so nothing accumulates '
+      + 'across the reset either. A domain shred is the act that reaches it: since 2026-09-24 '
+      + 'the row carries its `privacy_domain` and the shred cascade deletes it, because the '
+      + 'transition in it is by itself a statement about when somebody drove',
+  },
+  {
     table: 'pico_observation',
     why: 'ADR 0129. The observation buffer is pruned to its window at every boot, so a reset '
       + 'needs no opinion about it',

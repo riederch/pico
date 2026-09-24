@@ -30,10 +30,24 @@ export const picoSpatialRecallModuleManifest: PicoModuleManifest = Object.freeze
   publishedSubpaths: Object.freeze([
     './manifest', './mobility', './parking', './ports', './speed-mobility',
   ]),
+  /**
+   * **Pico Link, nicht Foundation API** - berichtigt am 2026-09-23
+   * (Nutzerentscheidung 14). Die beiden ersten Saetze sagten `Foundation API`,
+   * und das war zweimal falsch: gebaut war keiner von ihnen, und die
+   * Foundation-Flaeche ist lokale Diagnose und kein Produktweg. Was eine
+   * Person erreicht, erreicht sie ueber Pico Link.
+   *
+   * **Der dritte Satz ist weg, nicht erfuellt.** Eine Antwort ohne das Home
+   * braeuchte eine Quelle auf dem Geraet: entweder eigene Messungen - die
+   * Erfassung auf dem Client ist eine zurueckgestellte Produktentscheidung,
+   * `ports.ts` sagt das mit Datum - oder eine Kopie der letzten Ableitung
+   * neben der Domaenen-Custody und ausserhalb des Shred-Pfads. Ein Versprechen
+   * stehenzulassen, dessen Einloesung eine offene Entscheidung ist, ist genau
+   * das, was B194 gefunden hat.
+   */
   surfaces: Object.freeze([
-    'Foundation API: the last likely parking place, with its certainty',
-    'Foundation API: confirming or rejecting a parking candidate',
-    'Companion: answering where the vehicle was left, offline',
+    'Pico Link: home.parking.ask',
+    'Pico Link: home.parking.decide',
   ]),
   effects: Object.freeze([]),
 });

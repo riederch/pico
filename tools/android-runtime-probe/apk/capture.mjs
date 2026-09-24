@@ -35,7 +35,10 @@ import {
   defaultPicoCompanionPlatformUnlockPath,
 } from '@pico/companion/platform-unlock';
 import { createPicoCompanionLinkClient } from '@pico/companion/recovery-controller';
-import { keepPicoCompanionDerivedObservation } from '@pico/companion/observations';
+import {
+  askPicoCompanionParking,
+  keepPicoCompanionDerivedObservation,
+} from '@pico/companion/observations';
 import {
   condensePicoCompanionObservations,
   retainPicoCompanionObservationLines,
@@ -210,6 +213,22 @@ try {
           memoryItemId: kept.memoryItemId,
           from: fixes.length + mobility.length,
         });
+        /**
+         * **Und zurueckgefragt** (ADR 0129 SR4, seit dem 2026-09-24). Das
+         * Geraet, das gerade abgeleitet hat, fragt sein Home, was es jetzt
+         * sagt - der Rundlauf, den SR4 beschreibt, auf einem echten Telefon.
+         *
+         * **Gefragt, nicht entschieden.** `home.parking.decide` ruft dieses
+         * Skript ausdruecklich nicht: ob das der richtige Ort war, ist der
+         * Satz einer Person, und ein Erfassungsskript, das ihn an ihrer Stelle
+         * saeghe, waere genau die versteckte Automation, die dieser Baum
+         * nirgends zulaesst.
+         *
+         * Der Ausgang wird gemeldet und nicht der Ort: was hier in ein
+         * Sondenprotokoll geschrieben wird, liegt ausserhalb jeder Domaene.
+         */
+        const answer = await askPicoCompanionParking({ linkClient });
+        say({ step: 'parking_answer', outcome: answer.outcome });
       }
     } finally {
       await daemonClient.close();

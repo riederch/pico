@@ -2,6 +2,10 @@ import {
   maxPicoObservationSubmission,
   type PicoObservationKind,
 } from '@pico/protocol/observation';
+import {
+  picoParkingDecisions,
+  type PicoParkingDecision,
+} from '@pico/protocol/spatial-recall';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 
 /**
@@ -103,4 +107,119 @@ export async function keepPicoCompanionDerivedObservation(input: {
     throw new Error('invalid_pico_derived_observation_result');
   }
   return { memoryItemId: result.memoryItemId, crossed: result.crossed };
+}
+
+/**
+ * ADR 0129 SR4, Nutzerentscheidung 14 vom 2026-09-23. Wo das Fahrzeug zuletzt
+ * abgestellt wurde - und wie sicher das ist.
+ *
+ * **Die Lesehaelfte der Ableitung.** Der Zwilling darueber schickt, was aus
+ * den Messungen wurde; dieser fragt es zurueck. Bis heute tat das niemand:
+ * `picoParkingAnswer` stand fertig im Modul und hatte keinen Aufrufer.
+ *
+ * `outcome` kommt immer mit, und ohne Ort gibt es kein `place` - ADR 0129 SR4
+ * verlangt, dass eine Antwort ihre Sicherheit traegt, und eine Flaeche, der
+ * man eine blosse Position reichen kann, hat genau das verloren.
+ */
+export interface PicoCompanionParkingAnswer {
+  outcome: 'known' | 'likely' | 'uncertain' | 'unknown';
+  place?: {
+    memoryItemId: string;
+    parkedAt: string;
+    sourceTransitionAt: string;
+    confidence: string;
+    latitudeDeg: number;
+    longitudeDeg: number;
+    accuracyM: number;
+  };
+}
+
+export async function askPicoCompanionParking(input: {
+  linkClient: PicoLinkDirectClient;
+}): Promise<PicoCompanionParkingAnswer> {
+  const answer = await input.linkClient.request('home.parking.ask', {});
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `parking_ask_${answer.outcome}`);
+  }
+  const result = answer.result as Record<string, unknown>;
+  if (result.outcome !== 'known'
+    && result.outcome !== 'likely'
+    && result.outcome !== 'uncertain'
+    && result.outcome !== 'unknown') {
+    throw new Error('invalid_pico_parking_answer');
+  }
+  if (result.outcome === 'unknown') {
+    return { outcome: 'unknown' };
+  }
+  if (typeof result.memoryItemId !== 'string'
+    || typeof result.parkedAt !== 'string'
+    || typeof result.sourceTransitionAt !== 'string'
+    || typeof result.confidence !== 'string'
+    || typeof result.place !== 'string') {
+    throw new Error('invalid_pico_parking_answer');
+  }
+  let place: { latitudeDeg: unknown; longitudeDeg: unknown; accuracyM: unknown };
+  try {
+    // Als Text, aus demselben Grund wie auf dem Hinweg: die kanonische Form
+    // der Link-Argumente traegt keine Fliesskommazahlen.
+    const parsed: unknown = JSON.parse(result.place);
+    /**
+     * **`null` ist gueltiges JSON**, und `typeof null` ist `'object'` - ohne
+     * diese Zeile wurde aus einem Home, das `"null"` schickt, ein
+     * `TypeError: Cannot read properties of null` statt einer benannten
+     * Ablehnung. Gefunden hat das die Begehung, nicht das Lesen.
+     */
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Error('invalid_pico_parking_answer');
+    }
+    place = parsed as typeof place;
+  } catch {
+    throw new Error('invalid_pico_parking_answer');
+  }
+  if (typeof place.latitudeDeg !== 'number'
+    || typeof place.longitudeDeg !== 'number'
+    || typeof place.accuracyM !== 'number') {
+    throw new Error('invalid_pico_parking_answer');
+  }
+  return {
+    outcome: result.outcome,
+    place: {
+      memoryItemId: result.memoryItemId,
+      parkedAt: result.parkedAt,
+      sourceTransitionAt: result.sourceTransitionAt,
+      confidence: result.confidence,
+      latitudeDeg: place.latitudeDeg,
+      longitudeDeg: place.longitudeDeg,
+      accuracyM: place.accuracyM,
+    },
+  };
+}
+
+/**
+ * ADR 0129 SR4. Die Person sagt, ob das der Ort war.
+ *
+ * **Ueber den Uebergang und nicht ueber das Stueck**, weil genau das der
+ * Vergleich ist, den die Antwort anstellt: wer die gestrige Vermutung
+ * verworfen hat, hat ueber die heutige nichts gesagt.
+ */
+export async function decidePicoCompanionParking(input: {
+  linkClient: PicoLinkDirectClient;
+  sourceTransitionAt: string;
+  status: PicoParkingDecision;
+}): Promise<{ status: PicoParkingDecision }> {
+  const answer = await input.linkClient.request('home.parking.decide', {
+    sourceTransitionAt: input.sourceTransitionAt,
+    status: input.status,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `parking_decide_${answer.outcome}`);
+  }
+  const status = (answer.result as { status?: unknown }).status;
+  if (typeof status !== 'string'
+    || !(picoParkingDecisions as readonly string[]).includes(status)) {
+    throw new Error('invalid_pico_parking_decision_result');
+  }
+  return { status: status as PicoParkingDecision };
 }

@@ -197,6 +197,8 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       // ADR 0126 P3, seit dem 2026-09-03: was ein Gerät aus seinen eigenen
       // Messungen gemacht hat, statt der Messungen selbst.
       'home.observation.derived.keep',
+      'home.parking.ask',
+      'home.parking.decide',
       'home.modules.consent.read',
       'home.modules.consent.record',
     ]);

@@ -106,29 +106,6 @@ const anchors = [
       + 'surface the module declares, so it is the whole module: what ships is a '
       + 'transport with nothing behind it',
   },
-  {
-    module: 'spatial-recall',
-    surface: 'Foundation API: the last likely parking place, with its certainty',
-    unbuilt: 'parking',
-    why: 'picoParkingAnswer derives the sentence and nothing calls it. B194: the word '
-      + '`parking` occurs in no source of apps/core/src',
-  },
-  {
-    module: 'spatial-recall',
-    surface: 'Foundation API: confirming or rejecting a parking candidate',
-    unbuilt: 'parking',
-    why: 'there is nothing to confirm, because the surface above does not exist. '
-      + 'Confirming is the half that makes the derivation improve, so its absence is '
-      + 'why the thresholds in parking.ts have never been wrong in public',
-  },
-  {
-    module: 'spatial-recall',
-    surface: 'Companion: answering where the vehicle was left, offline',
-    unbuilt: 'picoParkingAnswer',
-    why: 'the answer exists as a function in the module and no companion code calls '
-      + 'it. The capture ports it would need have no implementation either, which '
-      + 'ports.ts says outright and dates to a deferred product decision',
-  },
 ];
 
 function sourceFiles(directory) {

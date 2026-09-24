@@ -119,6 +119,39 @@ describe('shredDomainWithAudit (ADR 0071 step 4)', () => {
     expect(result.forgottenRecalls).toBe(3);
   });
 
+  it('reaches what a person said about a place, and says how many it dropped', () => {
+    /**
+     * ADR 0129 SR4 mit ADR 0071 (2026-09-24). Die Zeile traegt keinen
+     * Schluesselumschlag: `source_transition_at` ist selbst eine Aussage
+     * darueber, wann jemand gefahren ist, und ein zerstoerter Domaenenschluessel
+     * macht sie nicht unlesbar. Sie stehen zu lassen waere Befund B251 eine
+     * Tabelle weiter.
+     */
+    const { store, append } = openHarness();
+    const dropped: string[] = [];
+
+    const result = shredDomainWithAudit(
+      store.memory(),
+      append,
+      { privacyDomain: 'domain-private' },
+      undefined,
+      undefined,
+      (domain) => {
+        dropped.push(domain);
+        return 2;
+      },
+    );
+
+    expect(dropped).toEqual(['domain-private']);
+    expect(result.forgottenParkingDecisions).toBe(2);
+  });
+
+  it('answers zero for the parking decisions when nobody wired it', () => {
+    const { store, append } = openHarness();
+    expect(shredDomainWithAudit(store.memory(), append, { privacyDomain: 'domain-private' })
+      .forgottenParkingDecisions).toBe(0);
+  });
+
   it('answers zero for the recall history when nobody wired it', () => {
     // The port is optional, and a shred without it says zero rather than
     // pretending it reached something.

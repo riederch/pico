@@ -96,6 +96,41 @@ export interface PicoMobilityTransition {
 export const picoParkingStatuses = ['candidate', 'confirmed', 'rejected'] as const;
 export type PicoParkingStatus = typeof picoParkingStatuses[number];
 
+/**
+ * ADR 0129 SR3. Was ein abgeleitetes Parkereignis fuer eine Inhaltsart hat.
+ *
+ * **Hier und nicht neben dem Verdichter**, seit dem 2026-09-23. Die Zeichenkette
+ * stand in `apps/companion/src/observation-condensation.ts` und musste vom Kern
+ * gelesen werden, sobald es eine Lesehaelfte gab (Nutzerentscheidung 14). Zwei
+ * Seiten, die dieselbe Art buchstabieren, koennen auseinanderlaufen; eine
+ * Wahrheit, zweimal geschrieben, driftet.
+ */
+/**
+ * ADR 0129 SR4. Was eine Person ueber einen Kandidaten sagen kann.
+ *
+ * **Zwei Woerter, nicht drei.** `picoParkingStatuses` kennt daneben
+ * `candidate`, und das ist genau das, was eine Person *nicht* sagen kann: es
+ * ist der Zustand, in dem eine Ableitung auf die Welt kommt, bevor jemand
+ * etwas dazu gesagt hat. Eine Entscheidung, die "Kandidat" lauten duerfte,
+ * waere ein Weg, eine Bestaetigung zurueckzunehmen, ohne sie zu verwerfen -
+ * und damit ein dritter Zustand ohne Bedeutung.
+ */
+export const picoParkingDecisions = ['confirmed', 'rejected'] as const;
+
+export type PicoParkingDecision = typeof picoParkingDecisions[number];
+
+export const picoParkingEventContentType = 'application/vnd.pico.parking-event' as const;
+
+/**
+ * Wie weit ein Home fuer die juengste Ableitung zurueckschaut.
+ *
+ * Jede Lesung, die eine Person ausloesen kann, ist begrenzt. Die Zahl ist
+ * grosszuegig gegen die Frage gemessen, die sie beantwortet: gesucht wird das
+ * juengste verortete Stueck *dieser* Inhaltsart, und daneben liegen im selben
+ * Raum die gewoehnlichen Erinnerungen.
+ */
+export const maxPicoParkingCandidatesRead = 100;
+
 export interface PicoParkingCandidate {
   /** When the vehicle came to rest - not when walking away was noticed. */
   parkedAt: string;

@@ -182,9 +182,16 @@ const arguedModuleNames = [
       + 'füllt - begangen bleibt sie im Durchlauf gegen ein laufendes Home',
   ],
   [
-    'picoParkingAnswer',
-    'ADR 0129, dieselbe Stelle: die Antwort auf eine Ableitung, deren Eingabe zur Hälfte da '
-      + 'ist. Die Messungen kommen an, die Bewegungsarten nicht',
+    'decidePicoCompanionParking',
+    'ADR 0129 SR4, seit dem 2026-09-24 - **und die Abwesenheit ist hier die Aussage**. Die '
+      + 'Lesehälfte daneben hat ihren Aufrufer: `capture.mjs` fragt nach dem Ablegen zurück, '
+      + 'was das Home jetzt sagt. Diese hier nicht, und zwar absichtlich. Ob das der richtige '
+      + 'Ort war, ist der Satz einer Person; das einzige, was ihn sagen könnte, wäre ein '
+      + 'Bedienelement im Fenster, und ein Erfassungsskript, das ihn an ihrer Stelle sähe, '
+      + 'wäre die versteckte Automation, die dieser Baum nirgends zulässt. Ob das Fenster '
+      + 'eine "wo steht mein Auto"-Fläche bekommt, ist Produktumfang und nicht entschieden - '
+      + 'bis dahin ist `known` im Produkt unerreichbar, und das ist ehrlicher als ein '
+      + 'Bestätigen, das niemand gesehen hat',
   ],
 ];
 

@@ -15,6 +15,11 @@ import {
   initiatePicoHomeDeviceRecovery,
 } from '@pico/vault-daemon';
 import sodium from 'libsodium-wrappers-sumo';
+import { createPicoVaultDaemonCeremonySigner } from '@pico/vault-daemon/ceremony-signer';
+import {
+  grantPicoCompanionDomainRead,
+  readPicoCompanionHomeId,
+} from '@pico/companion/domain-read-grant';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { writePicoCompanionProfile, type PicoCompanionProfile } from '@pico/companion';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
@@ -22,6 +27,8 @@ import type { PicoCompanionPresentation } from './contract.js';
 import { createPicoCompanionPresentationAdapter } from './presentation-adapter.js';
 import { exchangePicoCompanionLinkMailbox } from '@pico/companion/link-mailbox';
 import {
+  askPicoCompanionParking,
+  decidePicoCompanionParking,
   keepPicoCompanionDerivedObservation,
   submitPicoCompanionObservations,
 } from '@pico/companion/observations';
@@ -628,6 +635,143 @@ describe('Electron-hosted companion runtime against real processes', () => {
        */
       const again = await keepPicoCompanionDerivedObservation({ linkClient, derived: derived! });
       expect(again.memoryItemId).toBe(kept.memoryItemId);
+
+      /**
+       * **Und jetzt die Lesehaelfte** (ADR 0129 SR4, Nutzerentscheidung 14 vom
+       * 2026-09-23). Bis hierher schrieb der Weg nur. `picoParkingAnswer`
+       * stand seit ADR 0129 fertig im Modul und hatte keinen Aufrufer,
+       * waehrend das Manifest die Antwort versprach - Befund B194 hat den Satz
+       * als unerfuellt festgehalten.
+       *
+       * **Keine Ableitung erzeugt `known`.** Das ist die tragende Eigenschaft
+       * von SR4 und wird hier gegen ein laufendes Home gehalten, nicht gegen
+       * die Funktion allein: was gerade abgeleitet wurde, ist eine Vermutung,
+       * und ohne ein Wort der Person bleibt es eine.
+       */
+      /**
+       * ADR 0082 mit ADR 0077. "Darf dieses Home benutzen" ist nicht "darf
+       * diesen Raum lesen", und die Antwort liest Inhalt. Dass das Geraet die
+       * Ableitung selbst geschickt hat, aendert daran nichts - sonst waere
+       * Schreiben ein zweiter Weg zum Lesen.
+       */
+      const signer = createPicoVaultDaemonCeremonySigner({
+        socketPath: living.socketPath,
+        keyRole: 'pico_identity',
+        keyFingerprintHex: identity.keyFingerprintHex,
+      });
+      try {
+        const nowMs = Date.now();
+        await grantPicoCompanionDomainRead({
+          livingDeviceLinkClient: linkClient,
+          signer,
+          homeId: await readPicoCompanionHomeId({ livingDeviceLinkClient: linkClient }),
+          hostSigningKeyFingerprintHex: core.host.signingKeyFingerprintHex,
+          homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+          identityPublicKeyHex: identity.publicKeyHex,
+          privacyDomain: 'private',
+          validFrom: new Date(nowMs).toISOString(),
+          validUntil: new Date(nowMs + 365 * 24 * 60 * 60 * 1_000).toISOString(),
+          nowMs,
+        });
+      } finally {
+        signer.close();
+      }
+
+      const asked = await askPicoCompanionParking({ linkClient });
+      expect(asked.outcome).not.toBe('known');
+      expect(asked.outcome).not.toBe('unknown');
+      expect(asked.place?.memoryItemId).toBe(kept.memoryItemId);
+      expect(asked.place?.parkedAt).toBe(derived!.at);
+      // Der Ort kommt zurueck, wie er hingegangen ist - ueber zwei Haelften:
+      // der Schluss im Inhalt, die Position in den Kernspalten (SR3).
+      expect(asked.place?.latitudeDeg).toBe(derived!.place.latitudeDeg);
+      expect(asked.place?.longitudeDeg).toBe(derived!.place.longitudeDeg);
+
+      /**
+       * **Und das Wort der Person macht daraus `known`** - der einzige Weg
+       * dorthin. Eine Flaeche kann den Satz immer noch schlecht formulieren,
+       * aber sie kann keine Position ohne ihre Sicherheit gereicht bekommen.
+       */
+      const sourceTransitionAt = asked.place!.sourceTransitionAt;
+      expect(await decidePicoCompanionParking({
+        linkClient,
+        sourceTransitionAt,
+        status: 'confirmed',
+      })).toEqual({ status: 'confirmed' });
+      expect((await askPicoCompanionParking({ linkClient })).outcome).toBe('known');
+
+      /**
+       * **Ein Nein ist genauso dauerhaft wie ein Ja.** Ein Kandidat, den
+       * jemand weggeworfen hat, kommt nicht zurueck, weil die Ableitung ihn
+       * immer noch mag - und eine spaetere Antwort ersetzt die fruehere,
+       * statt eine Geschichte der Meinungsaenderungen anzulegen.
+       */
+      await decidePicoCompanionParking({ linkClient, sourceTransitionAt, status: 'rejected' });
+      expect((await askPicoCompanionParking({ linkClient })).outcome).toBe('unknown');
+
+      /**
+       * Und nur ueber einen Uebergang, den dieses Home wirklich abgeleitet
+       * hat: eine Entscheidung ueber einen erfundenen Zeitpunkt anzunehmen,
+       * liesse einen Aufrufer erfahren, wann jemand gefahren ist.
+       */
+      await expect(decidePicoCompanionParking({
+        linkClient,
+        sourceTransitionAt: '2020-01-01T00:00:00.000Z',
+        status: 'confirmed',
+      })).rejects.toThrow('no_such_parking_candidate');
+
+      /**
+       * **Und eine zweite Fahrt macht das Nein von vorhin nicht zum Nein von
+       * heute.** Das ist die Eigenschaft, die `picoParkingAnswer` ueber den
+       * Uebergang herstellt, und sie haelt nur, wenn der Home danach auch
+       * sucht: ein Leser, der einfach die letzte Antwort dieser Person naehme,
+       * liesse das Verwerfen von vorhin auf die neue Ableitung fallen - und
+       * eine Person, die einmal nein gesagt hat, bekaeme nie wieder eine
+       * Antwort.
+       */
+      const second = condensePicoCompanionObservations({
+        locationFixes: [
+          { at: '2026-09-05T18:00:00.000Z', latitudeDeg: 48.3, longitudeDeg: 16.20, accuracyM: 8 },
+          { at: '2026-09-05T18:01:00.000Z', latitudeDeg: 48.3, longitudeDeg: 16.2121, accuracyM: 8 },
+          { at: '2026-09-05T18:02:00.000Z', latitudeDeg: 48.3, longitudeDeg: 16.2242, accuracyM: 8 },
+          { at: '2026-09-05T18:03:00.000Z', latitudeDeg: 48.3, longitudeDeg: 16.22427, accuracyM: 8 },
+          { at: '2026-09-05T18:04:00.000Z', latitudeDeg: 48.3, longitudeDeg: 16.22548, accuracyM: 8 },
+        ],
+        mobilitySamples: [],
+      });
+      expect(second, 'die zweite Verdichtung muss etwas ergeben').toBeDefined();
+      expect(second!.at).not.toBe(derived!.at);
+      await keepPicoCompanionDerivedObservation({ linkClient, derived: second! });
+
+      const afterSecond = await askPicoCompanionParking({ linkClient });
+      expect(afterSecond.outcome).not.toBe('unknown');
+      expect(afterSecond.place?.parkedAt).toBe(second!.at);
+
+      /**
+       * **Und eine nachgereichte aeltere Fahrt bleibt eine aeltere.** Der Fall
+       * ist keiner aus dem Lehrbuch: ein Telefon, dessen Verbindung abriss,
+       * gibt gepufferte Messungen ab, sobald es wieder kann - und dann kommt
+       * die aeltere Ableitung *nach* der neueren an. Wer "die juengste" als
+       * "die zuletzt geschriebene Zeile" liest, schickt eine Person zu dem
+       * Parkplatz von vorgestern.
+       */
+      const backfilled = condensePicoCompanionObservations({
+        locationFixes: [
+          { at: '2026-09-03T07:00:00.000Z', latitudeDeg: 48.1, longitudeDeg: 16.50, accuracyM: 8 },
+          { at: '2026-09-03T07:01:00.000Z', latitudeDeg: 48.1, longitudeDeg: 16.5121, accuracyM: 8 },
+          { at: '2026-09-03T07:02:00.000Z', latitudeDeg: 48.1, longitudeDeg: 16.5242, accuracyM: 8 },
+          { at: '2026-09-03T07:03:00.000Z', latitudeDeg: 48.1, longitudeDeg: 16.52427, accuracyM: 8 },
+          { at: '2026-09-03T07:04:00.000Z', latitudeDeg: 48.1, longitudeDeg: 16.52548, accuracyM: 8 },
+        ],
+        mobilitySamples: [],
+      });
+      expect(backfilled, 'die nachgereichte Verdichtung muss etwas ergeben').toBeDefined();
+      expect(Date.parse(backfilled!.at)).toBeLessThan(Date.parse(second!.at));
+      await keepPicoCompanionDerivedObservation({ linkClient, derived: backfilled! });
+
+      // Zuletzt geschrieben, aber nicht zuletzt gefahren.
+      expect((await askPicoCompanionParking({ linkClient })).place?.parkedAt)
+        .toBe(second!.at);
     } finally {
       await daemonClient.close();
     }

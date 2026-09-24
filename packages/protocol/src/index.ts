@@ -760,6 +760,38 @@ export const picoLinkDirectOperations = [
    * Puffern, eine Verdichtung später.
    */
   'home.observation.derived.keep',
+  /**
+   * ADR 0129 SR4, Nutzerentscheidung 14 vom 2026-09-23. Wo das Fahrzeug
+   * zuletzt abgestellt wurde - mit der Sicherheit, die dazugehoert.
+   *
+   * **Die Lesehaelfte der Ableitung.** `home.observation.derived.keep`
+   * schreibt, was ein Geraet aus seinen Messungen gemacht hat, und bis heute
+   * las das niemand zurueck: `picoParkingAnswer` stand fertig im Modul und
+   * hatte keinen Aufrufer. Das Manifest von `spatial-recall` versprach die
+   * Antwort trotzdem, und `surfaces:check` hielt den Satz als unerfuellt fest.
+   *
+   * **Ueber Pico Link und nicht ueber die Foundation**, weil die
+   * Foundation-Flaeche lokale Diagnose ist und kein Produktweg. Das Manifest
+   * sagt das seit heute auch so.
+   *
+   * Was zurueckkommt, ist getaggt: `known`, `likely`, `uncertain` oder
+   * `unknown`. Keine Ableitung erzeugt `known` - das gibt es nur fuer einen
+   * Ort, den ein Mensch bestaetigt hat, und damit gibt es keinen Weg von einer
+   * Vermutung zu einem Satz, der wie eine Tatsache klingt.
+   */
+  'home.parking.ask',
+  /**
+   * ADR 0129 SR4. Die Person sagt, ob das der Ort war.
+   *
+   * **Die Haelfte, die die Ableitung besser macht** - und die, ohne die
+   * `known` unerreichbar bleibt. Eine Ablehnung ist dabei genauso dauerhaft
+   * wie eine Bestaetigung: ein Kandidat, den jemand weggeworfen hat, kommt
+   * nicht zurueck, weil die Ableitung ihn immer noch mag.
+   *
+   * Beides gilt nur fuer den Uebergang, aus dem der Kandidat stammt. Wer
+   * gestern nein gesagt hat, hat ueber heute nichts gesagt.
+   */
+  'home.parking.decide',
   'home.modules.consent.read',
   'home.modules.consent.record',
 ] as const;

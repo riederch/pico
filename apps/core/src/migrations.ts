@@ -350,6 +350,40 @@ export const picoLinkDirectSeenRequestMigrationId =
 export const picoEventDeviceLamportUniqueMigrationId =
   '0027_pico_event_device_lamport_unique' as const;
 
+/**
+ * ADR 0129 SR4, Nutzerentscheidung 14 vom 2026-09-23. Was eine Person ueber
+ * einen abgeleiteten Parkort gesagt hat.
+ *
+ * **Eine eigene Tabelle und kein zweites Erinnerungsstueck**, weil eine
+ * Bestaetigung eine Aussage *ueber* eine Ableitung ist und nicht selbst eine.
+ * Sie als Stueck abzulegen hiesse, denselben Ort ein zweites Mal
+ * hinzuschreiben, und zwei Zeilen ueber einen Ort koennen auseinanderlaufen.
+ * Dieselbe Form wie `pico_module_effect_consent`: die dauerhafte Entscheidung
+ * einer Person, unter dem, worueber sie entschieden hat.
+ *
+ * **Eine Zeile je Person, und das ist zugleich ihr Wachstumsende (ADR 0119
+ * Q5).** Der Uebergang steht in der Zeile, nicht im Schluessel: gelesen wird
+ * immer nur die juengste Ableitung, und eine Entscheidung ueber eine aeltere
+ * wird nie wieder gefragt. Sie aufzuheben hiesse, eine Liste davon zu fuehren,
+ * wo das Auto einer Person an welchem Tag stand - und das ist nichts, was ein
+ * Home ungefragt anlegen sollte. Eine spaetere Antwort ersetzt also die
+ * fruehere.
+ *
+ * **Der Raum steht in der Zeile, damit der Schredder sie erreicht.** Eine
+ * Entscheidung gehoert dem Raum ihres Gegenstands, und `source_transition_at`
+ * ist selbst eine Aussage darueber, wann jemand gefahren ist. Ohne diese
+ * Spalte ueberlebte sie einen Schredder, der genau das ausloeschen sollte -
+ * dieselbe Form wie Befund B251.
+ *
+ * **Nach Identitaet**, weil zwei Menschen in einem Home verschiedene Autos an
+ * verschiedenen Orten haben. Der Uebergang bleibt trotzdem der Vergleich, den
+ * `picoParkingAnswer` anstellt: wer die gestrige Vermutung verworfen hat, hat
+ * ueber die heutige nichts gesagt, und ein Leser, der nur nach Identitaet
+ * sucht, liesse das Nein von gestern auf heute fallen.
+ */
+export const picoParkingDecisionMigrationId =
+  '0028_pico_parking_decision' as const;
+
 export const migrations: readonly MigrationDefinition[] = [
   {
     id: picoSchemaBaselineMigrationId,
@@ -1704,6 +1738,23 @@ export const migrations: readonly MigrationDefinition[] = [
       db.exec(`
         CREATE UNIQUE INDEX pico_event_device_lamport_unique_idx
         ON pico_event (device_id, lamport);
+      `);
+    },
+  },
+  {
+    id: picoParkingDecisionMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_parking_decision (
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          source_transition_at TEXT NOT NULL,
+          memory_item_id TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('confirmed', 'rejected')),
+          decided_at TEXT NOT NULL,
+          PRIMARY KEY (pico_identity_fingerprint_hex)
+        );
       `);
     },
   },

@@ -63,13 +63,32 @@ export type DeleteDomainObservations = (privacyDomain: string) => number;
  */
 export type ForgetDomainRecalls = (privacyDomain: string) => number;
 
+/**
+ * ADR 0129 SR4 with ADR 0071. The person's own word about a place, which the
+ * shred must also reach.
+ *
+ * A port for the same reason as the two above: one act, one cascade. The row
+ * carries no key envelope and, once its derivation is unreadable, nothing
+ * left to agree with - but `source_transition_at` is by itself a statement
+ * about when somebody drove, so leaving it would be finding B251 again one
+ * table further on. Deleted rather than cleared: an emptied row here is a
+ * handle on nothing.
+ */
+export type ForgetDomainParkingDecisions = (privacyDomain: string) => number;
+
 export function shredDomainWithAudit(
   memory: MemoryStore,
   appendAudit: AppendShredAudit,
   input: ShredDomainInput,
   deleteObservations?: DeleteDomainObservations,
   forgetRecalls?: ForgetDomainRecalls,
-): { removedKeyVersions: number; removedObservations: number; forgottenRecalls: number } {
+  forgetParkingDecisions?: ForgetDomainParkingDecisions,
+): {
+  removedKeyVersions: number;
+  removedObservations: number;
+  forgottenRecalls: number;
+  forgottenParkingDecisions: number;
+} {
   const { removed } = memory.cryptoShredDomain(input.privacyDomain);
   // After the keys, so a failure between the two leaves readings whose domain
   // key is already gone rather than keys for readings that are already gone.
@@ -78,6 +97,9 @@ export function shredDomainWithAudit(
   // And the same ordering for the same reason: a failure here leaves words
   // whose domain key is gone, which the next run of the shred clears.
   const forgottenRecalls = forgetRecalls?.(input.privacyDomain) ?? 0;
+  // Und zuletzt, aus demselben Grund: was hier ueberlebte, waere eine Aussage
+  // ueber eine Fahrt ohne den Ort, zu dem sie gehoerte.
+  const forgottenParkingDecisions = forgetParkingDecisions?.(input.privacyDomain) ?? 0;
 
   appendAudit({
     privacyDomain: input.privacyDomain,
@@ -85,5 +107,10 @@ export function shredDomainWithAudit(
     ...(input.reason === undefined ? {} : { reason: input.reason }),
   });
 
-  return { removedKeyVersions: removed, removedObservations, forgottenRecalls };
+  return {
+    removedKeyVersions: removed,
+    removedObservations,
+    forgottenRecalls,
+    forgottenParkingDecisions,
+  };
 }

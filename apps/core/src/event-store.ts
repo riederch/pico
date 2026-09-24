@@ -1,3 +1,4 @@
+import type { PicoParkingDecision } from '@pico/protocol/spatial-recall';
 import { isAsciiToken, isCanonicalHex, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -7950,6 +7951,93 @@ export class EventStore {
    * Transaktion geschrieben, also tragen alle Zeilen eines Moduls denselben.
    * `MIN` sagt das und bleibt richtig, falls das je auseinanderfaellt.
    */
+  /**
+   * ADR 0129 SR4. Was diese Person ueber einen abgeleiteten Parkort gesagt hat.
+   *
+   * **Geschrieben statt ergaenzt, und eine Zeile je Person**: eine spaetere
+   * Antwort ersetzt die fruehere, auch die ueber einen aelteren Uebergang.
+   * Wer erst bestaetigt und dann verwirft, hat verworfen - und eine Liste
+   * davon, wo das Auto einer Person an welchem Tag stand, ist nichts, was ein
+   * Home ungefragt anlegen sollte. Das ist zugleich das Wachstumsende der
+   * Tabelle (ADR 0119 Q5).
+   */
+  public recordPicoParkingDecision(input: {
+    picoIdentityFingerprintHex: string;
+    privacyDomain: string;
+    sourceTransitionAt: string;
+    memoryItemId: string;
+    status: PicoParkingDecision;
+  }): void {
+    this.ensureOpen();
+    this.db
+      .prepare(`
+        INSERT INTO pico_parking_decision (
+          pico_identity_fingerprint_hex, privacy_domain, source_transition_at,
+          memory_item_id, status, decided_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (pico_identity_fingerprint_hex)
+        DO UPDATE SET
+          privacy_domain = excluded.privacy_domain,
+          source_transition_at = excluded.source_transition_at,
+          memory_item_id = excluded.memory_item_id,
+          status = excluded.status,
+          decided_at = excluded.decided_at
+      `)
+      .run(
+        input.picoIdentityFingerprintHex,
+        input.privacyDomain,
+        input.sourceTransitionAt,
+        input.memoryItemId,
+        input.status,
+        new Date().toISOString(),
+      );
+  }
+
+  /**
+   * ADR 0071 mit ADR 0129 SR4. Was der Schredder hier ausloescht.
+   *
+   * **Geloescht, nicht geleert**: die Zeile traegt keinen
+   * Schluesselumschlag, und `source_transition_at` ist selbst eine Aussage
+   * darueber, wann jemand gefahren ist. Fuer etwas, das ohne seinen
+   * Gegenstand keine Bedeutung mehr hat, ist Verschwinden staerker als
+   * Unlesbarwerden - dieselbe Begruendung, die der Beobachtungspuffer nebenan
+   * gibt.
+   */
+  public forgetPicoParkingDecisions(privacyDomain: string): number {
+    this.ensureOpen();
+    return this.db
+      .prepare('DELETE FROM pico_parking_decision WHERE privacy_domain = ?')
+      .run(privacyDomain).changes;
+  }
+
+  /**
+   * ADR 0129 SR4. Die letzte Antwort dieser Person, oder keine.
+   *
+   * **Nach Uebergang gesucht und nicht nach "zuletzt"**, weil genau das der
+   * Vergleich ist, den `picoParkingAnswer` anstellt: eine Person, die die
+   * gestrige Vermutung verworfen hat, hat ueber die heutige nichts gesagt.
+   * Ein Leser, der einfach die juengste Zeile naehme, liesse ein Nein von
+   * gestern auf eine Ableitung von heute fallen.
+   */
+  public picoParkingDecision(input: {
+    picoIdentityFingerprintHex: string;
+    sourceTransitionAt: string;
+  }): { status: PicoParkingDecision; memoryItemId: string; decidedAt: string } | undefined {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT status, memory_item_id AS memoryItemId, decided_at AS decidedAt
+        FROM pico_parking_decision
+        WHERE pico_identity_fingerprint_hex = ?
+          AND source_transition_at = ?
+      `)
+      .get(input.picoIdentityFingerprintHex, input.sourceTransitionAt) as
+        | { status: PicoParkingDecision; memoryItemId: string; decidedAt: string }
+        | undefined;
+    return row === undefined ? undefined : Object.freeze(row);
+  }
+
   public picoModuleConsentInstants(): ReadonlyArray<{
     identifier: string;
     consentedAt: string;

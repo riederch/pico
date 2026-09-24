@@ -233,6 +233,15 @@ import {
 } from '@pico/protocol/link-packet';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
+import { picoParkingAnswer } from '@pico/module-spatial-recall/parking';
+import {
+  maxPicoParkingCandidatesRead,
+  parsePicoParkingCandidate,
+  picoParkingDecisions,
+  picoParkingEventContentType,
+  type PicoParkingCandidate,
+  type PicoParkingDecision,
+} from '@pico/protocol/spatial-recall';
 import {
   picoModuleIdentifiers,
   resolvePicoModuleActivation,
@@ -2060,6 +2069,65 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * den Raum eines anderen oder in einen, den kein Shred je erreicht.
    */
   const spatialCapturePrivacyDomain = 'private';
+
+  /**
+   * ADR 0129 SR3/SR4. Die juengste Ableitung dieses Homes, wieder
+   * zusammengesetzt.
+   *
+   * **Aus zwei Haelften**, weil sie in zwei Haelften abgelegt wird: was das
+   * Modul geschlossen hat, steht als kanonischer Inhalt im Erinnerungsstueck,
+   * und *wo* es war, steht in den Kernspalten daneben (SR3). Ein Stueck ohne
+   * Ort ist darum kein Kandidat und keine halbe Antwort - es faellt weg.
+   *
+   * `undefined` ist eine Abwesenheit und kein Fehler: ein Home, das nie eine
+   * Fahrt gesehen hat, weiss nicht, wo das Auto steht.
+   */
+  const latestPicoParkingCandidate = ():
+  { memoryItemId: string; candidate: PicoParkingCandidate } | undefined => {
+    const placed = store.picoPlacedMemoryItems({
+      privacyDomain: spatialCapturePrivacyDomain,
+      limit: maxPicoParkingCandidatesRead,
+    });
+    let latest: { memoryItemId: string; candidate: PicoParkingCandidate } | undefined;
+    for (const row of placed) {
+      if (row.contentType !== picoParkingEventContentType) {
+        continue;
+      }
+      const item = store.memory().getInDomain(row.memoryItemId, spatialCapturePrivacyDomain);
+      if (item?.content === undefined) {
+        // Verschluesselt ohne Schluessel oder geschreddert: der Ort steht
+        // vielleicht noch in der Spalte, der Schluss darueber nicht mehr.
+        // Eine Antwort aus der halben Haelfte waere erfunden.
+        continue;
+      }
+      let candidate: PicoParkingCandidate;
+      try {
+        candidate = parsePicoParkingCandidate({
+          ...JSON.parse(item.content) as Record<string, unknown>,
+          latitudeDeg: row.latitudeDeg,
+          longitudeDeg: row.longitudeDeg,
+          accuracyM: row.accuracyM,
+        });
+      } catch {
+        // Ein Stueck, das der Parser nicht annimmt, ist keines - und ein
+        // Ergebnis daraus zu raten waere genau das, was ADR 0129 verbietet.
+        continue;
+      }
+      /**
+       * **Die juengste Fahrt, nicht die zuletzt geschriebene Zeile.** Die
+       * Abfrage sortiert nach `created_at`, und zwei Ableitungen, die in
+       * derselben Millisekunde ankommen, stuenden dort in beliebiger
+       * Reihenfolge - ein Geraet, das nach einem Verbindungsabbruch zwei
+       * Fahrten nachreicht, bekaeme sonst die falsche Antwort. Verglichen wird
+       * darum `parkedAt`: wann das Fahrzeug zur Ruhe kam.
+       */
+      if (latest === undefined
+        || Date.parse(candidate.parkedAt) > Date.parse(latest.candidate.parkedAt)) {
+        latest = { memoryItemId: row.memoryItemId, candidate };
+      }
+    }
+    return latest;
+  };
 
   /**
    * ADR 0149. The relay this Home uses, or nothing.
@@ -5205,6 +5273,114 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             result: { memoryItemId: derivedItemId, crossed: true },
           };
         }
+        case 'home.parking.ask': {
+          /**
+           * ADR 0129 SR4, Nutzerentscheidung 14 vom 2026-09-23. Die
+           * Lesehaelfte der Ableitung.
+           *
+           * Bis heute schrieb `home.observation.derived.keep` die abgeleiteten
+           * Parkereignisse, und **niemand las sie zurueck**:
+           * `picoParkingAnswer` stand fertig im Modul und hatte keinen
+           * Aufrufer, waehrend das Manifest die Antwort versprach. Befund
+           * B194 hat den Satz als unerfuellt festgehalten.
+           */
+          if (principal === undefined || Object.keys(args).length !== 0) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          /**
+           * ADR 0077. Dieselbe Regel wie bei `home.recall.ask`: der versiegelte
+           * Kanal beantwortet "darf dieses Home benutzen", nicht "darf diesen
+           * Raum lesen". Und dieselbe Stille - "du darfst nicht" von "da ist
+           * nichts" unterscheidbar zu machen, machte daraus ein Orakel ueber
+           * Leserechte (ADR 0077 C4).
+           */
+          if (!readership.mayRead({
+            sessionDigest: 'pico-link-direct',
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+          }, spatialCapturePrivacyDomain)) {
+            return { outcome: 'ok', result: { outcome: 'unknown' } };
+          }
+
+          const derived = latestPicoParkingCandidate();
+          if (derived === undefined) {
+            // Keine Ableitung ist eine Abwesenheit und kein Fehler (ADR 0118
+            // O4). Ein Home, das nie eine Fahrt gesehen hat, weiss nicht, wo
+            // das Auto steht - und sagt genau das.
+            return { outcome: 'ok', result: { outcome: 'unknown' } };
+          }
+          const decision = store.picoParkingDecision({
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            sourceTransitionAt: derived.candidate.sourceTransitionAt,
+          });
+          const answer = picoParkingAnswer({
+            derived: derived.candidate,
+            ...(decision === undefined
+              ? {}
+              : { recorded: { ...derived.candidate, status: decision.status } }),
+          });
+          /**
+           * Feld fuer Feld gebaut statt durchgereicht, und der Ausgang steht
+           * immer dabei: ADR 0129 SR4 verlangt, dass eine Antwort ihre
+           * Sicherheit traegt, und eine Flaeche, der man eine blosse Position
+           * reichen kann, hat genau diese Eigenschaft verloren.
+           */
+          return {
+            outcome: 'ok',
+            result: answer.outcome === 'unknown'
+              ? { outcome: 'unknown' }
+              : {
+                outcome: answer.outcome,
+                memoryItemId: derived.memoryItemId,
+                parkedAt: answer.place.parkedAt,
+                sourceTransitionAt: answer.place.sourceTransitionAt,
+                confidence: answer.place.confidence,
+                place: JSON.stringify({
+                  latitudeDeg: answer.place.latitudeDeg,
+                  longitudeDeg: answer.place.longitudeDeg,
+                  accuracyM: answer.place.accuracyM,
+                }),
+              },
+          };
+        }
+        case 'home.parking.decide': {
+          /**
+           * ADR 0129 SR4. Die Haelfte, die die Ableitung besser macht - und
+           * die einzige, ueber die `known` je erreichbar ist.
+           */
+          if (principal === undefined
+            || typeof args.sourceTransitionAt !== 'string'
+            || typeof args.status !== 'string'
+            || !(picoParkingDecisions as readonly string[]).includes(args.status)
+            || Object.keys(args).length !== 2) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (!readership.mayRead({
+            sessionDigest: 'pico-link-direct',
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+          }, spatialCapturePrivacyDomain)) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_readable' } };
+          }
+          const derived = latestPicoParkingCandidate();
+          if (derived === undefined
+            || derived.candidate.sourceTransitionAt !== args.sourceTransitionAt) {
+            /**
+             * Nur ueber einen Uebergang, den dieses Home wirklich abgeleitet
+             * hat. Eine Entscheidung ueber einen erfundenen Zeitpunkt
+             * anzunehmen, liesse einen Aufrufer erfahren, welche Zeitpunkte es
+             * gibt - und die sind selbst schon eine Aussage darueber, wann
+             * jemand gefahren ist.
+             */
+            return { outcome: 'invalid_arguments', result: { refusal: 'no_such_parking_candidate' } };
+          }
+          store.recordPicoParkingDecision({
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            privacyDomain: spatialCapturePrivacyDomain,
+            sourceTransitionAt: args.sourceTransitionAt,
+            memoryItemId: derived.memoryItemId,
+            status: args.status as PicoParkingDecision,
+          });
+          return { outcome: 'ok', result: { status: args.status } };
+        }
         case 'home.modules.consent.read': {
           if (principal === undefined) {
             return { outcome: 'invalid_arguments', result: {} };
@@ -8041,7 +8217,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       });
     }
 
-    const { removedKeyVersions, removedObservations, forgottenRecalls } = shredDomainWithAudit(
+    const {
+      removedKeyVersions, removedObservations, forgottenRecalls, forgottenParkingDecisions,
+    } = shredDomainWithAudit(
       store.memory(),
       (audit) => {
         appendServerEvent('memory.domain_shredded', audit);
@@ -8060,10 +8238,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // a person has on a memory item they kept (ADR 0126).
       (domain) => store.picoModelJobQueue()
         .forgetDomainRecalls({ privacyDomain: domain, at: new Date().toISOString() }),
+      // ADR 0129 SR4. Und was eine Person ueber einen Parkort gesagt hat: der
+      // Uebergang darin ist selbst eine Aussage darueber, wann sie gefahren
+      // ist, und nichts daran wird von einem zerstoerten Schluessel unlesbar.
+      (domain) => store.forgetPicoParkingDecisions(domain),
     );
 
     request.log.warn(
-      { privacyDomain, removedKeyVersions, removedObservations, forgottenRecalls },
+      {
+        privacyDomain, removedKeyVersions, removedObservations, forgottenRecalls,
+        forgottenParkingDecisions,
+      },
       'Privacy domain crypto-shredded.',
     );
     reconcileShareEnvelopes();
