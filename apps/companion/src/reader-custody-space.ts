@@ -559,8 +559,7 @@ export async function discardPicoCompanionReaderCustodySpace(input: {
     changedAt: now.toISOString(),
     lifecycleOrder: picoLifecycleOrderFrom(BigInt(now.getTime())),
   };
-  const signed = await signPicoCompanionWithIdentityRoot({
-    daemonClient: input.daemonClient,
+  const signed = await signPicoCompanionWithIdentityRoot(input.daemonClient, {
     keyFingerprintHex: input.profile.identity.keyFingerprintHex,
     label: picoReaderCustodyCanonicalLabels.domainLifecycle,
     fields: lifecycle,

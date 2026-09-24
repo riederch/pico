@@ -222,6 +222,12 @@ const unlabelledSignCalls = new Map([
     reason: 'die Grundfunktion eine Ebene unter den Familien - hier sind die Bytes '
       + 'bereits gebaut, das Etikett hat der Aufrufer eine Ebene höher genannt',
   }],
+  ['apps/companion/src/reader-custody.ts', {
+    count: 1,
+    reason: 'ein Weiterleiter: `signPicoCompanionWithIdentityRoot` reicht sein Argument '
+      + 'durch und prueft nur, dass der Vault wirklich die Wurzel genommen hat - seine '
+      + 'Aufrufer nennen das Etikett und werden unten selbst geprueft',
+  }],
   ['apps/vault-daemon/src/device-lifecycle-ceremony.ts', {
     count: 1,
     reason: 'ein Weiterleiter: `signWithExactKey` reicht sein Argument durch, und seine '
@@ -244,7 +250,18 @@ for (const root of roots) {
     const source = readFileSync(path, 'utf8');
     const flat = blankStringsAndComments(source, relative(repoRoot, path));
     signCall.lastIndex = 0;
-    for (const call of source.matchAll(signCall)) {
+    /**
+     * **Gegen die geschwaerzte Fassung gesucht, nicht gegen den Quelltext.**
+     *
+     * `blankStringsAndComments` gibt es hier seit jeher - `callSpan` liest
+     * darauf -, und die Suche lief trotzdem auf dem Rohtext. Am 2026-09-24
+     * hat ein Kommentar, der `.sign(` in Anfuehrungszeichen *erklaert*, sich
+     * selbst als Signieraufruf gemeldet; der Pruefer verlangte eine
+     * Begruendung fuer einen Aufruf, den es nicht gibt. Dieselbe Lehre wie
+     * B188: eine Regex ist kein Leser von Quelltext, und wer beides hat, muss
+     * beides auch benutzen.
+     */
+    for (const call of flat.matchAll(signCall)) {
       const span = callSpan(flat, call.index);
       const label = span === null
         ? null
@@ -276,7 +293,18 @@ for (const root of roots) {
   for (const path of sourceFiles(root)) {
     const source = readFileSync(path, 'utf8');
     const flat = blankStringsAndComments(source, relative(repoRoot, path));
-    for (const call of source.matchAll(signCall)) {
+    /**
+     * **Gegen die geschwaerzte Fassung gesucht, nicht gegen den Quelltext.**
+     *
+     * `blankStringsAndComments` gibt es hier seit jeher - `callSpan` liest
+     * darauf -, und die Suche lief trotzdem auf dem Rohtext. Am 2026-09-24
+     * hat ein Kommentar, der `.sign(` in Anfuehrungszeichen *erklaert*, sich
+     * selbst als Signieraufruf gemeldet; der Pruefer verlangte eine
+     * Begruendung fuer einen Aufruf, den es nicht gibt. Dieselbe Lehre wie
+     * B188: eine Regex ist kein Leser von Quelltext, und wer beides hat, muss
+     * beides auch benutzen.
+     */
+    for (const call of flat.matchAll(signCall)) {
       const span = callSpan(flat, call.index);
       if (span === null || !/^[A-Za-z_$][\w$]*$/u.test(source.slice(span[0] + 1, span[1] - 1).trim())) {
         continue;

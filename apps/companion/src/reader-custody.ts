@@ -170,17 +170,23 @@ export async function submitPicoCompanionAuthorityRecord(input: {
  * zwei Saetze, die auseinanderlaufen koennen, und `refusal:check` hat den
  * zweiten am Tag seiner Entstehung gefangen.
  */
-export async function signPicoCompanionWithIdentityRoot(input: {
-  daemonClient: PicoVaultDaemonClient;
-  keyFingerprintHex: string;
-  label: string;
-  fields: Record<string, unknown>;
-}): Promise<{ signatureHex: string }> {
-  const signed = await input.daemonClient.sign({
-    keyFingerprintHex: input.keyFingerprintHex,
-    label: input.label,
-    fields: input.fields,
-  });
+export async function signPicoCompanionWithIdentityRoot(
+  daemonClient: PicoVaultDaemonClient,
+  /**
+   * **Als ein Stueck weitergereicht, nicht Feld fuer Feld**, und das ist keine
+   * Bequemlichkeit: `check-signature-labels.mjs` erkennt eine Weiterleitung
+   * genau daran, dass `.sign(` einen blossen Bezeichner bekommt, und liest das
+   * Label dann an den Aufrufstellen. Die erste Fassung baute hier ein Objekt
+   * zusammen - damit war dies eine Signierstelle, deren Label der Pruefer
+   * nicht mehr aufloesen konnte, und er hat es gemeldet.
+   */
+  request: {
+    keyFingerprintHex: string;
+    label: string;
+    fields: Record<string, unknown>;
+  },
+): Promise<{ signatureHex: string }> {
+  const signed = await daemonClient.sign(request);
   if (signed.keyRole !== 'pico_identity') {
     throw new Error('pico_identity_key_required');
   }
@@ -220,8 +226,7 @@ export async function publishPicoCompanionReaderKeyFreshness(input: {
      */
     freshUntil: new Date(now.getTime() + 4 * 60 * 1_000).toISOString(),
   };
-  const signed = await signPicoCompanionWithIdentityRoot({
-    daemonClient: input.daemonClient,
+  const signed = await signPicoCompanionWithIdentityRoot(input.daemonClient, {
     keyFingerprintHex: input.identityKeyFingerprintHex,
     label: picoIdentityReaderKeyFreshnessSignatureInputLabel,
     fields: checkpoint,
