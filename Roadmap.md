@@ -625,6 +625,22 @@ vorgelegt und geändert.
 | 20 | Löschung | `source_ref` leeren; `kept_*` und die drei Zeitpunkte bleiben |
 | — | Schlüsselexport (B255) | jetzt bauen |
 
+**Der Schlüsselexport, am 2026-09-24 auf Fable analysiert und in zwei
+Gabeln entschieden.** ADR 0158 wurde gegen den Baum gemessen statt gelesen:
+`key-store.ts`, `memory-content-crypto.ts`, `share-envelope.ts`, die
+Keyfile-Konstruktion in `packages/vault`, `argued-routes.mjs`. **Gabel A —
+wo versiegelt wird:** auf dem Gerät. Der Entwurf ließ das Home unter einer
+Passphrase versiegeln, die in der Anfrage reist; die ganze Konstruktion lebt
+aber in `packages/vault`, der Kern hat keinen KDF-Pfad, und eine getippte
+Passphrase läge im Klartext in einem Prozess, den ADR 0081 aus genau dem
+heraushält. **Gabel B — was der Export enthält:** nach Leserschaft je Domäne
+(ADR 0077), nicht der ganze Speicher — sonst würde Home-Verwaltung zu
+Domänen-Leserschaft. Acht Korrekturen daneben, keine davon eine Gabel; die
+schwerste: Versionsnummern sind über Shred-Generationen nicht eindeutig
+(`nextVersion` beginnt nach dem Shred wieder bei `v1`), also identifiziert der
+Import Schlüssel per Digest und kennt *conflicting*. Die Gates KE1–KE6 sind
+umgeschrieben; gebaut ist nichts.
+
 **Eine Nachentscheidung am 2026-09-24: woher die Parkantwort kommt.** Punkt 14
 sagte „`spatial-recall` zuerst, an der Ableitung" und liess offen, *wo* die
 Antwort gegeben wird. Gemessen ergab sich, dass der versprochene Satz
@@ -670,7 +686,8 @@ Begründung (ADR 0033 — nur Domänen-KEKs, zwei bewusste Artefakte), wird also
 billiger.
 
 1. **15, 8, 6, 20, 5, 19** und die Browser-Frist — sechs kleine, unabhängig
-2. **Schlüsselexport**
+2. **Schlüsselexport** — am 2026-09-24 auf Fable analysiert, beide Gabeln
+   entschieden (ADR 0158 KE1–KE6 umgeschrieben); der Bau ist der nächste Block
 3. **18, 10** — Store-Integrität, liegt neben der Schlüsselarbeit
 4. **16, 11** — die zwei Grenzen nach außen
 5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`; erledigt am

@@ -2,10 +2,13 @@
 
 ## Status
 
-**Draft, 2026-09-23, reviewed 2026-09-24. Nothing here is accepted and
-nothing is built.** KE1-KE6 are proposed gate shapes rather than decided ones;
-the review at the end measured them against the tree and found two forks the
-owner has to decide and eight corrections that are not forks. No status matrix row, no
+**Draft, 2026-09-23; reviewed and its two forks decided by the owner on
+2026-09-24. Nothing is built.** KE1-KE6 below are the decided shapes: the
+review at the end measured the first draft against the tree, found two forks
+(A: seal on the device; B: readership-scoped) and eight corrections, and the
+gates were rewritten to absorb all of them. No status matrix row, no
+`.agent-context.md` entry beyond the handoff, no ADR 0128 status note on
+anything it touches until something is built. No status matrix row, no
 `.agent-context.md` entry, no ADR 0128 status note on anything it touches -
 ADR 0146 set that precedent, ADR 0156 and 0157 follow it.
 
@@ -53,95 +56,137 @@ What already exists, measured rather than assumed:
 
 ## Decision
 
-### KE1 - The artifact holds memory KEKs and nothing else
+### KE1 - The artifact holds the KEKs its maker may read, and nothing else
 
-The export carries, for the Home it was made in, the complete set of
-`(domainId, version, kek)` triples the key store holds at export time, the
-Home id, and the instant of export. It carries **no** identity key, host key,
-device key, recovery anchor, operator credential or session - not because a
-list says so, but because the exporter reads only `KeyStore` and the parser
-refuses any payload element that is not a KEK triple.
+The export carries, for the Home it was made in, the `(domainId, version,
+kek, kekDigest)` tuples of exactly the **host-custody domains the requesting
+identity may read at export time** (ADR 0077 readership, asked per domain the
+way `home.recall.ask` asks it), the Home id, the exporting identity's
+fingerprint and the instant of export. It carries **no** identity key, host
+key, device key, recovery anchor, operator credential or session - not because
+a list says so, but because the Home releases only what `KeyStore` holds for
+readable domains and the parser refuses any payload element that is not a KEK
+tuple.
 
-This is ADR 0033's rule made structural: holding this file plus a database
-backup restores memory readability and nothing else. It cannot become
-identity, host administration, membership or transport authority, because
-none of those keys can be in it.
+This is ADR 0033's rule made structural, twice: holding this file plus a
+database backup restores memory readability and nothing else; and Home
+administration stays what it is - the Home Host exports the domains they may
+read, a member exports theirs, and nobody exports a domain they could not
+read. In a one-person Home the set is the whole store; the day a second person
+lives there it is not, and the export is not where the two start to blur.
 
 **Gate:** the export module imports nothing from identity, host-key, recovery
-or operator modules, checked by the module boundary the way `relay:check`
-checks the relay reaches no Pico store. And a round trip through the parser
-with a foreign element planted fails.
+or operator modules, checked the way `relay:check` checks the relay reaches
+no Pico store; a round trip through the parser with a foreign element planted
+fails; and a walk against a real Home with two readers shows each export
+carrying only its own domains.
 
-### KE2 - The construction is the Vault keyfile's, with its own name
+### KE2 - The construction is the Vault keyfile's, on the device, with its own name
 
 `pico.vault.keyexport.v1`: the same header fields as `pico.vault.keyfile.v1`
 (format, suite, KDF algorithm and profile, ops and memory limits, salt, AEAD
 algorithm, nonce), the same Argon2id-through-`crypto_pwhash` derivation, the
-same XChaCha20-Poly1305 seal with the header as associated data. The
-`keyRole` field of the keyfile header becomes a `contents` field that names
-what is inside (`memory_domain_keks`), and a `homeId` field binds the artifact
-to the Home it came from.
+same XChaCha20-Poly1305 seal with the header as associated data - **built by
+the same code, in `packages/vault`, on the person's device.** The `keyRole`
+field of the keyfile header becomes a `contents` field naming what is inside
+(`memory_domain_keks`), and `homeId` and the exporting identity's fingerprint
+bind the artifact to where it came from.
+
+The seal happens on the device and not at the Home, and this is a decision
+about *where a passphrase may exist*: the Home releases raw KEKs over the
+sealed Link channel (ADR 0107, end to end between the person's device and
+their own Home - the direction `share-envelope.ts` already seals a KEK in),
+the device derives, seals and writes. The passphrase a person chooses never
+leaves the device that asked for it; the artifact never crosses the wire;
+`apps/core` gains no KDF path. ADR 0081's rule that no host holds a
+passphrase is kept by construction.
 
 No new primitive, no new construction. The **format label is inside the
 associated data**, so a keyfile can never be opened as an export or an export
 as a keyfile: the AEAD refuses before any payload is looked at.
 
-**KDF tier: moderate**, not maximum, and this is a decision about
-*availability of the import*, not about strength. The device that owns the
-data may be an appliance with 1 GiB in total; an artifact that only a
-workstation can open protects nobody. The header is self-describing, so a
-later profile can raise the cost without a format change.
+**KDF profile: moderate**, the profile every unlock already runs on the same
+device, so the availability question the first draft asked answers itself.
+The header is self-describing; a later profile can raise the cost without a
+format change.
 
 ### KE3 - The passphrase is its own, and it is written nowhere
 
 The export passphrase is chosen at export time and never stored. It **must
-not equal the Vault passphrase**: the process performing the seal can refuse
-equality without retaining anything, and ADR 0033 forbids one secret becoming
-universal authority. A length floor applies; beyond that, the person is told
-the truth rather than scored: *this passphrase is written nowhere; without it
-the file is noise.*
+not equal the Vault passphrase**, and the device can refuse equality without
+retaining anything: it attempts to open the identity keyfile with the
+candidate - one Argon2id run at the moderate profile, about 215 ms - and
+refuses if it opens. ADR 0033 forbids one secret becoming universal
+authority, and this is the check that keeps a person from making it one out
+of habit. A length floor applies; beyond that, the person is told the truth
+rather than scored: *this passphrase is written nowhere; without it the file
+is noise.*
 
 Import verifies the passphrase only by attempting to open the artifact. There
 is no hint, no recovery, no second way in. Visible loss over hidden recovery
 channels - ADR 0081's posture, restated.
 
-### KE4 - Export and import are Core-side Link operations, approval-gated
+### KE4 - Export and import are signed statements the Home answers over Link
 
-The key store is the Core's, so the Core exports and the Core imports. Two
-new Pico Link Direct operations, reached from the companion and from nothing
-else (ADR 0105: no product path assumes a terminal):
+The key store is the Core's, so the Core releases and the Core writes; the
+device seals and opens. Two Pico Link Direct operations, reached from the
+companion and from nothing else (ADR 0105: no product path assumes a
+terminal):
 
-- `home.memory.keys.export.submit` - the Home seals its KEKs under the
-  passphrase carried in the request and returns the artifact bytes in the
-  reply. Passphrase and artifact travel only inside sealed Link envelopes
-  (ADR 0107). The companion writes the artifact to the path the person chose,
-  mode `0600` (`mode:check`), and shows the sentence in KE6.
-- `home.memory.keys.import.submit` - the reverse: artifact and passphrase in,
-  a report out.
+- `home.memory.keys.export.submit` - carries a **key-export statement**
+  signed by the identity root (`pico.mem.key-export.v1`: Home id, exporting
+  identity, the domains asked for, the instant). The Home verifies it against
+  its founding record, checks readership per domain (KE1), and answers with
+  the raw KEK tuples inside the sealed reply. The companion seals them (KE2)
+  and writes the artifact at mode `0600` (`mode:check`).
+- `home.memory.keys.import.submit` - the mirror: a signed **key-import
+  statement** and the raw KEK tuples the device opened from the artifact go
+  in; a report (KE5) comes out.
 
-Both require the current Home Host Pico with an active delegation **and
-ADR 0099 approval**. Producing a file that restores every memory is a
-sensitive act; so is writing keys into a live Home. Neither is a Foundation
-route: there is no dashboard convenience here, and the ADR 0076 operator is
-not the person whose memories these are.
+This is the tree's own shape of approval rather than a new one: the Core has
+no ADR 0099 gate (`home.action.approval.*` is ADR 0141's action runner), and
+every sensitive act an owner performs here is a statement the identity root
+signs at the Vault daemon, approval-gated there with a rendered sentence. Each
+statement therefore has a builder, a renderer and a role entry - all three
+catalogs, which is what B268 taught - and the rendered sentence is KE6's,
+shown at the moment the key signs. Neither operation is a Foundation route:
+there is no dashboard convenience here, and the ADR 0076 operator is not the
+person whose memories these are.
 
-### KE5 - Import never overwrites and never resurrects
+Both refuse by name when the Home's memory encryption decision is off
+(`memory_encryption_off`): there is no key store to release from, and keys
+written into a Home that stores plaintext protect nothing (ADR 0070,
+protection before exposure).
 
-Import writes a KEK file only where none exists. A version already present
-is left untouched - a live key is never replaced by an older copy. And a
-domain whose audit log carries `memory.domain_shredded` after the artifact's
-export instant is **refused**, by name: importing it would resurrect exactly
-the key material a shred destroyed, which is the case ADR 0033 names when it
-says stale backups must not silently resurrect retired keys. The event log
-is the source of truth for that refusal, not the file system.
+### KE5 - Import never overwrites, never mixes generations, never resurrects
 
-The report says, per domain: restored, already present, or refused and why.
+Keys are identified by **digest**, not by version name. `KeyStore.nextVersion`
+restarts at `v1` after a shred, and a domain re-created afterwards gets a
+fresh `v1` under the old name; a report keyed by name would call a different
+key "already present" and write the old `v2..vn` beside the new `v1` - the
+mixed-generation state in which a later restore of an old backup reads again.
+So the artifact carries a BLAKE2b digest per KEK (the shape `wrap_digest_hex`
+already uses), and import compares digests.
+
+Per domain, the report says one of four things: **restored** (no key of that
+version was present, the file was written), **already present** (same
+version, same digest), **conflicting** (same version, different digest - the
+whole domain is refused, because mixed generations are the resurrection
+path), or **refused** because the Home's log carries
+`memory.domain_shredded` for that domain after the artifact's export instant.
+Importing a shredded domain's keys would resurrect exactly the material a
+shred destroyed, which is the case ADR 0033 names when it says stale backups
+must not silently resurrect retired keys. The event log is the source of
+truth for that refusal, not the file system; nothing reads events by type
+today, and an import - rare by nature - may scan for it.
 
 ### KE6 - Both halves are said to the person, and only both restore
 
-At export: *"This file, together with a backup of your Home, restores your
-memories. Alone it restores nothing. The passphrase you chose is written
-nowhere. Anything your Home seals after today needs a newer file."*
+At export, in the sentence the daemon renders for the signature and again
+when the file is written: *"This file, together with a backup of your Home,
+restores your memories. Alone it restores nothing. The passphrase you chose is
+written nowhere. Any part of your memory your Home starts after today needs a
+newer file."*
 
 At import: the report from KE5, and one more sentence: *"Your memories are
 readable again only once the database backup is restored too."* - because a
@@ -160,16 +205,22 @@ moment each half is made.
 - A forgotten export passphrase is a useless file. That is the same shape as
   every scheme this project has accepted (ADR 0081, ADR 0110) and is preferred
   over any recovery channel.
-- Domains rotated after an export have newer versions the artifact lacks.
-  The export instant in the header, and the KE6 sentence, make that visible
-  rather than surprising. A person who rotates often exports often; the
-  product may later remind them, but this ADR does not decide that.
-- Two new Link operations widen the surface: `surface:check`,
-  `docs/protocol/public-surfaces.md`, `link-operations.mjs` and the argued
-  routes list all learn them, and `link:walk` counts them once a real Home
-  has answered each.
-- The key store gains one operation, "list every domain and version", which
-  the exporter needs and the shred already almost has.
+- Domains born after an export are not in it - a host-custody KEK is created
+  on a domain's first write, and no host-custody rotation exists today. The
+  export instant in the header, and the KE6 sentence, make that visible
+  rather than surprising. The product may later remind a person to export
+  again, but this ADR does not decide that.
+- Two new Link operations and two new signed statements widen the surface:
+  `surface:check`, `docs/protocol/public-surfaces.md`, `link-operations.mjs`
+  and the argued routes list learn the operations; `sign-rendering.ts` and
+  `signableLabelsByKeyRole` learn the labels, and the B174 triad test holds
+  the three catalogs together; `link:walk` counts the operations once a real
+  Home has answered each.
+- The key store gains one operation, "list every domain and version, with a
+  digest", which the exporter needs and the shred already almost has.
+- The day `pico_share_envelope` gets a door, a device's key-agreement key plus
+  a backup becomes a second restore path (C6). That is a question for
+  ADR 0033 at that time, named here so it is not discovered.
 
 ## What this ADR does not decide
 
@@ -307,9 +358,9 @@ separation (`assertKeyStoreSeparation`, `backup_exclude` in
 
 | Gate | Holds that |
 |---|---|
-| KE1 | the artifact contains memory KEKs and nothing else, structurally |
-| KE2 | the construction is `pico.vault.keyfile.v1`'s with its own AAD-bound format label |
-| KE3 | the passphrase is never the Vault passphrase and is stored nowhere |
-| KE4 | export and import are approval-gated Link operations, Core-side, companion-only |
-| KE5 | import never overwrites a present version and never resurrects a shredded domain |
+| KE1 | the artifact contains the KEKs of the domains its maker may read, and nothing else, structurally |
+| KE2 | the construction is `pico.vault.keyfile.v1`'s, built on the device by `packages/vault`, with its own AAD-bound format label |
+| KE3 | the passphrase is never the Vault passphrase (one KDF run proves it) and is stored nowhere |
+| KE4 | export and import are signed statements over Link, Core answers, companion only; refused by name when encryption is off |
+| KE5 | import compares digests, refuses a conflicting domain whole, and never resurrects a shredded domain |
 | KE6 | a real Home round-trips: export, empty the key store, import, read a sealed memory back |
