@@ -1063,8 +1063,20 @@ greift erst danach wieder zum Signierschluessel. Unter vier Forks reicht das
 ueber die fuenf Minuten.
 
 Das Produkt verhaelt sich richtig; die Annahme des Tests ist falsch. Was ein
-echtes Geraet tut, steht im Companion: `ensureUnlocked()` vor jedem Aufruf. Die
-Reparatur hat dieselbe Form und ist noch nicht gebaut.
+echtes Geraet tut, steht im Companion: `ensureUnlocked()` vor jedem Aufruf.
+
+**Gebaut am 2026-09-23, in derselben Form.** `startApprover` traegt ein, was es
+entsperrt hat; `createRecoveryLinkClient` fragt vorher nach und stellt her, was
+fehlt. **Den ganzen Tresor, nicht den einen Schluessel** — der Leerlauf ist je
+Sitzung, und welche als naechste gebraucht wird, weiss der Aufrufer nicht. Die
+erste Fassung stellte nur den Signierschluessel wieder her und fiel eine Zeile
+spaeter in der Wiederherstellungszeremonie um, die Identitaet und
+Schluesselvereinbarung braucht.
+
+Belegt statt abgewartet: `daemonClient.lock()` unmittelbar davor stellt den
+Leerlauf deterministisch nach. Ohne die Wiederherstellung wirft derselbe Fall
+genau `link_device_signing_key_not_unlocked` — die Meldung aus dem Ausfall —,
+mit ihr laeuft er durch.
 
 **B257 — die Zeichnung stand im Zeichner, wo sie ihre eigene Regel nicht
 erreichen kann (2026-09-23).** Nutzerentscheidung 9 sollte unter einem Modul,
