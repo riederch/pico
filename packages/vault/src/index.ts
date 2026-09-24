@@ -516,6 +516,19 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     picoReaderCustodyCanonicalLabels.domain,
     picoReaderCustodyCanonicalLabels.readerGrant,
     picoReaderCustodyCanonicalLabels.readerGrantLifecycle,
+    /**
+     * ADR 0078 K9, Nutzerentscheidung 13. Der Eigentuemer sagt, dass sein
+     * Home die Kopie wegwerfen soll - und niemand sonst darf das sagen, aus
+     * demselben Grund wie beim Raum selbst: das Home prueft die Unterschrift
+     * gegen den Domaenensatz, den es haelt.
+     *
+     * **Ohne diese Zeile endet jeder Druck auf `unknown_signature_input_label`**,
+     * und das Tor daneben bleibt gruen, weil es die Darstellungstabelle liest
+     * und nicht diese Liste. Genau so lag B36 vier Monate: `label:check` sah
+     * ein Label, das der Vault nicht unterschreiben durfte. Gefunden hat es
+     * beide Male ein Durchlauf gegen einen echten Daemon.
+     */
+    picoReaderCustodyCanonicalLabels.domainLifecycle,
     picoReaderCustodyCanonicalLabels.writerGrant,
     picoReaderCustodyCanonicalLabels.writerGrantLifecycle,
     picoReaderCustodyCanonicalLabels.kekRotation,

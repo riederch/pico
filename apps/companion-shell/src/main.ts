@@ -1204,6 +1204,18 @@ function registerIpc(): void {
       return await runtime.rotateReaderCustodyDomain();
     },
   );
+  /** ADR 0078 K9. Den gehosteten Raum beenden - host-lokal, und der Vault
+   * zeigt beim Freigeben, was das nicht heisst. */
+  ipcMain.handle(
+    picoCompanionIpcChannels.discardReaderCustodySpace,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      return await runtime.discardReaderCustodySpace();
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.letOtherDeviceRead,
     async (event: IpcMainInvokeEvent) => {

@@ -26,6 +26,7 @@ import {
   createPicoCompanionReaderCustodySpace,
   letPicoCompanionOtherDeviceRead,
   readPicoCompanionReaderCustodySpace,
+  discardPicoCompanionReaderCustodySpace,
   rotatePicoCompanionReaderCustodyDomain,
   writePicoCompanionReaderCustodyNote,
 } from '@pico/companion/reader-custody-space';
@@ -516,6 +517,76 @@ describe('ADR 0130 E5 - ein Raum, in den nur Gewählte sehen', () => {
 
     await expect(letPicoCompanionOtherDeviceRead(input))
       .rejects.toThrow('no_other_active_device');
+  }, 300_000);
+
+  it('wirft weg, was dieses Home haelt, und laesst nichts dahinter stehen', async () => {
+    /**
+     * ADR 0078 K9 mit Nutzerentscheidung 13 - die sechste Faehigkeit, und die
+     * einzige, die Befund B192 nicht gefunden hat: anlegen, schreiben,
+     * hereinlassen, anzeigen und umschliessen gab es, beenden nicht.
+     *
+     * **Gegen ein laufendes Home, weil die Zahlen sonst Behauptungen waeren.**
+     * Was weggeworfen wird, zaehlt der Home; was danach nicht mehr da ist,
+     * sagt er auf dieselbe Frage wie vorher. Und die Raumdatei hier geht mit -
+     * ein Geraet, das nach dem Wegwerfen noch einen Raum fuehrt, meldete beim
+     * naechsten Schreiben eine Ablehnung fuer etwas, das es nicht mehr gibt.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    await enrolSecondDevice(profilePath, session);
+    const profile = readPicoCompanionProfile(profilePath);
+    const input = {
+      daemonClient: session.consumerClient,
+      profile,
+      profilePath,
+      sodium: sodium as unknown as VaultSodium,
+    };
+    await createPicoCompanionReaderCustodySpace(input);
+    await writePicoCompanionReaderCustodyNote({ ...input, text: 'Eins.' });
+    await writePicoCompanionReaderCustodyNote({ ...input, text: 'Zwei.' });
+    await letPicoCompanionOtherDeviceRead(input);
+
+    const discarded = await discardPicoCompanionReaderCustodySpace(input);
+
+    expect(discarded.discardedItems).toBe(2);
+    expect(discarded.discardedReaderGrants).toBe(1);
+    expect(discarded.discardedWriterGrants).toBe(1);
+    expect(discarded.reasonCategory).toBe('owner_finished');
+
+    /**
+     * **Und danach ist der Raum hier keiner mehr.** Dieselbe Ablehnung wie bei
+     * einem Geraet, das nie einen angelegt hat - der Zustand ist derselbe, und
+     * ein eigener Name dafuer waere ein zweiter Zustand ohne Unterschied.
+     */
+    await expect(writePicoCompanionReaderCustodyNote({
+      ...input,
+      text: 'Danach.',
+    })).rejects.toThrow('no_reader_custody_space');
+  }, 300_000);
+
+  it('raeumt die Raumdatei auch dann weg, wenn das Home den Raum schon nicht mehr kennt', async () => {
+    /**
+     * Der Zustand zwischen den beiden Schritten: das Home hat weggeworfen, das
+     * Geraet ist dabei abgebrochen. Ohne diesen Zweig fuehrte es den Raum fuer
+     * immer weiter, und jeder Versuch endete auf `unknown_domain` - eine
+     * Ablehnung fuer etwas, das genau deshalb nicht mehr existiert.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    const profile = readPicoCompanionProfile(profilePath);
+    const input = {
+      daemonClient: session.consumerClient,
+      profile,
+      profilePath,
+      sodium: sodium as unknown as VaultSodium,
+    };
+    await createPicoCompanionReaderCustodySpace(input);
+    await discardPicoCompanionReaderCustodySpace(input);
+
+    // Ein zweites Mal: das Home sagt `unknown_domain`, und die Datei ist
+    // trotzdem weg - der naechste Versuch sagt darum, dass es keinen Raum gibt.
+    await expect(discardPicoCompanionReaderCustodySpace(input))
+      .rejects.toThrow('no_reader_custody_space');
   }, 300_000);
 
   it('schreibt nicht in einen Raum, den es nicht gibt', async () => {

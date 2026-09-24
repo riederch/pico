@@ -90,6 +90,12 @@ export const picoCompanionIpcChannels = Object.freeze({
   writeReaderCustodyNote: 'pico:reader-custody:write',
   letOtherDeviceRead: 'pico:reader-custody:let-other-device-read',
   rotateReaderCustodyDomain: 'pico:reader-custody:rotate',
+  /**
+   * ADR 0078 K9, Nutzerentscheidung 13. Die sechste Faehigkeit des Raums -
+   * und die einzige, die ihn beendet. Der Name sagt `discard` und nicht
+   * `shred`: was hier geschieht, ist host-lokal.
+   */
+  discardReaderCustodySpace: 'pico:reader-custody:discard',
   readReaderCustodyNotes: 'pico:reader-custody:read',
   decideRule: 'pico:rule:decide',
   forgetRule: 'pico:rule:forget',

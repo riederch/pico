@@ -94,6 +94,7 @@ declare global {
       writeReaderCustodyNote(text: string): Promise<unknown>;
       letOtherDeviceRead(): Promise<unknown>;
       rotateReaderCustodyDomain(): Promise<unknown>;
+      discardReaderCustodySpace(): Promise<unknown>;
       readReaderCustodyNotes(): Promise<unknown>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
@@ -696,6 +697,7 @@ const readerCustodyWrite = requireButton('reader-custody-write');
 const readerCustodyLetOther = requireButton('reader-custody-let-other');
 const readerCustodyRead = requireButton('reader-custody-read');
 const readerCustodyRotate = requireButton('reader-custody-rotate');
+const readerCustodyDiscard = requireButton('reader-custody-discard');
 const readerCustodyList = requireElement('reader-custody-list');
 const readerCustodyStatus = requireElement('reader-custody-status');
 
@@ -787,6 +789,38 @@ readerCustodyRotate.addEventListener('click', () => {
       : 'Nothing needed changing: nobody has been let out since the last change.';
   }, (error: unknown) => {
     readerCustodyStatus.textContent = refusalText(error, 'The lock was not changed.');
+  });
+});
+
+readerCustodyDiscard.addEventListener('click', () => {
+  /**
+   * ADR 0078 K9, Nutzerentscheidung 13. Den Raum beenden - die sechste
+   * Faehigkeit, und die einzige, die Befund B192 nicht gefunden hat.
+   *
+   * **Der Satz sagt, was *nicht* geschieht**, und das ist hier die ganze
+   * Arbeit. K9 verbietet, die Worte der Host-Custody zu borgen: dort zerstoert
+   * ein Schredder die Schluessel, und jede Sicherung wird dunkel. Hier liegen
+   * die Schluessel bei den Lesern. Was dieses Home tut, ist das Seine
+   * wegwerfen - und wer eine Kopie hat, behaelt sie.
+   *
+   * **Die Rueckfrage steht schon woanders, an der besseren Stelle.** Die
+   * Wurzel muss unterschreiben, und der Vault zeigt dabei genau diesen Satz.
+   * Ein zweites Textfeld hier waere die Bestaetigung einer Bestaetigung.
+   */
+  readerCustodyStatus.textContent = 'Asking your Home to discard its copy...';
+  void window.picoCompanion.discardReaderCustodySpace().then((answer) => {
+    const done = answer as {
+      privacyDomain: string;
+      discardedItems: number;
+      discardedReaderGrants: number;
+    };
+    readerCustodyStatus.textContent =
+      `Your Home has discarded its copy of ${done.privacyDomain}: `
+      + `${done.discardedItems} note(s) and ${done.discardedReaderGrants} reader(s). `
+      + 'Anyone you let in keeps their key, and any copy they made is theirs - '
+      + 'a Home can only destroy what it holds.';
+  }, (error: unknown) => {
+    readerCustodyStatus.textContent = refusalText(error, 'Nothing was discarded.');
   });
 });
 

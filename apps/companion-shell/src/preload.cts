@@ -40,6 +40,7 @@ const channels = Object.freeze({
   writeReaderCustodyNote: 'pico:reader-custody:write',
   letOtherDeviceRead: 'pico:reader-custody:let-other-device-read',
   rotateReaderCustodyDomain: 'pico:reader-custody:rotate',
+  discardReaderCustodySpace: 'pico:reader-custody:discard',
   readReaderCustodyNotes: 'pico:reader-custody:read',
   decideRule: 'pico:rule:decide',
   forgetRule: 'pico:rule:forget',
@@ -198,6 +199,8 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     await ipcRenderer.invoke(channels.letOtherDeviceRead),
   rotateReaderCustodyDomain: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.rotateReaderCustodyDomain),
+  discardReaderCustodySpace: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.discardReaderCustodySpace),
   readReaderCustodyNotes: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.readReaderCustodyNotes),
   forgetModelProvider: async (entryId: string): Promise<void> => {
