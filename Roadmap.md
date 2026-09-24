@@ -616,7 +616,7 @@ vorgelegt und geändert.
 | 10 | `synchronous` | `FULL` in beiden Stores |
 | 11 | `relay_mailbox` | zweite Quote über alle Zeilen eines Kontos |
 | 12 | Web-Banner | volle Satztabelle wie in der Schale |
-| 13 | Reader-Custody-Ende | host-lokale Zerstörung bauen |
+| 13 | Reader-Custody-Ende | host-lokale Zerstörung bauen — **erledigt 2026-09-24** |
 | 14 | Modul-Oberflächen | `spatial-recall` zuerst, an der Ableitung — **über Pico Link**, entschieden am 2026-09-24 |
 | 15 | `staticTokenCeiling` | Konstante entfernen |
 | 16 | Depot-Adresse | wirksame Adresse messen, bei Abweichung ablehnen |
@@ -675,7 +675,8 @@ billiger.
 4. **16, 11** — die zwei Grenzen nach außen
 5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`; erledigt am
    2026-09-23, und dabei fielen B256 und B257 an
-6. **13** — nach dem Export
+6. **13** — nach dem Export; **erledigt am 2026-09-24** (B264 bis B266),
+   vorgezogen, weil ADR 0158 als Entwurf genuegte
 7. **1, 14** — die zwei Verdrahtungen, beide erledigt. **1** am 2026-09-23
    (`rotationBootstrap`, dabei B259 und B260); **14** am 2026-09-24, nachdem
    der Nutzer den Weg entschieden hatte (B261 bis B263)
@@ -1012,6 +1013,80 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B267 — ein Kommentar, der `.sign(` erklärt, meldete sich als Signieraufruf
+(2026-09-24).** Nach dem Falten der Rollenprüfung (B265) hielt
+`check-signature-labels.mjs` die Weiterleitung für eine Signierstelle, deren
+Etikett es nicht auflösen kann — richtig, denn sie reicht `label` durch. Der
+Prüfer erkennt eine Weiterleitung genau daran, dass `.sign(` einen **blossen
+Bezeichner** bekommt; meine erste Fassung baute das Objekt an Ort und Stelle
+zusammen. Umgestellt, und die zwölf Aufrufe durch zwei Weiterleiter werden
+wieder an ihren Aufrufstellen beurteilt.
+
+**Und dabei fiel ein zweiter Fehler auf, diesmal im Prüfer.** Der Kommentar,
+der die Umstellung erklärt, enthält `.sign(` in Anführungszeichen — und wurde
+mitgezählt: die Datei hielt angeblich **zwei** Aufrufe ohne Etikett, von denen
+einer Prosa war. `blankStringsAndComments` gibt es in diesem Skript seit jeher,
+`callSpan` liest darauf, und die Suche selbst lief trotzdem auf dem Rohtext.
+
+**Dieselbe Lehre wie B188** — *eine Regex ist kein Leser von Quelltext* —, mit
+einem Zusatz: wer beide Fassungen hat, muss auch beide benutzen. Zwei
+Pflanzungen belegen den Unterschied: ein echter Aufruf ohne Etikett fällt
+weiterhin, ein Kommentar darüber nicht mehr.
+
+**B266 — was fehlte, war eine Tür, und die Maschine dahinter stand schon
+(2026-09-24).** Entscheidung 13, ADR 0078 K9, Befund B192. Ein
+Reader-Custody-Raum ließ sich anlegen, beschreiben, öffnen, schließen und
+umschließen — aber nicht beenden. `dropDomain` räumt seit jeher alles zu einem
+Raum weg, wenn ein Satz seine Prüfung nicht mehr besteht: **Reparatur, keine
+Wahl.** Was fehlte, war die unterschriebene Aussage davor, die aus dem Griff
+eine Entscheidung macht.
+
+Gebaut als sechste Autoritätsressource neben den fünf vorhandenen, mit einem
+eigenen kanonischen Label, einem eigenen Ereignis und einem eigenen Satz. **Der
+Name ist die halbe Arbeit:** `memory.reader_custody_discarded`, nicht
+`memory.domain_shredded`. K9 sagt, warum — der Host-Schredder zerstört
+Schlüssel und macht damit jede Sicherung dunkel; hier liegen die Schlüssel bei
+den Lesern, und das Home wirft nur weg, was es selbst hält. Denselben Namen zu
+nehmen wäre die Überbehauptung, die ADR 0070 verhindern soll.
+
+Was der Daemon beim Unterschreiben zeigt, nennt die Grenze mit: *„Readers keep
+their keys; copies elsewhere are untouched."* Wer das unterschreibt, hat es
+gelesen.
+
+**Eine Stelle ist bewusst milder als ihre Geschwister.** Die fünf anderen
+verlangen einen gültigen Domänensatz, weil sie etwas hinzufügen; diese nimmt
+nur weg — und ein Raum, dessen Eigentümer kein Mitglied mehr ist, ist genau
+der, den loswerden zu können am meisten zählt.
+
+**B265 — dieselbe Rollenprüfung zweimal, am Tag ihrer Entstehung gefangen
+(2026-09-24).** Die neue Zeremonie prüfte nach dem Unterschreiben, dass der
+Vault wirklich die Wurzel genommen hat — genau wie der Nachbar in
+`reader-custody.ts`, Wort für Wort. `refusal:check` weist das ab: *eine Regel,
+zweimal in einem Paket gegangen, driftet in die Richtung, in die niemand
+schaut.* Beide teilen sich jetzt `signPicoCompanionWithIdentityRoot`.
+
+Bemerkenswert ist der Zeitpunkt: die Kopie war keine Stunde alt. Ein Tor, das
+Duplikate erst nach Monaten findet, findet Drift; dieses hier hat sie
+verhindert.
+
+**B264 — ein grünes Tor aus dem falschen Grund, und die Umbenennung beim
+Import war schuld (2026-09-24).** Beim Bau von Entscheidung 13 bekam die
+Companion-Zeremonie denselben Namen wie die Link-Anfrage darunter, und der
+Aufrufer importierte die untere per `as` unter einem anderen. `capability:check`
+vergleicht Namen: die Importzeile nannte *beide* Namen, also galten beide als
+erreicht — obwohl die obere keinen Aufrufer hatte.
+
+Aufgefallen ist es nicht am Tor, sondern an der Frage, warum es plötzlich grün
+war. Gegengeprobt: die Zeremonie umbenannt, und das Tor fiel sofort mit genau
+dem Satz, den es hätte sagen müssen. Danach hat sie einen wirklichen Aufrufer
+in der Schale bekommen, neben ihren fünf Geschwistern.
+
+**Die Lehre ist die von B188 in einer neuen Gestalt** — *eine Regex ist kein
+Leser von Quelltext*: ein Prüfer, der Namen zählt, zählt auch die, die nur in
+einer Umbenennung vorkommen. Aufgeschrieben, nicht gebaut: den Prüfer die
+Importform lesen zu lassen wäre richtig, und er müsste dafür die
+Aliasschreibweise verstehen.
 
 **B263 — `JSON.parse("null")` ist gueltiges JSON und `typeof null` ist
 `object` (2026-09-24).** `refusal:check` verlangte eine Begehung fuer

@@ -70,9 +70,14 @@ const claims = [
   { phrase: 'Aufrufern', from: /(\d+) of those routes have a caller/u },
   { phrase: 'begründeten Lücken', from: /have a caller and (\d+) are argued without one/u },
   {
-    phrase: 'zwölf Autoritätsressourcen',
+    /**
+     * Ausgeschrieben war es bis zum 2026-09-24, mit `spelled: 12`. Die
+     * sechste Reader-Custody-Ressource (ADR 0078 K9) machte daraus 13, und
+     * eine Zahl, die waechst, gehoert in Ziffern - sonst zieht die naechste
+     * Aenderung zwei Schreibweisen hinter sich her.
+     */
+    phrase: 'Autoritätsressourcen darunter',
     from: /operations and (\d+) authority resources/u,
-    spelled: 12,
   },
   { phrase: 'acht Affordances', from: /Presence affordance check passed \((\d+)/u, spelled: 8 },
   { phrase: 'einmalig geschriebene Wire-Labels', from: /\((\d+) protocol labels spelled once/u },
