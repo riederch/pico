@@ -309,6 +309,7 @@ memory.time_bound_entry_due
 memory.tombstone
 memory.recall_forgotten
 memory.domain_shredded
+memory.reader_custody_discarded
 auth.operator_bootstrapped
 auth.credential_changed
 auth.operator_reset
@@ -341,6 +342,7 @@ Server-synthesized foundation event types (exported as `serverSynthesizedFoundat
 
 ```text
 memory.domain_shredded
+memory.reader_custody_discarded
 memory.recall_forgotten
 memory.time_bound_entry_due
 auth.operator_bootstrapped

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoReaderCustodyDomainLifecycleSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
   buildPicoReaderCustodyKekRotationSignatureInput,
   buildPicoReaderCustodyReaderGrantLifecycleSignatureInput,
@@ -11,6 +12,7 @@ import {
   buildPicoReaderCustodyWriterGrantSignatureInput,
   picoIdentitySuite,
   picoMemoryContentSuite,
+  picoReaderCustodyDomainLifecycleRecordSchema,
   picoReaderCustodyItemRecordSchema,
   picoReaderCustodyKekRotationRecordSchema,
   picoReaderCustodyReaderGrantLifecycleRecordSchema,
@@ -20,6 +22,7 @@ import {
 import type {
   PicoHomeFoundingRecord,
   PicoIdentityKeyRecordSignatureInput,
+  PicoReaderCustodyDomainLifecycleRecord,
   PicoReaderCustodyItemRecord,
   PicoReaderCustodyKekRotationRecord,
   PicoReaderCustodyReaderGrantLifecycleRecord,
@@ -748,6 +751,174 @@ describe('ReaderCustodyStore - die Ablehnungen, die niemand gegangen ist (B151)'
   });
 });
 
+/**
+ * ADR 0078 K9, Nutzerentscheidung 13 vom 2026-09-22 - Befund B192s fehlende
+ * sechste Faehigkeit.
+ *
+ * Einen Reader-Custody-Raum konnte eine Person anlegen, hineinschreiben,
+ * jemanden hereinlassen, dessen Zugang beenden und das Schloss wechseln. Nur
+ * "das soll weg" ging nicht: der Schluesselspeicher weist den Host-Schredder
+ * fuer diese Klasse zu Recht ab (K6), und die andere Tuer gab es nicht.
+ *
+ * **Host-lokal, und was das heisst, steht in den Zahlen.** Weggeworfen wird,
+ * was dieses Home haelt. Was es nie hielt - die Schluessel - kann es nicht
+ * wegwerfen, und die Aufzeichnung heisst darum anders als die des
+ * Host-Schredders.
+ */
+describe('ReaderCustodyStore - einen gehosteten Raum loswerden (ADR 0078 K9)', () => {
+  /**
+   * Ein Raum mit allem darin, was ein Wegwerfen erreichen muss: Chiffre,
+   * Schreiber- und Lesererteilung. Ohne die Lesererteilung waere die Haelfte
+   * der Zahlen nie ungleich null, und ein Zaehler, der nur null kennt, misst
+   * nichts.
+   */
+  const stocked = async (): Promise<{
+    harness: ReturnType<typeof openHarness>;
+    records: ReaderCustodyRecords;
+  }> => {
+    const harness = openHarness();
+    const records = makeRecords();
+    const readerIdentity = 'bb'.repeat(32);
+    const readerSigning = 'cc'.repeat(32);
+    const readerKeyRecord = keyRecord(
+      'device_key_agreement',
+      sodium.crypto_box_keypair().publicKey,
+    );
+    harness.activeMembers.add(records.domain.domain.ownerIdentityKeyFingerprintHex);
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    harness.activeMembers.add(readerIdentity);
+    harness.eligibleReaders.set(fingerprint(readerKeyRecord), {
+      identityFingerprintHex: readerIdentity,
+      deviceSigningKeyFingerprintHex: readerSigning,
+      delegationId: 'reader_delegation_0001',
+      keyRecord: readerKeyRecord,
+    });
+    expect(harness.store.recordDomain(records.domain, RECORDED_AT).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant, RECORDED_AT).ok).toBe(true);
+    expect(harness.store.recordItem(records.item, RECORDED_AT).ok).toBe(true);
+    expect((await harness.store.recordReaderGrant(makeReaderGrant(records, {
+      readerIdentityFingerprintHex: readerIdentity,
+      readerDeviceSigningKeyFingerprintHex: readerSigning,
+      readerKeyRecord,
+    }), RECORDED_AT)).ok).toBe(true);
+    return { harness, records };
+  };
+
+  it('wirft weg, was dieses Home haelt, und zaehlt es einzeln auf', async () => {
+    const { harness, records } = await stocked();
+
+    const discarded = harness.store.discardDomain(makeDomainLifecycle(records));
+
+    expect(discarded).toMatchObject({
+      ok: true,
+      value: {
+        domainAuthorityId: records.domain.domain.domainAuthorityId,
+        privacyDomain: records.domain.domain.domainId,
+        reasonCategory: 'owner_finished',
+        discardedItems: 1,
+        discardedWriterGrants: 1,
+        discardedReaderGrants: 1,
+        discardedRotations: 0,
+      },
+    });
+
+    // Und danach ist nichts mehr da - nicht als unlesbar markiert, sondern weg.
+    expect(harness.store.domains()).toHaveLength(0);
+    expect(harness.store.items()).toHaveLength(0);
+    expect(harness.store.writerGrants()).toHaveLength(0);
+    expect(harness.store.readerGrants()).toHaveLength(0);
+  });
+
+  it('nimmt nur den Satz des Eigentuemers an', async () => {
+    /**
+     * Ein Wegwerfen, das ein anderer unterschreiben koennte, waere eine
+     * Loeschtaste fuer Fremde - und zwar auf Material, das dieses Home gar
+     * nicht lesen kann und darum auch nicht wiederherstellen.
+     */
+    const { harness, records } = await stocked();
+    const foreign = sodium.crypto_sign_keypair();
+    const lifecycle = makeDomainLifecycle(records);
+
+    expect(harness.store.discardDomain({
+      ...lifecycle,
+      ownerSignatureHex: signHex(
+        buildPicoReaderCustodyDomainLifecycleSignatureInput(lifecycle.lifecycle),
+        foreign.privateKey,
+      ),
+    })).toEqual({ ok: false, reason: 'invalid_record' });
+
+    expect(harness.store.domains()).toHaveLength(1);
+    expect(harness.store.items()).toHaveLength(1);
+  });
+
+  it('nimmt auch keinen Fremden an, der seinen eigenen Schluesselsatz mitbringt', async () => {
+    /**
+     * Die schaerfere Haelfte derselben Frage. Eine falsche Unterschrift unter
+     * dem Schluesselsatz des Eigentuemers faellt schon an der Mathematik. Wer
+     * dagegen **seinen eigenen** Satz mitschickt und damit unterschreibt,
+     * rechnet richtig - und der Satz benennt trotzdem den Fingerabdruck des
+     * Eigentuemers, weil der geprueft wird. Was ihn aufhaelt, ist der
+     * Vergleich des Schluesselsatzes mit dem, den dieses Home zum Raum haelt.
+     */
+    const { harness, records } = await stocked();
+    const stranger = sodium.crypto_sign_keypair();
+    const lifecycle = makeDomainLifecycle(records);
+
+    expect(harness.store.discardDomain({
+      ...lifecycle,
+      ownerIdentityKeyRecord: keyRecord('pico_identity', stranger.publicKey),
+      ownerSignatureHex: signHex(
+        buildPicoReaderCustodyDomainLifecycleSignatureInput(lifecycle.lifecycle),
+        stranger.privateKey,
+      ),
+    })).toEqual({ ok: false, reason: 'invalid_record' });
+
+    expect(harness.store.domains()).toHaveLength(1);
+    expect(harness.store.items()).toHaveLength(1);
+  });
+
+  it('nimmt keinen Satz an, der einen aelteren Stand behauptet', async () => {
+    // Derselbe Schutz wie bei den Geschwistern: eine wiedereingespielte alte
+    // Aufzeichnung darf einen neueren Stand nicht ueberschreiben.
+    const { harness, records } = await stocked();
+
+    expect(harness.store.discardDomain(makeDomainLifecycle(records, {
+      lifecycleOrder: 'seq:0000000000000001',
+    }))).toEqual({ ok: false, reason: 'invalid_record' });
+
+    expect(harness.store.domains()).toHaveLength(1);
+  });
+
+  it('antwortet auf einen Raum, den es nicht haelt, wie auf jeden anderen', () => {
+    /**
+     * "Gab es nie" und "gehoert dir nicht" duerfen sich nicht unterscheiden:
+     * sonst wird die Tuer zu einem Verzeichnis fremder Raeume.
+     */
+    const harness = openHarness();
+    const records = makeRecords();
+
+    expect(harness.store.discardDomain(makeDomainLifecycle(records)))
+      .toEqual({ ok: false, reason: 'unknown_domain' });
+  });
+
+  it('laesst sich auch von einem Raum trennen, dessen Satz nicht mehr traegt', async () => {
+    /**
+     * Die eine Stelle, an der diese Tuer bewusst milder ist als ihre
+     * Geschwister. Die fuegen etwas hinzu und verlangen darum einen gueltigen
+     * Domaenensatz; diese nimmt nur weg - und ein Raum, dessen Eigentuemer
+     * kein Mitglied mehr ist, ist genau der, den loswerden zu koennen am
+     * meisten zaehlt.
+     */
+    const { harness, records } = await stocked();
+    harness.activeMembers.delete(records.domain.domain.ownerIdentityKeyFingerprintHex);
+
+    expect(harness.store.discardDomain(makeDomainLifecycle(records)))
+      .toMatchObject({ ok: true });
+    expect(harness.store.domains()).toHaveLength(0);
+  });
+});
+
+
 const makeReaderGrant = makeReaderCustodyReaderGrant;
 
 function makeReaderLifecycle(
@@ -778,6 +949,36 @@ function makeReaderLifecycle(
     ownerIdentityKeyRecord: records.domain.ownerIdentityKeyRecord,
     ownerSignatureHex: signHex(
       buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(lifecycle),
+      records.identityKeypair.privateKey,
+    ),
+    receivedAt: lifecycle.changedAt,
+  };
+}
+
+function makeDomainLifecycle(
+  records: ReaderCustodyRecords,
+  overrides: { lifecycleOrder?: string; reasonCategory?: 'owner_finished' | 'hosting_ended' } = {},
+): PicoReaderCustodyDomainLifecycleRecord {
+  const domain = records.domain.domain;
+  const lifecycle = {
+    suite: picoMemoryContentSuite,
+    lifecycleId: 'reader_domain_lifecycle_0001',
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    status: 'discarded' as const,
+    reasonCategory: overrides.reasonCategory ?? ('owner_finished' as const),
+    changedAt: '2026-07-27T10:09:00.000Z',
+    lifecycleOrder: overrides.lifecycleOrder ?? 'seq:0000000000000009',
+  };
+  return {
+    schema: picoReaderCustodyDomainLifecycleRecordSchema,
+    lifecycle,
+    ownerIdentityKeyRecord: records.domain.ownerIdentityKeyRecord,
+    ownerSignatureHex: signHex(
+      buildPicoReaderCustodyDomainLifecycleSignatureInput(lifecycle),
       records.identityKeypair.privateKey,
     ),
     receivedAt: lifecycle.changedAt,

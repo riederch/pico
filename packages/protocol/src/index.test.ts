@@ -136,6 +136,7 @@ describe('Pico protocol types', () => {
       'memory.tombstone',
       'memory.recall_forgotten',
       'memory.domain_shredded',
+      'memory.reader_custody_discarded',
       'auth.operator_bootstrapped',
       'auth.credential_changed',
       'auth.operator_reset',
@@ -167,6 +168,7 @@ describe('Pico protocol types', () => {
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
+      'memory.reader_custody_discarded',
       'memory.recall_forgotten',
       'memory.time_bound_entry_due',
       'auth.operator_bootstrapped',
@@ -1734,6 +1736,7 @@ describe('Pico protocol types', () => {
       'domain',
       'readerGrant',
       'readerGrantLifecycle',
+      'domainLifecycle',
       'writerGrant',
       'writerGrantLifecycle',
       'kekRotation',
@@ -1744,6 +1747,7 @@ describe('Pico protocol types', () => {
       domain: 'pico.mem.reader-domain.v1',
       readerGrant: 'pico.mem.reader-grant.v1',
       readerGrantLifecycle: 'pico.mem.reader-grant-lifecycle.v1',
+      domainLifecycle: 'pico.mem.reader-domain-lifecycle.v1',
       writerGrant: 'pico.mem.reader-writer-grant.v1',
       writerGrantLifecycle: 'pico.mem.reader-writer-grant-lifecycle.v1',
       kekRotation: 'pico.mem.reader-kek-rotation.v1',

@@ -231,6 +231,19 @@ export interface PicoCompanionShellRuntime {
    * Zwei Dinge in einer Handlung, weil eines nicht reicht: die offene
    * Rotationsschuld begleichen *und* dieses Gerät wieder schreibfähig machen.
    */
+  /**
+   * ADR 0078 K9. Den gehosteten Raum loswerden - host-lokal, und der Daemon
+   * sagt beim Unterschreiben, was das nicht heisst.
+   */
+  discardReaderCustodySpace(): Promise<{
+    domainAuthorityId: string;
+    privacyDomain: string;
+    reasonCategory: string;
+    discardedItems: number;
+    discardedReaderGrants: number;
+    discardedWriterGrants: number;
+    discardedRotations: number;
+  }>;
   rotateReaderCustodyDomain(): Promise<{
     rotated: boolean;
     writerGrantRenewed: boolean;
@@ -896,6 +909,19 @@ export async function startPicoCompanionShellRuntime(input: {
         const { createPicoCompanionReaderCustodySpace } =
           await import('@pico/companion/reader-custody-space');
         await createPicoCompanionReaderCustodySpace({
+          daemonClient,
+          profile,
+          profilePath,
+          sodium: input.sodium,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+      }),
+      discardReaderCustodySpace: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { discardPicoCompanionReaderCustodySpace } =
+          await import('@pico/companion/reader-custody-space');
+        return await discardPicoCompanionReaderCustodySpace({
           daemonClient,
           profile,
           profilePath,

@@ -1,8 +1,14 @@
 import { picoLifecycleOrderFrom } from '@pico/protocol/lifecycle-order';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { picoIdentitySuite } from '@pico/protocol';
+import {
+  picoIdentitySuite,
+  picoMemoryContentSuite,
+  picoReaderCustodyCanonicalLabels,
+  picoReaderCustodyDomainLifecycleRecordSchema,
+  type PicoReaderCustodyDomainDiscardReasonCategory,
+} from '@pico/protocol';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import type { VaultSodium } from '@pico/vault';
 import { writePicoCompanionFileAtomically } from './atomic-file.js';
@@ -11,8 +17,11 @@ import type { PicoCompanionProfile } from './profile.js';
 import { createPicoCompanionLinkClient } from './recovery-controller.js';
 import {
   fetchPicoCompanionReaderCustodyRotationBundle,
+  discardPicoCompanionReaderCustodyDomain,
+  signPicoCompanionWithIdentityRoot,
   submitPicoCompanionAuthorityRecord,
   submitPicoCompanionKekRotation,
+  type PicoCompanionReaderCustodyDiscard,
   publishPicoCompanionReaderKeyFreshness,
   submitPicoCompanionReaderCustodyRecords,
   submitPicoCompanionReaderGrant,
@@ -490,6 +499,102 @@ export async function rotatePicoCompanionReaderCustodyDomain(input: {
  * `freshness_unavailable` ab - richtig, aber die Person sähe eine Ablehnung
  * für etwas, das sie gerade richtig gemacht hat.
  */
+/**
+ * ADR 0078 K9, Nutzerentscheidung 13 vom 2026-09-22. Den Raum loswerden.
+ *
+ * **Die sechste Faehigkeit** (Befund B192). Die fuenf darueber gab es:
+ * anlegen, hineinschreiben, jemanden hereinlassen, dessen Zugang beenden und
+ * das Schloss wechseln. "Das soll weg" hatte keine Tuer - der
+ * Schluesselspeicher weist den Host-Schredder fuer diese Klasse zu Recht ab
+ * (K6), weil das Home die Schluessel gar nicht halten darf, und damit war ein
+ * Raum etwas, das man anlegen, aber nicht beenden kann.
+ *
+ * **Host-lokal, und der Daemon sagt es beim Unterschreiben.** Was
+ * `sign-rendering.ts` fuer dieses Label zeigt, nennt die Grenze beim Namen:
+ * die Leser behalten ihre Schluessel, und ueber Kopien anderswo sagt diese
+ * Tat nichts. K9 nennt genau das - eine *Bitte* um Zerstoerung kann reisen,
+ * eine Zusage nicht.
+ *
+ * **Und die Raumdatei hier geht mit.** Ein Geraet, das nach dem Wegwerfen noch
+ * einen Raum fuehrt, den das Home nicht mehr kennt, meldet beim naechsten
+ * Schreiben eine Ablehnung fuer etwas, das es gar nicht mehr gibt. Sie geht
+ * *danach* - ein Fehlschlag dazwischen laesst eine Datei ohne Raum zurueck,
+ * und das ist der Zustand, den der naechste Versuch selbst aufraeumt, weil
+ * `unknown_domain` hier ebenfalls zum Loeschen fuehrt.
+ */
+export async function discardPicoCompanionReaderCustodySpace(input: {
+  daemonClient: PicoVaultDaemonClient;
+  profile: PicoCompanionProfile;
+  profilePath: string;
+  sodium: VaultSodium;
+  reasonCategory?: PicoReaderCustodyDomainDiscardReasonCategory;
+  fetch?: typeof fetch;
+}): Promise<PicoCompanionReaderCustodyDiscard> {
+  const space = readPicoCompanionReaderCustodySpace(input.profilePath);
+  if (space === undefined) {
+    throw new Error('no_reader_custody_space');
+  }
+  const domain = (space.domainRecord as { domain?: Record<string, unknown> }).domain;
+  if (domain === undefined) {
+    throw new Error('invalid_reader_custody_space');
+  }
+  const linkClient = await createPicoCompanionLinkClient({
+    profile: input.profile,
+    daemonClient: input.daemonClient,
+    sodium: input.sodium,
+    ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+  });
+
+  const now = new Date();
+  const lifecycle = {
+    suite: picoMemoryContentSuite,
+    lifecycleId: `reader_domain_lifecycle_${randomUUID()}`,
+    domainAuthorityId: space.domainAuthorityId,
+    homeId: domain.homeId as string,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex as string,
+    domainId: domain.domainId as string,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex as string,
+    status: 'discarded' as const,
+    reasonCategory: input.reasonCategory ?? 'owner_finished',
+    changedAt: now.toISOString(),
+    lifecycleOrder: picoLifecycleOrderFrom(BigInt(now.getTime())),
+  };
+  const signed = await signPicoCompanionWithIdentityRoot({
+    daemonClient: input.daemonClient,
+    keyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    label: picoReaderCustodyCanonicalLabels.domainLifecycle,
+    fields: lifecycle,
+  });
+
+  let discarded: PicoCompanionReaderCustodyDiscard;
+  try {
+    discarded = await discardPicoCompanionReaderCustodyDomain({
+      linkClient,
+      record: {
+        schema: picoReaderCustodyDomainLifecycleRecordSchema,
+        lifecycle,
+        ownerIdentityKeyRecord: {
+          suite: picoIdentitySuite,
+          keyRole: 'pico_identity',
+          publicKeyHex: input.profile.identity.publicKeyHex,
+        },
+        ownerSignatureHex: signed.signatureHex,
+        receivedAt: lifecycle.changedAt,
+      },
+    });
+  } catch (failed) {
+    if ((failed as Error).message !== 'unknown_domain') {
+      throw failed;
+    }
+    // Das Home kennt den Raum nicht mehr. Dann ist die Raumdatei hier das
+    // Letzte, was ihn noch behauptet - und sie geht ebenfalls.
+    rmSync(picoCompanionReaderCustodySpacePath(input.profilePath), { force: true });
+    throw failed;
+  }
+  rmSync(picoCompanionReaderCustodySpacePath(input.profilePath), { force: true });
+  return discarded;
+}
+
 export async function letPicoCompanionOtherDeviceRead(input: {
   daemonClient: PicoVaultDaemonClient;
   profile: PicoCompanionProfile;

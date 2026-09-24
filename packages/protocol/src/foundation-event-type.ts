@@ -44,6 +44,17 @@ export const foundationEventTypes = [
    */
   'memory.recall_forgotten',
   'memory.domain_shredded',
+  /**
+   * ADR 0078 K9. Was dieses Home von einem gehosteten Raum weggeworfen hat.
+   *
+   * **Ein eigener Name, und das ist die halbe Entscheidung.** Der Schredder
+   * darueber zerstoert Schluessel, und danach ist jede Sicherung dunkel; hier
+   * liegen die Schluessel bei den Lesern, und das Home wirft nur weg, was es
+   * selbst haelt. Denselben Namen zu benutzen hiesse, eine Tat zu
+   * protokollieren, die groesser klingt als sie ist - genau die
+   * Ueberbehauptung, die ADR 0070 verhindern soll.
+   */
+  'memory.reader_custody_discarded',
   'auth.operator_bootstrapped',
   'auth.credential_changed',
   'auth.operator_reset',

@@ -2,6 +2,7 @@ import { assertExactKeys, isCanonicalHex } from '@pico/protocol/canonical-bytes'
 import type Database from 'better-sqlite3';
 import {
   isPicoInstant,
+  buildPicoReaderCustodyDomainLifecycleSignatureInput,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
   buildPicoReaderCustodyKekRotationSignatureInput,
@@ -13,6 +14,7 @@ import {
   picoIdentitySuite,
   type PicoReaderCustodyReaderAccessMode,
   picoMemoryContentSuite,
+  picoReaderCustodyDomainLifecycleRecordSchema,
   picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
   picoReaderCustodyKekRotationRecordSchema,
@@ -26,6 +28,7 @@ import {
 import type {
   PicoEventOriginClass,
   PicoHomeFoundingRecord,
+  PicoReaderCustodyDomainLifecycleRecord,
   PicoReaderCustodyDomainRecord,
   PicoReaderCustodyItemRecord,
   PicoReaderCustodyKekRotationRecord,
@@ -451,6 +454,79 @@ export class ReaderCustodyStore {
       ok: true,
       inserted: true,
       value: this.readerGrantView(grant, at),
+    };
+  }
+
+  /**
+   * ADR 0078 K9, Nutzerentscheidung 13 vom 2026-09-22. Die sechste Faehigkeit.
+   *
+   * **Was fehlte** (Befund B192): einen Reader-Custody-Raum konnte eine Person
+   * anlegen, hineinschreiben, jemanden hereinlassen, dessen Zugang beenden und
+   * das Schloss wechseln - aber nicht sagen, dass er weg soll. Der
+   * Schluesselspeicher weist den Host-Schredder fuer diese Klasse zu Recht ab
+   * (K6, das Home darf die Schluessel gar nicht halten), und damit gab es
+   * keine Tuer mehr.
+   *
+   * **Host-lokal, und der Name sagt es.** Weggeworfen wird, was dieses Home
+   * haelt: die Chiffren, die versiegelten Umschlaege in den Erteilungen, die
+   * Rotationen, der Domaenensatz. Die Schluessel liegen bei den Lesern und
+   * bleiben dort; ueber jede Kopie anderswo sagt diese Tat nichts, und die
+   * Aufzeichnung heisst darum `memory.reader_custody_discarded` und nicht
+   * `memory.domain_shredded`.
+   *
+   * **Die Maschine gab es schon, die Wahl nicht.** `dropDomain` raeumt seit
+   * jeher auf, wenn ein Satz seine Pruefung nicht mehr besteht - Reparatur.
+   * Hier wird derselbe Griff zu einer Entscheidung, und der Unterschied ist
+   * die unterschriebene Aussage davor.
+   */
+  public discardDomain(
+    record: PicoReaderCustodyDomainLifecycleRecord,
+  ): ReaderCustodyRecordResult<{
+    domainAuthorityId: string;
+    privacyDomain: string;
+    reasonCategory: string;
+    discardedItems: number;
+    discardedReaderGrants: number;
+    discardedWriterGrants: number;
+    discardedRotations: number;
+  }> {
+    const domain = this.domainRecord(record.lifecycle.domainAuthorityId);
+    if (domain === undefined) {
+      /**
+       * Derselbe Name wie bei den Geschwistern, und aus demselben Grund: ein
+       * Home, das "gab es nie" von "hast du nicht angelegt" unterscheidbar
+       * beantwortet, wird zu einem Verzeichnis fremder Raeume.
+       */
+      return { ok: false, reason: 'unknown_domain' };
+    }
+    /**
+     * **Der Domaenensatz wird geprueft, aber ein abgelaufener haelt nicht
+     * auf.** Bei den Geschwistern muss er gelten, weil sie etwas hinzufuegen.
+     * Dies hier nimmt nur weg - und ein Raum, dessen Satz nicht mehr traegt,
+     * ist genau einer, den loswerden zu koennen wichtiger ist als sonst.
+     */
+    if (!this.verifyDomainLifecycle(domain, record)) {
+      return { ok: false, reason: 'invalid_record' };
+    }
+    const privacyDomain = domain.domain.domainId;
+    const removed = this.db.transaction(() => this.dropDomain(
+      record.lifecycle.domainAuthorityId,
+    ))();
+    if (removed.domains === 0) {
+      return { ok: false, reason: 'unknown_domain' };
+    }
+    return {
+      ok: true,
+      inserted: true,
+      value: {
+        domainAuthorityId: record.lifecycle.domainAuthorityId,
+        privacyDomain,
+        reasonCategory: record.lifecycle.reasonCategory,
+        discardedItems: removed.items,
+        discardedReaderGrants: removed.readerGrants,
+        discardedWriterGrants: removed.writerGrants,
+        discardedRotations: removed.rotations,
+      },
     };
   }
 
@@ -1355,6 +1431,54 @@ export class ReaderCustodyStore {
           readerKeyFingerprintHex: grant.readerKeyFingerprintHex,
           grantedAt: grant.validFrom,
         }));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * ADR 0078 K9. Dass der Eigentuemer selbst gesagt hat, die Kopie soll weg.
+   *
+   * Geprueft wird gegen den **gespeicherten Domaenensatz**: Home, Host-Schluessel,
+   * Raumname und Eigentuemer muessen genau die aus dem Satz sein, den dieses
+   * Home haelt, und der Schluesselsatz derselbe. Ein Wegwerfen, das ein
+   * anderer unterschreiben koennte, waere eine Loeschtaste fuer Fremde.
+   */
+  private verifyDomainLifecycle(
+    domainRecord: PicoReaderCustodyDomainRecord,
+    record: PicoReaderCustodyDomainLifecycleRecord,
+  ): boolean {
+    try {
+      assertExactKeys(record as unknown as Record<string, unknown>, [
+        'schema',
+        'lifecycle',
+        'ownerIdentityKeyRecord',
+        'ownerSignatureHex',
+        'receivedAt',
+      ], 'invalid_record_shape');
+      const domain = domainRecord.domain;
+      const lifecycle = record.lifecycle;
+      return record.schema === picoReaderCustodyDomainLifecycleRecordSchema
+        && lifecycle.suite === picoMemoryContentSuite
+        && lifecycle.domainAuthorityId === domain.domainAuthorityId
+        && lifecycle.homeId === domain.homeId
+        && lifecycle.hostSigningKeyFingerprintHex
+          === domain.hostSigningKeyFingerprintHex
+        && lifecycle.domainId === domain.domainId
+        && lifecycle.ownerIdentityKeyFingerprintHex
+          === domain.ownerIdentityKeyFingerprintHex
+        && lifecycle.lifecycleOrder > domain.lifecycleOrder
+        && sameJson(
+          record.ownerIdentityKeyRecord,
+          domainRecord.ownerIdentityKeyRecord,
+        )
+        && isPicoInstant(record.receivedAt)
+        && verifyPicoIdentityDetachedSignature(this.sodium, {
+          publicKeyHex: record.ownerIdentityKeyRecord.publicKeyHex,
+          signatureInput:
+            buildPicoReaderCustodyDomainLifecycleSignatureInput(lifecycle),
+          signatureHex: record.ownerSignatureHex,
+        });
     } catch {
       return false;
     }

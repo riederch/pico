@@ -36,6 +36,17 @@ export { foundationEventTypes, type FoundationEventType } from './foundation-eve
 // append-only log cannot be flooded (ADR 0075 A9).
 export const serverSynthesizedFoundationEventTypes = [
   'memory.domain_shredded',
+  /**
+   * ADR 0078 K9. Was dieses Home von einem gehosteten Raum weggeworfen hat -
+   * und ausdruecklich nicht `memory.domain_shredded`.
+   *
+   * Der Host-Schredder zerstoert Schluessel, und danach ist jede Sicherung
+   * dunkel. Hier liegen die Schluessel bei den Lesern: das Home wirft weg, was
+   * es haelt, und ueber jede Kopie anderswo sagt es nichts. Zwei Taten, zwei
+   * Namen - denselben zu benutzen waere die Ueberbehauptung, die ADR 0070
+   * verhindern soll.
+   */
+  'memory.reader_custody_discarded',
   // Nur das Home hängt ihn an: wer behaupten dürfte, jemand habe etwas
   // vergessen, könnte eine Rücknahme erfinden, die nie stattfand.
   'memory.recall_forgotten',
@@ -322,6 +333,7 @@ export const picoHomeAuthoritySubmitResources = [
   'reader_custody_writer_grant',
   'reader_custody_reader_grant',
   'reader_custody_reader_grant_lifecycle',
+  'reader_custody_domain_lifecycle',
   'reader_custody_kek_rotation',
 ] as const;
 
@@ -1179,6 +1191,7 @@ export const picoReaderCustodyCanonicalFamilies = [
   'domain',
   'readerGrant',
   'readerGrantLifecycle',
+  'domainLifecycle',
   'writerGrant',
   'writerGrantLifecycle',
   'kekRotation',
@@ -1193,6 +1206,7 @@ export const picoReaderCustodyCanonicalLabels = {
   domain: 'pico.mem.reader-domain.v1',
   readerGrant: 'pico.mem.reader-grant.v1',
   readerGrantLifecycle: 'pico.mem.reader-grant-lifecycle.v1',
+  domainLifecycle: 'pico.mem.reader-domain-lifecycle.v1',
   writerGrant: 'pico.mem.reader-writer-grant.v1',
   writerGrantLifecycle: 'pico.mem.reader-writer-grant-lifecycle.v1',
   kekRotation: 'pico.mem.reader-kek-rotation.v1',
@@ -1224,6 +1238,8 @@ export const picoReaderCustodyReaderGrantRecordSchema =
   'pico.mem.reader-grant-record.v1' as const;
 export const picoReaderCustodyReaderGrantLifecycleRecordSchema =
   'pico.mem.reader-grant-lifecycle-record.v1' as const;
+export const picoReaderCustodyDomainLifecycleRecordSchema =
+  'pico.mem.reader-domain-lifecycle-record.v1' as const;
 export const picoReaderCustodyWriterGrantRecordSchema =
   'pico.mem.reader-writer-grant-record.v1' as const;
 export const picoReaderCustodyWriterGrantLifecycleRecordSchema =
@@ -1264,6 +1280,33 @@ export const picoReaderCustodyReaderGrantLifecycleStatuses = [
 
 export type PicoReaderCustodyReaderGrantLifecycleStatus =
   typeof picoReaderCustodyReaderGrantLifecycleStatuses[number];
+
+/**
+ * ADR 0078 K9, Nutzerentscheidung 13 vom 2026-09-22. Was der Eigentuemer ueber
+ * einen bei diesem Home gehosteten Raum sagen kann.
+ *
+ * **Ein Wort, und es borgt bewusst keines der Host-Custody.** `shredded` heisst
+ * dort: die Schluessel sind zerstoert, und jede Sicherung wird dunkel. Hier
+ * liegen die Schluessel bei den Lesern, und das Home kann nur das wegwerfen,
+ * was es selbst haelt. K9 nennt genau das den Fehler, den ADR 0070 verhindern
+ * soll - eine Behauptung, die weiter reicht als die Tat.
+ */
+export const picoReaderCustodyDomainLifecycleStatuses = [
+  'discarded',
+] as const;
+
+export type PicoReaderCustodyDomainLifecycleStatus =
+  typeof picoReaderCustodyDomainLifecycleStatuses[number];
+
+export const picoReaderCustodyDomainDiscardReasonCategories = [
+  'owner_finished',
+  'hosting_ended',
+  'relationship_revoked',
+  'security_review',
+] as const;
+
+export type PicoReaderCustodyDomainDiscardReasonCategory =
+  typeof picoReaderCustodyDomainDiscardReasonCategories[number];
 
 export const picoReaderCustodyReaderGrantRevocationReasonCategories = [
   'reader_removed',
@@ -1356,6 +1399,33 @@ export interface PicoReaderCustodyReaderGrantLifecycleSignatureInput {
   readerKeyFingerprintHex: string;
   status: PicoReaderCustodyReaderGrantLifecycleStatus;
   reasonCategory: PicoReaderCustodyReaderGrantRevocationReasonCategory;
+  changedAt: string;
+  lifecycleOrder: string;
+}
+
+/**
+ * ADR 0078 K9. Der Eigentuemer sagt, dass dieses Home seine Kopie wegwerfen soll.
+ *
+ * **Die sechste Faehigkeit** (Befund B192): einen Raum anlegen, hineinschreiben,
+ * jemanden hereinlassen, dessen Zugang beenden und das Schloss wechseln gab es -
+ * "das soll weg" nicht. Der Schluesselspeicher weist den Host-Schredder fuer
+ * diese Klasse zu Recht ab (K6), und dann muss die andere Tuer existieren.
+ *
+ * **Kein Lesergeraet und kein Schluessel steht darin.** Was hier entschieden
+ * wird, betrifft nur, was dieses Home haelt; wer die Schluessel hat, behaelt
+ * sie, und ob ein Leser seine Kopie wegwirft, ist seine Sache. Deshalb traegt
+ * dieser Satz nur den Raum und den Grund.
+ */
+export interface PicoReaderCustodyDomainLifecycleSignatureInput {
+  suite: string;
+  lifecycleId: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  ownerIdentityKeyFingerprintHex: string;
+  status: PicoReaderCustodyDomainLifecycleStatus;
+  reasonCategory: PicoReaderCustodyDomainDiscardReasonCategory;
   changedAt: string;
   lifecycleOrder: string;
 }
@@ -1462,6 +1532,14 @@ export interface PicoReaderCustodyReaderGrantRecord {
 export interface PicoReaderCustodyReaderGrantLifecycleRecord {
   schema: typeof picoReaderCustodyReaderGrantLifecycleRecordSchema;
   lifecycle: PicoReaderCustodyReaderGrantLifecycleSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  ownerSignatureHex: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyDomainLifecycleRecord {
+  schema: typeof picoReaderCustodyDomainLifecycleRecordSchema;
+  lifecycle: PicoReaderCustodyDomainLifecycleSignatureInput;
   ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   ownerSignatureHex: string;
   receivedAt: string;
@@ -2193,6 +2271,24 @@ export interface MemoryDomainShreddedPayload {
   reason?: string;
 }
 
+/**
+ * ADR 0078 K9. Was dieses Home von einem gehosteten Raum weggeworfen hat.
+ *
+ * **Zahlen statt eines Versprechens.** Der Host-Schredder nennt zerstoerte
+ * Schluesselversionen, weil er damit etwas ueber jede Kopie sagt. Dieser hier
+ * nennt nur, was hier lag - Chiffren, Erteilungen, Rotationen -, weil er ueber
+ * Kopien anderswo nichts weiss und nichts behaupten darf.
+ */
+export interface MemoryReaderCustodyDiscardedPayload {
+  domainAuthorityId: string;
+  privacyDomain: string;
+  reasonCategory: string;
+  discardedItems: number;
+  discardedReaderGrants: number;
+  discardedWriterGrants: number;
+  discardedRotations: number;
+}
+
 // Append-only operator audit records (ADR 0076, ADR 0037 audit style). They
 // carry no credential material, no session identifiers, no passphrase metadata
 // and no content; the actor and time live on the event envelope (deviceId,
@@ -2268,6 +2364,7 @@ export type FoundationEventPayload =
   | MemoryTombstonePayload
   | MemoryRecallForgottenPayload
   | MemoryDomainShreddedPayload
+  | MemoryReaderCustodyDiscardedPayload
   | AuthOperatorBootstrappedPayload
   | AuthCredentialChangedPayload
   | AuthOperatorResetPayload
@@ -2443,6 +2540,62 @@ export function validateFoundationEventPayload(
         privacyDomain: payload.privacyDomain,
         removedKeyVersions: payload.removedKeyVersions,
         ...(payload.reason === undefined ? {} : { reason: payload.reason }),
+      },
+    };
+  }
+
+  if (type === 'memory.reader_custody_discarded') {
+    const extraKey = firstUnexpectedKey(payload, [
+      'domainAuthorityId',
+      'privacyDomain',
+      'reasonCategory',
+      'discardedItems',
+      'discardedReaderGrants',
+      'discardedWriterGrants',
+      'discardedRotations',
+    ]);
+    if (extraKey !== undefined) {
+      return {
+        ok: false,
+        error: `memory.reader_custody_discarded payload has unexpected field: ${extraKey}.`,
+      };
+    }
+
+    if (!isNonEmptyString(payload.domainAuthorityId, 256)
+      || !isNonEmptyString(payload.privacyDomain, 256)
+      || !isNonEmptyString(payload.reasonCategory, 256)) {
+      return {
+        ok: false,
+        error: 'memory.reader_custody_discarded payload requires domainAuthorityId, '
+          + 'privacyDomain and reasonCategory.',
+      };
+    }
+
+    for (const name of [
+      'discardedItems',
+      'discardedReaderGrants',
+      'discardedWriterGrants',
+      'discardedRotations',
+    ] as const) {
+      const value = payload[name];
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+        return {
+          ok: false,
+          error: `memory.reader_custody_discarded ${name} must be a non-negative integer.`,
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      payload: {
+        domainAuthorityId: payload.domainAuthorityId,
+        privacyDomain: payload.privacyDomain,
+        reasonCategory: payload.reasonCategory,
+        discardedItems: payload.discardedItems as number,
+        discardedReaderGrants: payload.discardedReaderGrants as number,
+        discardedWriterGrants: payload.discardedWriterGrants as number,
+        discardedRotations: payload.discardedRotations as number,
       },
     };
   }
@@ -4459,6 +4612,56 @@ export function buildPicoReaderCustodyReaderGrantSignatureInput(
     kekVersionBytes(input.firstKekVersion),
     asciiBytes(input.validFrom),
     asciiBytes(input.validUntil),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoReaderCustodyDomainLifecycleSignatureInput(
+  input: PicoReaderCustodyDomainLifecycleSignatureInput,
+): Uint8Array {
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
+    'suite',
+    'lifecycleId',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'ownerIdentityKeyFingerprintHex',
+    'status',
+    'reasonCategory',
+    'changedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.lifecycleId);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  assertStringMember(
+    input.status,
+    picoReaderCustodyDomainLifecycleStatuses,
+    'invalid_reader_domain_lifecycle_status',
+  );
+  assertStringMember(
+    input.reasonCategory,
+    picoReaderCustodyDomainDiscardReasonCategories,
+    'invalid_reason_category',
+  );
+  assertPicoInstant(input.changedAt);
+  assertPicoLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.domainLifecycle),
+    asciiBytes(input.suite),
+    asciiBytes(input.lifecycleId),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    fixedHexBytes(input.ownerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.status),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.changedAt),
     asciiBytes(input.lifecycleOrder),
   ]);
 }

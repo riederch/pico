@@ -160,6 +160,33 @@ export async function submitPicoCompanionAuthorityRecord(input: {
  * Bindung ungültig macht, und er muss alle fünf Minuten wiederholbar sein.
  * Wer dafür jedes Mal gefragt würde, klickte bald weg.
  */
+/**
+ * Mit der Wurzel unterschreiben, und nur mit ihr.
+ *
+ * **Eine Stelle, seit dem 2026-09-24.** Die Rolle hier zu pruefen ist kein
+ * zweites Tor - der Vault laesst nichts anderes zu -, sondern der Satz, an dem
+ * ein Aufrufer merkt, dass er den falschen Fingerabdruck geschickt hat. Genau
+ * deshalb darf es ihn nur einmal geben: zwei Stellen mit demselben Wort sind
+ * zwei Saetze, die auseinanderlaufen koennen, und `refusal:check` hat den
+ * zweiten am Tag seiner Entstehung gefangen.
+ */
+export async function signPicoCompanionWithIdentityRoot(input: {
+  daemonClient: PicoVaultDaemonClient;
+  keyFingerprintHex: string;
+  label: string;
+  fields: Record<string, unknown>;
+}): Promise<{ signatureHex: string }> {
+  const signed = await input.daemonClient.sign({
+    keyFingerprintHex: input.keyFingerprintHex,
+    label: input.label,
+    fields: input.fields,
+  });
+  if (signed.keyRole !== 'pico_identity') {
+    throw new Error('pico_identity_key_required');
+  }
+  return signed;
+}
+
 export async function publishPicoCompanionReaderKeyFreshness(input: {
   daemonClient: PicoVaultDaemonClient;
   linkClient: PicoLinkDirectClient;
@@ -193,17 +220,12 @@ export async function publishPicoCompanionReaderKeyFreshness(input: {
      */
     freshUntil: new Date(now.getTime() + 4 * 60 * 1_000).toISOString(),
   };
-  const signed = await input.daemonClient.sign({
+  const signed = await signPicoCompanionWithIdentityRoot({
+    daemonClient: input.daemonClient,
     keyFingerprintHex: input.identityKeyFingerprintHex,
     label: picoIdentityReaderKeyFreshnessSignatureInputLabel,
     fields: checkpoint,
   });
-  if (signed.keyRole !== 'pico_identity') {
-    // Nur die Wurzel darf. Die Rolle hier zu prüfen ist kein zweites Tor -
-    // der Vault lässt nichts anderes zu -, sondern der Satz, an dem ein
-    // Aufrufer merkt, dass er den falschen Fingerabdruck geschickt hat.
-    throw new Error('pico_identity_key_required');
-  }
   await submitPicoCompanionAuthorityRecord({
     linkClient: input.linkClient,
     resource: 'reader_key_freshness_checkpoint',
@@ -292,6 +314,54 @@ export async function fetchPicoCompanionReaderCustodyRotationBundle(input: {
     );
   }
   return answer.result as unknown as PicoCompanionReaderCustodyRotationBundle;
+}
+
+/**
+ * ADR 0078 K9, Nutzerentscheidung 13 vom 2026-09-22. Den gehosteten Raum
+ * loswerden.
+ *
+ * **Die sechste Faehigkeit** (Befund B192). Anlegen, hineinschreiben,
+ * hereinlassen, Zugang beenden und das Schloss wechseln gab es hier alles -
+ * "das soll weg" nicht, und damit war ein Raum etwas, das man anlegen, aber
+ * nicht beenden kann.
+ *
+ * **Host-lokal, und der Aufrufer bekommt es gesagt.** Was zurueckkommt, zaehlt
+ * auf, was dieses Home weggeworfen hat. Ueber Kopien anderswo sagt es nichts,
+ * weil es nichts darueber weiss: die Schluessel liegen bei den Lesern, und
+ * hoechstens eine *Bitte* um Zerstoerung kann reisen - K9 nennt das
+ * ausdruecklich eine Erwartung und keine Zusage.
+ */
+export interface PicoCompanionReaderCustodyDiscard {
+  domainAuthorityId: string;
+  privacyDomain: string;
+  reasonCategory: string;
+  discardedItems: number;
+  discardedReaderGrants: number;
+  discardedWriterGrants: number;
+  discardedRotations: number;
+}
+
+export async function discardPicoCompanionReaderCustodyDomain(input: {
+  linkClient: PicoLinkDirectClient;
+  record: Record<string, unknown>;
+}): Promise<PicoCompanionReaderCustodyDiscard> {
+  const answer = await input.linkClient.request('home.authority.submit', {
+    resource: 'reader_custody_domain_lifecycle',
+    record: input.record,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(
+      typeof refusal === 'string'
+        ? refusal
+        : `reader_custody_domain_discard_${answer.outcome}`,
+    );
+  }
+  const discarded = (answer.result as { discarded?: unknown }).discarded;
+  if (typeof discarded !== 'object' || discarded === null) {
+    throw new Error('invalid_pico_reader_custody_discard_result');
+  }
+  return discarded as PicoCompanionReaderCustodyDiscard;
 }
 
 /** ADR 0101. Die neue Fassung abgeben, nachdem der Daemon sie unterschrieben hat. */

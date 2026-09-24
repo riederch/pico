@@ -93,6 +93,7 @@ import {
   type PicoHomeContinuitySignatureInput,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
+  type PicoReaderCustodyDomainLifecycleRecord,
   type PicoReaderCustodyDomainRecord,
   type PicoReaderCustodyItemRecord,
   type PicoReaderCustodyKekRotationRecord,
@@ -3809,6 +3810,47 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     };
   }
 
+  /**
+   * ADR 0078 K9, Nutzerentscheidung 13. Der Raum, den man loswerden kann.
+   *
+   * **Die Antwort sagt, was nicht geschehen ist.** K9 verlangt, dass jede
+   * Flaeche das als host-lokal darstellt und die Worte der Host-Custody nicht
+   * borgt; hier gibt es keine Karte und keinen Knopf, also ist die Antwort
+   * selbst die Flaeche. `hostLocal: true` und ein Satz reisen mit, damit die
+   * Einschraenkung nicht von einem Zeichner ergaenzt werden *muss*, der
+   * vielleicht nie gebaut wird.
+   */
+  function discardReaderCustodyDomain(body: unknown): FoundationOperationResult {
+    const result = readerCustody.discardDomain(
+      body as PicoReaderCustodyDomainLifecycleRecord,
+    );
+    if (!result.ok) {
+      return {
+        statusCode: readerCustodyFailureStatus(result.reason),
+        body: { error: result.reason },
+      };
+    }
+    appendServerEvent('memory.reader_custody_discarded', {
+      domainAuthorityId: result.value.domainAuthorityId,
+      privacyDomain: result.value.privacyDomain,
+      reasonCategory: result.value.reasonCategory,
+      discardedItems: result.value.discardedItems,
+      discardedReaderGrants: result.value.discardedReaderGrants,
+      discardedWriterGrants: result.value.discardedWriterGrants,
+      discardedRotations: result.value.discardedRotations,
+    });
+    return {
+      statusCode: 200,
+      body: {
+        discarded: result.value as unknown as Record<string, unknown>,
+        hostLocal: true,
+        note: 'This Home has discarded the copy it was holding. The readers keep '
+          + 'their keys, and anything they or anyone else still hold is untouched - '
+          + 'a Home can only destroy what it holds.',
+      },
+    };
+  }
+
   function recordReaderCustodyKekRotation(body: unknown): FoundationOperationResult {
     const result = readerCustody.recordKekRotation(body as PicoReaderCustodyKekRotationRecord);
     if (!result.ok) {
@@ -3853,6 +3895,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         return await recordReaderCustodyReaderGrant(args.record);
       case 'reader_custody_reader_grant_lifecycle':
         return recordReaderCustodyReaderGrantLifecycle(args.record);
+      /**
+       * ADR 0078 K9's missing door (Befund B192). Five of the six things a
+       * person can do with a hosted domain went through here; "this should
+       * go" had nowhere to arrive.
+       */
+      case 'reader_custody_domain_lifecycle':
+        return discardReaderCustodyDomain(args.record);
       case 'reader_custody_kek_rotation':
         return recordReaderCustodyKekRotation(args.record);
       default:

@@ -17,6 +17,7 @@ import {
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   buildPicoLinkDirectRequestSignatureInput,
+  buildPicoReaderCustodyDomainLifecycleSignatureInput,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
   buildPicoReaderCustodyKekRotationSignatureInput,
@@ -47,6 +48,7 @@ import {
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationSignatureInput,
+  type PicoReaderCustodyDomainLifecycleSignatureInput,
   type PicoReaderCustodyDomainSignatureInput,
   type PicoReaderCustodyKekRotationSignatureInput,
   type PicoReaderCustodyReaderGrantLifecycleSignatureInput,
@@ -136,6 +138,8 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
     buildPicoReaderCustodyReaderGrantSignatureInput(f as never),
   [picoReaderCustodyCanonicalLabels.readerGrantLifecycle]: (f) =>
     buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(f as never),
+  [picoReaderCustodyCanonicalLabels.domainLifecycle]: (f) =>
+    buildPicoReaderCustodyDomainLifecycleSignatureInput(f as never),
   [picoReaderCustodyCanonicalLabels.writerGrant]: (f) =>
     buildPicoReaderCustodyWriterGrantSignatureInput(f as never),
   [picoReaderCustodyCanonicalLabels.writerGrantLifecycle]: (f) =>
@@ -277,6 +281,17 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   [picoReaderCustodyCanonicalLabels.readerGrantLifecycle]: (f) => {
     const v = f as PicoReaderCustodyReaderGrantLifecycleSignatureInput;
     return `Set the reader grant of ${picoDisplayFingerprint(v.readerIdentityKeyFingerprintHex)} on domain ${v.domainId} to ${v.status} (${v.reasonCategory}).`;
+  },
+  /**
+   * ADR 0078 K9. Der Satz sagt, was *nicht* geschieht.
+   *
+   * "Shred" waere hier die Ueberbehauptung, die K9 verbietet: die Schluessel
+   * liegen bei den Lesern, und was dieses Home wegwirft, ist seine eigene
+   * Kopie. Wer das unterschreibt, soll genau das gelesen haben.
+   */
+  [picoReaderCustodyCanonicalLabels.domainLifecycle]: (f) => {
+    const v = f as PicoReaderCustodyDomainLifecycleSignatureInput;
+    return `Tell Home ${v.homeId} to discard its copy of domain ${v.domainId} (${v.reasonCategory}). Readers keep their keys; copies elsewhere are untouched.`;
   },
   [picoReaderCustodyCanonicalLabels.writerGrant]: (f) => {
     const v = f as PicoReaderCustodyWriterGrantSignatureInput;
