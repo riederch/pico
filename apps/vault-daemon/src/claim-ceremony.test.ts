@@ -100,6 +100,10 @@ afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
+  // Mit den Daemons geht auch, was sie entsperrt hielten. Ein Eintrag, der
+  // einen toten Tresor ueberlebt, wuerde den naechsten Fall gegen ein
+  // geloeschtes Verzeichnis entsperren lassen.
+  approvers.clear();
 });
 
 function tempDir(prefix: string): string {
@@ -532,6 +536,14 @@ async function createRecoveryLinkClient(input: {
   delegationId: string;
   nowMs?: number;
 }): Promise<PicoLinkDirectClient> {
+  /**
+   * Befund B258. `createPicoLinkDirectClient` verlangt die Sitzung des
+   * Signierschluessels und wirft sonst `link_device_signing_key_not_unlocked` -
+   * und genau hier liegt in diesen Zeremonien die laengste Pause zwischen
+   * Entsperren und Gebrauch.
+   */
+  await ensureApproverUnlocked(input.daemonClient, input.signing.keyFingerprintHex);
+
   return await createPicoLinkDirectClient({
     sodium,
     daemonClient: input.daemonClient,
@@ -612,6 +624,60 @@ function foundingFacts(stdout: string): {
   };
 }
 
+/**
+ * Wer welchen Schluessel einmal entsperrt hat, nach Fingerabdruck.
+ *
+ * Befund B258. Der Daemon schliesst eine Sitzung nach fuenf Minuten Leerlauf,
+ * und das ist richtig so. Die Zeremonien hier dauern unter Last laenger als
+ * das: eine Wurzel wird am Anfang entsperrt, dann laeuft eine ganze
+ * Wiederherstellung, der Kern wird angehalten und neu gestartet - und erst
+ * danach greift der Test wieder zum Signierschluessel. `display-zone:check`
+ * fiel genau daran aus, in einem Lauf von zweien, und sah aus wie ein
+ * Zonenfehler.
+ *
+ * Was ein echtes Geraet an dieser Stelle tut, steht im Companion:
+ * `ensureUnlocked()` vor jedem Aufruf. Dieses Verzeichnis ist die Haelfte, die
+ * das hier moeglich macht.
+ */
+const approvers = new Map<string, {
+  daemon: RunningDaemon;
+  fixture: CreatePicoVaultKeyfileResult;
+  role: 'pico_identity' | 'device_key_agreement' | 'device_signing';
+  passphrase: string;
+}>();
+
+/**
+ * Entsperrt erneut, was der Leerlauf geschlossen hat - und sonst nichts.
+ *
+ * **Den ganzen Tresor, nicht einen Schluessel**, aus demselben Grund, aus dem
+ * `ensureUnlocked()` im Companion den Tresor meint: der Leerlauf ist je
+ * Sitzung, und welche davon als naechste gebraucht wird, weiss der Aufrufer
+ * nicht. Der Einstieg ist ein Fingerabdruck, weil das die Stelle ist, an der
+ * eine Zeremonie merkt, dass ihr etwas fehlt; wiederhergestellt wird alles,
+ * was derselbe Tresor einmal offen hatte.
+ *
+ * Kein Wiederholen auf Verdacht: eine Sitzung, die noch offen ist, wuerde der
+ * Daemon ablehnen, und diese Ablehnung ist richtig. Gefragt wird also zuerst,
+ * und gehandelt nur bei einer Luecke.
+ */
+async function ensureApproverUnlocked(
+  daemonClient: PicoVaultDaemonClient,
+  keyFingerprintHex: string,
+): Promise<void> {
+  const entry = approvers.get(keyFingerprintHex);
+  if (entry === undefined) {
+    return;
+  }
+  const open = new Set((await daemonClient.status()).sessions
+    .map((session) => session.keyFingerprintHex));
+  for (const known of approvers.values()) {
+    if (known.daemon !== entry.daemon || open.has(known.fixture.keyFingerprintHex)) {
+      continue;
+    }
+    await startApprover(known.daemon, known.fixture, known.role, known.passphrase);
+  }
+}
+
 /** The person: a scripted `pico-vault unlock` that answers every prompt yes. */
 async function startApprover(
   daemon: RunningDaemon,
@@ -641,6 +707,8 @@ async function startApprover(
     () => daemon.stderr().split('"event":"approval_watch_started"').length - 1 > before,
     'approval_watch_started',
   );
+
+  approvers.set(fixture.keyFingerprintHex, { daemon, fixture, role, passphrase });
 
   return { approvals: () => stderr.split('Approve? [y/N]').length - 1 };
 }
