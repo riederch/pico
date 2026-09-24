@@ -1017,6 +1017,29 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B269 — beinahe ein zweiter Prüfer über ein Subjekt, das schon einen hatte
+(2026-09-24).** Aus B268 folgte die Aufgabe: die zwei Listen gegeneinander
+halten. Ich habe dafür ein Tor gebaut, `catalog:check`, mit drei Regeln — und
+es war grün. Dann fiel `capability:check` über die neue Exportfunktion und
+fragte, wer sie aufruft. Beim Suchen nach einem Aufrufer fand ich den Test, den
+es längst gibt.
+
+**`sign-rendering.test.ts` hält seit Befund B174 (2026-09-14) denselben
+Dreiklang** — und zwei meiner drei Regeln waren seine. Was fehlte, war genau
+eine Richtung: beide vorhandenen Fälle gehen von der *Rollenmenge* aus und
+fragen nach Bytes und Satz. B268 fiel andersherum — ein Bauer, den **keine**
+Rolle unterschreiben darf.
+
+Das zweite Tor ist wieder weg; der dritte Fall steht jetzt neben den zwei
+anderen, in einer Datei. **Eine Wahrheit, zweimal geschrieben, driftet** — und
+zwei Prüfer über einen Dreiklang wären genau das gewesen, mit dem Zusatz, dass
+der jüngere seine Herkunft vergisst und der ältere sie behält.
+
+**Was das über `capability:check` sagt.** Es hat hier nicht gefunden, wofür es
+geschrieben wurde. Es hat gefragt *wer ruft das auf*, und die Antwort war ein
+Test, den ich nicht kannte. Ein Prüfer, der nach Aufrufern fragt, ist
+nebenbei ein Verzeichnis dessen, was es schon gibt.
+
 **B268 — ein Tor sagte ja, und der laufende Vault sagte nein (2026-09-24).**
 Der Knopf, der einen gehosteten Raum beendet (Nutzerentscheidung, zwei Flächen
 vorgelegt, eine gewählt), war gebaut und `verify:gates` grün — und der erste
@@ -1034,9 +1057,10 @@ Befund B36 lag vier Monate so: `grantPicoCompanionDomainRead` wurde am
 hat es gemerkt, weil sie alle über einen Stellvertreter unterschreiben."*
 Beide Male gefunden hat es ein Durchlauf gegen einen echten Daemon.
 
-Aufgeschrieben, nicht gebaut: die beiden Listen gegeneinander zu halten wäre
-ein Tor wert — jedes Label, das der Daemon bauen kann, gehört einer Rolle, und
-umgekehrt. Heute prüft nichts das Paar.
+**Gebaut am selben Tag, und an der Stelle, an der schon einer stand** (B269):
+`sign-rendering.test.ts` hielt seit B174 zwei der drei Richtungen; die dritte —
+ein Bauer, den keine Rolle unterschreiben darf — steht jetzt daneben. Eine
+Pflanzung stellt B268 nach und fällt.
 
 **B267 — ein Kommentar, der `.sign(` erklärt, meldete sich als Signieraufruf
 (2026-09-24).** Nach dem Falten der Rollenprüfung (B265) hielt
