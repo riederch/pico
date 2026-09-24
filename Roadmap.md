@@ -675,8 +675,11 @@ billiger.
 4. **16, 11** — die zwei Grenzen nach außen
 5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`; erledigt am
    2026-09-23, und dabei fielen B256 und B257 an
-6. **13** — nach dem Export; **erledigt am 2026-09-24** (B264 bis B266),
-   vorgezogen, weil ADR 0158 als Entwurf genuegte
+6. **13** — nach dem Export; **erledigt am 2026-09-24** (B264 bis B268),
+   vorgezogen, weil ADR 0158 als Entwurf genuegte. Der Bedienweg im Fenster
+   kam am selben Tag dazu: von zwei vorgelegten Flächen hat der Nutzer die
+   Raum-Fläche gewählt, weil ein Parkabschnitt heute nur „Ich weiß nicht"
+   zeigen könnte — die Erfassung auf dem Client ist zurückgestellt
 7. **1, 14** — die zwei Verdrahtungen, beide erledigt. **1** am 2026-09-23
    (`rotationBootstrap`, dabei B259 und B260); **14** am 2026-09-24, nachdem
    der Nutzer den Weg entschieden hatte (B261 bis B263)
@@ -1013,6 +1016,27 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B268 — ein Tor sagte ja, und der laufende Vault sagte nein (2026-09-24).**
+Der Knopf, der einen gehosteten Raum beendet (Nutzerentscheidung, zwei Flächen
+vorgelegt, eine gewählt), war gebaut und `verify:gates` grün — und der erste
+Durchlauf gegen echte Prozesse endete auf `unknown_signature_input_label`.
+
+Der Grund: **zwei Listen über dasselbe Subjekt.** `sign-rendering.ts` sagt, was
+der Daemon *bauen und zeigen* kann; `signableLabelsByKeyRole` in
+`packages/vault` sagt, was eine Schlüsselrolle *unterschreiben darf*.
+`label:check` liest die erste. Ich hatte die erste ergänzt und die zweite
+übersehen.
+
+**Das ist nicht neu, und der Kommentar an genau dieser Stelle sagt es schon.**
+Befund B36 lag vier Monate so: `grantPicoCompanionDomainRead` wurde am
+2026-08-16 ausgeliefert, jeder Druck endete auf demselben Namen, *„und kein Test
+hat es gemerkt, weil sie alle über einen Stellvertreter unterschreiben."*
+Beide Male gefunden hat es ein Durchlauf gegen einen echten Daemon.
+
+Aufgeschrieben, nicht gebaut: die beiden Listen gegeneinander zu halten wäre
+ein Tor wert — jedes Label, das der Daemon bauen kann, gehört einer Rolle, und
+umgekehrt. Heute prüft nichts das Paar.
 
 **B267 — ein Kommentar, der `.sign(` erklärt, meldete sich als Signieraufruf
 (2026-09-24).** Nach dem Falten der Rollenprüfung (B265) hielt
