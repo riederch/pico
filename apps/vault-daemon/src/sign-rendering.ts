@@ -73,6 +73,25 @@ import {
  * approval-exempt. For a gated label the statement is mandatory: a record
  * nobody can render is a record nobody could have meaningfully approved.
  */
+/**
+ * Welche Etiketten dieser Daemon bauen kann.
+ *
+ * **Die dritte Richtung desselben Dreiklangs** (Befund B268, 2026-09-24). Der
+ * Test daneben haelt seit B174 zwei: was eine Rolle unterschreiben darf, muss
+ * Bytes haben, und was zusaetzlich bewilligungspflichtig ist, muss einen Satz
+ * haben. Beide gehen von der Rollenmenge aus. Die Gegenrichtung fehlte - ein
+ * Bauer, den *keine* Rolle unterschreiben darf -, und genau dorthin fiel B268:
+ * das Etikett war gebaut und darstellbar, und `signableLabelsByKeyRole` kannte
+ * es nicht. Jeder Druck endete auf `unknown_signature_input_label`.
+ *
+ * Als Menge und nicht als Praedikat, aus demselben Grund, den
+ * `picoVaultSignableLabels` nebenan nennt: wer eine Tabelle gegen eine andere
+ * halten will, braucht sie ganz.
+ */
+export function picoVaultDaemonBuildableLabels(): ReadonlySet<string> {
+  return new Set(Object.keys(buildersByLabel));
+}
+
 export function buildPicoVaultSignatureInputFromFields(
   label: string,
   fields: object,

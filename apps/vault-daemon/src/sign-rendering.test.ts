@@ -23,6 +23,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   buildPicoVaultSignatureInputFromFields,
+  picoVaultDaemonBuildableLabels,
   renderPicoVaultApprovalStatement,
 } from './sign-rendering.js';
 import { picoDisplayFingerprint } from '@pico/protocol/fingerprint-display';
@@ -483,5 +484,38 @@ describe('ADR 0099 - jedes gefragte Etikett hat auch einen Satz (B174)', () => {
     }
 
     expect([...ohneBytes].filter((label) => !vertagt.has(label))).toEqual([]);
+  });
+
+  it('leaves no builder that no key role may sign (B268)', () => {
+    /**
+     * **Die dritte Richtung, und die, in die es wirklich gefallen ist.**
+     *
+     * Die beiden Faelle darueber gehen von der Rollenmenge aus und fragen nach
+     * Bytes und Satz. Am 2026-09-24 fiel es andersherum: ein neues Etikett
+     * bekam Bauer und Zeichner, und `signableLabelsByKeyRole` kannte es nicht.
+     * Beide Tests waren gruen, `verify:gates` war gruen, und der erste
+     * Durchlauf gegen echte Prozesse endete auf
+     * `unknown_signature_input_label` - an einem Knopf, der gebaut aussah.
+     *
+     * Genau so lag Befund B36 vier Monate. Ein Bauer, den niemand
+     * unterschreiben darf, ist entweder eine vergessene Rollenmenge oder
+     * toter Code; beides will man wissen, und keines davon merkt man am
+     * Quelltext.
+     */
+    const ohneRolle = new Set(picoVaultDaemonBuildableLabels());
+    for (const keyRole of picoVaultPersonKeyRoles) {
+      for (const label of picoVaultSignableLabels(keyRole)) {
+        ohneRolle.delete(label);
+      }
+    }
+
+    expect([...ohneRolle]).toEqual([]);
+
+    /**
+     * Und der Vergleich hat einen Gegenstand (Befund B166). Zwei leere Mengen
+     * sind still gruen, und still gruen ist der Zustand, in dem ein Pruefer
+     * aufhoert, einer zu sein.
+     */
+    expect(picoVaultDaemonBuildableLabels().size).toBeGreaterThan(20);
   });
 });

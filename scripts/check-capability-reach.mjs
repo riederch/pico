@@ -182,6 +182,16 @@ const arguedModuleNames = [
       + 'füllt - begangen bleibt sie im Durchlauf gegen ein laufendes Home',
   ],
   [
+    'picoVaultDaemonBuildableLabels',
+    'ADR 0099 mit Befund B268 (2026-09-24). Die Menge der Etiketten, fuer die dieser Daemon '
+      + 'Bytes bauen kann - **damit ein Test sie gegen die Rollenmengen des Vaults halten '
+      + 'kann**, und fuer nichts sonst. Ein Produktaufrufer waere eine zweite Stelle, die '
+      + 'entscheidet, was baubar ist; die eine Stelle ist `buildersByLabel` daneben, und '
+      + 'diese Funktion liest sie nur. Der Vergleich selbst ist nicht optional: er ist die '
+      + 'Richtung, in die B36 vier Monate lang und B268 an seinem Entstehungstag gefallen '
+      + 'ist',
+  ],
+  [
     'decidePicoCompanionParking',
     'ADR 0129 SR4, seit dem 2026-09-24 - **und die Abwesenheit ist hier die Aussage**. Die '
       + 'Lesehälfte daneben hat ihren Aufrufer: `capture.mjs` fragt nach dem Ablegen zurück, '
