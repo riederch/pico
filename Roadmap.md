@@ -617,13 +617,25 @@ vorgelegt und geändert.
 | 11 | `relay_mailbox` | zweite Quote über alle Zeilen eines Kontos |
 | 12 | Web-Banner | volle Satztabelle wie in der Schale |
 | 13 | Reader-Custody-Ende | host-lokale Zerstörung bauen |
-| 14 | Modul-Oberflächen | `spatial-recall` zuerst, an der Ableitung |
+| 14 | Modul-Oberflächen | `spatial-recall` zuerst, an der Ableitung — **über Pico Link**, entschieden am 2026-09-24 |
 | 15 | `staticTokenCeiling` | Konstante entfernen |
 | 16 | Depot-Adresse | wirksame Adresse messen, bei Abweichung ablehnen |
 | 18 | Zweiter Kern | `UNIQUE (device_id, lamport)` |
 | 19 | Link-Eingang | 404 und 405 zusammenlegen wie im Relay |
 | 20 | Löschung | `source_ref` leeren; `kept_*` und die drei Zeitpunkte bleiben |
 | — | Schlüsselexport (B255) | jetzt bauen |
+
+**Eine Nachentscheidung am 2026-09-24: woher die Parkantwort kommt.** Punkt 14
+sagte „`spatial-recall` zuerst, an der Ableitung" und liess offen, *wo* die
+Antwort gegeben wird. Gemessen ergab sich, dass der versprochene Satz
+(*„Companion: answering where the vehicle was left, offline"*) eine Quelle auf
+dem Geraet braeuchte — entweder eigene Messungen, deren Erfassung der Nutzer
+zurueckgestellt hat, oder eine Kopie der letzten Ableitung neben der
+Domaenen-Custody und ausserhalb des Shred-Pfads. Vorgelegt und entschieden:
+**ueber Pico Link fragen** (`home.parking.ask`, `home.parking.decide`), und die
+Manifest-Saetze berichtigen. Die beiden ersten sagten `Foundation API`, was
+zweimal falsch war: gebaut war keiner, und die Foundation-Flaeche ist lokale
+Diagnose und kein Produktweg. Der dritte Satz ist **entfernt statt erfuellt**.
 
 ### Drei Dinge, die aus den Antworten folgen
 
@@ -664,10 +676,9 @@ billiger.
 5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`; erledigt am
    2026-09-23, und dabei fielen B256 und B257 an
 6. **13** — nach dem Export
-7. **1, 14** — die zwei Verdrahtungen. **1 erledigt am 2026-09-23**
-   (`rotationBootstrap`, dabei B259 und B260); **14 blockiert**: die
-   Antwort braucht eine Quelle auf dem Geraet, und das ist die
-   Erfassungsentscheidung, die der Nutzer zurueckgestellt hat
+7. **1, 14** — die zwei Verdrahtungen, beide erledigt. **1** am 2026-09-23
+   (`rotationBootstrap`, dabei B259 und B260); **14** am 2026-09-24, nachdem
+   der Nutzer den Weg entschieden hatte (B261 bis B263)
 
 ## Zukunft
 
@@ -1001,6 +1012,59 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B263 — `JSON.parse("null")` ist gueltiges JSON und `typeof null` ist
+`object` (2026-09-24).** `refusal:check` verlangte eine Begehung fuer
+`invalid_pico_parking_answer` — den Namen, den das Geraet einem Home gibt, das
+falsch antwortet. Die Begehung fand sofort einen echten Fehler: ein Ort, der
+als `"null"` ankommt, erzeugte `TypeError: Cannot read properties of null`
+statt der benannten Ablehnung.
+
+Die Stelle traegt einen **Ort einer Person**, und was dort nicht abgewiesen
+wird, erscheint als Punkt auf einer Karte — ein erfundener sieht aus wie ein
+gemessener. Der Leser prueft jetzt auf Objekt, nicht-`null` und nicht-Array,
+bevor er Felder anfasst.
+
+**B262 — der Schredder haette eine Aussage darueber stehen lassen, wann jemand
+gefahren ist (2026-09-24).** Beim Bau von Entscheidung 14 fiel eine Tabelle an:
+`pico_parking_decision` haelt, was eine Person ueber einen abgeleiteten Parkort
+gesagt hat. Die erste Fassung war nach Identitaet **und Uebergang**
+geschluesselt — fachlich naheliegend, und `ceiling:check` wies sie zurueck: so
+waechst sie mit jeder Fahrt, ueber die jemand je entschieden hat.
+
+Das Tor hat damit nicht nur einen Deckel erzwungen, sondern die bessere Form.
+Gelesen wird immer nur die **juengste** Ableitung; eine Entscheidung ueber eine
+aeltere wird nie wieder gefragt. Sie aufzuheben hiesse, eine Liste davon zu
+fuehren, wo das Auto einer Person an welchem Tag stand. Jetzt: **eine Zeile je
+Person**, die die naechste Antwort ersetzt.
+
+**Und dann fehlte immer noch der Schredder.** `reset:check` verlangte eine
+Aussage darueber, was ein Home-Reset mit der Tabelle tut, und beim Aufschreiben
+der Begruendung zeigte sich, dass `domain-shred.ts` sie gar nicht kannte. Ein
+zerstoerter Domaenenschluessel macht `source_transition_at` nicht unlesbar —
+und das ist fuer sich schon eine Aussage darueber, wann jemand gefahren ist.
+**Dieselbe Form wie B251**, eine Tabelle weiter: geloescht war der Inhalt,
+nicht der Umstand. Die Zeile traegt jetzt ihren Raum, und die Kaskade hat einen
+vierten Port.
+
+**B261 — "die juengste Ableitung" hiess "die zuletzt geschriebene Zeile"
+(2026-09-24).** Die Pflanzung gegen die Auswahl biss zuerst nicht, und der
+Grund war, dass die Begehung den Fall nicht herstellte, fuer den die Auswahl da
+ist. `picoPlacedMemoryItems` sortiert nach `created_at`; genommen wurde die
+erste passende Zeile.
+
+Der Fall ist keiner aus dem Lehrbuch: ein Telefon, dessen Verbindung abriss,
+gibt gepufferte Messungen ab, sobald es wieder kann — und dann kommt die
+**aeltere** Ableitung nach der neueren an. Wer "die juengste" als "die zuletzt
+geschriebene Zeile" liest, schickt eine Person zum Parkplatz von vorgestern.
+Verglichen wird jetzt `parkedAt`, also wann das Fahrzeug zur Ruhe kam, und die
+Begehung reicht eine aeltere Fahrt nach, damit die Pflanzung etwas zu fangen
+hat.
+
+Danebenlag dieselbe Lehre ein zweites Mal: eine Pflanzung, die den Leser nur
+nach Identitaet suchen liess, kam durch, weil der Weg nur **eine** Fahrt
+kannte. Jetzt faehrt er zweimal — und ein Nein von vorgestern faellt nicht mehr
+auf die Ableitung von heute.
 
 **B260 — eine Aufraeumung, die genau die Datei nicht erreichen konnte, fuer
 die sie da war (2026-09-23).** Beim Bau von `rotationBootstrap` (Entscheidung 1)
