@@ -392,9 +392,19 @@ Also decided while building: the export passphrase has a floor of 12
 characters (`minPicoVaultKeyExportPassphraseLength`), and is typed twice,
 because a mistyped passphrase would make the file silently useless.
 
-Open: KE1's module-boundary gate (the export imports nothing from identity,
-host-key, recovery or operator modules) is not built as a check, and the walk
-has one reader, not two.
+KE1 was closed the same day, in two halves. **The import boundary** is a
+third walk in `check-companion-boundary.mjs` beside the tray and the
+shell-free core: `memory-keys.ts` may not statically reach the Recovery Card,
+founding, enrolment, host-key pinning, the relay operator credential, the
+platform secrets, the automatic unlock, the daemon server or device recovery.
+It says what it cannot do: `packages/vault` is reached, because the seal lives
+there beside identity recovery, so the payload is held by the reader - every
+element exactly four fields with a recomputed digest, and an element
+carrying anything more is refused, walked in `key-export.test.ts`. **Two
+readers** are walked in `app.test.ts`: two residents, each with its own
+identity, membership, delegated device and read grant on one domain; before
+the grants neither gets anything, afterwards each export carries exactly its
+own domain.
 
 ## Gates, in one place
 
