@@ -276,12 +276,27 @@ export class PicoSupplierHost {
   }
 
   #deliver(body: Buffer): void {
-    let frame: { family?: unknown; requestId?: unknown; ok?: unknown; result?: unknown; reason?: unknown };
+    let parsed: unknown;
     try {
-      frame = JSON.parse(body.toString('utf8'));
+      parsed = JSON.parse(body.toString('utf8'));
     } catch {
       return;
     }
+    /**
+     * Finding B274. `null`, a number, a string and an array all parse, and
+     * the reader used to go from the parse straight to `frame.family`. For
+     * `null` that is a TypeError inside a stream's `data` listener - an
+     * uncaught exception, and the Home process ends. A supplier is somebody
+     * else's code from a depot; four bytes of body must not be able to stop
+     * the Home. What is not an object is not a frame, and is dropped like one
+     * in the wrong family.
+     */
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return;
+    }
+    const frame = parsed as {
+      family?: unknown; requestId?: unknown; ok?: unknown; result?: unknown; reason?: unknown;
+    };
     if (frame.family !== picoSupplierResponseFamily) {
       // Every response carries one family. Anything else is a supplier
       // speaking out of turn, and there is no inbound family it could be.

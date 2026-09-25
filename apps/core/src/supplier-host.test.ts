@@ -500,6 +500,28 @@ describe('ADR 0097 framing - a supplier that speaks out of turn', () => {
     await expect(host.hello()).rejects.toThrow(/unreachable|timed_out|refused/u);
   });
 
+  it('drops a frame that parses to no object, and the Home stays up', async () => {
+    // Finding B274. `null` is valid JSON, and the reader went from the parse
+    // straight to `frame.family`: a TypeError inside a stream's `data`
+    // listener, which is an uncaught exception - the Home process ends. A
+    // supplier comes from a depot, somebody else's code, and four bytes of
+    // body were enough.
+    const host = rogueHost(rogueRuntime(`
+      process.stdin.once('data', () => {
+        for (const text of ['null', '7', '"text"', '[]']) {
+          const body = Buffer.from(text, 'utf8');
+          const frame = Buffer.allocUnsafe(4 + body.byteLength);
+          frame.writeUInt32BE(body.byteLength, 0);
+          body.copy(frame, 4);
+          process.stdout.write(frame);
+        }
+      });
+      setTimeout(() => {}, 5_000);
+    `));
+
+    await expect(host.hello()).rejects.toThrow(/unreachable|timed_out|refused/u);
+  });
+
   it('ends the connection on a declared body it will not allocate', async () => {
     // Checked before the body is buffered: a supplier that declares four
     // gigabytes must not be able to make this process reserve them.
