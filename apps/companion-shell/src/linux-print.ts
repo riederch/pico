@@ -27,7 +27,18 @@ export function createLinuxLpRecoveryCardPrinter(input: {
        * Ein Satz ueber das empfindlichste Stueck dieses Produkts nennt keinen
        * Ort, an dem niemand nachgesehen hat.
        */
-      const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      /**
+       * Befund B279. `lp` reicht die Karte nur an den Spooler und kehrt
+       * sofort zurueck - ausser CUPS antwortet nicht, und dann kehrte es nie
+       * zurueck: die Person saesse vor dem empfindlichsten Schritt dieses
+       * Produkts ohne Antwort. Nach der Frist endet der Prozess, und `close`
+       * meldet es als gescheiterten Druck.
+       */
+      const child = spawn(command, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: picoLinuxPrintTimeoutMs,
+        killSignal: 'SIGKILL',
+      });
       let stdout = '';
       child.stdout.setEncoding('utf8');
       child.stdout.on('data', (chunk: string) => {
@@ -59,6 +70,9 @@ export function createLinuxLpRecoveryCardPrinter(input: {
     }),
   };
 }
+
+/** Wie lange `lp` fuer die Uebergabe an den Spooler haben darf (Befund B279). */
+export const picoLinuxPrintTimeoutMs = 30_000;
 
 /**
  * Das Ziel aus dem Bericht von `lp`, oder ein Satz, der keinen Ort nennt.

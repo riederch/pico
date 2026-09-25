@@ -30,7 +30,22 @@ import type {
 export interface LinuxNotifySendAdapterOptions {
   /** Overridable for tests; defaults to `notify-send` on PATH. */
   command?: string;
+  /** Overridable for tests; defaults to {@link picoCompanionNotifySendTimeoutMs}. */
+  timeoutMs?: number;
 }
+
+/**
+ * How long a notification may take before it counts as failed.
+ *
+ * Finding B279. `notify-send` talks to the notification daemon over the
+ * session bus, and a bus nobody answers on is a call that never returns. The
+ * alarm carrier awaits every notification before it plans its next check - so
+ * without a bound, one stuck bus would have ended the pending-recovery alarm
+ * for good, silently, and that alarm is the one telling a person their
+ * account is being recovered while they can still stop it. With a bound, a
+ * stuck notifier is a failure the carrier counts and the next check comes.
+ */
+export const picoCompanionNotifySendTimeoutMs = 10_000;
 
 export function renderPicoCompanionPendingRecoveryAlarm(
   alarm: PicoCompanionPendingRecoveryAlarm,
@@ -113,6 +128,7 @@ export function createLinuxNotifySendAdapter(
   options: LinuxNotifySendAdapterOptions = {},
 ): PicoCompanionNotificationAdapter & PicoCompanionHostContinuityNotifications {
   const command = options.command ?? 'notify-send';
+  const timeoutMs = options.timeoutMs ?? picoCompanionNotifySendTimeoutMs;
   const send = async (title: string, body: string): Promise<void> => {
     await new Promise<void>((resolvePromise, rejectPromise) => {
       execFile(command, [
@@ -121,7 +137,7 @@ export function createLinuxNotifySendAdapter(
         '--icon=dialog-warning',
         title,
         body,
-      ], (error) => {
+      ], { timeout: timeoutMs, killSignal: 'SIGKILL' }, (error) => {
         if (error === null) {
           resolvePromise();
         } else {

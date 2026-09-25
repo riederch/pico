@@ -38,6 +38,15 @@ import { fileURLToPath } from 'node:url';
  * started with. Each of those says so here, and each argument names something
  * that must still be in its file - so an argument that stops describing its
  * subject fails rather than outliving it.
+ *
+ * **And a program this tree starts ends, or somebody says why it need not**
+ * (2026-09-25, finding B279). The same call sites, a second question. The
+ * companion's `notify-send` had no bound: a session bus nobody answers on is a
+ * call that never returns, and the alarm carrier awaits every notification
+ * before it plans its next check - one stuck bus would have ended the
+ * pending-recovery alarm for good, without a word. A start carries `timeout`
+ * or `signal` in its options, or stands in `unbounded` with the reason and a
+ * phrase its file must still say.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const ts = createRequire(import.meta.url)('typescript');
@@ -74,6 +83,22 @@ const argued = [
     requires: 'launching a second copy',
     why: 'a probe relaunching this same shell wants the environment it was started with - '
       + 'that is what it is measuring',
+  },
+];
+
+/** A start without `timeout` or `signal`, and what bounds it instead. */
+const unbounded = [
+  {
+    file: 'apps/core/src/supplier-host.ts',
+    requires: 'requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS',
+    why: 'a supplier is a long-lived process by design; what must end is each request '
+      + 'to it, and every request carries its own timer that refuses it at the deadline',
+  },
+  {
+    file: 'apps/companion-shell/src/main.ts',
+    requires: 'second.kill(\'SIGKILL\')',
+    why: 'the reachability probe\'s second copy is killed at its own fifteen-second '
+      + 'deadline, beside the spawn, because it is waited for rather than detached',
   },
 ];
 
@@ -140,9 +165,12 @@ function isWholeEnvironment(node) {
 }
 
 const failures = [];
+const bounded = [];
+const boundedElsewhere = [];
 const controlled = [];
 const inherited = [];
 const used = new Set();
+const usedUnbounded = new Set();
 
 for (const path of shipped) {
   const text = readFileSync(join(repoRoot, path), 'utf8');
@@ -157,6 +185,32 @@ for (const path of shipped) {
       && names.has(node.expression.text)
       && starters.has(node.expression.text)) {
       const where = `${path}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+      const options = node.arguments.find((argument) => ts.isObjectLiteralExpression(argument));
+      const hasBound = options !== undefined && options.properties.some(
+        (property) => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+          && ts.isIdentifier(property.name)
+          && (property.name.text === 'timeout' || property.name.text === 'signal'),
+      );
+      if (hasBound) {
+        bounded.push(where);
+      } else {
+        const reason = unbounded.find((one) => one.file === path);
+        if (reason === undefined) {
+          failures.push(
+            `${where} starts ${node.expression.text} with no \`timeout\` and no \`signal\`. A program `
+            + 'that never ends holds whatever awaits it - B279 was an alarm that would have '
+            + 'stopped for good. Bound it, or argue here what bounds it instead.',
+          );
+        } else if (!text.includes(reason.requires)) {
+          usedUnbounded.add(path);
+          failures.push(
+            `${path} is argued as bounded by "${reason.requires}", which the file no longer says.`,
+          );
+        } else {
+          boundedElsewhere.push(`${where}: ${reason.why}`);
+          usedUnbounded.add(path);
+        }
+      }
       const environment = environmentOf(node);
       const entry = argued.find((one) => one.file === path);
 
@@ -196,6 +250,15 @@ for (const path of shipped) {
   })(source);
 }
 
+for (const entry of unbounded) {
+  if (!usedUnbounded.has(entry.file)) {
+    failures.push(
+      `${entry.file} is argued as bounded elsewhere, and no unbounded start is left in it. `
+      + 'Drop the entry.',
+    );
+  }
+}
+
 for (const entry of argued) {
   if (!used.has(entry.file)) {
     failures.push(`${entry.file} is argued here and starts no program that inherits an environment`);
@@ -218,8 +281,11 @@ if (failures.length > 0) {
     `Child environment check passed (${controlled.length + inherited.length} places start another `
     + `program; ${controlled.length} build the child an environment of their own, `
     + `${inherited.length} hand over the person's session and say why - each argument checked `
-    + 'against a phrase its file must still carry).',
+    + 'against a phrase its file must still carry; '
+    + `${bounded.length} end at a timeout or signal of their own, ${boundedElsewhere.length} `
+    + 'are bounded by what their argument names).',
   );
   for (const line of controlled) console.log(`  own environment: ${line}`);
+  for (const line of boundedElsewhere) console.log(`  bounded:         ${line}`);
   for (const line of inherited) console.log(`  inherited:       ${line}`);
 }

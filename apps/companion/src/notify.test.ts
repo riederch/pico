@@ -40,7 +40,7 @@ function pendingView(): PicoHomeDeviceRecoveryPendingView {
 }
 
 /** A fake notify-send that records its argv - the adapter test is a real spawn. */
-function fakeNotifySend(behavior: 'record' | 'fail'): { command: string; argvFile: string } {
+function fakeNotifySend(behavior: 'record' | 'fail' | 'hang'): { command: string; argvFile: string } {
   const directory = mkdtempSync(join(tmpdir(), 'pico-companion-notify-'));
   temporaryDirectories.push(directory);
   const argvFile = join(directory, 'argv.json');
@@ -51,7 +51,11 @@ function fakeNotifySend(behavior: 'record' | 'fail'): { command: string; argvFil
     // - which an on-device fixture run turned from a lint nit into ENOENT.
     `#!${process.execPath}`,
     `require('node:fs').writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));`,
-    behavior === 'fail' ? 'process.exit(3);' : 'process.exit(0);',
+    behavior === 'fail'
+      ? 'process.exit(3);'
+      : behavior === 'hang'
+        ? 'setInterval(() => {}, 1_000);'
+        : 'process.exit(0);',
     '',
   ].join('\n'));
   chmodSync(command, 0o700);
@@ -89,6 +93,17 @@ describe('Linux notify-send alarm adapter (ADR 0113 C1)', () => {
     expect(argv[2]).toBe('--icon=dialog-warning');
     expect(argv[3]).toContain('recovery pending');
     expect(argv[4]).toContain('recovery_notify_0001');
+  });
+
+  it('gives up on a notifier that never returns, so the carrier checks again', async () => {
+    // Finding B279. A session bus nobody answers on: the call must end as a
+    // failure the carrier counts rather than an await that never settles.
+    const fake = fakeNotifySend('hang');
+    const adapter = createLinuxNotifySendAdapter({ command: fake.command, timeoutMs: 300 });
+    const startedAt = Date.now();
+    await expect(adapter.notifyPendingRecovery(alarm()))
+      .rejects.toThrow('notify_send_failed');
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
   });
 
   it('surfaces a failing notifier as an error the carrier can count', async () => {
