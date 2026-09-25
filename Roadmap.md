@@ -1034,6 +1034,32 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B271 — eine Familie, die gelesen und nicht verteilt wird, bekam keine
+Antwort (2026-09-25).** B259 hatte notiert, dass kein Tor die Anfragefamilien
+des Vault-Daemons kennt, und ein Tor über ihre Schreibweise vorgeschlagen.
+Nachgemessen war die Schreibweise nicht das Problem: jeder der 23 Namen steht
+genau einmal, in `protocol.ts`, und die Tests nennen nur absichtlich falsche.
+Jede Familie hat einen Lesefall und einen Verteilerfall.
+
+**Die Lücke war eine andere, und sie war still.** Der Verteiler im Daemon hatte
+keinen Standardzweig und keine `never`-Prüfung. Eine Familie, die gelesen und
+für die niemand einen Verteilerfall schreibt, übersetzte sich, fiel durch den
+`switch` und bekam **keine Antwort** — der Client wartete bis zu seiner Frist
+und meldete einen Zeitablauf, wo ein fehlender Fall die Ursache war. Das Home
+hält seine Link-Operationen seit ADR 0107 genau so fest; der Daemon hatte die
+Sicherung nicht.
+
+Zwei Richtungen, zwei Netze. **Verteilt:** ein `never` im Standardzweig macht
+aus dem Schweigen einen Übersetzungsfehler — gepflanzt, der Bau bricht. **Gelesen:**
+der Leser verzweigt über eine Zeichenkette, und dort hilft kein Typ; ein Test
+schickt jede deklarierte Familie leer hinein, und nur ein fehlender Lesefall
+antwortet `unknown_request_family` — gepflanzt, der Test fällt.
+
+Die Lehre ist die von B269 in anderer Gestalt: **die Notiz beschrieb, was ich
+vermutete, und die Messung fand, was da war.** Ein Tor über Schreibweisen wäre
+grün gewesen und hätte die eine Stelle nicht gesehen, an der der Daemon
+schweigt.
+
 **B270 — der Schlüsselexport ist gebaut, und der Bau hat den Entwurf zweimal
 berichtigt, wo er sich auf etwas Falsches verließ (2026-09-25).** ADR 0158
 KE1–KE6, Gabel A (auf dem Gerät versiegeln) und Gabel B (Leserschaft je
@@ -1288,7 +1314,7 @@ zaehlt es (1.035 auf 1.038), die Namen nicht.
 Kein Fehler, aber eine unbewachte Flaeche: 24 Anfragefamilien ueber einen
 Socket, jede mit einer Version im Namen, und nichts haelt sie darauf, einmal
 geschrieben und in der Version zu stehen, die der Daemon kennt. Notiert, nicht
-gebaut.
+gebaut. **Am 2026-09-25 nachgemessen und anders gebaut als notiert** (B271).
 
 **B258 — ein Test, der eine entsperrte Sitzung ueber Minuten haelt, misst die
 Geschwindigkeit der Maschine mit (2026-09-23).** `display-zone:check` fiel in
