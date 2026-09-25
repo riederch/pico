@@ -531,3 +531,52 @@ describe('ADR 0143 DP8 - an escalated decision says what escalated it', () => {
     expect(decided.escalations).toBeUndefined();
   });
 });
+
+/**
+ * Finding B280. The runner runs what the decision function decided, and
+ * nothing shaped like it. A decision is a plain object; before this the only
+ * thing between a hand-built `{ decision: 'allow' }` and a running effect was
+ * that nobody had written one.
+ */
+describe('B280 the runner runs only a decision the rules handed out', () => {
+  it('refuses an allow built by hand, a copy of a real one and a cast', () => {
+    const { decided } = decide();
+    expect(decided.decision).toBe('allow');
+
+    const forged = { ...decided } as PicoActionDecision;
+    const ran: string[] = [];
+    const effects = { 'calendar.raise-entry': () => { ran.push('raised'); } };
+    const facts: unknown[] = [];
+    const emit = (type: PicoActionFactType, payload: Record<string, unknown>) => {
+      facts.push({ type, payload });
+      return `evt-${facts.length}`;
+    };
+
+    expect(() => executePicoAction({ decided: forged, effects: effects as never, emit }))
+      .toThrow('pico_action_not_decided_here');
+    expect(() => executePicoAction({
+      decided: JSON.parse(JSON.stringify(decided)) as PicoActionDecision,
+      effects: effects as never,
+      emit,
+    })).toThrow('pico_action_not_decided_here');
+
+    // Refused before anything ran and before anything was recorded.
+    expect(ran).toEqual([]);
+    expect(facts).toEqual([]);
+
+    // The real one still runs.
+    expect(execute(decided).ran).toEqual(['raised']);
+  });
+  it('refuses a copy on the approval path too, the runner\'s second door', () => {
+    const { decided } = decide();
+    expect(() => resolvePicoActionApproval({
+      decided: { ...decided } as PicoActionDecision,
+      presenceSessionId: 'presence-1',
+      approved: true,
+      nowMs: Date.now(),
+      monotonicNowMs: 0,
+      effects: {} as never,
+      emit: () => 'evt-1',
+    })).toThrow('pico_action_not_decided_here');
+  });
+});

@@ -127,6 +127,29 @@ export interface PicoActionDecision {
   pending?: PicoPendingApproval;
 }
 
+/**
+ * Finding B280. Every decision `decidePicoAction` handed out, and nothing
+ * else.
+ *
+ * The runner's guard was `decided.decision !== 'allow'`, and a decision is a
+ * plain interface: any line in this process could build
+ * `{ decision: 'allow', request, ... }` and the runner would run it. None did
+ * - measured - but "the runner only runs what rules allowed" (ADR 0140, and
+ * the first invariant in AGENTS.md) was held by nobody writing that line,
+ * not by the runner. Now the runner asks whether this exact object came out of
+ * the decision function. A literal, a spread copy or a cast is a different
+ * object, and is refused before anything runs or is recorded.
+ *
+ * A WeakSet, so a decision nobody holds any more costs nothing here.
+ */
+const issuedDecisions = new WeakSet<PicoActionDecision>();
+
+function assertIssuedHere(decided: PicoActionDecision): void {
+  if (!issuedDecisions.has(decided)) {
+    throw new Error('pico_action_not_decided_here');
+  }
+}
+
 export interface PicoActionDecisionInput {
   /** What the requester asked for. It cannot state its arguments' origin. */
   requested: PicoActionRequestInput;
@@ -329,7 +352,7 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
     });
   }
 
-  return Object.freeze({
+  const issued: PicoActionDecision = Object.freeze({
     requestedEventId,
     decisionEventId,
     decision,
@@ -340,6 +363,8 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
     privacyDomain: input.privacyDomain,
     ...(pending === undefined ? {} : { pending }),
   });
+  issuedDecisions.add(issued);
+  return issued;
 }
 
 export interface PicoActionExecution {
@@ -364,6 +389,7 @@ export function executePicoAction(input: {
   effects: Readonly<Record<string, PicoActionEffect>>;
   emit: PicoActionEmit;
 }): PicoActionExecution {
+  assertIssuedHere(input.decided);
   if (input.decided.decision !== 'allow') {
     throw new Error('pico_action_not_allowed');
   }
@@ -433,6 +459,7 @@ export function resolvePicoActionApproval(input: {
   effects: Readonly<Record<string, PicoActionEffect>>;
   emit: PicoActionEmit;
 }): { outcome: PicoApprovalOutcome; ran: boolean; succeeded?: boolean } {
+  assertIssuedHere(input.decided);
   const pending = input.decided.pending;
   if (pending === undefined) {
     throw new Error('pico_action_has_no_pending_approval');
