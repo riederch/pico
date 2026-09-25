@@ -43,6 +43,17 @@ import { fileURLToPath } from 'node:url';
  * *Dateideskriptor* traegt keinen Modus - er gehoert dem `openSync`, das ihn
  * aufmachte, und das hat einen. Und ein `openSync`, dessen Flags nur lesen,
  * legt nichts an. Beides wird gezaehlt statt uebersehen.
+ *
+ * **Und was es anlegt, steht auf der Platte, bevor jemand davon erfaehrt**
+ * (2026-09-25, Befund B275). Dieselben Stellen, eine zweite Frage: die
+ * Domaenenschluessel, das Host-Schluesselpaar und die Schluesseldatei des
+ * Tresors wurden mit einem nackten `writeFileSync` angelegt, und SQLite
+ * synchronisiert seine eigenen Commits - nach einem Stromausfall konnten
+ * dauerhafte Zeilen unter einem leeren Schluessel stehen. Eine Quelldatei, die
+ * Dateien anlegt, ruft darum auch `fsyncSync` auf, oder sie steht in
+ * `unflushed` mit dem Grund. Das ist grob - ein Aufruf irgendwo in der Datei -
+ * und mit Absicht: die Tests neben jedem Schreiber halten die Reihenfolge,
+ * dieser Pruefer haelt, dass kein neuer Schreiber ohne die Frage entsteht.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const ts = createRequire(import.meta.url)('typescript');
@@ -50,8 +61,15 @@ const ts = createRequire(import.meta.url)('typescript');
 const directoryMode = '0o700';
 const fileMode = '0o600';
 
+/** Quelldateien, die anlegen, ohne zu synchronisieren - jede mit ihrem Grund. */
+const unflushed = new Map([
+  ['apps/vault-daemon/src/cli.ts', 'Die Wiederherstellungskarte als PDF, ein Ausdruck fuer die Person an einem Pfad, den sie selbst nennt. Nichts im Produkt liest ihn wieder, und eine abgeschnittene Datei sieht sie beim Drucken.'],
+]);
+
 const errors = [];
 const narrowed = [];
+const creators = new Set();
+const flushers = new Set();
 const descriptors = [];
 const readOnly = [];
 
@@ -140,6 +158,10 @@ for (const path of files) {
       const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
       const where = `${path}:${line}`;
 
+      if (callee === 'fsyncSync' || callee === 'fdatasyncSync') {
+        flushers.add(path);
+      }
+
       if (callee === 'mkdirSync' || callee === 'mkdir') {
         const mode = modeOption(node.arguments[1], source);
         if (mode === undefined) {
@@ -165,6 +187,7 @@ for (const path of files) {
         if (isDescriptor) {
           descriptors.push({ where });
         } else {
+          creators.add(path);
           const mode = modeOption(node.arguments[callee === 'writeFileSync' ? 2 : 1], source);
           if (mode === undefined) {
             errors.push(
@@ -193,6 +216,7 @@ for (const path of files) {
         } else if (!creates) {
           readOnly.push({ where });
         } else {
+          creators.add(path);
           const mode = node.arguments[2]?.getText(source);
           if (mode === undefined) {
             errors.push(
@@ -212,6 +236,27 @@ for (const path of files) {
     }
     node.forEachChild(walk);
   })(source);
+}
+
+for (const path of [...creators].sort()) {
+  if (!flushers.has(path) && !unflushed.has(path)) {
+    errors.push(
+      `${path}: legt Dateien an und synchronisiert keine. Was nur im Seitencache steht, `
+      + 'kann nach einem Stromausfall leer zurueckkommen, waehrend SQLite seine Zeilen '
+      + 'schon geschrieben hat (B275). `createPicoHomeFileDurably` im Home, '
+      + '`writePicoCompanionFileAtomically` im Companion - oder hier begruenden.',
+    );
+  }
+}
+for (const [path] of unflushed) {
+  if (!creators.has(path)) {
+    errors.push(`${path}: begruendet als Schreiber ohne fsync, legt aber nichts mehr an - das Argument streichen.`);
+  } else if (flushers.has(path)) {
+    errors.push(`${path}: begruendet als Schreiber ohne fsync, synchronisiert aber - das Argument streichen.`);
+  }
+}
+if (creators.size === 0) {
+  errors.push('Keine einzige Quelldatei legt eine Datei an - der Leser misst nichts mehr (B166).');
 }
 
 if (narrowed.length < 25) {
@@ -234,5 +279,7 @@ console.log(
   + `${counted('file')} files made ${fileMode}, every creation in the product naming its own `
   + `mode rather than taking the service umask; ${descriptors.length} writes into a descriptor `
   + `its own openSync already narrowed, and ${readOnly.length} openSync calls whose flags `
-  + 'cannot create anything).',
+  + 'cannot create anything). '
+  + `${creators.size} source files create files: ${creators.size - unflushed.size} flush them, `
+  + `${unflushed.size} argued.`,
 );

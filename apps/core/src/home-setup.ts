@@ -18,13 +18,14 @@ const hostKeyHexToBytes = (
   errorMessage = 'Pico Home host key material must be lowercase hex.',
 ): Uint8Array => hexToBytes(hex, errorMessage);
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
   picoIdentitySuite,
   type PicoIdentityKeyRole,
 } from '@pico/protocol';
+import { createPicoHomeFileDurably, removePicoHomeFileDurably } from './durable-file.js';
 import { digest } from './session-store.js';
 
 /**
@@ -203,10 +204,14 @@ export class HomeHostKeyStore {
     let removedFiles = 0;
     for (const name of readdirSync(this.storePath)) {
       if (name === HOST_SIGNING_KEY_FILE || name === HOST_KEY_AGREEMENT_KEY_FILE) {
-        rmSync(this.keyPath(name), { force: true });
+        removePicoHomeFileDurably(this.keyPath(name));
         removedFiles += 1;
       }
     }
+    // A partial copy of a pair whose creation never finished holds a private
+    // key too, and has no file of its own for the loop above to find.
+    removePicoHomeFileDurably(this.keyPath(HOST_SIGNING_KEY_FILE));
+    removePicoHomeFileDurably(this.keyPath(HOST_KEY_AGREEMENT_KEY_FILE));
 
     return { removedFiles };
   }
@@ -307,8 +312,8 @@ export class HomeHostKeyStore {
   }
 
   public discardStagedRotation(): void {
-    rmSync(this.keyPath(STAGED_HOST_SIGNING_KEY_FILE), { force: true });
-    rmSync(this.keyPath(STAGED_HOST_KEY_AGREEMENT_KEY_FILE), { force: true });
+    removePicoHomeFileDurably(this.keyPath(STAGED_HOST_SIGNING_KEY_FILE));
+    removePicoHomeFileDurably(this.keyPath(STAGED_HOST_KEY_AGREEMENT_KEY_FILE));
   }
 
   public signWithStagedSigningKey(sodium: HomeHostKeyStoreSodium, signatureInput: Uint8Array): string {
@@ -518,11 +523,14 @@ function readStoredKeyPair(
   return parsed as StoredHostKeyPair;
 }
 
+/**
+ * Finding B275. On the disk before the Home uses it. A pair written only to
+ * the page cache could come back empty after a power cut, `load` refuses an
+ * empty file as invalid, and the Home would not start - with a founding
+ * record elsewhere that names exactly this key.
+ */
 function writeStoredKeyPair(path: string, keyPair: StoredHostKeyPair): void {
-  writeFileSync(path, `${JSON.stringify(keyPair, null, 2)}\n`, {
-    mode: 0o600,
-    flag: 'wx',
-  });
+  createPicoHomeFileDurably(path, `${JSON.stringify(keyPair, null, 2)}\n`);
 }
 
 function toKeyPairSet(signing: StoredHostKeyPair, keyAgreement: StoredHostKeyPair): HomeHostKeyPairSet {

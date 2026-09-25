@@ -1,7 +1,19 @@
 // Befund B51. Dasselbe Muster, jetzt von dort, wo es einmal steht.
 import { bytesToHex, hexToBytes, isHexOfBytes } from '@pico/protocol/canonical-bytes';
 import { isPicoPrivacyDomain } from '@pico/protocol/privacy-domain';
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  constants as fsConstants,
+  fsyncSync,
+  linkSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { wordlist as bip39EnglishWordlist } from '@scure/bip39/wordlists/english.js';
 import {
@@ -2577,9 +2589,63 @@ export function parsePicoVaultKeyfile(serialized: string): PicoVaultEncryptedKey
   };
 }
 
+/**
+ * Created, never replaced, and on the disk before this returns (finding
+ * B275).
+ *
+ * The bare `writeFileSync` with `wx` this replaces left a new keyfile in the
+ * page cache while the Home was already told about the key it holds. After a
+ * power cut the file could come back empty - and the daemon reads every
+ * keyfile in the directory, so one unreadable file takes the whole vault
+ * with it, the identity root included.
+ *
+ * The finished file is published with `link`, which refuses an existing name
+ * the way `wx` did, rather than `rename`, which would replace it. The partial
+ * file has a fixed name so `removePicoVaultKeyfile` can take it too; it ends
+ * in `.partial`, so the daemon's listing - `.json` only - never reads it as a
+ * keyfile. The Home's key store does the same in `durable-file.ts`; this
+ * package cannot import the Home, so the dozen lines stand here a second
+ * time, and the test beside each holds its own copy to the same promise.
+ */
 export function writePicoVaultKeyfile(path: string, keyfile: PicoVaultEncryptedKeyfileV1): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, serializePicoVaultKeyfile(keyfile), { mode: 0o600, flag: 'wx' });
+  const partialPath = `${path}.partial`;
+  rmSync(partialPath, { force: true });
+  const bytes = Buffer.from(serializePicoVaultKeyfile(keyfile), 'utf8');
+  const handle = openSync(
+    partialPath,
+    fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY,
+    0o600,
+  );
+  try {
+    let written = 0;
+    while (written < bytes.byteLength) {
+      written += writeSync(handle, bytes, written, bytes.byteLength - written);
+    }
+    fsyncSync(handle);
+  } catch (error) {
+    closeSync(handle);
+    rmSync(partialPath, { force: true });
+    throw error;
+  }
+  closeSync(handle);
+  try {
+    linkSync(partialPath, path);
+  } finally {
+    unlinkSync(partialPath);
+  }
+  const directory = openSync(dirname(path), 'r');
+  try {
+    fsyncSync(directory);
+  } finally {
+    closeSync(directory);
+  }
+}
+
+/** Takes back a keyfile this package wrote, with any partial copy of it. */
+export function removePicoVaultKeyfile(path: string): void {
+  rmSync(path, { force: true });
+  rmSync(`${path}.partial`, { force: true });
 }
 
 export function readPicoVaultKeyfile(path: string): PicoVaultEncryptedKeyfileV1 {

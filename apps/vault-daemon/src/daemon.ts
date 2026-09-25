@@ -15,6 +15,7 @@ import {
   readPicoVaultKeyfile,
   restorePicoVaultIdentityFromRecovery,
   rotatePicoReaderCustodyDomain,
+  removePicoVaultKeyfile,
   writePicoVaultKeyfile,
   type PicoVaultEncryptedKeyfileV1,
   type PicoVaultReaderCustodySyncAccessSession,
@@ -1587,7 +1588,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     }>,
   ): void {
     if (this.#unlockedSessions.size !== 0
-      || readdirSync(this.keyfilesPath).length !== 0) {
+      || publishedKeyfileNames(this.keyfilesPath).length !== 0) {
       this.#respondError(socket, request.requestId, 'recovery_bootstrap_requires_fresh_vault');
       return;
     }
@@ -1665,7 +1666,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       });
     } catch (error) {
       for (const path of paths) {
-        rmSync(path, { force: true });
+        removePicoVaultKeyfile(path);
       }
       const reason = snakeCaseReasonPattern.test(messageOf(error))
         ? messageOf(error)
@@ -1697,7 +1698,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     }>,
   ): void {
     if (this.#unlockedSessions.size !== 0
-      || readdirSync(this.keyfilesPath).length !== 0) {
+      || publishedKeyfileNames(this.keyfilesPath).length !== 0) {
       this.#respondError(socket, request.requestId, 'founding_bootstrap_requires_fresh_vault');
       return;
     }
@@ -1751,7 +1752,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       // A half-written vault is worse than none: the next attempt would meet
       // its own leftovers and refuse as "not fresh".
       for (const path of paths) {
-        rmSync(path, { force: true });
+        removePicoVaultKeyfile(path);
       }
       const reason = snakeCaseReasonPattern.test(messageOf(error))
         ? messageOf(error)
@@ -1777,7 +1778,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     }>,
   ): void {
     if (this.#unlockedSessions.size !== 0
-      || readdirSync(this.keyfilesPath).length !== 0) {
+      || publishedKeyfileNames(this.keyfilesPath).length !== 0) {
       this.#respondError(socket, request.requestId, 'device_bootstrap_requires_fresh_vault');
       return;
     }
@@ -1818,7 +1819,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       });
     } catch (error) {
       for (const path of paths) {
-        rmSync(path, { force: true });
+        removePicoVaultKeyfile(path);
       }
       const reason = snakeCaseReasonPattern.test(messageOf(error))
         ? messageOf(error)
@@ -1899,7 +1900,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       // a half-written successor would count as the second root above and
       // lock the person out of ever staging a real one.
       for (const path of paths) {
-        rmSync(path, { force: true });
+        removePicoVaultKeyfile(path);
       }
       const reason = snakeCaseReasonPattern.test(messageOf(error))
         ? messageOf(error)
@@ -2126,6 +2127,16 @@ function assertPrivateDirectory(path: string): void {
   }
 }
 
+
+/**
+ * Finding B275. What the directory holds, without the partial copies a crash
+ * during `writePicoVaultKeyfile` can leave. Such a copy was never published
+ * and is not a key this vault has; counted, it would mark a vault that holds
+ * nothing as "not fresh" for good, and no setup could ever run on it again.
+ */
+function publishedKeyfileNames(keyfilesPath: string): string[] {
+  return readdirSync(keyfilesPath).filter((name) => !name.endsWith('.partial'));
+}
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

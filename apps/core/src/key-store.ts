@@ -1,8 +1,9 @@
 import { isPicoPrivacyDomain, picoPrivacyDomainPattern } from '@pico/protocol/privacy-domain';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { MemoryDomainCustodyClass } from '@pico/protocol';
+import { createPicoHomeFileDurably, removePicoHomeFileDurably } from './durable-file.js';
 
 /**
  * File-based store for memory Domain Content Keys (KEKs) - ADR 0072.
@@ -48,7 +49,11 @@ export class KeyStore {
     mkdirSync(this.keyStorePath, { recursive: true, mode: 0o700 });
 
     const version = this.nextVersion(domainId);
-    writeFileSync(this.keyPath(domainId, version), randomBytes(KEK_BYTES), { mode: 0o600 });
+    // Finding B275. Durable before this returns: whatever gets encrypted under
+    // this version is committed by SQLite after the key is on the disk, never
+    // before it. And created rather than written - a version that exists is
+    // not replaced, which the bare write here used to do.
+    createPicoHomeFileDurably(this.keyPath(domainId, version), randomBytes(KEK_BYTES));
 
     return { domainId, version };
   }
@@ -91,7 +96,19 @@ export class KeyStore {
     const versions = this.listVersions(domainId, options);
 
     for (const version of versions) {
-      rmSync(this.keyPath(domainId, version), { force: true });
+      removePicoHomeFileDurably(this.keyPath(domainId, version));
+    }
+    // Finding B275. A version whose creation crashed before it was published
+    // has no key file and so no place in `versions` - only its partial copy,
+    // which holds the key all the same. A shred that left it would be a shred
+    // with a survivor.
+    for (const name of existsSync(this.keyStorePath) ? readdirSync(this.keyStorePath) : []) {
+      const match = name.endsWith('.partial')
+        ? KEY_FILE_PATTERN.exec(name.slice(0, -'.partial'.length))
+        : null;
+      if (match?.groups?.domainId === domainId) {
+        removePicoHomeFileDurably(join(this.keyStorePath, name.slice(0, -'.partial'.length)));
+      }
     }
 
     return { removed: versions.length };
@@ -136,7 +153,7 @@ export class KeyStore {
       throw new Error('invalid_imported_key');
     }
     mkdirSync(this.keyStorePath, { recursive: true, mode: 0o700 });
-    writeFileSync(this.keyPath(domainId, version), kek, { mode: 0o600, flag: 'wx' });
+    createPicoHomeFileDurably(this.keyPath(domainId, version), kek);
   }
 
   private nextVersion(domainId: string): number {
