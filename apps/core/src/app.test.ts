@@ -25,6 +25,7 @@ import {
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityDelegationSignatureInput,
+  buildPicoMemoryKeyExportSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
@@ -4911,6 +4912,235 @@ describe('Pico Home Core app', () => {
 
     await expect(app.injectWS(`/ws?ticket=${encodeURIComponent(ticket.json().ticket as string)}`))
       .rejects.toThrow('Unexpected server response: 401');
+
+    await app.close();
+  });
+});
+
+describe('ADR 0158 KE1 - each reader exports only the domains it may read', () => {
+  /**
+   * Gabel B, gegen zwei Leser gegangen. Der reale Durchlauf in der Schale kennt
+   * eine Person; hier wohnen zwei Bewohner im selben Home, jeder mit eigener
+   * Identitaet, eigener Mitgliedschaft und eigenem delegierten Geraet, und
+   * jeder darf genau eine Domaene lesen. Beide Domaenen haben Schluessel.
+   *
+   * Was gezeigt wird: ein Export traegt die Schluessel der Domaene, die sein
+   * Absender lesen darf, und keine anderen - auch wenn dasselbe Home sie
+   * haelt. Home-Verwaltung ist keine Leserschaft, und zwei Bewohner sind
+   * einander keine Leser.
+   */
+  it('hands each resident the keys of its own domain and nothing else', async () => {
+    const app = await buildAppWithCapturedLog({ memoryEncryption: true });
+    const { setup, sealedClaim, claimResponse } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
+    const homeId = (claimResponse.claimState as { homeId: string }).homeId;
+    const operatorSession = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(app), passphrase: OPERATOR_PASSPHRASE },
+    })).json().session as string;
+    const operatorAuth = { authorization: `Bearer ${operatorSession}` };
+
+    const moveIn = async (name: string, index: number) => {
+      const identity = sodium.crypto_sign_keypair();
+      const keyRecord: PicoIdentityKeyRecordSignatureInput = {
+        suite: picoIdentitySuite,
+        keyRole: 'pico_identity',
+        publicKeyHex: bytesToHex(identity.publicKey),
+      };
+      const fingerprint = keyRecordFingerprintHex(keyRecord);
+      const membership: PicoHomeMembershipSignatureInput = {
+        suite: picoIdentitySuite,
+        credentialId: `member_key_export_${name}`,
+        homeId,
+        issuerPicoIdentityFingerprintHex: sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+        subjectPicoIdentityFingerprintHex: fingerprint,
+        hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+        role: 'home_member',
+        scopes: ['host.use', 'packet.receive'],
+        ...picoTestValidityWindow(),
+        lifecycleOrder: `seq:000000000000000${index}`,
+      };
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/home/memberships',
+        headers: operatorAuth,
+        payload: {
+          schema: picoHomeMembershipCredentialSchema,
+          membership,
+          issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+          issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoHomeMembershipSignatureInput(membership),
+            sealedClaim.claimantPrivateKey,
+          )),
+        },
+      })).statusCode).toBe(201);
+
+      const signing = sodium.crypto_sign_keypair();
+      const signingKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+        suite: picoIdentitySuite,
+        keyRole: 'device_signing',
+        publicKeyHex: bytesToHex(signing.publicKey),
+      };
+      const agreement = sodium.crypto_box_keypair();
+      const agreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+        suite: picoIdentitySuite,
+        keyRole: 'device_key_agreement',
+        publicKeyHex: bytesToHex(agreement.publicKey),
+      };
+      const record: PicoIdentityDelegationSignatureInput = {
+        suite: picoIdentitySuite,
+        delegationId: `delegation_key_export_${name}`,
+        issuerIdentityKeyFingerprintHex: fingerprint,
+        subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(signingKeyRecord),
+        subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(agreementKeyRecord),
+        scopes: ['surface_session'],
+        ...picoTestValidityWindow(),
+        lifecycleOrder: 'seq:0000000000000002',
+      };
+      const challenge = (await app.inject({
+        method: 'POST',
+        url: '/api/auth/identity-challenges',
+      })).json() as { challengeId: string; verifierNonceHex: string; verifierContext: string };
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/auth/identity-session',
+        payload: {
+          challengeId: challenge.challengeId,
+          identityKeyRecord: keyRecord,
+          deviceSigningKeyRecord: signingKeyRecord,
+          deviceKeyAgreementKeyRecord: agreementKeyRecord,
+          delegation: {
+            record,
+            signatureHex: bytesToHex(sodium.crypto_sign_detached(
+              buildPicoIdentityDelegationSignatureInput(record),
+              identity.privateKey,
+            )),
+          },
+          revocations: [],
+          possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoIdentityPossessionSignatureInput({
+              suite: picoIdentitySuite,
+              subjectKeyFingerprintHex: keyRecordFingerprintHex(signingKeyRecord),
+              verifierNonceHex: challenge.verifierNonceHex,
+              verifierContext: challenge.verifierContext,
+            }),
+            signing.privateKey,
+          )),
+        },
+      })).statusCode).toBe(201);
+
+      const request = async (
+        operation: PicoLinkDirectOperation,
+        args: Record<string, unknown>,
+      ): Promise<{ response: PicoLinkDirectResponseSignatureInput; result: Record<string, unknown> }> => {
+        const replyKey = sodium.crypto_box_keypair();
+        const createdAtMs = Date.now();
+        const linkRequest = {
+          suite: picoIdentitySuite,
+          requestId: `linkreq_${randomHex(16)}`,
+          operation,
+          hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+          senderIdentityKeyFingerprintHex: fingerprint,
+          senderDeviceSigningKeyFingerprintHex: keyRecordFingerprintHex(signingKeyRecord),
+          senderDeviceKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(agreementKeyRecord),
+          senderDelegationId: record.delegationId,
+          replyPublicKeyHex: bytesToHex(replyKey.publicKey),
+          argumentsDigestHex: picoLinkDirectPayloadDigestHex(sodium, args),
+          createdAt: new Date(createdAtMs).toISOString(),
+          expiresAt: new Date(createdAtMs + 30_000).toISOString(),
+        };
+        const linked = await app.inject({
+          method: 'POST',
+          url: '/api/home/link',
+          payload: {
+            schema: picoLinkDirectRequestEnvelopeSchema,
+            sealedRequestHex: bytesToHex(sodium.crypto_box_seal(
+              Buffer.from(JSON.stringify({
+                schema: picoLinkDirectRequestEnvelopeSchema,
+                request: linkRequest,
+                senderIdentityKeyRecord: keyRecord,
+                senderDeviceSigningKeyRecord: signingKeyRecord,
+                arguments: args,
+                senderSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+                  buildPicoLinkDirectRequestSignatureInput(linkRequest),
+                  signing.privateKey,
+                )),
+              }), 'utf8'),
+              hexToBytes(setup.host.keyAgreementPublicKeyHex),
+            )),
+          },
+        });
+        expect(linked.statusCode).toBe(200);
+        return JSON.parse(new TextDecoder().decode(sodium.crypto_box_seal_open(
+          hexToBytes((linked.json() as { sealedResponseHex: string }).sealedResponseHex),
+          replyKey.publicKey,
+          replyKey.privateKey,
+        ))) as { response: PicoLinkDirectResponseSignatureInput; result: Record<string, unknown> };
+      };
+
+      const exportKeys = async () => {
+        const statement = {
+          suite: picoIdentitySuite,
+          requestId: `key_export_${name}`,
+          homeId,
+          identityKeyFingerprintHex: fingerprint,
+          requestedAt: new Date().toISOString(),
+        };
+        return await request('home.memory.keys.export.submit', {
+          statement,
+          identityKeyRecord: keyRecord,
+          signatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoMemoryKeyExportSignatureInput(statement),
+            identity.privateKey,
+          )),
+        });
+      };
+      return { fingerprint, exportKeys };
+    };
+
+    const ada = await moveIn('ada', 3);
+    const bea = await moveIn('bea', 4);
+    await recordMemoryItem(app, operatorSession, { privacyDomain: 'domain-ada', content: 'Nur fuer Ada.' });
+    await recordMemoryItem(app, operatorSession, { privacyDomain: 'domain-bea', content: 'Nur fuer Bea.' });
+
+    // Ohne Lesezugang gibt das Home nichts heraus, obwohl es Schluessel haelt.
+    expect((await ada.exportKeys()).result).toEqual({ refusal: 'no_memory_keys' });
+
+    for (const [reader, privacyDomain, grantId] of [
+      [ada.fingerprint, 'domain-ada', 'grant_key_export_ada'],
+      [bea.fingerprint, 'domain-bea', 'grant_key_export_bea'],
+    ] as const) {
+      const grant: PicoHomeDomainReadGrantSignatureInput = {
+        suite: picoIdentitySuite,
+        grantId,
+        homeId,
+        hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+        privacyDomain,
+        controllerPicoIdentityFingerprintHex: sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+        readerPicoIdentityFingerprintHex: reader,
+        ...picoTestValidityWindow(),
+        lifecycleOrder: 'seq:0000000000000001',
+      };
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/home/domain-read-grants',
+        headers: operatorAuth,
+        payload: {
+          schema: picoHomeDomainReadGrantRecordSchema,
+          grant,
+          issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+          issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoHomeDomainReadGrantSignatureInput(grant),
+            sealedClaim.claimantPrivateKey,
+          )),
+        },
+      })).statusCode).toBe(201);
+    }
+
+    const domainsOf = (answer: { result: Record<string, unknown> }): string[] =>
+      [...new Set((answer.result.keks as Array<{ domainId: string }>).map((entry) => entry.domainId))];
+    expect(domainsOf(await ada.exportKeys())).toEqual(['domain-ada']);
+    expect(domainsOf(await bea.exportKeys())).toEqual(['domain-bea']);
 
     await app.close();
   });

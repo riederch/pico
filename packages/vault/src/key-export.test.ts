@@ -119,7 +119,16 @@ describe('ADR 0158 - the key export artifact', () => {
       header.kdfMemLimitBytes,
       sodium.crypto_pwhash_ALG_ARGON2ID13,
     );
-    for (const body of ['{"keks":"not a list"}', '{"keks":[],"extra":1}', 'nicht einmal JSON']) {
+    /**
+     * KE1s zweite Haelfte: ein Element, das mehr traegt als ein
+     * Schluesseltupel, wird abgewiesen - auch wenn es sonst stimmt. Die Datei
+     * traegt Erinnerungsschluessel und nichts sonst, und das haelt der Leser,
+     * nicht der Vorsatz des Schreibers.
+     */
+    const smuggled = JSON.stringify({
+      keks: [{ ...kek('private', 1, 1), identityPrivateKeyHex: 'ee'.repeat(64) }],
+    });
+    for (const body of ['{"keks":"not a list"}', '{"keks":[],"extra":1}', 'nicht einmal JSON', smuggled]) {
       const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
         new TextEncoder().encode(body),
         buildPicoVaultKeyExportHeaderAad(header),
@@ -140,6 +149,8 @@ describe('ADR 0158 - the key export artifact', () => {
     expect(() => seal([kek('private', 1, 1), kek('private', 1, 2)]))
       .toThrow('invalid_key_export_keks');
     expect(() => seal([])).toThrow('invalid_key_export_keks');
+    expect(() => seal([{ ...kek('private', 1, 1), identityPrivateKeyHex: 'ee'.repeat(64) } as never]))
+      .toThrow('invalid_key_export_keks');
   });
 
   it('refuses a passphrase shorter than the floor', () => {

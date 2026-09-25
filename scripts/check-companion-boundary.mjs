@@ -565,6 +565,74 @@ for (const { file, why } of clientForbidden) {
   }
 }
 
+/**
+ * ADR 0158 KE1. Was der Schluesselexport nicht erreichen darf.
+ *
+ * **Die Datei traegt Erinnerungsschluessel und nichts sonst**, und KE1 wollte
+ * das strukturell und nicht als Vorsatz: der Pfad, der sie baut, soll nichts
+ * erreichen, was anderes Schluesselmaterial erzeugt oder haelt - keine
+ * Identitaetswurzel auf Papier, keine Geraeteschluessel aus einer Gruendung
+ * oder einem Beitritt, keine Host-Schluessel, keine Betreiber- oder
+ * Plattformgeheimnisse, keinen Tresor-Server. Wer eines davon hier importiert,
+ * hat es in der Hand, waehrend er eine Datei fuer draussen versiegelt.
+ *
+ * **Was dieser Gang nicht leisten kann, steht hier statt verschwiegen:**
+ * `packages/vault` wird erreicht, weil dort versiegelt wird, und diese Datei
+ * enthaelt auch die Wiederherstellung der Identitaet. Dass die Nutzlast nur
+ * Schluesseltupel ist, haelt darum der Leser des Artefakts - jedes Element mit
+ * genau vier Feldern und nachgerechnetem Digest -, gegangen in
+ * `packages/vault/src/key-export.test.ts`.
+ *
+ * Gemessen am 2026-09-25, bevor die Liste geschrieben wurde: der Pfad
+ * erreichte drei Companion-Module, das Protokoll und `packages/vault`.
+ */
+const keyExportEntry = join(repoRoot, 'apps', 'companion', 'src', 'memory-keys.ts');
+const keyExportForbidden = [
+  { file: join(repoRoot, 'apps', 'companion', 'src', 'recovery-card.ts'), why: 'the Recovery Card, which carries the identity root' },
+  { file: join(repoRoot, 'apps', 'companion', 'src', 'founding.ts'), why: 'founding, which makes an identity and device keys' },
+  { file: join(repoRoot, 'apps', 'companion', 'src', 'enrolment.ts'), why: 'enrolment, which makes device keys' },
+  { file: join(repoRoot, 'apps', 'companion', 'src', 'host-repin.ts'), why: 'host-key pinning' },
+  { file: join(repoRoot, 'apps', 'companion', 'src', 'relay-operator.ts'), why: 'the relay operator credential' },
+  { file: join(repoRoot, 'apps', 'companion', 'src', 'platform-secrets.ts'), why: 'platform keystore secrets' },
+  { file: join(repoRoot, 'apps', 'companion', 'src', 'platform-unlock.ts'), why: 'the automatic Vault unlock' },
+  { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'daemon.ts'), why: 'the daemon server that holds unlocked keys' },
+  { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'device-recovery-ceremony.ts'), why: 'device recovery' },
+  { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'recovery-card-pdf.ts'), why: 'the Recovery Card document' },
+];
+const keyExportReached = new Set();
+const keyExportQueue = [keyExportEntry];
+while (keyExportQueue.length > 0) {
+  const file = keyExportQueue.pop();
+  if (keyExportReached.has(file)) {
+    continue;
+  }
+  keyExportReached.add(file);
+  const source = readFileSync(file, 'utf8');
+  for (const match of source.matchAll(/(?:^|[^\w$])(?:from\s+|require\s*\(\s*)['"]([^'"]+)['"]/g)) {
+    const preceding = source.slice(0, match.index + match[0].length - match[1].length - 2);
+    if (typeOnly.test(preceding)) {
+      continue;
+    }
+    const resolved = resolveTrayImport(match[1], file);
+    if (resolved !== null) {
+      keyExportQueue.push(resolved);
+    }
+  }
+}
+if (!existsSync(keyExportEntry)) {
+  errors.push('apps/companion/src/memory-keys.ts is gone, and the ADR 0158 KE1 walk has nothing to walk.');
+}
+for (const { file, why } of keyExportForbidden) {
+  if (!existsSync(file)) {
+    errors.push(`the key-export walk forbids ${relative(repoRoot, file)}, which no longer exists - a rule about nothing.`);
+  } else if (keyExportReached.has(file)) {
+    errors.push(
+      `apps/companion/src/memory-keys.ts must not statically reach ${relative(repoRoot, file)} (${why}); `
+      + 'a file sealed for outside carries memory keys and nothing else (ADR 0158 KE1).',
+    );
+  }
+}
+
 for (const { file, why } of trayForbidden) {
   if (trayReached.has(file)) {
     errors.push(
@@ -794,7 +862,7 @@ if (errors.length > 0) {
 console.log(
   'Companion shell-boundary check passed'
   + ` (tray start reaches ${trayReached.size} modules,`
-  + ` the shell-free core ${clientReached.size};`
+  + ` the shell-free core ${clientReached.size}, the key export ${keyExportReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides,`
   + ` ${channelsAnswered} answered or pushed by the main process and`
   + ` ${exposedMethods.length} offered methods each called by the window,`
