@@ -1034,6 +1034,56 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B273 — ein Termin, der nicht markiert werden konnte, hätte das Home beendet
+(2026-09-25).** Pico läuft als Hintergrunddienst, und unter Node 22 beendet
+eine unbehandelte abgelehnte Promise den Prozess. Gemessen wurde darum, welche
+Promise der Baum wegwirft, ohne ihre Ablehnung zu behandeln. Gelesen hat der
+Typprüfer, nicht ein Muster: die erste Zählung über die Schreibweise fand 509
+Stellen, weil sie `void` als Rückgabetyp nicht vom `void`-Operator
+unterscheiden kann. Mit Typen blieben ohne Ablehnungszweig drei Stellen im
+Home und drei im Tresor-Dienst, im Relay und in den Paketen keine.
+
+**Der Zeitgeber des Terminplaners warf seinen Tick weg**: `void tick()`. Der
+Tick liest und markiert im Speicher außerhalb seines `try` — das `try` fängt
+nur die Ankündigung. Ein `UPDATE`, das nicht durchgeht, etwa bei voller Platte,
+wurde so zur unbehandelten Ablehnung, und eine einzige nicht markierbare
+Erinnerung hätte das ganze Home mitgenommen, samt Link und Gedächtnis. Nach
+dem Neustart wäre derselbe Termin fällig gewesen und dasselbe passiert. Und
+hätte der Prozess überlebt, hätte nichts den Zeitgeber neu gestellt: jeder
+spätere Termin wäre ohne ein Wort unangekündigt geblieben, das eine Ergebnis,
+gegen das diese Familie gebaut ist. Der bestehende Test konnte es nicht sehen,
+weil er `tick()` selbst abwartet — der eine Aufrufer, der die Ablehnung immer
+bekommt.
+
+Jetzt meldet der Planer einen gescheiterten Tick über ein **Pflichtfeld**
+`reportFailure` ins Log des Homes und versucht es nach einer Minute wieder.
+Gestoppt mitten in einer Ankündigung, lässt er den Speicher in Ruhe, weil der
+`onClose`-Haken ihn gleich danach schließt. Zwei Tests fahren den Weg über den
+Zeitgeber; zurückgepflanzt meldet vitest genau die unbehandelte Ablehnung.
+
+Dazu der Dienstbefehl des Tresors: `void daemon.close().then(resolve)` beim
+Signal. Ein Schließen, das scheitert — die letzte Audit-Zeile bei voller
+Platte —, gab einen rohen Stapel statt der Fehlerzeile, und die umgebende
+Promise wurde nie fertig. Jetzt geht die Ablehnung dorthin, wohin die Fehler
+des Befehls gehen.
+
+**Das Netz, `floating:check`**, läuft nach dem Bau mit dem Typprüfer über
+Home, Tresor-Dienst, Relay und alle Pakete: jede verworfene Promise hat
+`.catch` oder `.then(ok, fehler)`, auch vor einem `.finally`, oder ist
+begründet. Begründet sind vier, darunter der periodische Planer, dessen Tick
+außerhalb des `try` nur Speicher im Prozess berührt. Fünf Pflanzungen beißen:
+B273 zurück, ein `then` mit nur einem Arm, ein veraltetes Argument, eine
+nackte Anweisung im Relay und ein blinder Leser.
+
+**Nicht im Netz ist der Companion, und das ist gemessen**: Electron 44 warnt
+bei einer unbehandelten Ablehnung im Hauptprozess nur und läuft weiter. Dort
+ist die Frage nicht der Prozess, sondern das stille Einschlafen, und die ist
+eine eigene Messung. Zwei weitere Kandidaten dieser Runde trugen keinen
+Befund: Die Lesewege des Fensters liefern bei einem Fehler dieselbe leere
+Liste wie bei „keine", aber auch die Fehlerzweige des Renderers blenden nur
+aus, wie ADR 0118 O4 es begründet. Und die Grabsteine, die beim Start
+durchgesetzt werden, haben genau zwei Schreiber, beide in der gelesenen Form.
+
 **B272 — sechs Standardzweige waren der letzte bekannte Fall (2026-09-25).**
 Aus B271 die nächste Frage: wo verzweigt der Baum sonst über eine geschlossene
 Menge, ohne dass ein fehlender Fall den Bau bricht? Gemessen über alle
