@@ -137,6 +137,8 @@ describe('Pico protocol types', () => {
       'memory.recall_forgotten',
       'memory.domain_shredded',
       'memory.reader_custody_discarded',
+      'memory.keys_exported',
+      'memory.keys_imported',
       'auth.operator_bootstrapped',
       'auth.credential_changed',
       'auth.operator_reset',
@@ -169,6 +171,8 @@ describe('Pico protocol types', () => {
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
       'memory.reader_custody_discarded',
+      'memory.keys_exported',
+      'memory.keys_imported',
       'memory.recall_forgotten',
       'memory.time_bound_entry_due',
       'auth.operator_bootstrapped',

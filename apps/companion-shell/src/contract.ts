@@ -96,6 +96,9 @@ export const picoCompanionIpcChannels = Object.freeze({
    * `shred`: was hier geschieht, ist host-lokal.
    */
   discardReaderCustodySpace: 'pico:reader-custody:discard',
+  /** ADR 0158. Die eigenen Speicherschluessel mitnehmen und zurueckbringen. */
+  exportMemoryKeys: 'pico:memory-keys:export',
+  importMemoryKeys: 'pico:memory-keys:import',
   readReaderCustodyNotes: 'pico:reader-custody:read',
   decideRule: 'pico:rule:decide',
   forgetRule: 'pico:rule:forget',

@@ -21,6 +21,8 @@ import type { MemoryStore } from './memory-store.js';
 export type AppendShredAudit = (input: {
   privacyDomain: string;
   removedKeyVersions: number;
+  /** ADR 0158 KE5. Die Digests der zerstoerten Schluessel, sortiert. */
+  destroyedKeyDigests: string[];
   reason?: string;
 }) => void;
 
@@ -89,7 +91,7 @@ export function shredDomainWithAudit(
   forgottenRecalls: number;
   forgottenParkingDecisions: number;
 } {
-  const { removed } = memory.cryptoShredDomain(input.privacyDomain);
+  const { removed, destroyedKeyDigests } = memory.cryptoShredDomain(input.privacyDomain);
   // After the keys, so a failure between the two leaves readings whose domain
   // key is already gone rather than keys for readings that are already gone.
   // Both are bad; only one of them is recoverable by running the shred again.
@@ -104,6 +106,7 @@ export function shredDomainWithAudit(
   appendAudit({
     privacyDomain: input.privacyDomain,
     removedKeyVersions: removed,
+    destroyedKeyDigests,
     ...(input.reason === undefined ? {} : { reason: input.reason }),
   });
 

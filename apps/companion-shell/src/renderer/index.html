@@ -231,6 +231,21 @@
       <ul id="reader-custody-list" class="provider-list"></ul>
       <p id="reader-custody-status" class="detail" role="status" aria-live="polite"></p>
     </section>
+    <!--
+      ADR 0158 mit ADR 0072 Punkt 5. Die Haelfte einer Wiederherstellung, die
+      eine Person selbst halten kann: eine Sicherung ohne Schluesselspeicher
+      laesst jede verschluesselte Erinnerung unlesbar, mit Absicht (R6). Diese
+      Datei macht daraus etwas, das man verhindern kann, statt es zu erleiden.
+      Ort und Passphrase fragt der Hauptprozess, nicht diese Seite.
+    -->
+    <section id="memory-keys" class="form-card">
+      <h2>Keep your memories restorable</h2>
+      <p class="detail">A backup of your Home does not carry the keys that make your memories readable.
+        Save them to a file you keep elsewhere; the file alone restores nothing.</p>
+      <button id="memory-keys-export" type="button">Save my memory keys to a file</button>
+      <button id="memory-keys-import" type="button" class="secondary">Bring my memory keys back</button>
+      <p id="memory-keys-status" class="detail" role="status" aria-live="polite"></p>
+    </section>
     <section id="depot-attach" class="form-card">
       <h2>Give Pico material</h2>
       <label for="depot-remote">Where it lives</label>

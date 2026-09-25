@@ -55,6 +55,9 @@ export const foundationEventTypes = [
    * Ueberbehauptung, die ADR 0070 verhindern soll.
    */
   'memory.reader_custody_discarded',
+  // ADR 0158. Inhaltsfrei: Zaehlungen, nie Schluesselbytes.
+  'memory.keys_exported',
+  'memory.keys_imported',
   'auth.operator_bootstrapped',
   'auth.credential_changed',
   'auth.operator_reset',

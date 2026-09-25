@@ -1,6 +1,7 @@
 // Befund B50. Die kanonischen Bytes-Regeln stehen in `./canonical-bytes.js`
 // und nirgends sonst: sie standen hier und in `recovery.ts` zweimal, mit
 // denselben Bytes und vier verschiedenen Ablehnungen.
+import { isPicoPrivacyDomain } from './privacy-domain.js';
 import { asciiBytes, assertAsciiToken, assertExactKeysWithoutFieldOrder, bytesToHex,   canonicalTextEncoder, concatCanonicalElements, fixedHexBytes, isAsciiToken, isHexOfBytes } from './canonical-bytes.js';
 import { foundationEventTypes, type FoundationEventType } from './foundation-event-type.js';
 // ADR 0116 W2 (Befund B49). Diese Barriere gibt die Herkunftsklasse weiter und
@@ -47,6 +48,9 @@ export const serverSynthesizedFoundationEventTypes = [
    * verhindern soll.
    */
   'memory.reader_custody_discarded',
+  // ADR 0158. Inhaltsfrei: wie viele Domaenen und Schluessel, nie welche Bytes.
+  'memory.keys_exported',
+  'memory.keys_imported',
   // Nur das Home hängt ihn an: wer behaupten dürfte, jemand habe etwas
   // vergessen, könnte eine Rücknahme erfinden, die nie stattfand.
   'memory.recall_forgotten',
@@ -804,6 +808,18 @@ export const picoLinkDirectOperations = [
    * gestern nein gesagt hat, hat ueber heute nichts gesagt.
    */
   'home.parking.decide',
+  /**
+   * ADR 0158 KE4. Die Schluessel der Domaenen herausgeben, die die anfragende
+   * Person lesen darf - roh, im versiegelten Kanal, an ihr eigenes Geraet.
+   * Versiegelt wird dort (KE2); das Home sieht keine Passphrase.
+   */
+  'home.memory.keys.export.submit',
+  /**
+   * ADR 0158 KE5. Die Spiegelung: das Geraet hat die Datei geoeffnet und gibt
+   * die Schluessel zurueck. Geschrieben wird nur, wo nichts liegt; ein
+   * anderer Schluessel unter demselben Namen verweigert die ganze Domaene.
+   */
+  'home.memory.keys.import.submit',
   'home.modules.consent.read',
   'home.modules.consent.record',
 ] as const;
@@ -1214,6 +1230,127 @@ export const picoReaderCustodyCanonicalLabels = {
   item: 'pico.mem.reader-item.v1',
 } as const satisfies Record<PicoReaderCustodyCanonicalFamily, string>;
 
+/**
+ * ADR 0158 KE4. Die zwei Saetze, mit denen eine Person ihre Speicherschluessel
+ * mitnimmt und zurueckbringt.
+ *
+ * **Unterschrieben von der Identitaetswurzel, bewilligt am Vault-Daemon.** Der
+ * Link-Kanal ist schon authentisch - aber sein Geraeteschluessel unterschreibt
+ * ohne Rueckfrage (`pico.link.direct.request.v1` ist ausgenommen), und eine
+ * Handlung, die jeden lesbaren Schluessel dieses Homes herausgibt, darf nicht
+ * das sein, was ein entsperrtes Geraet unbemerkt tut. Der Satz macht daraus
+ * etwas, das eine Person gesehen und freigegeben hat.
+ */
+export const picoMemoryKeyCanonicalLabels = {
+  export: 'pico.mem.key-export.v1',
+  import: 'pico.mem.key-import.v1',
+} as const;
+
+/**
+ * ADR 0158 KE1. Kein Domaenenverzeichnis im Satz: ausgegeben wird, was die
+ * Person lesen darf, und das entscheidet das Home zum Zeitpunkt der Anfrage
+ * (ADR 0077). Die Antwort nennt die Domaenen; der Satz bindet Home, Person und
+ * Augenblick.
+ */
+export interface PicoMemoryKeyExportSignatureInput {
+  suite: string;
+  requestId: string;
+  homeId: string;
+  identityKeyFingerprintHex: string;
+  requestedAt: string;
+}
+
+/**
+ * ADR 0158 KE5. Der Import bindet, **was** zurueckkommt: jede Zeile ist
+ * `domain:version:digest`, sortiert, und das Home rechnet die Digests aus den
+ * gelieferten Schluesseln nach. Ein Satz, der nur "importiere" sagte, liesse
+ * sich unter andere Schluessel legen.
+ */
+export interface PicoMemoryKeyImportSignatureInput {
+  suite: string;
+  requestId: string;
+  homeId: string;
+  identityKeyFingerprintHex: string;
+  exportedAt: string;
+  entries: string[];
+  requestedAt: string;
+}
+
+export const maxPicoMemoryKeyImportEntries = 4096;
+
+/**
+ * Wie weit der Augenblick im Satz von der Uhr des Homes abweichen darf. Ein
+ * Satz, der Schluessel herausgibt, ist fuer jetzt gedacht - nicht fuer einen
+ * spaeteren Tag, an dem jemand ihn aufgehoben hat.
+ */
+export const maxPicoMemoryKeyStatementSkewMs = 5 * 60 * 1_000;
+
+export function picoMemoryKeyImportEntry(
+  domainId: string,
+  version: number,
+  digestHex: string,
+): string {
+  return `${domainId}:${String(version)}:${digestHex}`;
+}
+
+export function buildPicoMemoryKeyExportSignatureInput(
+  input: PicoMemoryKeyExportSignatureInput,
+): Uint8Array {
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
+    'suite',
+    'requestId',
+    'homeId',
+    'identityKeyFingerprintHex',
+    'requestedAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.requestId);
+  assertAsciiToken(input.homeId);
+  assertPicoInstant(input.requestedAt);
+  return concatCanonicalElements([
+    asciiBytes(picoMemoryKeyCanonicalLabels.export),
+    asciiBytes(input.suite),
+    asciiBytes(input.requestId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.identityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.requestedAt),
+  ]);
+}
+
+export function buildPicoMemoryKeyImportSignatureInput(
+  input: PicoMemoryKeyImportSignatureInput,
+): Uint8Array {
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
+    'suite',
+    'requestId',
+    'homeId',
+    'identityKeyFingerprintHex',
+    'exportedAt',
+    'entries',
+    'requestedAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.requestId);
+  assertAsciiToken(input.homeId);
+  assertPicoInstant(input.exportedAt);
+  assertPicoInstant(input.requestedAt);
+  if (!Array.isArray(input.entries) || input.entries.length > maxPicoMemoryKeyImportEntries) {
+    throw new Error('invalid_key_import_entries');
+  }
+  const entries = canonicalAsciiTokenSet(input.entries, false, 'invalid_key_import_entries');
+  return concatCanonicalElements([
+    asciiBytes(picoMemoryKeyCanonicalLabels.import),
+    asciiBytes(input.suite),
+    asciiBytes(input.requestId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.identityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.exportedAt),
+    asciiBytes(String(entries.length)),
+    ...entries.map((entry) => asciiBytes(entry)),
+    asciiBytes(input.requestedAt),
+  ]);
+}
+
 export const picoReaderCustodySyncRecordDigestLabel =
   'pico.mem.reader-sync-record.v1' as const;
 export const picoReaderCustodySyncEvidenceDigestLabel =
@@ -1612,6 +1749,15 @@ export interface PicoReaderCustodySyncBatchRecord {
 }
 
 export const picoVaultKeyfileFormat = 'pico.vault.keyfile.v1' as const;
+
+/**
+ * ADR 0158 KE2. Das Exportartefakt - dieselbe Konstruktion wie das Keyfile,
+ * mit eigenem Namen. Das Formatlabel steht in den authentisierten Daten, also
+ * oeffnet sich ein Keyfile nie als Export und ein Export nie als Keyfile: die
+ * AEAD verweigert, bevor irgendeine Nutzlast angesehen wird.
+ */
+export const picoVaultKeyExportFormat = 'pico.vault.keyexport.v1' as const;
+export const picoVaultKeyExportContents = 'memory_domain_keks' as const;
 
 // ADR 0081 Gate P1 covers person-role key custody only. Host-role keys stay on
 // the ADR 0080 host-custody path and must not be accepted as Vault keyfiles.
@@ -2087,6 +2233,26 @@ export interface PicoHomeContinuityRecord {
   createdAt: string;
 }
 
+/**
+ * ADR 0158 KE2. Der Kopf des Keyfiles, mit `contents` statt `keyRole` und mit
+ * dem, woran das Artefakt gebunden ist: Home, Person, Augenblick.
+ */
+export interface PicoVaultKeyExportHeaderAadInput {
+  format: string;
+  suite: string;
+  contents: string;
+  homeId: string;
+  identityKeyFingerprintHex: string;
+  exportedAt: string;
+  kdfAlgorithm: PicoVaultKdfAlgorithm;
+  kdfProfile: PicoVaultKdfProfile;
+  kdfOpsLimit: number;
+  kdfMemLimitBytes: number;
+  kdfSaltHex: string;
+  aeadAlgorithm: PicoVaultAeadAlgorithm;
+  aeadNonceHex: string;
+}
+
 export interface PicoVaultKeyfileHeaderAadInput {
   format: string;
   suite: string;
@@ -2268,6 +2434,12 @@ export interface MemoryRecallForgottenPayload {
 export interface MemoryDomainShreddedPayload {
   privacyDomain: string;
   removedKeyVersions: number;
+  /**
+   * ADR 0158 KE5. BLAKE2b-256 ueber jeden zerstoerten Schluessel, sortiert.
+   * Additiv und darum optional: eine Aufzeichnung von vor dem 2026-09-25 hat
+   * das Feld nicht, und ein Import kann ihre Schluessel nicht wiedererkennen.
+   */
+  destroyedKeyDigests?: string[];
   reason?: string;
 }
 
@@ -2279,6 +2451,32 @@ export interface MemoryDomainShreddedPayload {
  * nennt nur, was hier lag - Chiffren, Erteilungen, Rotationen -, weil er ueber
  * Kopien anderswo nichts weiss und nichts behaupten darf.
  */
+/**
+ * ADR 0158. Dass Schluessel das Home verlassen haben, und fuer wen - aber
+ * nicht welche Bytes. Eine Aufzeichnung, die die Schluessel enthielte, waere
+ * ein Export in das Protokoll.
+ */
+export interface MemoryKeysExportedPayload {
+  identityKeyFingerprintHex: string;
+  domains: number;
+  keys: number;
+  /**
+   * ADR 0158 KE5. `domain:digest` je herausgegebenem Schluessel, sortiert. Ein
+   * Digest eines zufaelligen Schluessels verraet nichts ueber ihn - er laesst
+   * einen spaeteren Shred aber wissen, welche Kopien es draussen gibt, die er
+   * nicht erreichen kann, und einen Import sie danach abweisen.
+   */
+  keyDigests: string[];
+}
+
+export interface MemoryKeysImportedPayload {
+  identityKeyFingerprintHex: string;
+  restored: number;
+  alreadyPresent: number;
+  conflicting: number;
+  refused: number;
+}
+
 export interface MemoryReaderCustodyDiscardedPayload {
   domainAuthorityId: string;
   privacyDomain: string;
@@ -2365,6 +2563,8 @@ export type FoundationEventPayload =
   | MemoryRecallForgottenPayload
   | MemoryDomainShreddedPayload
   | MemoryReaderCustodyDiscardedPayload
+  | MemoryKeysExportedPayload
+  | MemoryKeysImportedPayload
   | AuthOperatorBootstrappedPayload
   | AuthCredentialChangedPayload
   | AuthOperatorResetPayload
@@ -2517,7 +2717,12 @@ export function validateFoundationEventPayload(
   }
 
   if (type === 'memory.domain_shredded') {
-    const extraKey = firstUnexpectedKey(payload, ['privacyDomain', 'removedKeyVersions', 'reason']);
+    const extraKey = firstUnexpectedKey(payload, [
+      'privacyDomain',
+      'removedKeyVersions',
+      'destroyedKeyDigests',
+      'reason',
+    ]);
     if (extraKey !== undefined) {
       return { ok: false, error: `memory.domain_shredded payload has unexpected field: ${extraKey}.` };
     }
@@ -2534,14 +2739,78 @@ export function validateFoundationEventPayload(
       return { ok: false, error: 'memory.domain_shredded reason must be a non-empty string when provided.' };
     }
 
+    if (payload.destroyedKeyDigests !== undefined
+      && (!Array.isArray(payload.destroyedKeyDigests)
+        || payload.destroyedKeyDigests.length !== payload.removedKeyVersions
+        || !payload.destroyedKeyDigests.every((digest) => isHexOfBytes(digest, 32)))) {
+      return {
+        ok: false,
+        error: 'memory.domain_shredded destroyedKeyDigests must be one digest per removed key version.',
+      };
+    }
+
     return {
       ok: true,
       payload: {
         privacyDomain: payload.privacyDomain,
         removedKeyVersions: payload.removedKeyVersions,
+        ...(payload.destroyedKeyDigests === undefined
+          ? {}
+          : { destroyedKeyDigests: [...payload.destroyedKeyDigests as string[]] }),
         ...(payload.reason === undefined ? {} : { reason: payload.reason }),
       },
     };
+  }
+
+  if (type === 'memory.keys_exported' || type === 'memory.keys_imported') {
+    const counts = type === 'memory.keys_exported'
+      ? ['domains', 'keys'] as const
+      : ['restored', 'alreadyPresent', 'conflicting', 'refused'] as const;
+    const extraKey = firstUnexpectedKey(payload, [
+      'identityKeyFingerprintHex',
+      ...counts,
+      ...(type === 'memory.keys_exported' ? ['keyDigests'] : []),
+    ]);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `${type} payload has unexpected field: ${extraKey}.` };
+    }
+    if (!isHexOfBytes(payload.identityKeyFingerprintHex, 32)) {
+      return { ok: false, error: `${type} payload requires identityKeyFingerprintHex.` };
+    }
+    for (const name of counts) {
+      const value = payload[name];
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+        return { ok: false, error: `${type} ${name} must be a non-negative integer.` };
+      }
+    }
+    if (type === 'memory.keys_exported'
+      && (!Array.isArray(payload.keyDigests)
+        || payload.keyDigests.length !== payload.keys
+        || !payload.keyDigests.every((entry) => typeof entry === 'string'
+          && isPicoPrivacyDomain(entry.slice(0, entry.lastIndexOf(':')))
+          && isHexOfBytes(entry.slice(entry.lastIndexOf(':') + 1), 32)))) {
+      return { ok: false, error: 'memory.keys_exported keyDigests must be one domain:digest per key.' };
+    }
+    return type === 'memory.keys_exported'
+      ? {
+        ok: true,
+        payload: {
+          identityKeyFingerprintHex: payload.identityKeyFingerprintHex,
+          domains: payload.domains as number,
+          keys: payload.keys as number,
+          keyDigests: [...payload.keyDigests as string[]],
+        },
+      }
+      : {
+        ok: true,
+        payload: {
+          identityKeyFingerprintHex: payload.identityKeyFingerprintHex,
+          restored: payload.restored as number,
+          alreadyPresent: payload.alreadyPresent as number,
+          conflicting: payload.conflicting as number,
+          refused: payload.refused as number,
+        },
+      };
   }
 
   if (type === 'memory.reader_custody_discarded') {
@@ -4413,6 +4682,62 @@ export function buildPicoHomeContinuitySignatureInput(input: PicoHomeContinuityS
     asciiBytes(input.reasonCategory),
     asciiBytes(input.changedAt),
     asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoVaultKeyExportHeaderAad(
+  input: PicoVaultKeyExportHeaderAadInput,
+): Uint8Array {
+  assertExactKeysWithoutFieldOrder(input as unknown as Record<string, unknown>, [
+    'format',
+    'suite',
+    'contents',
+    'homeId',
+    'identityKeyFingerprintHex',
+    'exportedAt',
+    'kdfAlgorithm',
+    'kdfProfile',
+    'kdfOpsLimit',
+    'kdfMemLimitBytes',
+    'kdfSaltHex',
+    'aeadAlgorithm',
+    'aeadNonceHex',
+  ]);
+  if (input.format !== picoVaultKeyExportFormat) {
+    throw new Error('wrong_key_export_label');
+  }
+  if (input.contents !== picoVaultKeyExportContents) {
+    throw new Error('invalid_key_export_contents');
+  }
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.homeId);
+  assertPicoInstant(input.exportedAt);
+  assertStringMember(input.kdfAlgorithm, picoVaultKdfAlgorithms, 'invalid_kdf_algorithm');
+  assertStringMember(input.kdfProfile, picoVaultKdfProfiles, 'invalid_kdf_profile');
+  assertStringMember(input.aeadAlgorithm, picoVaultAeadAlgorithms, 'invalid_aead_algorithm');
+
+  return concatCanonicalElements([
+    asciiBytes(picoVaultKeyExportFormat),
+    asciiBytes(input.suite),
+    asciiBytes(input.contents),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.identityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.exportedAt),
+    asciiBytes(input.kdfAlgorithm),
+    asciiBytes(input.kdfProfile),
+    kdfParameterBytes(
+      input.kdfOpsLimit,
+      picoVaultArgon2idModerateParams.opsLimit,
+      picoVaultArgon2idMaximumParams.opsLimit,
+    ),
+    kdfParameterBytes(
+      input.kdfMemLimitBytes,
+      picoVaultArgon2idModerateParams.memLimitBytes,
+      picoVaultArgon2idMaximumParams.memLimitBytes,
+    ),
+    fixedHexBytes(input.kdfSaltHex, 16, 'invalid_kdf_salt_length'),
+    asciiBytes(input.aeadAlgorithm),
+    fixedHexBytes(input.aeadNonceHex, 24, 'invalid_aead_nonce_length'),
   ]);
 }
 

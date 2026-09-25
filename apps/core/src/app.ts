@@ -44,6 +44,11 @@ import {
   picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
   picoIdentitySuite,
+  buildPicoMemoryKeyExportSignatureInput,
+  buildPicoMemoryKeyImportSignatureInput,
+  maxPicoMemoryKeyImportEntries,
+  maxPicoMemoryKeyStatementSkewMs,
+  picoMemoryKeyImportEntry,
   protocolCapabilities,
   clientWritableMessageCreatedRoles,
   memoryRetentionModes,
@@ -2069,6 +2074,64 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * und ein Gerät, das seine eigene nennen dürfte, legte seine Messungen in
    * den Raum eines anderen oder in einen, den kein Shred je erreicht.
    */
+  /**
+   * ADR 0158 KE4. Ob ein Schluesselsatz von der Person stammt, die ihn ueber
+   * Link schickt - unterschrieben von ihrer Identitaetswurzel, fuer dieses
+   * Home, jetzt.
+   *
+   * **Der Kanal allein genuegt nicht**, und das ist der Grund fuer den Satz:
+   * Link-Anfragen unterschreibt ein Geraeteschluessel ohne Rueckfrage. Eine
+   * Handlung, die jeden lesbaren Schluessel herausgibt, verlangt die Wurzel,
+   * und die fragt am Vault-Daemon mit dem Satz aus KE6.
+   */
+  const verifyMemoryKeyStatement = (
+    kind: 'export' | 'import',
+    args: Record<string, unknown>,
+    principal: PicoLinkDirectPrincipal,
+  ): { ok: true; statement: Record<string, unknown> } | { ok: false; refusal: string } => {
+    const statement = args.statement;
+    const keyRecord = args.identityKeyRecord as PicoIdentityKeyRecordSignatureInput | undefined;
+    if (!isRecord(statement) || !isRecord(keyRecord) || typeof args.signatureHex !== 'string') {
+      return { ok: false, refusal: 'invalid_memory_key_statement' };
+    }
+    const homeId = store.picoHomeFoundingRecord()?.founding.homeId;
+    let signatureInput: Uint8Array;
+    try {
+      signatureInput = kind === 'export'
+        ? buildPicoMemoryKeyExportSignatureInput(statement as never)
+        : buildPicoMemoryKeyImportSignatureInput(statement as never);
+    } catch {
+      return { ok: false, refusal: 'invalid_memory_key_statement' };
+    }
+    const requestedAtMs = Date.parse(String(statement.requestedAt));
+    if (statement.suite !== picoIdentitySuite
+      || homeId === undefined
+      || statement.homeId !== homeId
+      || statement.identityKeyFingerprintHex !== principal.picoIdentityFingerprintHex
+      || !Number.isFinite(requestedAtMs)
+      || Math.abs(Date.now() - requestedAtMs) > maxPicoMemoryKeyStatementSkewMs) {
+      return { ok: false, refusal: 'invalid_memory_key_statement' };
+    }
+    try {
+      if (keyRecord.suite !== picoIdentitySuite
+        || keyRecord.keyRole !== 'pico_identity'
+        || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+          keyRecord,
+          expectedFingerprintHex: principal.picoIdentityFingerprintHex,
+        })
+        || !verifyPicoIdentityDetachedSignature(sodium, {
+          publicKeyHex: keyRecord.publicKeyHex,
+          signatureInput,
+          signatureHex: args.signatureHex,
+        })) {
+        return { ok: false, refusal: 'invalid_memory_key_statement' };
+      }
+    } catch {
+      return { ok: false, refusal: 'invalid_memory_key_statement' };
+    }
+    return { ok: true, statement };
+  };
+
   const spatialCapturePrivacyDomain = 'private';
 
   /**
@@ -5429,6 +5492,197 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             status: args.status as PicoParkingDecision,
           });
           return { outcome: 'ok', result: { status: args.status } };
+        }
+        case 'home.memory.keys.export.submit': {
+          /**
+           * ADR 0158 KE1/KE4. Die Schluessel der Domaenen, die diese Person
+           * lesen darf - roh, im versiegelten Kanal, an ihr eigenes Geraet.
+           * Versiegelt wird dort (KE2); dieses Home sieht keine Passphrase.
+           */
+          if (principal === undefined
+            || !hasExactKeys(args, ['statement', 'identityKeyRecord', 'signatureHex'])) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const verified = verifyMemoryKeyStatement('export', args, principal);
+          if (!verified.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: verified.refusal } };
+          }
+          if (keyStore === undefined) {
+            // ADR 0070. Ohne Verschluesselung gibt es keinen Schluesselspeicher,
+            // und ein Satz ueber das Wiederherstellen von Erinnerungen waere
+            // falsch.
+            return { outcome: 'invalid_arguments', result: { refusal: 'memory_encryption_off' } };
+          }
+          /**
+           * **Nach Leserschaft, je Domaene** (Gabel B). Home-Verwaltung ist
+           * keine Domaenen-Leserschaft; wer eine Domaene nicht lesen darf,
+           * bekommt auch ihren Schluessel nicht, auch nicht der Home Host.
+           *
+           * Das haelt zugleich KE1: der Schluesselspeicher traegt auch den
+           * Schluessel der Anbieter-Zugangsdaten, und ein Lesezugang auf einen
+           * Namen, der keine Erinnerungsdomaene mit Host-Verwahrung ist, wird
+           * gar nicht erst angenommen (`domain_is_not_host_custody`). Ein
+           * eigener Filter hier waere eine zweite Kopie derselben Regel, die
+           * nie beissen kann - der Durchlauf geht die erste.
+           */
+          const domains = keyStore.listDomains().filter((domain) => readership.mayRead({
+            sessionDigest: 'pico-link-direct',
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+          }, domain));
+          const keks = domains.flatMap((domain) => keyStore!.listVersions(domain).map((version) => {
+            const kek = keyStore!.loadKeyVersion(domain, version);
+            try {
+              return {
+                domainId: domain,
+                version,
+                kekHex: kek.toString('hex'),
+                digestHex: Buffer.from(sodium.crypto_generichash(32, kek, null)).toString('hex'),
+              };
+            } finally {
+              kek.fill(0);
+            }
+          }));
+          if (keks.length === 0) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'no_memory_keys' } };
+          }
+          appendServerEvent('memory.keys_exported', {
+            identityKeyFingerprintHex: principal.picoIdentityFingerprintHex,
+            domains: domains.length,
+            keys: keks.length,
+            keyDigests: keks.map((entry) => `${entry.domainId}:${entry.digestHex}`).sort(),
+          });
+          return {
+            outcome: 'ok',
+            result: {
+              homeId: String(verified.statement.homeId),
+              exportedAt: new Date().toISOString(),
+              keks,
+            },
+          };
+        }
+        case 'home.memory.keys.import.submit': {
+          /**
+           * ADR 0158 KE5. Zurueckbringen - nie ueberschreiben, nie Generationen
+           * mischen, nie wiedererwecken.
+           */
+          if (principal === undefined
+            || !hasExactKeys(args, ['statement', 'identityKeyRecord', 'signatureHex', 'keks'])
+            || !Array.isArray(args.keks)
+            || args.keks.length === 0
+            || args.keks.length > maxPicoMemoryKeyImportEntries) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const verified = verifyMemoryKeyStatement('import', args, principal);
+          if (!verified.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: verified.refusal } };
+          }
+          if (keyStore === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'memory_encryption_off' } };
+          }
+          /**
+           * Der Satz bindet, was zurueckkommt: jede Zeile `domain:version:digest`,
+           * und die Digests rechnet dieses Home aus den gelieferten Bytes nach.
+           */
+          const offered: Array<{ domainId: string; version: number; kek: Buffer; digestHex: string }> = [];
+          for (const entry of args.keks as unknown[]) {
+            if (!isRecord(entry)
+              || !hasExactKeys(entry, ['domainId', 'version', 'kekHex'])
+              || typeof entry.domainId !== 'string'
+              || !isPicoPrivacyDomain(entry.domainId)
+              || !Number.isSafeInteger(entry.version) || (entry.version as number) < 1
+              || !isHexOfBytes(entry.kekHex, 32)) {
+              return { outcome: 'invalid_arguments', result: { refusal: 'invalid_memory_key_statement' } };
+            }
+            const kek = Buffer.from(entry.kekHex, 'hex');
+            offered.push({
+              domainId: entry.domainId,
+              version: entry.version as number,
+              kek,
+              digestHex: Buffer.from(sodium.crypto_generichash(32, kek, null)).toString('hex'),
+            });
+          }
+          const signedEntries = [...(verified.statement.entries as string[])].sort();
+          const offeredEntries = offered
+            .map((entry) => picoMemoryKeyImportEntry(entry.domainId, entry.version, entry.digestHex))
+            .sort();
+          if (signedEntries.length !== offeredEntries.length
+            || signedEntries.some((entry, index) => entry !== offeredEntries[index])) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'invalid_memory_key_statement' } };
+          }
+
+          const byDomain = new Map<string, typeof offered>();
+          for (const entry of offered) {
+            byDomain.set(entry.domainId, [...(byDomain.get(entry.domainId) ?? []), entry]);
+          }
+          const report: Array<{ domainId: string; outcome: string; restoredVersions: number }> = [];
+          for (const [domainId, entries] of [...byDomain].sort(([a], [b]) => (a < b ? -1 : 1))) {
+            // Leserschaft allein, aus demselben Grund wie beim Export: ohne
+            // Host-Verwahrung gibt es keinen Lesezugang.
+            if (!readership.mayRead({
+              sessionDigest: 'pico-link-direct',
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            }, domainId)) {
+              report.push({ domainId, outcome: 'refused_not_readable', restoredVersions: 0 });
+              continue;
+            }
+            /**
+             * **Nie wiedererwecken, und ohne einem Zeitpunkt zu trauen.** Ein
+             * Schluessel, den ein Shred zerstoert hat oder den dieses Home vor
+             * einem Shred herausgegeben hat, kommt nicht zurueck - egal, welches
+             * Datum der Importierende behauptet.
+             */
+            const retired = store.picoRetiredKeyDigests(domainId);
+            if (entries.some((entry) => retired.has(entry.digestHex))) {
+              report.push({ domainId, outcome: 'refused_shredded', restoredVersions: 0 });
+              continue;
+            }
+            /**
+             * **Nach Digest, nicht nach Versionsname.** Nach einem Shred beginnt
+             * die Zaehlung wieder bei `v1`; derselbe Name kann ein anderer
+             * Schluessel sein. Ein anderer Schluessel unter einem vorhandenen
+             * Namen verweigert die ganze Domaene - gemischte Generationen sind
+             * der Weg, auf dem eine alte Sicherung wieder lesbar wird.
+             */
+            const present = new Set(keyStore.listVersions(domainId));
+            let conflicting = false;
+            const missing: typeof entries = [];
+            for (const entry of entries) {
+              if (!present.has(entry.version)) {
+                missing.push(entry);
+                continue;
+              }
+              const existing = keyStore.loadKeyVersion(domainId, entry.version);
+              const existingDigest = Buffer.from(sodium.crypto_generichash(32, existing, null)).toString('hex');
+              existing.fill(0);
+              if (existingDigest !== entry.digestHex) {
+                conflicting = true;
+              }
+            }
+            if (conflicting) {
+              report.push({ domainId, outcome: 'conflicting', restoredVersions: 0 });
+              continue;
+            }
+            for (const entry of missing) {
+              keyStore.importKeyVersion(domainId, entry.version, entry.kek);
+            }
+            report.push({
+              domainId,
+              outcome: missing.length === 0 ? 'already_present' : 'restored',
+              restoredVersions: missing.length,
+            });
+          }
+          for (const entry of offered) {
+            entry.kek.fill(0);
+          }
+          const count = (outcome: string): number => report.filter((line) => line.outcome === outcome).length;
+          appendServerEvent('memory.keys_imported', {
+            identityKeyFingerprintHex: principal.picoIdentityFingerprintHex,
+            restored: count('restored'),
+            alreadyPresent: count('already_present'),
+            conflicting: count('conflicting'),
+            refused: count('refused_not_readable') + count('refused_shredded'),
+          });
+          return { outcome: 'ok', result: { domains: report } };
         }
         case 'home.modules.consent.read': {
           if (principal === undefined) {

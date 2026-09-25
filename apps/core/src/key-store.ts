@@ -97,6 +97,48 @@ export class KeyStore {
     return { removed: versions.length };
   }
 
+  /**
+   * ADR 0158 KE1. Jede Domaene, fuer die hier Schluessel liegen.
+   *
+   * Aus den Dateinamen und nicht aus einer Tabelle: der Schluesselspeicher ist
+   * die eine Stelle, die weiss, welche Schluessel es gibt, und eine zweite
+   * Liste daneben koennte ihm widersprechen.
+   */
+  public listDomains(): string[] {
+    if (!existsSync(this.keyStorePath)) {
+      return [];
+    }
+    const domains = new Set<string>();
+    for (const name of readdirSync(this.keyStorePath)) {
+      const match = KEY_FILE_PATTERN.exec(name);
+      if (match?.groups?.domainId !== undefined) {
+        domains.add(match.groups.domainId);
+      }
+    }
+    return [...domains].sort();
+  }
+
+  /**
+   * ADR 0158 KE5. Einen zurueckgebrachten Schluessel schreiben - **nur, wo
+   * nichts liegt**. `wx` laesst das Dateisystem die Regel halten: eine Datei,
+   * die zwischen Pruefen und Schreiben entstand, wird nicht ueberschrieben,
+   * sondern der Import scheitert laut.
+   */
+  public importKeyVersion(
+    domainId: string,
+    version: number,
+    kek: Uint8Array,
+    options: KeyStoreOperationOptions = {},
+  ): void {
+    assertDomainId(domainId);
+    assertHostCustodyRawKek(domainId, options.custodyClass);
+    if (!Number.isSafeInteger(version) || version < 1 || kek.length !== KEK_BYTES) {
+      throw new Error('invalid_imported_key');
+    }
+    mkdirSync(this.keyStorePath, { recursive: true, mode: 0o700 });
+    writeFileSync(this.keyPath(domainId, version), kek, { mode: 0o600, flag: 'wx' });
+  }
+
   private nextVersion(domainId: string): number {
     const versions = this.listVersions(domainId);
     return versions.length === 0 ? 1 : versions[versions.length - 1] + 1;

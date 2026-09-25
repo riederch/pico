@@ -540,7 +540,7 @@ export class MemoryStore {
    * `domain_encrypted` item in the domain becomes unreadable, including backup
    * copies, subject to the ADR 0033 key-handling limits. Ciphertext rows stay.
    */
-  public cryptoShredDomain(privacyDomain: string): { removed: number } {
+  public cryptoShredDomain(privacyDomain: string): { removed: number; destroyedKeyDigests: string[] } {
     if (this.crypto === undefined) {
       throw new Error('Cannot crypto-shred without a crypto provider.');
     }

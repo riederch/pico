@@ -1,5 +1,6 @@
 // Befund B51. Dasselbe Muster, jetzt von dort, wo es einmal steht.
-import { bytesToHex, hexToBytes } from '@pico/protocol/canonical-bytes';
+import { bytesToHex, hexToBytes, isHexOfBytes } from '@pico/protocol/canonical-bytes';
+import { isPicoPrivacyDomain } from '@pico/protocol/privacy-domain';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { wordlist as bip39EnglishWordlist } from '@scure/bip39/wordlists/english.js';
@@ -20,12 +21,14 @@ import {
   buildPicoShareWrapPayload,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  buildPicoVaultKeyExportHeaderAad,
   buildPicoVaultKeyfileHeaderAad,
   buildPicoRecoveryCardPayload,
   isPicoInstant,
   maxPicoIdentityReaderKeyFreshnessMs,
   maxPicoReaderCustodySyncManifestMs,
   picoMemoryContentSuite,
+  picoMemoryKeyCanonicalLabels,
   picoReaderCustodyCanonicalLabels,
   picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
@@ -53,6 +56,8 @@ import {
   picoVaultArgon2idModerateParams,
   picoVaultKdfAlgorithms,
   picoVaultKdfProfiles,
+  picoVaultKeyExportContents,
+  picoVaultKeyExportFormat,
   picoVaultKeyfileFormat,
   picoVaultPersonKeyRoles,
   picoRecoveryCardSchema,
@@ -61,6 +66,7 @@ import type {
   PicoVaultAeadAlgorithm,
   PicoVaultKdfAlgorithm,
   PicoVaultKdfProfile,
+  PicoVaultKeyExportHeaderAadInput,
   PicoVaultKeyfileHeaderAadInput,
   PicoVaultPersonKeyRole,
   PicoIdentityKeyRecordSignatureInput,
@@ -529,6 +535,13 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
      * beide Male ein Durchlauf gegen einen echten Daemon.
      */
     picoReaderCustodyCanonicalLabels.domainLifecycle,
+    /**
+     * ADR 0158 KE4. Die eigenen Speicherschluessel mitnehmen und zurueckbringen
+     * - die Wurzel und nichts sonst: ein Geraeteschluessel, der das koennte,
+     * gaebe jeden lesbaren Schluessel heraus, sobald das Geraet entsperrt ist.
+     */
+    picoMemoryKeyCanonicalLabels.export,
+    picoMemoryKeyCanonicalLabels.import,
     picoReaderCustodyCanonicalLabels.writerGrant,
     picoReaderCustodyCanonicalLabels.writerGrantLifecycle,
     picoReaderCustodyCanonicalLabels.kekRotation,
@@ -2284,6 +2297,251 @@ export function openPicoVaultKeyfile(
   } finally {
     sodium.memzero(fileKey);
   }
+}
+
+/**
+ * ADR 0158 - der Schluesselexport, versiegelt auf dem Geraet.
+ *
+ * **Dieselbe Konstruktion wie das Keyfile, von demselben Code** (KE2):
+ * Argon2id ueber `crypto_pwhash` mit selbstbeschreibendem Kopf,
+ * XChaCha20-Poly1305 mit dem Kopf als authentisierten Daten. Nur das
+ * Formatlabel ist ein anderes, und es steht in den AAD - ein Keyfile oeffnet
+ * sich nie als Export und ein Export nie als Keyfile.
+ *
+ * **Hier und nicht im Home** (Gabel A, Nutzerentscheidung vom 2026-09-24).
+ * Die Passphrase, die eine Person waehlt, verlaesst das Geraet nie; das Home
+ * gibt rohe Schluessel ueber den versiegelten Kanal an das eigene Geraet und
+ * sieht keine Passphrase. ADR 0081s Regel, dass kein Host eine haelt, gilt
+ * damit durch die Bauform.
+ */
+export const picoVaultKeyExportEnvelopeSchema = 'pico.vault.keyexport.encrypted.v1' as const;
+
+/**
+ * KE3. Eine Untergrenze und keine Bewertung: kurz genug, dass ein Mensch sie
+ * sich merkt, lang genug, dass die Datei allein nicht in Stunden faellt. Was
+ * darueber hinaus zaehlt, sagt der Satz neben dem Feld - *diese Passphrase
+ * steht nirgends; ohne sie ist die Datei Rauschen.*
+ */
+export const minPicoVaultKeyExportPassphraseLength = 12;
+
+export interface PicoVaultExportedKek {
+  domainId: string;
+  version: number;
+  kekHex: string;
+  /** BLAKE2b-256 ueber die Schluesselbytes - die Form von `wrap_digest_hex`. */
+  digestHex: string;
+}
+
+export interface PicoVaultKeyExportV1 {
+  schema: typeof picoVaultKeyExportEnvelopeSchema;
+  format: typeof picoVaultKeyExportFormat;
+  header: PicoVaultKeyExportHeaderAadInput;
+  ciphertextHex: string;
+}
+
+export function picoVaultKekDigestHex(sodium: VaultSodium, kek: Uint8Array): string {
+  return bytesToHex(sodium.crypto_generichash(32, kek, null));
+}
+
+export function sealPicoVaultKeyExport(
+  sodium: VaultSodium,
+  input: {
+    passphrase: string;
+    homeId: string;
+    identityKeyFingerprintHex: string;
+    exportedAt: string;
+    keks: readonly PicoVaultExportedKek[];
+  },
+): PicoVaultKeyExportV1 {
+  assertPassphrase(input.passphrase);
+  if (input.passphrase.length < minPicoVaultKeyExportPassphraseLength) {
+    throw new Error('key_export_passphrase_too_short');
+  }
+  assertSodiumConstants(sodium);
+  const keks = canonicalExportedKeks(sodium, input.keks);
+  const salt = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES);
+  const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  const header: PicoVaultKeyExportHeaderAadInput = {
+    format: picoVaultKeyExportFormat,
+    suite: picoIdentitySuite,
+    contents: picoVaultKeyExportContents,
+    homeId: input.homeId,
+    identityKeyFingerprintHex: input.identityKeyFingerprintHex,
+    exportedAt: input.exportedAt,
+    kdfAlgorithm: picoVaultKdfAlgorithms[0],
+    kdfProfile: picoVaultKdfProfiles[0],
+    kdfOpsLimit: picoVaultArgon2idModerateParams.opsLimit,
+    kdfMemLimitBytes: picoVaultArgon2idModerateParams.memLimitBytes,
+    kdfSaltHex: bytesToHex(salt),
+    aeadAlgorithm: picoVaultAeadAlgorithms[0],
+    aeadNonceHex: bytesToHex(nonce),
+  };
+  const aad = buildPicoVaultKeyExportHeaderAad(header);
+  const fileKey = deriveExportFileKey(sodium, input.passphrase, header);
+  const payload = new TextEncoder().encode(JSON.stringify({ keks }));
+  try {
+    const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+      payload,
+      aad,
+      null,
+      nonce,
+      fileKey,
+    );
+    return {
+      schema: picoVaultKeyExportEnvelopeSchema,
+      format: picoVaultKeyExportFormat,
+      header,
+      ciphertextHex: bytesToHex(ciphertext),
+    };
+  } finally {
+    sodium.memzero(fileKey);
+    sodium.memzero(payload);
+  }
+}
+
+export function serializePicoVaultKeyExport(artifact: PicoVaultKeyExportV1): string {
+  return `${JSON.stringify(artifact, null, 2)}\n`;
+}
+
+/**
+ * Oeffnet ein Exportartefakt. **Die Passphrase wird nur durch den Versuch
+ * geprueft** (KE3) - kein Hinweis, keine Wiederherstellung, kein zweiter Weg.
+ * Jeder Schluessel wird gegen seinen Digest nachgerechnet: ein Artefakt, das
+ * die AEAD passiert und trotzdem nicht zusammenpasst, gibt es nicht, und wenn
+ * doch, ist es keines.
+ */
+export function openPicoVaultKeyExport(
+  sodium: VaultSodium,
+  input: { artifact: string | PicoVaultKeyExportV1; passphrase: string },
+): { header: PicoVaultKeyExportHeaderAadInput; keks: PicoVaultExportedKek[] } {
+  assertPassphrase(input.passphrase);
+  assertSodiumConstants(sodium);
+  let parsed: unknown;
+  try {
+    parsed = typeof input.artifact === 'string' ? JSON.parse(input.artifact) : input.artifact;
+  } catch {
+    throw new Error('invalid_key_export');
+  }
+  const artifact = parsed as Partial<PicoVaultKeyExportV1> | null;
+  if (typeof artifact !== 'object' || artifact === null
+    || artifact.schema !== picoVaultKeyExportEnvelopeSchema
+    || artifact.format !== picoVaultKeyExportFormat
+    || typeof artifact.header !== 'object' || artifact.header === null
+    || typeof artifact.ciphertextHex !== 'string') {
+    throw new Error('invalid_key_export');
+  }
+  const header = artifact.header;
+  // Wirft bei jedem Kopf, der nicht genau dieses Format beschreibt - auch bei
+  // einem Keyfile-Kopf, bevor irgendetwas abgeleitet wird.
+  const aad = buildPicoVaultKeyExportHeaderAad(header);
+  const fileKey = deriveExportFileKey(sodium, input.passphrase, header);
+  let plaintext: Uint8Array;
+  try {
+    plaintext = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+      null,
+      hexToBytes(artifact.ciphertextHex),
+      aad,
+      hexToBytes(header.aeadNonceHex),
+      fileKey,
+    );
+  } catch {
+    throw new Error('key_export_not_opened');
+  } finally {
+    sodium.memzero(fileKey);
+  }
+  try {
+    const body = JSON.parse(new TextDecoder().decode(plaintext)) as unknown;
+    if (typeof body !== 'object' || body === null || Array.isArray(body)
+      || Object.keys(body).length !== 1
+      || !Array.isArray((body as { keks?: unknown }).keks)) {
+      throw new Error('invalid_key_export_payload');
+    }
+    return {
+      header: { ...header },
+      keks: canonicalExportedKeks(sodium, (body as { keks: PicoVaultExportedKek[] }).keks),
+    };
+  } catch {
+    throw new Error('invalid_key_export_payload');
+  } finally {
+    sodium.memzero(plaintext);
+  }
+}
+
+/**
+ * KE3. Dass die Exportpassphrase nicht die Vault-Passphrase ist - geprueft
+ * durch einen Versuch, das Identitaets-Keyfile damit zu oeffnen, ohne sich
+ * irgendetwas zu merken. Ein Argon2id-Lauf, etwa 215 ms. ADR 0033 verbietet,
+ * dass ein Geheimnis universelle Autoritaet wird; dies ist die Pruefung, die
+ * eine Person davor bewahrt, es aus Gewohnheit dazu zu machen.
+ */
+export function assertPicoVaultKeyExportPassphraseIsOwn(
+  sodium: VaultSodium,
+  input: { identityKeyfile: PicoVaultEncryptedKeyfileV1 | string; passphrase: string },
+): void {
+  let opened: PicoVaultSession | undefined;
+  try {
+    opened = openPicoVaultKeyfile(sodium, {
+      keyfile: input.identityKeyfile,
+      passphrase: input.passphrase,
+    });
+  } catch {
+    return;
+  }
+  opened.lock();
+  throw new Error('key_export_passphrase_is_vault_passphrase');
+}
+
+function deriveExportFileKey(
+  sodium: VaultSodium,
+  passphrase: string,
+  header: PicoVaultKeyExportHeaderAadInput,
+): Uint8Array {
+  if (header.kdfAlgorithm !== 'argon2id' || header.kdfProfile !== 'moderate') {
+    throw new Error('invalid_kdf_profile');
+  }
+  return sodium.crypto_pwhash(
+    sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES,
+    passphrase,
+    hexToBytes(header.kdfSaltHex),
+    header.kdfOpsLimit,
+    header.kdfMemLimitBytes,
+    sodium.crypto_pwhash_ALG_ARGON2ID13,
+  );
+}
+
+function canonicalExportedKeks(
+  sodium: VaultSodium,
+  keks: readonly PicoVaultExportedKek[],
+): PicoVaultExportedKek[] {
+  if (!Array.isArray(keks) || keks.length === 0) {
+    throw new Error('invalid_key_export_keks');
+  }
+  const seen = new Set<string>();
+  const checked = keks.map((entry) => {
+    if (typeof entry !== 'object' || entry === null
+      || Object.keys(entry).length !== 4
+      || !isPicoPrivacyDomain(entry.domainId)
+      || !Number.isSafeInteger(entry.version) || entry.version < 1
+      || !isHexOfBytes(entry.kekHex, 32)
+      || typeof entry.digestHex !== 'string'
+      || picoVaultKekDigestHex(sodium, hexToBytes(entry.kekHex)) !== entry.digestHex) {
+      throw new Error('invalid_key_export_keks');
+    }
+    const key = `${entry.domainId}:${String(entry.version)}`;
+    if (seen.has(key)) {
+      throw new Error('invalid_key_export_keks');
+    }
+    seen.add(key);
+    return {
+      domainId: entry.domainId,
+      version: entry.version,
+      kekHex: entry.kekHex,
+      digestHex: entry.digestHex,
+    };
+  });
+  return checked.sort((a, b) => (a.domainId === b.domainId
+    ? a.version - b.version
+    : a.domainId < b.domainId ? -1 : 1));
 }
 
 export function serializePicoVaultKeyfile(keyfile: PicoVaultEncryptedKeyfileV1): string {

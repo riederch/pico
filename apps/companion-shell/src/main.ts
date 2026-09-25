@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -58,6 +60,7 @@ import {
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import {
+  picoCompanionKeyExportPassphrasePrompt,
   picoCompanionVaultPassphrasePrompt,
 } from '@pico/companion/vault-passphrase-prompt';
 import {
@@ -1206,6 +1209,98 @@ function registerIpc(): void {
   );
   /** ADR 0078 K9. Den gehosteten Raum beenden - host-lokal, und der Vault
    * zeigt beim Freigeben, was das nicht heisst. */
+  /**
+   * ADR 0158. Die eigenen Speicherschluessel in eine Datei - und zurueck.
+   *
+   * **Alles Geheime fragt dieser Prozess, nicht das Fenster** (ADR 0113 C2),
+   * wie bei der Recovery Card: das Fenster waehlt die Handlung, hier werden
+   * Ort und Passphrase gefragt. Das Fenster bekommt Zahlen zurueck, nie eine
+   * Passphrase und nie einen Schluessel.
+   *
+   * **Zwei Rueckfragen, und keine ist doppelt.** Die Passphrase wird zweimal
+   * getippt, weil eine vertippte Passphrase die Datei still unbrauchbar
+   * machte; die Freigabe im Vault fragt nach dem Satz, weil dort die Wurzel
+   * unterschreibt. Die eine schuetzt die Datei, die andere die Handlung.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.exportMemoryKeys,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      const target = currentWindow();
+      if (runtime === null || target === null || target.isDestroyed()) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_active');
+      }
+      const chosen = await dialog.showSaveDialog(target, {
+        title: 'Save your memory keys',
+        defaultPath: join(homedir(), `pico-memory-keys-${new Date().toISOString().slice(0, 10)}.pico`),
+      });
+      if (chosen.canceled || chosen.filePath === undefined || chosen.filePath === '') {
+        return { canceled: true };
+      }
+      const before = presentation;
+      productOperationActive = true;
+      try {
+        const ask = async (kind: 'choose' | 'repeat'): Promise<string> => {
+          const prompt = picoCompanionKeyExportPassphrasePrompt(kind);
+          return await collectPicoCompanionSecureInput({
+            window: target,
+            prompt,
+            presentCount: async (count, invalid) => {
+              await presentSecureInput(prompt, count, invalid);
+            },
+          });
+        };
+        const passphrase = await ask('choose');
+        if (passphrase !== await ask('repeat')) {
+          throw new Error('key_export_passphrase_mismatch');
+        }
+        return await runtime.exportMemoryKeys({ passphrase, outputPath: chosen.filePath });
+      } finally {
+        productOperationActive = false;
+        await presentationPort.present({ ...before, observedAt: new Date().toISOString() });
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.importMemoryKeys,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      const target = currentWindow();
+      if (runtime === null || target === null || target.isDestroyed()) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_active');
+      }
+      const chosen = await dialog.showOpenDialog(target, {
+        title: 'Bring your memory keys back',
+        properties: ['openFile'],
+      });
+      const artifactPath = chosen.filePaths[0];
+      if (chosen.canceled || artifactPath === undefined) {
+        return { canceled: true };
+      }
+      const before = presentation;
+      productOperationActive = true;
+      try {
+        const prompt = picoCompanionKeyExportPassphrasePrompt('open');
+        const passphrase = await collectPicoCompanionSecureInput({
+          window: target,
+          prompt,
+          presentCount: async (count, invalid) => {
+            await presentSecureInput(prompt, count, invalid);
+          },
+        });
+        return { domains: await runtime.importMemoryKeys({ passphrase, artifactPath }) };
+      } finally {
+        productOperationActive = false;
+        await presentationPort.present({ ...before, observedAt: new Date().toISOString() });
+      }
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.discardReaderCustodySpace,
     async (event: IpcMainInvokeEvent) => {

@@ -146,6 +146,10 @@
       "types": "./dist/observations.d.ts",
       "import": "./dist/observations.js"
     },
+    "./memory-keys": {
+      "types": "./dist/memory-keys.d.ts",
+      "import": "./dist/memory-keys.js"
+    },
     "./reader-custody": {
       "types": "./dist/reader-custody.d.ts",
       "import": "./dist/reader-custody.js"

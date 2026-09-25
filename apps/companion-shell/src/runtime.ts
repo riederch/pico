@@ -1,6 +1,7 @@
 import type { PicoRulesDecisionValue } from '@pico/protocol/pico-rules';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   startPicoCompanionAlarmCarrier,
   type PicoCompanionAlarmCheck,
@@ -231,6 +232,21 @@ export interface PicoCompanionShellRuntime {
    * Zwei Dinge in einer Handlung, weil eines nicht reicht: die offene
    * Rotationsschuld begleichen *und* dieses Gerät wieder schreibfähig machen.
    */
+  /**
+   * ADR 0158. Die Speicherschluessel, die diese Person lesen darf, in eine
+   * Datei, auf diesem Geraet versiegelt - und zurueck.
+   */
+  exportMemoryKeys(input: { passphrase: string; outputPath: string }): Promise<{
+    path: string;
+    domains: number;
+    keys: number;
+    exportedAt: string;
+  }>;
+  importMemoryKeys(input: { passphrase: string; artifactPath: string }): Promise<ReadonlyArray<{
+    domainId: string;
+    outcome: string;
+    restoredVersions: number;
+  }>>;
   /**
    * ADR 0078 K9. Den gehosteten Raum loswerden - host-lokal, und der Daemon
    * sagt beim Unterschreiben, was das nicht heisst.
@@ -914,6 +930,53 @@ export async function startPicoCompanionShellRuntime(input: {
           profilePath,
           sodium: input.sodium,
           ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+      }),
+      exportMemoryKeys: async (request) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { exportPicoCompanionMemoryKeys } = await import('@pico/companion/memory-keys');
+        const socketPath = input.vaultSocketPath ?? defaultPicoVaultDaemonSocketPath();
+        return await exportPicoCompanionMemoryKeys({
+          daemonClient,
+          linkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          profile,
+          sodium: input.sodium,
+          passphrase: request.passphrase,
+          /**
+           * KE3 braucht das Identitaets-Keyfile dieses Geraets: es liegt neben
+           * dem Socket des Tresors, verschluesselt, und wird nur fuer einen
+           * Oeffnungsversuch gelesen, der scheitern soll.
+           */
+          identityKeyfile: readFileSync(join(
+            dirname(dirname(socketPath)),
+            'keyfiles',
+            `pico_identity-${profile.identity.keyFingerprintHex}.json`,
+          ), 'utf8'),
+          outputPath: request.outputPath,
+        });
+      }),
+      importMemoryKeys: async (request) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const { importPicoCompanionMemoryKeys } = await import('@pico/companion/memory-keys');
+        return await importPicoCompanionMemoryKeys({
+          daemonClient,
+          linkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          profile,
+          sodium: input.sodium,
+          passphrase: request.passphrase,
+          artifactPath: request.artifactPath,
         });
       }),
       discardReaderCustodySpace: async () => await serialized(async () => {

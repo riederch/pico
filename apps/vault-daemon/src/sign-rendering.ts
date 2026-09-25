@@ -17,6 +17,8 @@ import {
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   buildPicoLinkDirectRequestSignatureInput,
+  buildPicoMemoryKeyExportSignatureInput,
+  buildPicoMemoryKeyImportSignatureInput,
   buildPicoReaderCustodyDomainLifecycleSignatureInput,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
@@ -34,6 +36,7 @@ import {
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
   picoLinkDirectRequestSignatureInputLabel,
+  picoMemoryKeyCanonicalLabels,
   picoReaderCustodyCanonicalLabels,
   picoShareCanonicalLabels,
   type PicoHomeClaimSignatureInput,
@@ -48,6 +51,8 @@ import {
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationSignatureInput,
+  type PicoMemoryKeyExportSignatureInput,
+  type PicoMemoryKeyImportSignatureInput,
   type PicoReaderCustodyDomainLifecycleSignatureInput,
   type PicoReaderCustodyDomainSignatureInput,
   type PicoReaderCustodyKekRotationSignatureInput,
@@ -159,6 +164,10 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
     buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(f as never),
   [picoReaderCustodyCanonicalLabels.domainLifecycle]: (f) =>
     buildPicoReaderCustodyDomainLifecycleSignatureInput(f as never),
+  [picoMemoryKeyCanonicalLabels.export]: (f) =>
+    buildPicoMemoryKeyExportSignatureInput(f as never),
+  [picoMemoryKeyCanonicalLabels.import]: (f) =>
+    buildPicoMemoryKeyImportSignatureInput(f as never),
   [picoReaderCustodyCanonicalLabels.writerGrant]: (f) =>
     buildPicoReaderCustodyWriterGrantSignatureInput(f as never),
   [picoReaderCustodyCanonicalLabels.writerGrantLifecycle]: (f) =>
@@ -308,6 +317,21 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
    * liegen bei den Lesern, und was dieses Home wegwirft, ist seine eigene
    * Kopie. Wer das unterschreibt, soll genau das gelesen haben.
    */
+  /**
+   * ADR 0158 KE6. Der Satz sagt beide Haelften - und das, was die Datei allein
+   * nicht kann -, genau in dem Augenblick, in dem die Wurzel unterschreibt.
+   */
+  [picoMemoryKeyCanonicalLabels.export]: (f) => {
+    const v = f as PicoMemoryKeyExportSignatureInput;
+    return `Export the memory keys you may read from Home ${v.homeId} into a file sealed with a passphrase of its own. `
+      + 'That file, together with a backup of your Home, restores your memories; alone it restores nothing. '
+      + 'Any part of your memory your Home starts after today needs a newer file.';
+  },
+  [picoMemoryKeyCanonicalLabels.import]: (f) => {
+    const v = f as PicoMemoryKeyImportSignatureInput;
+    return `Return ${v.entries.length} memory key(s) exported on ${picoDisplayDate(v.exportedAt)} to Home ${v.homeId}. `
+      + 'Nothing already there is replaced, and a domain shredded since then stays shredded.';
+  },
   [picoReaderCustodyCanonicalLabels.domainLifecycle]: (f) => {
     const v = f as PicoReaderCustodyDomainLifecycleSignatureInput;
     return `Tell Home ${v.homeId} to discard its copy of domain ${v.domainId} (${v.reasonCategory}). Readers keep their keys; copies elsewhere are untouched.`;

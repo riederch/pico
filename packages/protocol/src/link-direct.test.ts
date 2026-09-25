@@ -199,6 +199,8 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.observation.derived.keep',
       'home.parking.ask',
       'home.parking.decide',
+      'home.memory.keys.export.submit',
+      'home.memory.keys.import.submit',
       'home.modules.consent.read',
       'home.modules.consent.record',
     ]);

@@ -5162,7 +5162,14 @@ describe('domain crypto-shred trigger', () => {
       .filter((event) => event.type === 'memory.domain_shredded');
     expect(audit).toHaveLength(1);
     // The audit records the decision and its references, never content or keys.
-    expect(audit[0].payload).toEqual({ privacyDomain: 'domain-private', removedKeyVersions: 1, reason: 'device loss' });
+    // ADR 0158 KE5: und der Digest des zerstoerten Schluessels - kein Inhalt,
+    // aber genug, um diesen Schluessel bei einem spaeteren Import abzuweisen.
+    expect(audit[0].payload).toEqual({
+      privacyDomain: 'domain-private',
+      removedKeyVersions: 1,
+      destroyedKeyDigests: [expect.stringMatching(/^[0-9a-f]{64}$/u)],
+      reason: 'device loss',
+    });
 
     await app.close();
 

@@ -7961,6 +7961,58 @@ export class EventStore {
    * Home ungefragt anlegen sollte. Das ist zugleich das Wachstumsende der
    * Tabelle (ADR 0119 Q5).
    */
+  /**
+   * ADR 0158 KE5. Welche Schluessel einer Domaene nicht zurueckkommen duerfen,
+   * nach Digest.
+   *
+   * **Zwei Quellen, beide aus dem eigenen Protokoll dieses Homes.** Erstens,
+   * was ein Shred zerstoert hat. Zweitens, was dieses Home vor einem Shred
+   * derselben Domaene herausgegeben hat: eine exportierte Kopie kann kein Shred
+   * erreichen, und ein Schluessel, der verloren ging, bevor der Shred lief,
+   * steht nicht in dessen Liste - wohl aber in der Aufzeichnung seines
+   * Exports. Die Reihenfolge ist die Einfuegereihenfolge dieses Protokolls,
+   * also die des Homes selbst, und kein Zeitpunkt, den ein Importierender
+   * unterschrieben hat.
+   *
+   * **Die erste Fassung verglich einen Exportzeitpunkt aus dem Importsatz** -
+   * den unterschreibt aber der Importierende, und wer eine alte Datei hat, kann
+   * einen spaeteren behaupten. Die zweite kannte nur zerstoerte Digests und
+   * liess durch, was vor dem Shred verloren und herausgegeben war.
+   *
+   * Was dieses Protokoll nicht kennt, kann es nicht abweisen: ein Shred nach
+   * dem Stand einer eingespielten Sicherung steht nicht darin. Das ist keine
+   * Luecke dieser Abfrage, sondern die Grenze jeder Sicherung.
+   */
+  public picoRetiredKeyDigests(privacyDomain: string): Set<string> {
+    this.ensureOpen();
+    const destroyed = this.db
+      .prepare(`
+        SELECT digest.value AS digest
+        FROM pico_event,
+             json_each(pico_event.payload_json, '$.destroyedKeyDigests') AS digest
+        WHERE pico_event.type = 'memory.domain_shredded'
+          AND json_extract(pico_event.payload_json, '$.privacyDomain') = ?
+      `)
+      .all(privacyDomain) as Array<{ digest: string }>;
+    const prefix = `${privacyDomain}:`;
+    const exportedBeforeShred = this.db
+      .prepare(`
+        SELECT substr(entry.value, ?) AS digest
+        FROM pico_event AS exported,
+             json_each(exported.payload_json, '$.keyDigests') AS entry
+        WHERE exported.type = 'memory.keys_exported'
+          AND substr(entry.value, 1, ?) = ?
+          AND EXISTS (
+            SELECT 1 FROM pico_event AS shredded
+            WHERE shredded.type = 'memory.domain_shredded'
+              AND json_extract(shredded.payload_json, '$.privacyDomain') = ?
+              AND shredded.rowid > exported.rowid
+          )
+      `)
+      .all(prefix.length + 1, prefix.length, prefix, privacyDomain) as Array<{ digest: string }>;
+    return new Set([...destroyed, ...exportedBeforeShred].map((row) => row.digest));
+  }
+
   public recordPicoParkingDecision(input: {
     picoIdentityFingerprintHex: string;
     privacyDomain: string;

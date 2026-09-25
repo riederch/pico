@@ -95,6 +95,8 @@ declare global {
       letOtherDeviceRead(): Promise<unknown>;
       rotateReaderCustodyDomain(): Promise<unknown>;
       discardReaderCustodySpace(): Promise<unknown>;
+      exportMemoryKeys(): Promise<unknown>;
+      importMemoryKeys(): Promise<unknown>;
       readReaderCustodyNotes(): Promise<unknown>;
       forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
@@ -700,6 +702,9 @@ const readerCustodyRotate = requireButton('reader-custody-rotate');
 const readerCustodyDiscard = requireButton('reader-custody-discard');
 const readerCustodyList = requireElement('reader-custody-list');
 const readerCustodyStatus = requireElement('reader-custody-status');
+const memoryKeysExport = requireButton('memory-keys-export');
+const memoryKeysImport = requireButton('memory-keys-import');
+const memoryKeysStatus = requireElement('memory-keys-status');
 
 /**
  * Der Satz sagt, was die beiden Knöpfe kosten - eine Zustimmung je Zeremonie,
@@ -789,6 +794,63 @@ readerCustodyRotate.addEventListener('click', () => {
       : 'Nothing needed changing: nobody has been let out since the last change.';
   }, (error: unknown) => {
     readerCustodyStatus.textContent = refusalText(error, 'The lock was not changed.');
+  });
+});
+
+memoryKeysExport.addEventListener('click', () => {
+  /**
+   * ADR 0158 KE6. Beide Haelften werden gesagt, in dem Augenblick, in dem die
+   * eine entsteht - und das, was diese Datei allein nicht kann.
+   *
+   * Ort und Passphrase fragt der Hauptprozess (ADR 0113 C2); hierher kommen
+   * nur Zahlen und der Ort, den die Person selbst gewaehlt hat.
+   */
+  memoryKeysStatus.textContent = 'Choose where the file goes...';
+  void window.picoCompanion.exportMemoryKeys().then((answer) => {
+    const done = answer as { canceled?: boolean; path?: string; domains?: number; keys?: number };
+    if (done.canceled === true) {
+      memoryKeysStatus.textContent = 'Nothing was saved.';
+      return;
+    }
+    memoryKeysStatus.textContent =
+      `Saved ${done.keys ?? 0} key(s) for ${done.domains ?? 0} part(s) of your memory to ${done.path ?? ''}. `
+      + 'This file, together with a backup of your Home, restores your memories. '
+      + 'Alone it restores nothing. The passphrase you chose is written nowhere. '
+      + 'Any part of your memory your Home starts after today needs a newer file.';
+  }, (error: unknown) => {
+    memoryKeysStatus.textContent = refusalText(error, 'No file was saved.');
+  });
+});
+
+memoryKeysImport.addEventListener('click', () => {
+  /**
+   * ADR 0158 KE5. Der Bericht je Domaene, in Saetzen und nicht in Namen: wer
+   * "conflicting" liest, weiss nicht, dass es eine Handlung ist, die ihm
+   * gerade etwas bewahrt hat.
+   */
+  memoryKeysStatus.textContent = 'Choose the file...';
+  void window.picoCompanion.importMemoryKeys().then((answer) => {
+    const done = answer as {
+      canceled?: boolean;
+      domains?: ReadonlyArray<{ domainId: string; outcome: string; restoredVersions: number }>;
+    };
+    if (done.canceled === true) {
+      memoryKeysStatus.textContent = 'Nothing was brought back.';
+      return;
+    }
+    const said: Record<string, (domainId: string) => string> = {
+      restored: (domainId) => `${domainId} is readable again.`,
+      already_present: (domainId) => `${domainId} already had these keys.`,
+      conflicting: (domainId) => `${domainId} was left alone: your Home holds a different key under the same name, `
+        + 'most likely because something new was written after the loss. Nothing was replaced.',
+      refused_not_readable: (domainId) => `${domainId} was not brought back: this identity may not read it here.`,
+      refused_shredded: (domainId) => `${domainId} was not brought back: it was shredded, and a shred stays a shred.`,
+    };
+    memoryKeysStatus.textContent = (done.domains ?? [])
+      .map((line) => (said[line.outcome] ?? ((domainId: string) => `${domainId}: ${line.outcome}.`))(line.domainId))
+      .join(' ');
+  }, (error: unknown) => {
+    memoryKeysStatus.textContent = refusalText(error, 'Nothing was brought back.');
   });
 });
 

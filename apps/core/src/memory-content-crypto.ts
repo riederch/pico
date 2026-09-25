@@ -27,6 +27,7 @@ const DEK_BYTES = 32;
 
 // Minimal shape of the ready libsodium-wrappers-sumo module this class needs.
 export interface SodiumLike {
+  crypto_generichash(hashLength: number, message: Uint8Array, key: null): Uint8Array;
   crypto_aead_xchacha20poly1305_ietf_KEYBYTES: number;
   crypto_aead_xchacha20poly1305_ietf_NPUBBYTES: number;
   crypto_aead_xchacha20poly1305_ietf_encrypt(
@@ -212,8 +213,31 @@ export class MemoryContentCrypto {
    * precisely R6's, because "destroying a key that every data backup still
    * contains destroys nothing".
    */
-  public shredDomain(domainId: string, custodyClass: MemoryDomainCustodyClass = 'host_custody'): { removed: number } {
-    return this.keyStore.shredDomain(domainId, { custodyClass });
+  public shredDomain(
+    domainId: string,
+    custodyClass: MemoryDomainCustodyClass = 'host_custody',
+  ): { removed: number; destroyedKeyDigests: string[] } {
+    /**
+     * ADR 0158 KE5. **Was zerstoert wurde, wird mit Namen aufgeschrieben** -
+     * als BLAKE2b-256 ueber die Schluesselbytes, dieselbe Form, die ein
+     * Exportartefakt je Schluessel traegt. Ein Digest eines zufaelligen
+     * 32-Byte-Schluessels verraet nichts ueber ihn; er erlaubt aber einem
+     * spaeteren Import, genau diesen Schluessel wiederzuerkennen und
+     * abzuweisen, ohne einem Zeitpunkt zu trauen, den der Importierende selbst
+     * unterschrieben hat.
+     */
+    const destroyedKeyDigests = this.keyStore.listVersions(domainId, { custodyClass })
+      .map((version) => {
+        const kek = this.keyStore.loadKeyVersion(domainId, version, { custodyClass });
+        try {
+          return Buffer.from(this.sodium.crypto_generichash(32, kek, null)).toString('hex');
+        } finally {
+          kek.fill(0);
+        }
+      })
+      .sort();
+    const { removed } = this.keyStore.shredDomain(domainId, { custodyClass });
+    return { removed, destroyedKeyDigests };
   }
 
   private currentOrNewKekVersion(domainId: string, custodyClass: MemoryDomainCustodyClass): number {

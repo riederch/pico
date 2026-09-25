@@ -1,4 +1,8 @@
-import { isPicoVaultPassphrase, maxPicoVaultPassphraseLength } from '@pico/vault';
+import {
+  isPicoVaultPassphrase,
+  maxPicoVaultPassphraseLength,
+  minPicoVaultKeyExportPassphraseLength,
+} from '@pico/vault';
 
 /**
  * ADR 0131 A5 / ADR 0130 E3. Was ein Pico eine Person fragt, wenn es eine
@@ -114,4 +118,50 @@ function words(purpose: PicoCompanionVaultPassphrasePurpose): {
           + 'not the Recovery Phrase or Card PIN.',
       };
   }
+}
+
+/**
+ * ADR 0158 KE3/KE6. Was das Fenster sagt, waehrend jemand die Passphrase der
+ * Schluesseldatei tippt - im Hauptprozess abgefragt, nie im Renderer
+ * (ADR 0113 C2).
+ *
+ * **Hier, neben dem Satz fuer den Tresor**, weil `one-voice:check` jeden Satz,
+ * der nach einer Passphrase fragt, an diese eine Stelle bindet. Es sind zwei
+ * verschiedene Geheimnisse - KE3 verlangt sogar, dass sie verschieden sind -,
+ * und gerade darum sollen ihre Saetze nebeneinander stehen: wer den einen
+ * aendert, sieht den anderen.
+ *
+ * **Die Wahrheit statt einer Bewertung.** Eine Untergrenze gilt, und darueber
+ * hinaus steht hier der Satz aus KE3: diese Passphrase steht nirgends, und ohne
+ * sie ist die Datei Rauschen. Beim Oeffnen gilt keine Untergrenze - wer eine
+ * alte Datei hat, tippt, was damals galt.
+ */
+export function picoCompanionKeyExportPassphrasePrompt(kind: 'choose' | 'repeat' | 'open'): {
+  title: string;
+  instruction: string;
+  maximumLength: number;
+  refusal: string;
+  validate(value: string): boolean;
+} {
+  if (kind === 'open') {
+    return {
+      title: 'Passphrase of the key file',
+      instruction: 'Type the passphrase you chose when you saved this file, then press Enter.',
+      maximumLength: maxPicoVaultPassphraseLength,
+      refusal: `A passphrase is 1 to ${maxPicoVaultPassphraseLength} characters.`,
+      validate: isPicoVaultPassphrase,
+    };
+  }
+  return {
+    title: kind === 'choose' ? 'Choose a passphrase for this file' : 'Repeat the passphrase',
+    instruction: kind === 'choose'
+      ? 'This passphrase is written nowhere, and without it the file is noise. '
+        + 'It must not be your Vault passphrase. Type it, then press Enter.'
+      : 'Type the same passphrase again, then press Enter.',
+    maximumLength: maxPicoVaultPassphraseLength,
+    refusal: `The passphrase for this file is ${minPicoVaultKeyExportPassphraseLength} to `
+      + `${maxPicoVaultPassphraseLength} characters.`,
+    validate: (value) => isPicoVaultPassphrase(value)
+      && value.length >= minPicoVaultKeyExportPassphraseLength,
+  };
 }

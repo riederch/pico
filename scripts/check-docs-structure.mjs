@@ -605,24 +605,6 @@ const arguedOperationNames = [
   ['home.rules.read',
     'named in Roadmap.md as the operation deliberately NOT built beside the '
     + 'rules decision - a named absence, and the sentence around it says so'],
-  /**
-   * Eine dritte Sorte neben "entfernt" und "nie gebaut": **vorgeschlagen**.
-   * ADR 0158 ist ein Entwurf, den der Nutzer vor dem Bauen liest, und er
-   * nennt seine zwei Tueren beim Namen, weil ein Entwurf mit vagen Namen
-   * nichts entscheidet. Die Regel dieses Tors - ein Dokument wird als
-   * aktueller Stand gelesen - ist richtig, und der Entwurf sagt in seiner
-   * ersten Zeile, dass er keiner ist.
-   *
-   * Werden die Tueren gebaut, stehen sie in `picoLinkDirectOperations`, und
-   * diese zwei Eintraege sind dann zu **entfernen** - sonst argumentiert das
-   * Tor eine Abwesenheit, die keine mehr ist.
-   */
-  ['home.memory.keys.export.submit',
-    'proposed in draft ADR 0158 (2026-09-23) and not built; remove this entry '
-    + 'when the operation exists'],
-  ['home.memory.keys.import.submit',
-    'proposed in draft ADR 0158 (2026-09-23) and not built; remove this entry '
-    + 'when the operation exists'],
 ];
 const knownOperations = new Set(picoLinkDirectOperations);
 const arguedOperations = new Map(arguedOperationNames);

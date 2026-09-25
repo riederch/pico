@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -8,14 +8,21 @@ import {
   createPicoVaultKeyfile,
   writePicoVaultKeyfile,
   type CreatePicoVaultKeyfileResult,
+  type VaultSodium,
 } from '@pico/vault';
 import {
   connectPicoVaultDaemonClient,
   createPicoLinkDirectClient,
   initiatePicoHomeDeviceRecovery,
 } from '@pico/vault-daemon';
+import { randomBytes } from 'node:crypto';
 import sodium from 'libsodium-wrappers-sumo';
+import { picoIdentitySuite, picoMemoryKeyCanonicalLabels } from '@pico/protocol';
 import { createPicoVaultDaemonCeremonySigner } from '@pico/vault-daemon/ceremony-signer';
+import {
+  exportPicoCompanionMemoryKeys,
+  importPicoCompanionMemoryKeys,
+} from '@pico/companion/memory-keys';
 import {
   grantPicoCompanionDomainRead,
   readPicoCompanionHomeId,
@@ -772,6 +779,279 @@ describe('Electron-hosted companion runtime against real processes', () => {
       // Zuletzt geschrieben, aber nicht zuletzt gefahren.
       expect((await askPicoCompanionParking({ linkClient })).place?.parkedAt)
         .toBe(second!.at);
+    } finally {
+      await daemonClient.close();
+    }
+  }, 300_000);
+
+  /**
+   * ADR 0158 KE6 - der Rundlauf, den der Schluesselexport verspricht.
+   *
+   * **Befund B255 hat die Frage gestellt**: eine Sicherung ohne
+   * Schluesselspeicher laesst jede verschluesselte Erinnerung dauerhaft
+   * unlesbar, mit Absicht (ADR 0072 R6) - und eine Person konnte das nicht
+   * verhindern, nur erleiden. Hier wird verhindert: exportieren, den
+   * Schluesselspeicher verlieren, zurueckbringen, lesen.
+   *
+   * Gegen ein echtes, verschluesseltes Home, weil jede Haelfte sonst eine
+   * Behauptung waere: dass die Datei auf dem Geraet versiegelt wird, dass das
+   * Home nur lesbare Domaenen herausgibt, dass der Import nach Digest
+   * vergleicht und dass ein Shred nicht wiederkommt.
+   */
+  it('exportiert die Schluessel, verliert sie, bringt sie zurueck und liest wieder', async () => {
+    const core = await startCore({ PICO_MEMORY_ENCRYPTION: 'true' });
+    const { living, delegationId, signedDelegation } = await foundedDevice({
+      core,
+      prefix: 'pico-companion-key-export-',
+    });
+    const daemonClient = await connectPicoVaultDaemonClient({ socketPath: living.socketPath });
+    await daemonClient.hello();
+    const linkClient = await createPicoLinkDirectClient({
+      sodium,
+      daemonClient,
+      coreUrl: core.linkBaseUrl,
+      host: core.host,
+      sender: {
+        identityKeyFingerprintHex: identity.keyFingerprintHex,
+        identityPublicKeyHex: identity.publicKeyHex,
+        deviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+        delegationId,
+      },
+    });
+    const profile = profileFor(core, delegationId);
+    const session = await operatorSession(core);
+    /**
+     * Gelesen wird als die Person und nicht als Betreiber: der Betreiber ist
+     * kein Leser (ADR 0077 C1), und ein Durchlauf, der ueber ihn laese, bewiese
+     * eine Leserschaft, die es nicht gibt.
+     */
+    let readerSession = '';
+    const readItems = async (): Promise<Array<{ content?: string; contentUnavailable?: string }>> => {
+      const listed = await fetch(`${core.apiBaseUrl}/api/memory/domains/household/items`, {
+        headers: { authorization: `Bearer ${readerSession}` },
+      });
+      expect(listed.status, await listed.clone().text()).toBe(200);
+      return ((await listed.json()) as { items: Array<{ content?: string; contentUnavailable?: string }> }).items;
+    };
+
+    try {
+      const written = await fetch(`${core.apiBaseUrl}/api/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session}` },
+        body: JSON.stringify({
+          deviceId: 'pico-key-export-walk',
+          type: 'memory.recorded',
+          payload: {
+            privacyDomain: 'household',
+            contentType: 'application/vnd.pico.reminder',
+            content: 'Der Ersatzschluessel liegt beim Nachbarn.',
+            dueAt: '2027-01-01T10:00:00.000Z',
+          },
+        }),
+      });
+      expect(written.status, await written.clone().text()).toBe(201);
+
+      /**
+       * KE1: nur, was diese Person lesen darf. Ohne Lesezugang gibt das Home
+       * nichts heraus - auch nicht an den Home Host, dem es gehoert.
+       */
+      const identityKeyfile = readFileSync(
+        join(living.vaultHomePath, 'keyfiles', `pico_identity-${identity.keyFingerprintHex}.json`),
+        'utf8',
+      );
+      const artifactPath = join(tempDirectory('pico-key-export-file-'), 'memory-keys.pico');
+      const exportInput = {
+        daemonClient,
+        linkClient,
+        profile,
+        sodium: sodium as unknown as VaultSodium,
+        passphrase: 'a passphrase of its own for this file',
+        identityKeyfile,
+        outputPath: artifactPath,
+      };
+      await expect(exportPicoCompanionMemoryKeys(exportInput)).rejects.toThrow('no_memory_keys');
+
+      const signer = createPicoVaultDaemonCeremonySigner({
+        socketPath: living.socketPath,
+        keyRole: 'pico_identity',
+        keyFingerprintHex: identity.keyFingerprintHex,
+      });
+      try {
+        const nowMs = Date.now();
+        const grant = {
+          livingDeviceLinkClient: linkClient,
+          signer,
+          homeId: await readPicoCompanionHomeId({ livingDeviceLinkClient: linkClient }),
+          hostSigningKeyFingerprintHex: core.host.signingKeyFingerprintHex,
+          homeHostPicoIdentityFingerprintHex: identity.keyFingerprintHex,
+          identityPublicKeyHex: identity.publicKeyHex,
+          privacyDomain: 'household',
+          validFrom: new Date(nowMs).toISOString(),
+          validUntil: new Date(nowMs + 365 * 24 * 60 * 60 * 1_000).toISOString(),
+          nowMs,
+        };
+        await grantPicoCompanionDomainRead(grant);
+        /**
+         * **KE1s Grenze, und wo sie wirklich steht.** Der Schluesselspeicher
+         * haelt auch den Schluessel der Anbieter-Zugangsdaten. Dass ein Export
+         * ihn nie mitnimmt, haelt nicht ein Filter im Export, sondern die
+         * Leserschaft darunter: ein Lesezugang auf diesen Namen wird gar nicht
+         * erst angenommen, und ohne Lesezugang gibt das Home keinen Schluessel.
+         */
+        await expect(grantPicoCompanionDomainRead({
+          ...grant,
+          privacyDomain: 'pico-model-provider-credentials',
+        })).rejects.toThrow('domain_is_not_host_custody');
+      } finally {
+        signer.close();
+      }
+      /**
+       * Der Schluessel, den `ModelProviderCredentialCrypto` an genau dieser
+       * Stelle anlegt, sobald eine Person einem Anbieter Zugangsdaten gibt -
+       * hier direkt hingelegt, weil der Weg dorthin einen Modellhost braucht,
+       * um den es in diesem Durchlauf nicht geht.
+       */
+      writeFileSync(
+        join(core.keyStorePath, 'domain_pico-model-provider-credentials.v1.key'),
+        randomBytes(32),
+        { mode: 0o600 },
+      );
+      readerSession = await openIdentitySession({ daemon: living, core, delegation: signedDelegation });
+      expect((await readItems()).map((item) => item.content))
+        .toContain('Der Ersatzschluessel liegt beim Nachbarn.');
+
+      /**
+       * KE3, bevor das Home gefragt wird: die Passphrase, die schon die Wurzel
+       * schuetzt, darf nicht auch die Datei schuetzen.
+       */
+      await expect(exportPicoCompanionMemoryKeys({ ...exportInput, passphrase: identityPassphrase }))
+        .rejects.toThrow('key_export_passphrase_is_vault_passphrase');
+
+      /**
+       * KE4: der Kanal allein genuegt nicht. Ein Satz, dessen Unterschrift
+       * nicht zu ihm gehoert, bekommt nichts - auch vom richtigen Geraet, ueber
+       * den richtigen Kanal. Unterschrieben wird ein anderer Satz, geschickt
+       * dieser.
+       */
+      const homeId = await readPicoCompanionHomeId({ livingDeviceLinkClient: linkClient });
+      const honest = {
+        suite: picoIdentitySuite,
+        requestId: 'key_export_forged_walk',
+        homeId,
+        identityKeyFingerprintHex: identity.keyFingerprintHex,
+        requestedAt: new Date().toISOString(),
+      };
+      const signedHonest = await daemonClient.sign({
+        keyFingerprintHex: identity.keyFingerprintHex,
+        label: picoMemoryKeyCanonicalLabels.export,
+        fields: honest,
+      });
+      const forged = await linkClient.request('home.memory.keys.export.submit', {
+        statement: { ...honest, requestId: 'key_export_something_else' },
+        identityKeyRecord: {
+          suite: picoIdentitySuite,
+          keyRole: 'pico_identity',
+          publicKeyHex: identity.publicKeyHex,
+        },
+        signatureHex: signedHonest.signatureHex,
+      });
+      expect(forged.outcome).toBe('invalid_arguments');
+      expect(forged.result).toEqual({ refusal: 'invalid_memory_key_statement' });
+
+      const exported = await exportPicoCompanionMemoryKeys(exportInput);
+      // Nur die Erinnerung - nicht der Schluessel der Anbieter-Zugangsdaten,
+      // obwohl diese Person seinen Namen lesen darf.
+      expect(exported).toMatchObject({ domains: 1, keys: 1 });
+      // Auf dem Geraet geschrieben, nur fuer die Person lesbar, und ohne einen
+      // einzigen Schluessel im Klartext.
+      expect(statSync(artifactPath).mode & 0o777).toBe(0o600);
+      const onDisk = readFileSync(artifactPath, 'utf8');
+      for (const name of readdirSync(core.keyStorePath)) {
+        expect(onDisk).not.toContain(readFileSync(join(core.keyStorePath, name)).toString('hex'));
+      }
+
+      /**
+       * **Der Verlust, den B255 beschreibt.** Eine Sicherung bringt die
+       * Datenbank, der Schluesselspeicher liegt daneben und kommt nicht mit.
+       */
+      for (const name of readdirSync(core.keyStorePath)) {
+        if (name.startsWith('domain_household.')) {
+          rmSync(join(core.keyStorePath, name));
+        }
+      }
+      expect((await readItems())[0]?.contentUnavailable).toBe('key_shredded');
+
+      const importInput = {
+        daemonClient,
+        linkClient,
+        profile,
+        sodium: sodium as unknown as VaultSodium,
+        passphrase: exportInput.passphrase,
+        artifactPath,
+      };
+      expect(await importPicoCompanionMemoryKeys(importInput)).toEqual([
+        { domainId: 'household', outcome: 'restored', restoredVersions: 1 },
+      ]);
+      // Und die Erinnerung ist wieder da - das ist der ganze Satz aus KE6.
+      expect((await readItems()).map((item) => item.content))
+        .toContain('Der Ersatzschluessel liegt beim Nachbarn.');
+
+      // Ein zweites Mal ist kein zweites Schreiben.
+      expect(await importPicoCompanionMemoryKeys(importInput)).toEqual([
+        { domainId: 'household', outcome: 'already_present', restoredVersions: 0 },
+      ]);
+
+      /**
+       * **KE5: ein anderer Schluessel unter demselben Namen verweigert die
+       * ganze Domaene.** Der zweite Verlust, und diesmal schreibt die Person
+       * etwas Neues, bevor sie zurueckbringt: dabei entsteht ein neues `v1`.
+       * Das alte `v1` aus der Datei ist ein anderer Schluessel mit demselben
+       * Namen - schriebe der Import die uebrigen Fassungen dazu, lagen danach
+       * zwei Generationen nebeneinander.
+       */
+      for (const name of readdirSync(core.keyStorePath)) {
+        if (name.startsWith('domain_household.')) {
+          rmSync(join(core.keyStorePath, name));
+        }
+      }
+      const rewritten = await fetch(`${core.apiBaseUrl}/api/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session}` },
+        body: JSON.stringify({
+          deviceId: 'pico-key-export-walk',
+          type: 'memory.recorded',
+          payload: {
+            privacyDomain: 'household',
+            contentType: 'application/vnd.pico.reminder',
+            content: 'Neu geschrieben, vor dem Zurueckbringen.',
+            dueAt: '2027-01-02T10:00:00.000Z',
+          },
+        }),
+      });
+      expect(rewritten.status, await rewritten.clone().text()).toBe(201);
+      expect(await importPicoCompanionMemoryKeys(importInput)).toEqual([
+        { domainId: 'household', outcome: 'conflicting', restoredVersions: 0 },
+      ]);
+
+      /**
+       * **KE5: ein Shred kommt nicht wieder - auch nicht fuer einen Schluessel,
+       * den er nicht mehr vorfand.** Der Shred zerstoert das neue `v1`; das
+       * alte lag zu dem Zeitpunkt nicht mehr beim Home. Es steht aber in der
+       * Aufzeichnung seines Exports, vor dem Shred - und kommt darum nicht
+       * zurueck.
+       */
+      const shredded = await fetch(`${core.apiBaseUrl}/api/memory/domains/household/shred`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session}` },
+        body: JSON.stringify({ confirm: 'household', reason: 'walked against a running Home' }),
+      });
+      expect(shredded.status, await shredded.clone().text()).toBe(200);
+      expect(await importPicoCompanionMemoryKeys(importInput)).toEqual([
+        { domainId: 'household', outcome: 'refused_shredded', restoredVersions: 0 },
+      ]);
+      expect(readdirSync(core.keyStorePath).filter((name) => name.startsWith('domain_household.')))
+        .toEqual([]);
     } finally {
       await daemonClient.close();
     }
@@ -1850,6 +2130,11 @@ interface RunningCore {
    */
   operatorBootstrapCode: string;
   moveInCode: string;
+  /**
+   * ADR 0158 KE6. Wo die Domaenenschluessel liegen - damit ein Durchlauf ihren
+   * Verlust herstellen kann, den eine Sicherung ohne Schluesselspeicher bringt.
+   */
+  keyStorePath: string;
   host: {
     signingPublicKeyHex: string;
     signingKeyFingerprintHex: string;
@@ -1962,6 +2247,7 @@ async function startCore(overrides: Record<string, string> = {}): Promise<Runnin
     logs: () => output,
     operatorBootstrapCode: String(bootstrap.operatorBootstrapCode),
     moveInCode: String(setup.picoHomeMoveInCode),
+    keyStorePath: join(data, 'keys'),
     host: {
       signingPublicKeyHex: String(setup.hostSigningPublicKeyHex),
       signingKeyFingerprintHex: String(setup.hostSigningKeyFingerprintHex),
