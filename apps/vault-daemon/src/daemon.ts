@@ -803,6 +803,26 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#handleReaderAccessDecryptItem(socket, request);
         return;
       }
+      default: {
+        /**
+         * Befund B259, 2026-09-25. Unerreichbar - und das ist der Punkt.
+         *
+         * Bis heute hatte dieser Verteiler keinen Standardzweig. Eine Familie,
+         * die `parsePicoVaultDaemonRequest` liest und fuer die hier niemand
+         * einen Fall schreibt, uebersetzte sich still, fiel durch den `switch`
+         * und bekam **keine Antwort**: der Client wartete bis zu seiner Frist
+         * und meldete einen Zeitablauf, wo ein fehlender Fall die Ursache war.
+         * Das Home haelt seine Link-Operationen seit ADR 0107 genau so fest;
+         * der Daemon hatte die Sicherung nicht.
+         *
+         * Das `never` macht aus dem Schweigen einen Uebersetzungsfehler. Die
+         * Antwort darunter ist fuer den Fall, dass ein Typ luegt.
+         */
+        const unhandled: never = request;
+        void unhandled;
+        this.#respondError(socket, (request as { requestId: string }).requestId, 'unknown_request_family');
+        return;
+      }
     }
   }
 

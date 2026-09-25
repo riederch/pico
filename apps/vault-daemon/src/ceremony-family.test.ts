@@ -709,3 +709,32 @@ describe('a daemon response from a version this build does not have', () => {
     }), 'utf8'))).toThrow('invalid_response');
   });
 });
+
+describe('B259 - every family the daemon declares is one it reads', () => {
+  /**
+   * Die andere Richtung derselben Luecke. Der Verteiler im Daemon ist seit
+   * dem 2026-09-25 erschoepfend - eine gelesene Familie ohne Fall bricht den
+   * Bau. Der Leser verzweigt aber ueber eine Zeichenkette, und dort hilft kein
+   * `never`: eine deklarierte Familie ohne Lesefall uebersetzt sich und wird
+   * im Betrieb als `unknown_request_family` abgewiesen, obwohl der Daemon sie
+   * selbst ankuendigt.
+   *
+   * Gefragt wird mit einer leeren Anfrage: jeder vorhandene Lesefall weist sie
+   * wegen fehlender Felder ab - mit einem anderen Grund. Nur ein fehlender
+   * Fall sagt, er kenne die Familie nicht.
+   */
+  it('reaches a read case for each declared family', () => {
+    const families = Object.values(picoVaultDaemonRequestFamilies);
+    expect(families.length).toBeGreaterThan(20);
+    for (const family of families) {
+      const frame = Buffer.from(JSON.stringify({ family, requestId: 'b259_probe' }), 'utf8');
+      let reason = '';
+      try {
+        parsePicoVaultDaemonRequest(frame);
+      } catch (error) {
+        reason = (error as Error).message;
+      }
+      expect(reason, family).not.toBe('unknown_request_family');
+    }
+  });
+});
