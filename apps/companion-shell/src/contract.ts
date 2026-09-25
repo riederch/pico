@@ -2091,7 +2091,6 @@ function picoCompanionDeviceAuthorityDetail(device: PicoCompanionDeviceAuthority
       return `It can no longer act as you. Its authority ran out on `
         + `${device.validUntilDisplay}.`;
     case 'revoked':
-    default:
       return 'It can no longer act as you. You ended its authority.';
   }
 }
@@ -2451,7 +2450,7 @@ function picoCompanionDomainReaderDetail(reader: PicoCompanionDomainReaderRow): 
       return `${reach}, starting later and until ${reader.validUntilDisplay}.`;
     case 'expired':
       return `no longer reads this; the access ran out on ${reader.validUntilDisplay}.`;
-    default:
+    case 'revoked':
       return 'no longer reads this; the access was ended.';
   }
 }

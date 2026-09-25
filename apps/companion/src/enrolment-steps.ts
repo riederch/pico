@@ -184,7 +184,7 @@ export function picoCompanionFoundingStepLine(
         body: 'Pico is asking your Home to let this identity move in, using the one-time '
           + 'code from the line you pasted.',
       };
-    default:
+    case 'founding_acceptance':
       return {
         title: 'Approve founding',
         body: 'Your Home accepted the claim and is waiting for you to sign what it '
@@ -285,7 +285,6 @@ export function picoCompanionEnrolmentStepLine(
           + 'the same keys; only the authority over them is new.',
       };
     case 'joined':
-    default:
       return {
         title: 'This device is yours',
         body: 'Your Home answers to it now, and every device you already had keeps '

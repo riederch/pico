@@ -111,7 +111,6 @@ function words(purpose: PicoCompanionVaultPassphrasePurpose): {
           + 'setup, then press Enter.',
       };
     case 'recovery_card':
-    default:
       return {
         title: 'Enter the Vault passphrase',
         instruction: 'Type this device’s Vault passphrase, then press Enter. It is '

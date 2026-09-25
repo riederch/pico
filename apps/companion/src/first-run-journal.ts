@@ -181,7 +181,7 @@ export function parsePicoCompanionFirstRunJournal(
         receipt: parseReceipt(record.receipt, binding),
       });
     }
-    default: {
+    case 'committed': {
       assertExactKeys(record, [
         'schema',
         'step',

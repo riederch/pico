@@ -1544,6 +1544,15 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
       }
       return;
     }
+    default: {
+      /**
+       * Befund B272, 2026-09-25. Derselbe Fall wie B271, eine Tuer weiter: ein
+       * Befehl in `cliCommands` ohne Fall hier lief bis heute ohne Wirkung und
+       * endete mit 0. Das `never` macht daraus einen Uebersetzungsfehler.
+       */
+      const unhandled: never = invocation.command;
+      throw new Error(`unknown_cli_command:${String(unhandled)}`);
+    }
   }
 }
 
