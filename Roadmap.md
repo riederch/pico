@@ -1034,6 +1034,57 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B275 — die Schlüssel standen zuletzt auf der Platte (2026-09-25).**
+Gemessen wurde, welche Dateien das Produkt anlegt, ohne sie zu
+synchronisieren. Der Baum kennt die Klasse genau: `atomic-file.ts` im Companion
+(B121) und der Wiederherstellungsanker im Home (B214) schreiben eine
+Zwischendatei, synchronisieren sie und benennen um. **Ausgerechnet die
+Schlüssel fehlten** — das eine, was sich nicht neu ableiten lässt.
+
+Die Domänenschlüssel des Homes, das Host-Schlüsselpaar samt dem für die
+Rotation und die Schlüsseldatei des Tresors wurden mit einem nackten
+`writeFileSync` angelegt. SQLite synchronisiert seine eigenen Commits, also
+war die Reihenfolge auf der Platte verkehrt: die unter einem neuen Schlüssel
+verschlüsselten Zeilen erreichten sie, der Schlüssel selbst lag vielleicht noch
+im Seitencache. Nach einem Stromausfall kann eine neue Datei leer
+zurückkommen — der klassische Fall auf ext4 — unter Zeilen, die stehen. Eine
+Domäne mit leerem Schlüssel liest niemand mehr. Ein leeres Host-Schlüsselpaar
+weist `load` als ungültig ab, und das Home startet nicht. Und eine leere
+Schlüsseldatei im Tresor nimmt, wie ein Kommentar im Dienst selbst sagt, den
+ganzen Tresor mit, weil er jede Datei im Verzeichnis liest. Das Paar für die
+Rotation sagte über sich *„Staging is durable"*.
+
+**Jetzt: angelegt, nie ersetzt, und auf der Platte, bevor jemand davon
+erfährt.** Die Zwischendatei wird synchronisiert und mit `link` veröffentlicht,
+nicht mit `rename` — `link` scheitert an einem vorhandenen Namen atomar wie
+vorher `wx`, `rename` ersetzte ihn. Danach das Verzeichnis. Im Home steht das
+in `durable-file.ts`, im Tresor-Paket ein zweites Mal, weil es das Home nicht
+importieren darf.
+
+**Die Zwischendatei hat einen festen Namen, und das ist eine
+Sicherheitseigenschaft.** Ein Absturz zwischen Schreiben und Veröffentlichen
+lässt eine Kopie des Schlüssels unter diesem Namen liegen. Mit zufälligem
+Namen hätte `shredDomain` den Schlüssel vernichtet und seine Kopie daneben
+stehen lassen. So nimmt das Schreddern sie mit — auch die einer Version, deren
+Anlage nie fertig wurde und die darum in keiner Versionsliste steht. Das
+Verwerfen einer Rotation und das Zurücksetzen tun dasselbe, und die vier
+Rücknahmen im Tresor-Dienst ebenso. Die Frische-Prüfung des Tresors zählt eine
+unveröffentlichte Zwischendatei nicht mit, sonst sperrte ein Absturz beim
+ersten Schlüssel jede weitere Einrichtung.
+
+**Die Netze:** Acht Tests halten die Reihenfolge — Datei und Verzeichnis
+synchronisiert, bevor die Version herausgegeben wird —, das Nie-Ersetzen und
+das Schreddern der Zwischendatei. Und `mode:check`, der dieselben Stellen schon
+wegen der Rechte las, fragt jetzt auch das: eine Quelldatei, die Dateien
+anlegt, synchronisiert sie oder ist begründet. Begründet ist eine, die
+Wiederherstellungskarte als PDF. Sieben Pflanzungen beißen, darunter `rename`
+statt `link` und ein Schreddern, das die Zwischendateien übersieht.
+
+**Vorher gemessen, ohne Befund:** die IPC-Grenze des Companion. Alle 40 Wege,
+die vom Fenster ein Argument annehmen, prüfen zuerst den Absender und dann das
+Argument — durch einen Parser, eine Typprüfung oder über `?.`, das auch `null`
+und Zahlen übersteht.
+
 **B274 — vier Bytes eines Lieferanten hätten das Home beendet (2026-09-25).**
 B273 hatte die asynchrone Hälfte gemessen: eine Ablehnung, die niemand fängt.
 Die synchrone Schwester ist eine Ausnahme in einem Rückruf, den ein Zeitgeber
