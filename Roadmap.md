@@ -1034,6 +1034,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B277 — eine Schlüsselableitung, zweimal geschrieben (2026-09-25).** B276
+fand eine Abschrift, weil nach Dateischreibern gesucht wurde. Die allgemeine
+Frage dahinter: welcher Funktionskörper steht im Produkt zweimal? Gemessen mit
+dem Syntaxbaum über jede Funktion, Körper ohne Kommentare und Leerraum
+verglichen, ab 200 Zeichen: 2.051 Körper, vier Gruppen.
+
+**Die heikelste war Kryptographie.** Die Exportdatei aus ADR 0158 leitete ihren
+Dateischlüssel mit einer eigenen Funktion ab, Byte für Byte die des Keyfiles.
+Beide nehmen die Kosten von Argon2id aus dem Kopf der Datei, die gerade
+geöffnet wird — beim Import eine Datei von außen. Nachgemessen statt geglaubt:
+die Grenze hält auf beiden Wegen, weil der AAD-Bauer im Protokoll mit
+`kdfParameterBytes` vor jeder Ableitung läuft, beim Keyfile im Parser, den
+`openPicoVaultKeyfile` immer durchläuft, beim Export direkt davor. Mein erster
+Kommentar dazu behauptete *„every caller runs it first"* — beim Keyfile steht
+die Ableitung vor dem AAD-Aufruf; gehalten wird sie vom Parser. Der Kommentar
+sagt jetzt, wo. Eine KDF, die zweimal steht, lässt sich einmal ändern; jetzt
+steht sie einmal.
+
+Die zwei anderen: der Bürge einer Gerätezeremonie, im Companion für Beitritt
+und Gerätelebenslauf je einmal ausgeschrieben, und die Sitzungssuche in zwei
+Zeremonien des Tresor-Dienstes. Beide stehen jetzt einmal, in `profile.ts` und
+`protocol.ts`, die ihre Aufrufer schon importierten. Die vierte Gruppe,
+`narrowToOwner` in Home und Relay, ist das Modulpaar, das `copies:check` schon
+als Spiegel hält.
+
+**Das Netz ist die dritte Gestalt in `copies:check`**, der Konstanten (B69)
+und ausgeschriebene Listen (B70) schon so hält: ein Funktionskörper ab 200
+Zeichen steht einmal, oder beide Stellen liegen in einem gespiegelten
+Modulpaar. Darunter hält der Schritt nichts, und er sagt das. Vier Pflanzungen
+beißen: jede der drei Abschriften zurück und ein blinder Leser.
+
 **B276 — dreimal derselbe Schreiber im Companion (2026-09-25).** Nach B275
 die Frage eine Stufe weiter: welche Umbenennung setzt einen Zustand in Kraft,
 ohne dass das Verzeichnis danach auf der Platte steht? Gemessen über jedes
