@@ -1034,6 +1034,36 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B276 — dreimal derselbe Schreiber im Companion (2026-09-25).** Nach B275
+die Frage eine Stufe weiter: welche Umbenennung setzt einen Zustand in Kraft,
+ohne dass das Verzeichnis danach auf der Platte steht? Gemessen über jedes
+`renameSync` im Produkt.
+
+**Ohne Befund, und warum:** Die Beförderung des Rotationspaars im Home
+synchronisiert nicht, braucht es aber nicht — geht das Umbenennen verloren,
+liegt das Paar noch da, und `completeInterruptedRotation` setzt es beim Start
+gegen den bewiesenen Kettenkopf in Kraft; seit B275 steht sein Inhalt sicher.
+Das Zurückspielen einer Sicherung synchronisiert seine Kopie nicht, hat aber
+keinen Produktaufrufer, was `capability:check` schon festhält. Die Sicherung
+selbst schreibt die Backup-API von SQLite, die ihr Ziel mit einem
+synchronisierten Commit abschließt. Daneben gemessen und sauber: das Home
+schwärzt das Ticket in URLs, bevor Fastify sie loggt, und das Relay loggt nur
+eigene Ereignisse ohne Anfragedaten.
+
+**Der Befund ist eine Abschrift, keine Lücke.** Der Beziehungsspeicher der
+Relays und die Plattform-Entsperrung schrieben Zwischendatei, Modus, fsync,
+Umbenennen und Verzeichnis-fsync Zeile für Zeile so, wie
+`writePicoCompanionFileAtomically` es im selben Paket tut. Richtig, beide —
+aber B121 ist genau das, was aus einer Abschrift neben der richtigen wird: eine
+Datei im selben Verzeichnis, die es nicht so machte. Beide rufen jetzt den
+gemeinsamen Schreiber.
+
+**Das Netz** steht wieder in `mode:check`, bei denselben Stellen: wer
+`renameSync` oder `linkSync` ruft, ist ein bekannter Schreiber, mit dem Grund,
+warum er nicht den gemeinsamen seines Pakets nimmt oder selbst dieser ist.
+Sieben sind es. Zwei Pflanzungen beißen: die alte Abschrift zurück und ein
+Argument für einen Schreiber, der nichts mehr veröffentlicht.
+
 **B275 — die Schlüssel standen zuletzt auf der Platte (2026-09-25).**
 Gemessen wurde, welche Dateien das Produkt anlegt, ohne sie zu
 synchronisieren. Der Baum kennt die Klasse genau: `atomic-file.ts` im Companion
