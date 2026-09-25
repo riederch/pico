@@ -1449,3 +1449,27 @@ function requireBoundedString(parsed: Record<string, unknown>, key: string): str
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+/**
+ * The unlocked session a ceremony needs, or the ceremony's own refusal.
+ *
+ * Finding B277. The device lifecycle and the device recovery ceremony each
+ * carried this, byte for byte; a key role matched in one and not the other is
+ * how two ceremonies come to disagree about which key may act.
+ */
+export function requirePicoVaultDaemonUnlockedSession(
+  sessions: readonly PicoVaultDaemonUnlockedSessionDescriptor[],
+  fingerprintHex: string,
+  keyRole: PicoVaultDaemonUnlockedSessionDescriptor['keyRole'],
+  reason: string,
+): PicoVaultDaemonUnlockedSessionDescriptor {
+  const session = sessions.find(
+    (candidate) =>
+      candidate.keyFingerprintHex === fingerprintHex
+      && candidate.keyRole === keyRole,
+  );
+  if (session === undefined) {
+    throw new Error(reason);
+  }
+  return session;
+}

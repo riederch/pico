@@ -651,6 +651,75 @@ if (mirroredModules.length === 0) {
   );
 }
 
+/**
+ * Befund B277. Die dritte Gestalt derselben Sache: ein Funktionskoerper, der
+ * zweimal dasteht.
+ *
+ * Gemessen am 2026-09-25 ueber jede Funktion im Produkt, Koerper ohne
+ * Kommentare und Leerraum verglichen: vier Gruppen. Die Schluesselableitung
+ * des Tresors stand fuer den Export Byte fuer Byte ein zweites Mal - eine
+ * KDF, die zweimal steht, laesst sich einmal aendern. Der Buerge einer
+ * Geraetezeremonie stand im Companion zweimal, die Sitzungssuche in zwei
+ * Zeremonien des Tresor-Dienstes. Die vierte war `narrowToOwner` in Home und
+ * Relay, und die haelt `mirroredModules` oben schon.
+ *
+ * Die Grenze liegt bei 200 Zeichen gedrucktem Koerper. Darunter stehen
+ * Einzeiler wie `return value.trim()`, deren Gleichheit keine Kopie ist,
+ * sondern dieselbe Handlung. Was darunter liegt, haelt dieser Schritt also
+ * nicht, und er sagt das hier statt so zu tun.
+ */
+const minimumBodyLength = 200;
+const mirroredFiles = new Set(
+  mirroredModules.flatMap((pair) => [pair.proven, pair.mirror]),
+);
+const bodies = new Map();
+let bodiesMeasured = 0;
+const printer = ts.createPrinter({ removeComments: true });
+for (const path of trackedFiles.filter(
+  (candidate) => /^(apps|packages)\/[^/]+\/src\/.+\.(ts|cts)$/u.test(candidate)
+    && !/\.test\.|\.d\.ts$|\/test-/u.test(candidate),
+)) {
+  const source = ts.createSourceFile(
+    path,
+    readFileSync(join(repoRoot, path), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  (function walk(node) {
+    if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)
+      || ts.isArrowFunction(node) || ts.isFunctionExpression(node))
+      && node.body !== undefined && ts.isBlock(node.body)) {
+      const body = printer.printNode(ts.EmitHint.Unspecified, node.body, source)
+        .replace(/\s+/gu, ' ');
+      if (body.length >= minimumBodyLength) {
+        bodiesMeasured += 1;
+        const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+        const places = bodies.get(body) ?? [];
+        places.push({ path, line, name: node.name?.getText(source) ?? '(anonym)' });
+        bodies.set(body, places);
+      }
+    }
+    ts.forEachChild(node, walk);
+  })(source);
+}
+let mirroredBodies = 0;
+for (const places of bodies.values()) {
+  if (places.length < 2) continue;
+  if (places.every((place) => mirroredFiles.has(place.path))) {
+    mirroredBodies += 1;
+    continue;
+  }
+  errors.push(
+    `ein Funktionskoerper steht ${places.length}-mal: `
+    + places.map((place) => `${place.path}:${place.line} ${place.name}`).join(', ')
+    + '. Eine Handlung, die zweimal geschrieben steht, kann einmal geaendert werden (B277) - '
+    + 'an eine Stelle legen, die beide Seiten importieren, oder als Modulpaar spiegeln.',
+  );
+}
+if (bodiesMeasured === 0) {
+  errors.push('kein einziger Funktionskoerper gemessen - der Leser misst nichts mehr (B166).');
+}
+
 if (errors.length > 0) {
   console.error('Constant-copies check failed:');
   for (const error of errors) {
@@ -671,5 +740,7 @@ console.log(
   + `${mirroredModules.length} Modulpaar(e) stehen zweimal und tragen denselben Code, und `
   + `die ${mirroredModules.reduce((sum, pair) => sum + exportedNames(pair.proven).length, 0)} `
   + 'Exporte der bewiesenen Fassung werden von einem Test daneben wirklich gerufen - '
-  + 'den Beweis, den die Spiegelung erben laesst, gibt es also).',
+  + 'den Beweis, den die Spiegelung erben laesst, gibt es also; '
+  + `${bodiesMeasured} Funktionskoerper ab ${minimumBodyLength} Zeichen, keiner doppelt `
+  + `ausser ${mirroredBodies} im gespiegelten Paar).`,
 );

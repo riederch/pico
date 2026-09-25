@@ -175,3 +175,27 @@ function assertHex32(value: unknown, reason: string): void {
 function assertCoreUrl(value: unknown): void {
   assertPicoHomeCoreUrl(value, 'invalid_companion_core_url');
 }
+
+/**
+ * This device as the one vouching for another in a device ceremony: the
+ * identity it acts for and the delegation it acts under.
+ *
+ * Finding B277. Enrolment and the device lifecycle each wrote this out, field
+ * for field; one place now, so a sixth field cannot reach one ceremony and
+ * miss the other.
+ */
+export function picoCompanionProfileSponsor(profile: PicoCompanionProfile): {
+  identityKeyFingerprintHex: string;
+  identityPublicKeyHex: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  delegationId: string;
+} {
+  return {
+    identityKeyFingerprintHex: profile.identity.keyFingerprintHex,
+    identityPublicKeyHex: profile.identity.publicKeyHex,
+    deviceSigningKeyFingerprintHex: profile.device.signingKeyFingerprintHex,
+    deviceKeyAgreementKeyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
+    delegationId: profile.device.delegationId,
+  };
+}

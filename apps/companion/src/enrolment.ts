@@ -34,6 +34,7 @@ import {
   picoCompanionProfileSchema,
   writePicoCompanionProfile,
   type PicoCompanionProfile,
+  picoCompanionProfileSponsor,
 } from './profile.js';
 import { createPicoCompanionLinkClient } from './recovery-controller.js';
 import {
@@ -117,7 +118,7 @@ export async function enrolPicoCompanionDevice(input: {
     sponsorLinkClient: input.livingDeviceLinkClient,
     sodium: input.sodium,
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sponsorOf(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
     target: targetSignerOverCodes(input.profile, offer.device, input.exchange),
     scopes: [...picoCompanionEnrolmentScopes],
     validUntil: input.validUntil,
@@ -177,7 +178,7 @@ export async function renewPicoCompanionDeviceOverCodes(input: {
    */
   const view = await readPicoHomeDeviceLifecycle(input.livingDeviceLinkClient, {
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sponsorOf(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
   });
   const replaced = view.devices.find(
     (device) => device.deviceSigningKeyFingerprintHex
@@ -199,7 +200,7 @@ export async function renewPicoCompanionDeviceOverCodes(input: {
     sponsorLinkClient: input.livingDeviceLinkClient,
     sodium: input.sodium,
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sponsorOf(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
     target: targetSignerOverCodes(input.profile, offer.device, input.exchange),
     replacedDelegationId: replaced.delegationId,
     scopes: [...picoCompanionEnrolmentScopes],
@@ -212,22 +213,6 @@ export async function renewPicoCompanionDeviceOverCodes(input: {
     targetSigningKeyFingerprintHex:
       result.submission.evidence.targetDeviceSigningKeyFingerprintHex,
   });
-}
-
-function sponsorOf(profile: PicoCompanionProfile): {
-  identityKeyFingerprintHex: string;
-  identityPublicKeyHex: string;
-  deviceSigningKeyFingerprintHex: string;
-  deviceKeyAgreementKeyFingerprintHex: string;
-  delegationId: string;
-} {
-  return {
-    identityKeyFingerprintHex: profile.identity.keyFingerprintHex,
-    identityPublicKeyHex: profile.identity.publicKeyHex,
-    deviceSigningKeyFingerprintHex: profile.device.signingKeyFingerprintHex,
-    deviceKeyAgreementKeyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
-    delegationId: profile.device.delegationId,
-  };
 }
 
 /**

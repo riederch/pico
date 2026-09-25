@@ -2389,7 +2389,7 @@ export function sealPicoVaultKeyExport(
     aeadNonceHex: bytesToHex(nonce),
   };
   const aad = buildPicoVaultKeyExportHeaderAad(header);
-  const fileKey = deriveExportFileKey(sodium, input.passphrase, header);
+  const fileKey = deriveFileKey(sodium, input.passphrase, header);
   const payload = new TextEncoder().encode(JSON.stringify({ keks }));
   try {
     const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
@@ -2446,7 +2446,7 @@ export function openPicoVaultKeyExport(
   // Wirft bei jedem Kopf, der nicht genau dieses Format beschreibt - auch bei
   // einem Keyfile-Kopf, bevor irgendetwas abgeleitet wird.
   const aad = buildPicoVaultKeyExportHeaderAad(header);
-  const fileKey = deriveExportFileKey(sodium, input.passphrase, header);
+  const fileKey = deriveFileKey(sodium, input.passphrase, header);
   let plaintext: Uint8Array;
   try {
     plaintext = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
@@ -2501,24 +2501,6 @@ export function assertPicoVaultKeyExportPassphraseIsOwn(
   }
   opened.lock();
   throw new Error('key_export_passphrase_is_vault_passphrase');
-}
-
-function deriveExportFileKey(
-  sodium: VaultSodium,
-  passphrase: string,
-  header: PicoVaultKeyExportHeaderAadInput,
-): Uint8Array {
-  if (header.kdfAlgorithm !== 'argon2id' || header.kdfProfile !== 'moderate') {
-    throw new Error('invalid_kdf_profile');
-  }
-  return sodium.crypto_pwhash(
-    sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES,
-    passphrase,
-    hexToBytes(header.kdfSaltHex),
-    header.kdfOpsLimit,
-    header.kdfMemLimitBytes,
-    sodium.crypto_pwhash_ALG_ARGON2ID13,
-  );
 }
 
 function canonicalExportedKeks(
@@ -3602,10 +3584,27 @@ function generateKeypairForRole(
   return sodium.crypto_sign_keypair();
 }
 
+/**
+ * One derivation for both files a passphrase opens: the keyfile and the key
+ * export (finding B277). The export had its own copy, byte for byte, and a
+ * KDF written twice is a KDF that can be changed once.
+ *
+ * The cost parameters come from the file being opened. What bounds them is
+ * the header AAD builder, and it runs before every derivation: for a keyfile
+ * inside `parsePicoVaultKeyfile`, which `openPicoVaultKeyfile` always goes
+ * through - an object too, by way of `cloneKeyfile` - and for an export
+ * directly before the call. `kdfParameterBytes` refuses a downgrade and
+ * anything past the sensitive profile before a single Argon2id pass, which is
+ * synchronous and cannot be interrupted. A keyfile being created carries the
+ * moderate constants and needs no bound.
+ */
 function deriveFileKey(
   sodium: VaultSodium,
   passphrase: string,
-  header: PicoVaultKeyfileHeaderAadInput,
+  header: Pick<
+    PicoVaultKeyfileHeaderAadInput | PicoVaultKeyExportHeaderAadInput,
+    'kdfAlgorithm' | 'kdfProfile' | 'kdfOpsLimit' | 'kdfMemLimitBytes' | 'kdfSaltHex'
+  >,
 ): Uint8Array {
   if (header.kdfAlgorithm !== 'argon2id' || header.kdfProfile !== 'moderate') {
     throw new Error('invalid_kdf_profile');

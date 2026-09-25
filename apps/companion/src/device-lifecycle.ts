@@ -15,6 +15,7 @@ import { picoPresenceIdForDeviceSigningKey } from './presence.js';
 import {
   writePicoCompanionProfile,
   type PicoCompanionProfile,
+  picoCompanionProfileSponsor,
 } from './profile.js';
 
 /**
@@ -100,7 +101,7 @@ export async function readPicoCompanionDeviceAuthority(input: {
 }): Promise<PicoCompanionDeviceAuthorityView> {
   const view = await readPicoHomeDeviceLifecycle(input.livingDeviceLinkClient, {
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sender(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
   });
   const own = input.profile.device.signingKeyFingerprintHex;
   return Object.freeze({
@@ -167,7 +168,7 @@ export async function revokePicoCompanionDeviceAuthority(input: {
    */
   const before = await readPicoHomeDeviceLifecycle(input.livingDeviceLinkClient, {
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sender(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
   });
   const target = before.devices.find(
     (device) => device.delegationId === input.targetDelegationId,
@@ -183,7 +184,7 @@ export async function revokePicoCompanionDeviceAuthority(input: {
     sponsorLinkClient: input.livingDeviceLinkClient,
     sodium: input.sodium,
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sender(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
     targetDelegationId: input.targetDelegationId,
     subject: 'delegation',
     reasonCategory: input.reason,
@@ -197,7 +198,7 @@ export async function revokePicoCompanionDeviceAuthority(input: {
    */
   const after = await readPicoHomeDeviceLifecycle(input.livingDeviceLinkClient, {
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sender(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
   }).catch(() => null);
 
   return Object.freeze({
@@ -207,22 +208,6 @@ export async function revokePicoCompanionDeviceAuthority(input: {
       ? null
       : after.devices.filter((device) => device.status === 'active').length,
   });
-}
-
-function sender(profile: PicoCompanionProfile): {
-  identityKeyFingerprintHex: string;
-  identityPublicKeyHex: string;
-  deviceSigningKeyFingerprintHex: string;
-  deviceKeyAgreementKeyFingerprintHex: string;
-  delegationId: string;
-} {
-  return {
-    identityKeyFingerprintHex: profile.identity.keyFingerprintHex,
-    identityPublicKeyHex: profile.identity.publicKeyHex,
-    deviceSigningKeyFingerprintHex: profile.device.signingKeyFingerprintHex,
-    deviceKeyAgreementKeyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
-    delegationId: profile.device.delegationId,
-  };
 }
 
 async function holdsIdentityKey(
@@ -292,7 +277,7 @@ export async function renewPicoCompanionDeviceAuthority(input: {
     sponsorLinkClient: input.livingDeviceLinkClient,
     sodium: input.sodium,
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: sender(input.profile),
+    sponsor: picoCompanionProfileSponsor(input.profile),
     target: await picoHomeDeviceTargetSignerFromVault(input.daemonClient, {
       signingKeyFingerprintHex: input.profile.device.signingKeyFingerprintHex,
       keyAgreementKeyFingerprintHex: input.profile.device.keyAgreementKeyFingerprintHex,

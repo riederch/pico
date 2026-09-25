@@ -28,8 +28,9 @@ import {
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from './client.js';
 import type { PicoLinkDirectClient } from './link-direct-client.js';
-import type {
-  PicoVaultDaemonUnlockedSessionDescriptor,
+import {
+  requirePicoVaultDaemonUnlockedSession,
+  type PicoVaultDaemonUnlockedSessionDescriptor,
 } from './protocol.js';
 
 const fingerprintPattern = hexOfBytesPattern(32);
@@ -116,19 +117,19 @@ export async function initiatePicoHomeDeviceRecovery(
     input.rootClient.status(),
     input.targetClient.status(),
   ]);
-  const identity = requireSession(
+  const identity = requirePicoVaultDaemonUnlockedSession(
     rootStatus.sessions,
     input.identityKeyFingerprintHex,
     'pico_identity',
     'recovery_identity_key_not_unlocked',
   );
-  const targetSigning = requireSession(
+  const targetSigning = requirePicoVaultDaemonUnlockedSession(
     targetStatus.sessions,
     input.targetDeviceSigningKeyFingerprintHex,
     'device_signing',
     'recovery_target_signing_key_not_unlocked',
   );
-  const targetAgreement = requireSession(
+  const targetAgreement = requirePicoVaultDaemonUnlockedSession(
     targetStatus.sessions,
     input.targetDeviceKeyAgreementKeyFingerprintHex,
     'device_key_agreement',
@@ -594,23 +595,6 @@ async function signWithExactKey(
     throw new Error('recovery_signer_mismatch');
   }
   return signed.signatureHex;
-}
-
-function requireSession(
-  sessions: PicoVaultDaemonUnlockedSessionDescriptor[],
-  fingerprintHex: string,
-  keyRole: PicoVaultDaemonUnlockedSessionDescriptor['keyRole'],
-  reason: string,
-): PicoVaultDaemonUnlockedSessionDescriptor {
-  const session = sessions.find(
-    (candidate) =>
-      candidate.keyFingerprintHex === fingerprintHex
-      && candidate.keyRole === keyRole,
-  );
-  if (session === undefined) {
-    throw new Error(reason);
-  }
-  return session;
 }
 
 function keyRecord<Role extends 'pico_identity' | 'device_signing' | 'device_key_agreement'>(
