@@ -1034,6 +1034,42 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B274 — vier Bytes eines Lieferanten hätten das Home beendet (2026-09-25).**
+B273 hatte die asynchrone Hälfte gemessen: eine Ablehnung, die niemand fängt.
+Die synchrone Schwester ist eine Ausnahme in einem Rückruf, den ein Zeitgeber
+oder ein Ereignis aufruft — auch sie beendet einen Node-Prozess. Gemessen
+wurden darum alle Zeitgeber und alle Lauscher auf fremden Bytes in Home,
+Tresor-Dienst und Relay.
+
+**Die Zeitgeber halten.** Der Aufräumlauf des Homes steht ganz im `try`, der
+Keepalive der WebSockets pingt nur offene Sockets. Der Aufräumlauf des
+Tresor-Dienstes würde bei einem Fehler den Dienst beenden, aber das ist die
+sichere Richtung: ein toter Dienst hält keine entsperrten Schlüssel. Die
+Companion-Schleifen stellen sich im `finally` neu oder laufen als Intervall
+unabhängig vom einzelnen Durchlauf; dort schläft nichts ein.
+
+**Ein Lauscher hielt nicht: der Leser der Lieferanten-Antworten.** Er parste
+ein Frame mit `JSON.parse` und ging von dort direkt zu `frame.family`. `null`
+ist gültiges JSON, und für `null` ist dieser Zugriff ein TypeError — im
+`data`-Lauscher auf der Standardausgabe des Lieferanten, also eine nicht
+gefangene Ausnahme, und das Home endet. Ein Lieferant kommt aus einem Depot,
+ist also fremder Code, und vier Bytes Inhalt genügten. Die Nachbarn hatten die
+Formen schon: ein Frame der falschen Familie und eine unerbetene Antwort
+wurden verworfen, nur ein Frame, das gar kein Objekt ist, nicht.
+
+Jetzt ist, was kein Objekt ist, kein Frame und wird verworfen wie eines der
+falschen Familie. Ein Test schickt `null`, eine Zahl, eine Zeichenkette und
+ein Array; zurückgepflanzt meldet vitest genau den TypeError als nicht
+gefangene Ausnahme.
+
+**Kein eigener Prüfer, und das ist gemessen.** Alle anderen Lauscher auf
+fremden Bytes stehen im `try` oder reichen an einen Fänger weiter: der
+Frameleser des Tresor-Dienstes (B75), sein Client, das Relay über `handle()`
+mit `.catch` und der Link-Eingang des Homes über Fastify. Ein Netz über die
+Form der Lauscher bestünde aus einer Regel und fünf Begründungen. Die 71
+Stellen, an denen `JSON.parse` sofort einen Typ bekommt, lesen fast alle die
+eigene Datenbank des Homes, die das Home selbst geschrieben hat.
+
 **B273 — ein Termin, der nicht markiert werden konnte, hätte das Home beendet
 (2026-09-25).** Pico läuft als Hintergrunddienst, und unter Node 22 beendet
 eine unbehandelte abgelehnte Promise den Prozess. Gemessen wurde darum, welche
