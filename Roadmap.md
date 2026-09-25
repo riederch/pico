@@ -1034,6 +1034,42 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B278 — jede gelesene Erinnerung ließ den Domänenschlüssel liegen
+(2026-09-25).** Nach B277 die Frage an dieselbe Kryptographie von der anderen
+Seite: wird jeder Schlüssel, den das Produkt lädt oder entpackt, nach Gebrauch
+gelöscht — auch auf dem Weg, auf dem etwas wirft? Der Tresor tut es überall,
+das Home bei seinen Host-Schlüsseln auch.
+
+**Gemessen über jedes `loadKeyVersion`: zehn Stellen.** Der Export, der
+Vergleich beim Import, das Schreddern und der Share-Umschlag löschten den
+geladenen Domänenschlüssel. **Die drei Wege, die am häufigsten laufen, taten es
+nie**: der Inhalt jeder Erinnerung, geschrieben und gelesen, und die
+Zugangsdaten für Modellanbieter und Lieferanten. Jedes Lesen einer Erinnerung
+lud den Schlüssel zur ganzen Domäne frisch von der Platte, entpackte einen
+Datenschlüssel und überließ beide dem Garbage Collector — der Speicher
+freigibt, ohne ihn zu überschreiben. Dieselbe Datei löschte den Schlüssel
+beim Schreddern mit `kek.fill(0)`, zwanzig Zeilen tiefer.
+
+Jetzt werden Domänenschlüssel, Datenschlüssel und die Bytes einer
+Zugangsangabe im `finally` genullt. Ein Test hält jeden geladenen Schlüssel
+fest und sieht nach dem Schreiben, dem Lesen und einem abgewiesenen Öffnen
+nach: nur Nullen. Gegen die alten Fassungen fällt er dreimal.
+
+**Der Prüfer fand danach eine vierte Stelle, die die Messung für sauber
+hielt**: der Vergleich beim Import löschte den Schlüssel, aber nach dem Hash
+statt im `finally` — wirft der Hash, bleibt er liegen. Jetzt im `finally`.
+
+**Das Netz, `zeroing:check`**, liest mit dem Syntaxbaum: das Ergebnis jedes
+`loadKeyVersion` gehört einem Namen, und derselbe Name wird in einem
+`finally` derselben Funktion genullt. Die Datenschlüssel hält er nicht — sie
+tragen keinen Namen, an dem ein Leser sie erkennt —, und der Kopf sagt das.
+Vier Pflanzungen beißen: eine alte Fassung, `fill(1)`, ein Laden ohne Namen und
+ein blinder Leser. Die Kette hat jetzt 76 Schritte.
+
+**Eine Grenze, die bleibt:** eine Zeichenkette lässt sich in JavaScript nicht
+nullen. Die entschlüsselte Zugangsangabe verlässt die Klasse als String, weil
+der Aufrufer genau das braucht; genullt werden die Bytes, aus denen sie wurde.
+
 **B277 — eine Schlüsselableitung, zweimal geschrieben (2026-09-25).** B276
 fand eine Abschrift, weil nach Dateischreibern gesucht wurde. Die allgemeine
 Frage dahinter: welcher Funktionskörper steht im Produkt zweimal? Gemessen mit
