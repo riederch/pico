@@ -1034,6 +1034,40 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B272 — sechs Standardzweige waren der letzte bekannte Fall (2026-09-25).**
+Aus B271 die nächste Frage: wo verzweigt der Baum sonst über eine geschlossene
+Menge, ohne dass ein fehlender Fall den Bau bricht? Gemessen über alle
+`switch`-Anweisungen im Produktcode — und es sind nur 22.
+
+**Die tückischere Form fand sich nicht beim Schweigen, sondern bei den
+Sätzen.** Sechs Standardzweige fingen nicht das Unbekannte auf, sie **waren**
+der letzte bekannte Fall: `case 'revoked': default:` vor dem Satz *„You ended
+its authority"*, `case 'recovery_card': default:` vor *„Enter the Vault
+passphrase"*, und so weiter bei den Gründungs- und Beitrittsschritten, beim
+Leser des Einrichtungsjournals und beim Leserstatus. Ein neuer Wert in einer
+dieser Mengen hätte einer Person den Satz eines anderen Zustands gezeigt —
+beim Gerätestatus eine Handlung, die sie nie getan hat —, und der Bau hätte
+nichts gesagt. Zur Laufzeit waren die Leser dicht; die Lücke lag zwischen
+zwei Änderungen am selben Typ.
+
+Jeder der sechs heißt jetzt den letzten Fall beim Namen, und weil jeder am
+Ende einer Funktion mit Rückgabetyp steht, hält der Compiler die
+Vollständigkeit (TS2366). Dazu der CLI-Verteiler des Tresors, derselbe Fall
+wie B271 eine Tür weiter: ein neuer Befehl ohne Fall hätte ohne Wirkung mit 0
+geendet. Vier Pflanzungen — ein neuer Status, Zweck, Schritt, Befehl — brechen
+jeweils an der Satzstelle.
+
+**Das Netz, `switch:check`**, kann keine Typen lesen und fragt darum, was es
+fragen kann: jeder Standardzweig ist erschöpfend oder begründet, und ein
+`switch` ohne Standardzweig muss das Letzte in einer Funktion sein, die etwas
+zurückgibt — sonst fällt ein fehlender Fall still durch. B271 selbst,
+zurückgepflanzt, wird gefangen. Zehn offene Standardzweige sind begründet,
+jeder mit Eingaben von außen: Pfade, Dateiendungen, Ablehnungscodes.
+
+**Und die erste Messung war selbst zu eng**: ihr Muster verlangte einen
+Ausdruck ohne Klammern und fand 21. Der Prüfer zählt die Klammern und fand den
+22. — `switch (extname(filePath))`. Dieselbe Lehre wie B188, im Kleinen.
+
 **B271 — eine Familie, die gelesen und nicht verteilt wird, bekam keine
 Antwort (2026-09-25).** B259 hatte notiert, dass kein Tor die Anfragefamilien
 des Vault-Daemons kennt, und ein Tor über ihre Schreibweise vorgeschlagen.
