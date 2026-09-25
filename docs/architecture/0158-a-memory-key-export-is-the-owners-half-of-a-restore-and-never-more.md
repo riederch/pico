@@ -2,15 +2,10 @@
 
 ## Status
 
-**Draft, 2026-09-23; reviewed and its two forks decided by the owner on
-2026-09-24. Nothing is built.** KE1-KE6 below are the decided shapes: the
-review at the end measured the first draft against the tree, found two forks
-(A: seal on the device; B: readership-scoped) and eight corrections, and the
-gates were rewritten to absorb all of them. No status matrix row, no
-`.agent-context.md` entry beyond the handoff, no ADR 0128 status note on
-anything it touches until something is built. No status matrix row, no
-`.agent-context.md` entry, no ADR 0128 status note on anything it touches -
-ADR 0146 set that precedent, ADR 0156 and 0157 follow it.
+**Accepted 2026-09-24 (both forks decided by the owner), built 2026-09-25.**
+KE1-KE6 below are the decided shapes; the review further down measured the
+first draft against the tree. Building then corrected KE5 twice and removed
+one guard KE1 did not need - all three are recorded under *Built*, at the end.
 
 Written for the user to read before anything is built. It is the design step
 that ADR 0072 point 5 named and deferred, ordered second of seven blocks on
@@ -168,17 +163,22 @@ mixed-generation state in which a later restore of an old backup reads again.
 So the artifact carries a BLAKE2b digest per KEK (the shape `wrap_digest_hex`
 already uses), and import compares digests.
 
-Per domain, the report says one of four things: **restored** (no key of that
-version was present, the file was written), **already present** (same
-version, same digest), **conflicting** (same version, different digest - the
-whole domain is refused, because mixed generations are the resurrection
-path), or **refused** because the Home's log carries
-`memory.domain_shredded` for that domain after the artifact's export instant.
-Importing a shredded domain's keys would resurrect exactly the material a
-shred destroyed, which is the case ADR 0033 names when it says stale backups
-must not silently resurrect retired keys. The event log is the source of
-truth for that refusal, not the file system; nothing reads events by type
-today, and an import - rare by nature - may scan for it.
+Per domain, the report says one of five things: **restored** (no key of that
+version was present, the file was written with `wx`), **already present**
+(same version, same digest), **conflicting** (same version, different digest -
+the whole domain is refused, because mixed generations are the resurrection
+path), **refused as not readable** (ADR 0077), or **refused as shredded**.
+
+**A key is retired, and never comes back, if this Home's own log says so -
+not a date the importer signed.** Two sources, both written by this Home: the
+digests a shred destroyed (`memory.domain_shredded` carries
+`destroyedKeyDigests`), and the digests this Home released in an export
+(`memory.keys_exported` carries `keyDigests`) *before* a shred of the same
+domain, in the log's own insertion order. The second source is what covers a
+key that was exported, then lost, then outlived by a new generation that the
+shred destroyed instead. What the log does not know it cannot refuse: a shred
+after the state of a restored database backup is not in it. That is the limit
+of every backup, not of this rule.
 
 ### KE6 - Both halves are said to the person, and only both restore
 
@@ -188,10 +188,15 @@ restores your memories. Alone it restores nothing. The passphrase you chose is
 written nowhere. Any part of your memory your Home starts after today needs a
 newer file."*
 
-At import: the report from KE5, and one more sentence: *"Your memories are
-readable again only once the database backup is restored too."* - because a
-person who has just imported keys into an empty Home has restored nothing
-yet, and the honest state is to say so.
+At import: the report from KE5, one sentence per domain. The first draft
+added *"readable again only once the database backup is restored too"* for a
+person importing into an empty Home - but import is a Link operation, and a
+Link principal exists only in a Home whose database already holds the
+person's delegation. The backup is necessarily restored first, so the report
+can say *readable again* and mean it. And it says the one trap in plain words:
+**writing anything new after a loss and before importing** gives the domain a
+new `v1`, the old key conflicts, and the old memories stay unreadable. The
+window names that outcome as exactly that.
 
 The two-artifact rule of ADR 0072 point 5 is kept mechanical rather than
 advisory: neither half does anything alone, and the product says so at the
@@ -354,6 +359,43 @@ artifact, and the format label sits inside the authenticated data. The R6
 separation (`assertKeyStoreSeparation`, `backup_exclude` in
 `pico_home/config.yaml`) is intact and untouched by any variant above.
 
+## Built, 2026-09-25
+
+Protocol (`pico.mem.key-export.v1`, `pico.mem.key-import.v1`,
+`pico.vault.keyexport.v1`, two Link operations, two content-free records),
+`packages/vault` (seal, open, the KE3 check), the three signing catalogs
+(role set, builder, renderer - held together by the B174 triad test), the
+Core handlers, the companion ceremonies and the window path, walked against a
+real, encrypted Home: export, lose the key store, import, read the memory
+back; a second import says *already present*; a forged statement is refused;
+writing after a second loss makes the import *conflicting*; and after a shred
+the old file is *refused as shredded*. Five planted defects fail that walk.
+
+Three corrections came out of building, none of them a fork:
+
+- **C9 - the export instant cannot be trusted by the Home.** The draft refused
+  a domain shredded after the artifact's export instant. That instant sits in
+  the import statement, which the importer signs; whoever holds an old file
+  can claim a later date. Replaced by digests (KE5).
+- **C10 - destroyed digests alone miss a key that was lost first.** Export,
+  lose the key store, write something new (a new `v1`), shred: the shred sees
+  and records only the new key, and the old file would import. The export
+  record's digests close that, in the log's own order.
+- **C11 - KE1 needs no filter of its own.** The key store also holds
+  `pico-model-provider-credentials`. The first build filtered it out in the
+  export; measuring showed a read grant on a name that is not a host-custody
+  memory domain is refused before it exists (`domain_is_not_host_custody`),
+  so readership already keeps it out. The filter could never bite and was
+  removed; the walk proves the grant refusal instead.
+
+Also decided while building: the export passphrase has a floor of 12
+characters (`minPicoVaultKeyExportPassphraseLength`), and is typed twice,
+because a mistyped passphrase would make the file silently useless.
+
+Open: KE1's module-boundary gate (the export imports nothing from identity,
+host-key, recovery or operator modules) is not built as a check, and the walk
+has one reader, not two.
+
 ## Gates, in one place
 
 | Gate | Holds that |
@@ -362,5 +404,5 @@ separation (`assertKeyStoreSeparation`, `backup_exclude` in
 | KE2 | the construction is `pico.vault.keyfile.v1`'s, built on the device by `packages/vault`, with its own AAD-bound format label |
 | KE3 | the passphrase is never the Vault passphrase (one KDF run proves it) and is stored nowhere |
 | KE4 | export and import are signed statements over Link, Core answers, companion only; refused by name when encryption is off |
-| KE5 | import compares digests, refuses a conflicting domain whole, and never resurrects a shredded domain |
+| KE5 | import compares digests, refuses a conflicting domain whole, and never accepts a key this Home's log retired |
 | KE6 | a real Home round-trips: export, empty the key store, import, read a sealed memory back |

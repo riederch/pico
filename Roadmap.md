@@ -686,8 +686,8 @@ Begründung (ADR 0033 — nur Domänen-KEKs, zwei bewusste Artefakte), wird also
 billiger.
 
 1. **15, 8, 6, 20, 5, 19** und die Browser-Frist — sechs kleine, unabhängig
-2. **Schlüsselexport** — am 2026-09-24 auf Fable analysiert, beide Gabeln
-   entschieden (ADR 0158 KE1–KE6 umgeschrieben); der Bau ist der nächste Block
+2. **Schlüsselexport** — auf Fable analysiert (2026-09-24), **gebaut am
+   2026-09-25** (B270); damit sind alle sieben Blöcke abgearbeitet
 3. **18, 10** — Store-Integrität, liegt neben der Schlüsselarbeit
 4. **16, 11** — die zwei Grenzen nach außen
 5. **9, 12** — ein Oberflächendurchgang samt `one-voice:check`; erledigt am
@@ -1033,6 +1033,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `CustodyService`, weil der Vault-Daemon nie zurückkehrt, und `JoinService` und
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
+
+**B270 — der Schlüsselexport ist gebaut, und der Bau hat den Entwurf zweimal
+berichtigt, wo er sich auf etwas Falsches verließ (2026-09-25).** ADR 0158
+KE1–KE6, Gabel A (auf dem Gerät versiegeln) und Gabel B (Leserschaft je
+Domäne), gegangen gegen ein echtes, verschlüsseltes Home: exportieren, den
+Schlüsselspeicher verlieren, zurückbringen, die Erinnerung wieder lesen.
+Damit ist B255s Satz — *eine Person kann den Verlust nicht verhindern, nur
+erleiden* — nicht mehr wahr.
+
+**Erste Berichtigung: ein Zeitpunkt, den der Falsche unterschreibt.** Der
+Entwurf wies eine Domäne ab, die nach dem Exportzeitpunkt geschreddert wurde.
+Dieser Zeitpunkt steht im Importsatz — und den unterschreibt der
+Importierende. Wer eine alte Datei hat, behauptet einen späteren. Ersetzt
+durch Digests: ein Shred schreibt jetzt auf, welche Schlüssel er zerstört hat.
+
+**Zweite Berichtigung, an der ersten.** Beim Durchdenken des nächsten Falls
+fiel die Digest-Regel selbst: exportieren, Schlüsselspeicher verlieren, etwas
+Neues schreiben (ein neues `v1` entsteht), schreddern — der Shred sieht und
+verzeichnet nur den *neuen* Schlüssel, und die alte Datei käme zurück. Der
+Export schreibt darum auf, welche Digests er herausgab; was **vor** einem
+Shred herausging, kommt nicht wieder. Beide Quellen stehen im eigenen
+Protokoll des Homes, in seiner eigenen Einfügereihenfolge.
+
+**Und eine Wache, die nie beißen konnte.** Der Schlüsselspeicher hält auch
+`pico-model-provider-credentials`. Ich hatte ihn im Export ausgefiltert; die
+Begehung zeigte, dass ein Lesezugang auf diesen Namen gar nicht erst
+angenommen wird (`domain_is_not_host_custody`). Die Leserschaft hält die
+Grenze schon. Der Filter ist weg — dieselbe Lehre wie B269, eine Ebene tiefer:
+zwei Stellen für eine Regel, und die zweite hat keinen Gegenstand.
+
+**Eine Falle, die bleibt und jetzt gesagt wird.** Wer nach dem Verlust etwas
+Neues schreibt, *bevor* er zurückbringt, gibt der Domäne ein neues `v1`; der
+alte Schlüssel kollidiert, und die alten Erinnerungen bleiben unlesbar. Zwei
+Generationen unter einem Namen gehen nicht. Das Fenster sagt diesen Fall als
+das, was er meist ist.
+
+Offen: KE1s Modulgrenzen-Prüfung ist noch kein Tor, und die Begehung kennt
+einen Leser, nicht zwei.
 
 **B269 — beinahe ein zweiter Prüfer über ein Subjekt, das schon einen hatte
 (2026-09-24).** Aus B268 folgte die Aufgabe: die zwei Listen gegeneinander
