@@ -1034,6 +1034,44 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B279 — ein hängender Notifier hätte den Wiederherstellungsalarm beendet
+(2026-09-25).** Aus B273 die offene Frage: was schläft im Companion still ein,
+wenn ein Aufruf nie zurückkehrt? Gemessen wurde, was einen Auftrag festhalten
+kann — jede ausgehende Anfrage und jeder Start eines anderen Programms, mit dem
+Typprüfer statt über die Schreibweise.
+
+**Die Anfragen halten**: alle elf tragen ein `signal` mit Frist, auch die zwei,
+die es von außen nicht zeigen — `probeStatus` setzt seine eigene. **Die
+Programmstarts nicht alle.** `notify-send` lief ohne Frist, und es spricht über
+den Sitzungsbus mit dem Benachrichtigungsdienst; ein Bus, auf dem niemand
+antwortet, ist ein Aufruf, der nie endet. Der Alarmträger wartet jede
+Benachrichtigung ab, bevor er die nächste Prüfung plant. Ein hängender Bus
+hätte also den Alarm für eine laufende Wiederherstellung für immer beendet,
+ohne ein Wort — den Alarm, der einer Person sagt, dass ihr Konto gerade
+wiederhergestellt wird, solange sie es noch aufhalten kann. Der Adapter ist
+heute exportiert und nicht verdrahtet, die Schale benachrichtigt über
+Electron; die Lücke wartete auf den ersten Linux-Weg. Daneben `lp` für die
+Wiederherstellungskarte: CUPS, das nicht antwortet, ließ die Person vor dem
+empfindlichsten Schritt des Produkts ohne Antwort.
+
+Beide enden jetzt nach einer Frist, und ein Test lässt einen Notifier hängen:
+nach 300 ms ist es ein gezählter Fehlschlag; ohne Frist läuft der Test in die
+Zeitgrenze.
+
+**Das Netz steht in `children:check`**, der dieselben Starts schon wegen ihrer
+Umgebung liest: jeder Start trägt `timeout` oder `signal`, oder er ist
+begründet, mit einer Phrase, die seine Datei noch sagen muss. Begründet sind
+zwei: der Lieferant, ein langlebiger Prozess, bei dem jede Anfrage ihre Frist
+hat, und die Probe der Schale, deren zweite Kopie nach fünfzehn Sekunden
+beendet wird. Drei Pflanzungen beißen.
+
+**Ohne Befund daneben gemessen:** das Löschen der übrigen entpackten
+Schlüssel — der Tresor-Dienst nullt seinen Antwortschlüssel im `finally`, und
+der Companion hält seinen absichtlich als Hex im Antwortbuch, damit eine
+Antwort einen Neustart übersteht; eine genullte Byte-Kopie daneben gewönne
+nichts. Und die Speicherstrukturen an fremden Eingängen: das Relay begrenzt
+seine Töpfe mit fester Decke ohne Verdrängung, das Home seine Tickets auf 128.
+
 **B278 — jede gelesene Erinnerung ließ den Domänenschlüssel liegen
 (2026-09-25).** Nach B277 die Frage an dieselbe Kryptographie von der anderen
 Seite: wird jeder Schlüssel, den das Produkt lädt oder entpackt, nach Gebrauch
