@@ -5658,8 +5658,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 continue;
               }
               const existing = keyStore.loadKeyVersion(domainId, entry.version);
-              const existingDigest = Buffer.from(sodium.crypto_generichash(32, existing, null)).toString('hex');
-              existing.fill(0);
+              let existingDigest: string;
+              try {
+                existingDigest = Buffer.from(sodium.crypto_generichash(32, existing, null)).toString('hex');
+              } finally {
+                // Finding B278: on the throwing path too, not only after it.
+                existing.fill(0);
+              }
               if (existingDigest !== entry.digestHex) {
                 conflicting = true;
               }

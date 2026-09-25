@@ -84,26 +84,37 @@ export class SupplierCredentialCrypto {
       supplierIdentifier: input.supplierIdentifier,
     });
 
+    // Finding B278: the domain key, the data key and the secret's bytes leave
+    // the heap as zeros on every path, not whenever the collector gets to them.
     const dek = randomBytes(DEK_BYTES);
     const nonce = this.randomNonce();
-    const ciphertext = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      new TextEncoder().encode(input.secret),
-      credentialAd,
-      null,
-      nonce,
-      dek,
-    );
-
     const kekVersion = this.currentOrNewKekVersion(input.privacyDomain, custodyClass);
+    // Finding B278: zeroed on every path, as when sealing.
     const kek = this.keyStore.loadKeyVersion(input.privacyDomain, kekVersion, { custodyClass });
     const wrapNonce = this.randomNonce();
-    const wrappedDek = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      dek,
-      dekWrapAd,
-      null,
-      wrapNonce,
-      kek,
-    );
+    const secretBytes = new TextEncoder().encode(input.secret);
+    let ciphertext: Uint8Array;
+    let wrappedDek: Uint8Array;
+    try {
+      ciphertext = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        secretBytes,
+        credentialAd,
+        null,
+        nonce,
+        dek,
+      );
+      wrappedDek = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        dek,
+        dekWrapAd,
+        null,
+        wrapNonce,
+        kek,
+      );
+    } finally {
+      secretBytes.fill(0);
+      dek.fill(0);
+      kek.fill(0);
+    }
 
     return Object.freeze({
       suite: SUPPLIER_CREDENTIAL_SUITE,
@@ -146,29 +157,37 @@ export class SupplierCredentialCrypto {
       supplierIdentifier: input.supplierIdentifier,
     });
     const kek = this.keyStore.loadKeyVersion(input.privacyDomain, seal.kekVersion, { custodyClass });
-    const dek = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-      null,
-      Buffer.from(seal.wrappedDek, 'base64'),
-      dekWrapAd,
-      Buffer.from(seal.wrapNonce, 'base64'),
-      kek,
-    );
-
     const credentialAd = buildPicoSupplierCredentialAd({
       suite: seal.suite,
       supplierIdentifier: input.supplierIdentifier,
       privacyDomain: input.privacyDomain,
       scope: input.scope,
     });
-    const secret = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-      null,
-      Buffer.from(seal.ciphertext, 'base64'),
-      credentialAd,
-      Buffer.from(seal.nonce, 'base64'),
-      dek,
-    );
-
-    return { status: 'ok', secret: new TextDecoder().decode(secret) };
+    let dek: Uint8Array | undefined;
+    let secret: Uint8Array | undefined;
+    try {
+      dek = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        Buffer.from(seal.wrappedDek, 'base64'),
+        dekWrapAd,
+        Buffer.from(seal.wrapNonce, 'base64'),
+        kek,
+      );
+      secret = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        Buffer.from(seal.ciphertext, 'base64'),
+        credentialAd,
+        Buffer.from(seal.nonce, 'base64'),
+        dek,
+      );
+      // The string is what the caller needs, and a string cannot be zeroed;
+      // the bytes it was decoded from can.
+      return { status: 'ok', secret: new TextDecoder().decode(secret) };
+    } finally {
+      secret?.fill(0);
+      dek?.fill(0);
+      kek.fill(0);
+    }
   }
 
   private currentOrNewKekVersion(

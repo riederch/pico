@@ -115,26 +115,40 @@ export class MemoryContentCrypto {
       memoryItemId: input.memoryItemId,
     });
 
+    /**
+     * Finding B278. The domain key and this item's data key leave the heap
+     * as zeros, on every path. They used to be left for the collector, which
+     * frees memory without overwriting it - one read of one memory item kept a
+     * copy of the key to the whole domain until something else happened to
+     * land on the same bytes. `shredDomain` below zeroed its copy; the two
+     * paths every item takes did not.
+     */
     const dek = randomBytes(DEK_BYTES);
     const contentNonce = this.randomNonce();
-    const ciphertext = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      new TextEncoder().encode(input.plaintext),
-      contentAd,
-      null,
-      contentNonce,
-      dek,
-    );
-
     const kekVersion = this.currentOrNewKekVersion(domainId, custodyClass);
     const kek = this.keyStore.loadKeyVersion(domainId, kekVersion, { custodyClass });
     const wrapNonce = this.randomNonce();
-    const wrappedDek = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      dek,
-      dekWrapAd,
-      null,
-      wrapNonce,
-      kek,
-    );
+    let ciphertext: Uint8Array;
+    let wrappedDek: Uint8Array;
+    try {
+      ciphertext = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        new TextEncoder().encode(input.plaintext),
+        contentAd,
+        null,
+        contentNonce,
+        dek,
+      );
+      wrappedDek = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        dek,
+        dekWrapAd,
+        null,
+        wrapNonce,
+        kek,
+      );
+    } finally {
+      dek.fill(0);
+      kek.fill(0);
+    }
 
     const blob: StoredContentBlob = {
       v: 1,
@@ -174,29 +188,36 @@ export class MemoryContentCrypto {
       domainId,
       memoryItemId: input.memoryItemId,
     });
+    // Finding B278: both keys zeroed on every path, as in `encryptForWrite`.
     const kek = this.keyStore.loadKeyVersion(domainId, envelope.kekVersion, { custodyClass });
-    const dek = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-      null,
-      Buffer.from(envelope.wrappedDek, 'base64'),
-      dekWrapAd,
-      Buffer.from(envelope.wrapNonce, 'base64'),
-      kek,
-    );
-
-    const blob = JSON.parse(input.storedContent) as StoredContentBlob;
-    const contentAd = buildContentAd({
-      suite: blob.suite,
-      memoryItemId: input.memoryItemId,
-      privacyDomain: input.privacyDomain,
-      contentType: input.contentType,
-    });
-    const plaintext = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-      null,
-      Buffer.from(blob.c, 'base64'),
-      contentAd,
-      Buffer.from(blob.n, 'base64'),
-      dek,
-    );
+    let dek: Uint8Array | undefined;
+    let plaintext: Uint8Array;
+    try {
+      dek = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        Buffer.from(envelope.wrappedDek, 'base64'),
+        dekWrapAd,
+        Buffer.from(envelope.wrapNonce, 'base64'),
+        kek,
+      );
+      const blob = JSON.parse(input.storedContent) as StoredContentBlob;
+      const contentAd = buildContentAd({
+        suite: blob.suite,
+        memoryItemId: input.memoryItemId,
+        privacyDomain: input.privacyDomain,
+        contentType: input.contentType,
+      });
+      plaintext = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        Buffer.from(blob.c, 'base64'),
+        contentAd,
+        Buffer.from(blob.n, 'base64'),
+        dek,
+      );
+    } finally {
+      dek?.fill(0);
+      kek.fill(0);
+    }
 
     return { status: 'ok', plaintext: new TextDecoder().decode(plaintext) };
   }
