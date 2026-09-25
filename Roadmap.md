@@ -1034,6 +1034,37 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B280 — die Freigabe war eine Form, kein Beweis (2026-09-25).** Die erste
+Produktinvariante in AGENTS.md: *Assistant macht Vorschläge; Pico Rules/Policy
+entscheidet; Action Runner führt nur freigegebene Aktionen aus.* Gemessen
+wurde, was den Runner daran hält.
+
+Zwei Wege führen einen Effekt aus, `executePicoAction` und das Auflösen einer
+Freigabe, und beide prüften `decided.decision !== 'allow'`. Eine Entscheidung
+ist aber ein schlichtes Interface: jede Zeile in diesem Prozess konnte
+`{ decision: 'allow', request, … }` bauen, und der Runner hätte sie
+ausgeführt. **Gemessen hat es keine** — die Treffer für `decision: 'allow'` in
+den Tests sind gespeicherte Regelentscheidungen, keine Laufzeitobjekte. Die
+Invariante hielt also, weil niemand diese Zeile geschrieben hatte, nicht weil
+der Runner sie verweigert hätte.
+
+Jetzt merkt sich `action-path.ts` in einer `WeakSet`, welche Entscheidungen
+`decidePicoAction` ausgegeben hat, und beide Wege führen nur diese aus. Ein
+Literal, eine Kopie per Spread oder ein Umweg über JSON ist ein anderes Objekt
+und wird abgewiesen, bevor etwas läuft oder aufgezeichnet wird. Die
+Entscheidung war schon eingefroren, eine echte lässt sich also auch nicht
+umschreiben. Zwei Tests fälschen: einer auf dem direkten Weg, einer auf dem
+Freigabeweg. Drei Pflanzungen beißen, und ein leeres Register lässt vierzehn
+echte Tests fallen — die Ausgabe selbst ist also mitgehalten.
+
+**Ohne Befund daneben gemessen:** die Anfragen an den Tresor-Dienst. Der
+Client hat keine eigene Frist, braucht sie aber nicht — der Dienst beantwortet
+jede Familie im selben Durchlauf, und die drei, die warten, enden an seinen
+eigenen Zeitgebern: `approvalWait`, das Freigabefenster mit
+`approval_timeout`, und `approvalWatch` antwortet sofort. Und die Vergleiche
+von Geheimnissen an fremden Eingängen: alle in konstanter Zeit, im Relay für
+Konto und Claim, im Home für Sitzungen.
+
 **B279 — ein hängender Notifier hätte den Wiederherstellungsalarm beendet
 (2026-09-25).** Aus B273 die offene Frage: was schläft im Companion still ein,
 wenn ein Aufruf nie zurückkehrt? Gemessen wurde, was einen Auftrag festhalten
