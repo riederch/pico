@@ -1,15 +1,6 @@
-import {
-  chmodSync,
-  closeSync,
-  existsSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { writePicoCompanionFileAtomically } from './atomic-file.js';
 import {
   PicoRelayOperatorClient,
   type PicoRelayIssuedAccount,
@@ -295,21 +286,12 @@ function readFile(path: string): PicoCompanionRelayOperatorsFile {
   };
 }
 
+/**
+ * Finding B276. This was a line-for-line copy of `writePicoCompanionFileAtomically`
+ * - temporary file, mode, fsync, rename, directory fsync - written out a second
+ * and third time in the same package. The copies were right; B121 is what a
+ * copy beside the one that is right turns into.
+ */
 function writeFile(path: string, file: PicoCompanionRelayOperatorsFile): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const temporaryPath = `${path}.tmp`;
-  writeFileSync(temporaryPath, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 });
-  chmodSync(temporaryPath, 0o600);
-  fsyncPath(temporaryPath, 'r+');
-  renameSync(temporaryPath, path);
-  fsyncPath(dirname(path), 'r');
-}
-
-function fsyncPath(path: string, flags: 'r' | 'r+'): void {
-  const handle = openSync(path, flags);
-  try {
-    fsyncSync(handle);
-  } finally {
-    closeSync(handle);
-  }
+  writePicoCompanionFileAtomically(path, `${JSON.stringify(file, null, 2)}\n`);
 }

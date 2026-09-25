@@ -1,16 +1,7 @@
 import { isAsciiToken, isHexOfBytes } from '@pico/protocol/canonical-bytes';
-import {
-  chmodSync,
-  closeSync,
-  existsSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { writePicoCompanionFileAtomically } from './atomic-file.js';
 import { isPicoVaultPassphrase } from '@pico/vault';
 // The narrow subpath, not the barrel: ADR 0131 A1 measured the client's
 // closure and found the barrel dragging the CLI, the daemon *server* and
@@ -157,15 +148,8 @@ export async function writePicoCompanionPlatformUnlock(input: {
     encryptedPassphraseBase64: Buffer.from(encrypted).toString('base64'),
   };
   const parsed = parsePicoCompanionPlatformUnlock(record);
-  mkdirSync(dirname(input.path), { recursive: true, mode: 0o700 });
-  const temporaryPath = `${input.path}.tmp`;
-  writeFileSync(temporaryPath, `${JSON.stringify(parsed, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  chmodSync(temporaryPath, 0o600);
-  fsyncPath(temporaryPath, 'r+');
-  renameSync(temporaryPath, input.path);
-  fsyncPath(dirname(input.path), 'r');
+  // Finding B276: the shared writer, not a fourth copy of it.
+  writePicoCompanionFileAtomically(input.path, `${JSON.stringify(parsed, null, 2)}\n`);
 }
 
 export function hasPicoCompanionPlatformUnlock(path: string): boolean {
@@ -608,14 +592,5 @@ function assertFingerprint(value: unknown): void {
 function assertPassphrase(value: unknown): asserts value is string {
   if (!isPicoVaultPassphrase(value)) {
     throw new Error('invalid_platform_unlock_passphrase');
-  }
-}
-
-function fsyncPath(path: string, flags: 'r' | 'r+'): void {
-  const handle = openSync(path, flags);
-  try {
-    fsyncSync(handle);
-  } finally {
-    closeSync(handle);
   }
 }

@@ -54,6 +54,13 @@ import { fileURLToPath } from 'node:url';
  * `unflushed` mit dem Grund. Das ist grob - ein Aufruf irgendwo in der Datei -
  * und mit Absicht: die Tests neben jedem Schreiber halten die Reihenfolge,
  * dieser Pruefer haelt, dass kein neuer Schreiber ohne die Frage entsteht.
+ *
+ * **Und wer veroeffentlicht, ist ein bekannter Schreiber** (Befund B276).
+ * Zwischendatei, Modus, fsync, umbenennen, Verzeichnis-fsync stand im
+ * Companion dreimal zeilengleich - richtig, aber B121 ist genau das, was aus
+ * einer Abschrift neben der richtigen wird. Wer `renameSync` oder `linkSync`
+ * ruft, steht darum in `publishers`, mit dem Grund, warum er nicht den
+ * gemeinsamen Schreiber seines Pakets nimmt oder selbst dieser ist.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const ts = createRequire(import.meta.url)('typescript');
@@ -65,6 +72,18 @@ const fileMode = '0o600';
 const unflushed = new Map([
   ['apps/vault-daemon/src/cli.ts', 'Die Wiederherstellungskarte als PDF, ein Ausdruck fuer die Person an einem Pfad, den sie selbst nennt. Nichts im Produkt liest ihn wieder, und eine abgeschnittene Datei sieht sie beim Drucken.'],
 ]);
+
+/** Quelldateien, die per Umbenennen oder Link veroeffentlichen, und warum sie das selbst tun. */
+const publishers = new Map([
+  ['apps/companion/src/atomic-file.ts', 'Der gemeinsame Schreiber des Companion (B121).'],
+  ['apps/core/src/durable-file.ts', 'Der gemeinsame Schreiber des Homes fuer Schluesseldateien: link, weil er nie ersetzt (B275).'],
+  ['packages/vault/src/index.ts', 'Dasselbe fuer die Schluesseldatei des Tresors; das Paket darf das Home nicht importieren (B275).'],
+  ['apps/core/src/recovery-anchor.ts', 'Der Anker schreibt die naechste Generation vor dem Zaehler, und diese Reihenfolge gehoert zum Schreiben (ADR 0027 IM1).'],
+  ['packages/sync/src/index.ts', 'Ueber einen Deskriptor mit O_EXCL und O_NOFOLLOW; das Paket laeuft in Home und Companion und kann keinen der beiden importieren.'],
+  ['apps/core/src/home-setup.ts', 'Die Befoerderung des Rotationspaars: ein verlorenes Umbenennen setzt `completeInterruptedRotation` beim Start gegen den bewiesenen Kettenkopf fort (ADR 0115 U3).'],
+  ['apps/core/src/sqlite-backup.ts', 'Das Zurueckspielen einer Sicherung, ohne Produktaufrufer; `capability:check` fuehrt es als unerreichbar.'],
+]);
+const publishing = new Set();
 
 const errors = [];
 const narrowed = [];
@@ -157,6 +176,10 @@ for (const path of files) {
           : undefined;
       const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
       const where = `${path}:${line}`;
+
+      if (callee === 'renameSync' || callee === 'linkSync') {
+        publishing.add(path);
+      }
 
       if (callee === 'fsyncSync' || callee === 'fdatasyncSync') {
         flushers.add(path);
@@ -255,6 +278,20 @@ for (const [path] of unflushed) {
     errors.push(`${path}: begruendet als Schreiber ohne fsync, synchronisiert aber - das Argument streichen.`);
   }
 }
+for (const path of [...publishing].sort()) {
+  if (!publishers.has(path)) {
+    errors.push(
+      `${path}: veroeffentlicht per Umbenennen oder Link selbst. Im Companion ist das `
+      + '`writePicoCompanionFileAtomically`, im Home `createPicoHomeFileDurably` - eine '
+      + 'weitere Abschrift ist, woraus B121 wurde (B276). Sonst hier begruenden.',
+    );
+  }
+}
+for (const [path] of publishers) {
+  if (!publishing.has(path)) {
+    errors.push(`${path}: als Veroeffentlicher begruendet, veroeffentlicht aber nichts mehr - das Argument streichen.`);
+  }
+}
 if (creators.size === 0) {
   errors.push('Keine einzige Quelldatei legt eine Datei an - der Leser misst nichts mehr (B166).');
 }
@@ -281,5 +318,5 @@ console.log(
   + `its own openSync already narrowed, and ${readOnly.length} openSync calls whose flags `
   + 'cannot create anything). '
   + `${creators.size} source files create files: ${creators.size - unflushed.size} flush them, `
-  + `${unflushed.size} argued.`,
+  + `${unflushed.size} argued; ${publishing.size} publish by rename or link, each a known writer.`,
 );
