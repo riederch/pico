@@ -1034,10 +1034,15 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
         ...resolveFoundationPaths(invocation.flags, process.env),
       });
       process.stdout.write(`${JSON.stringify({ vaultHomePath, socketPath: daemon.socketPath })}\n`);
-      await new Promise<void>((resolvePromise) => {
+      await new Promise<void>((resolvePromise, rejectPromise) => {
         for (const signal of ['SIGINT', 'SIGTERM'] as const) {
           process.once(signal, () => {
-            void daemon.close().then(resolvePromise);
+            // Finding B273. A close that fails - the audit line it writes last
+            // on a full disk, the socket file it removes - is the command's
+            // failure and goes where the command's failures go. Handed to
+            // `void` it became an unhandled rejection: a raw stack instead of
+            // the error line, and a promise here that never settled.
+            daemon.close().then(resolvePromise, rejectPromise);
           });
         }
       });

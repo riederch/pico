@@ -42,6 +42,19 @@ export interface PicoTimeBoundSchedulerOptions {
    * being unreachable is not the same as being forgotten.
    */
   announce: (entry: PicoTimeBoundEntry) => void | Promise<void>;
+  /**
+   * Told when a tick the timer started could not finish - the store would not
+   * answer or would not take the mark.
+   *
+   * **Required, and the tick is retried after it** (finding B273). Before,
+   * the timer called `void tick()`: a store that threw turned into an
+   * unhandled rejection, which ends a Node process, so one appointment that
+   * could not be marked took the whole Home down with it. And had the process
+   * survived, nothing re-armed the timer - every later appointment would have
+   * stayed unannounced without a word, the one outcome this family exists to
+   * prevent.
+   */
+  reportFailure: (error: unknown) => void;
   now?: () => Date;
   setTimer?: (handler: () => void, delayMs: number) => NodeJS.Timeout;
   clearTimer?: (timer: NodeJS.Timeout) => void;
@@ -60,6 +73,14 @@ export interface PicoTimeBoundScheduler {
  * decides anything is always against the clock rather than against the timer.
  */
 export const maxPicoTimeBoundSleepMs = 60 * 60 * 1_000;
+
+/**
+ * How long a tick that failed waits before it tries again. Short, because a
+ * reminder that comes late is the failure this family exists to prevent; not
+ * zero, because a store that cannot answer now will not answer in a
+ * microtask either, and a retry loop would bury the log it reports into.
+ */
+export const picoTimeBoundRetryMs = 60 * 1_000;
 
 export function startPicoTimeBoundScheduler(
   options: PicoTimeBoundSchedulerOptions,
@@ -92,8 +113,19 @@ export function startPicoTimeBoundScheduler(
       maxPicoTimeBoundSleepMs,
       Math.max(0, Date.parse(nextDueAt) - now().getTime()),
     );
+    armAfter(delayMs);
+  };
+
+  const armAfter = (delayMs: number): void => {
+    disarm();
+    if (stopped) {
+      return;
+    }
     timer = setTimer(() => {
-      void tick();
+      tick().catch((error: unknown) => {
+        options.reportFailure(error);
+        armAfter(picoTimeBoundRetryMs);
+      });
     }, delayMs);
     timer.unref?.();
   };
@@ -119,6 +151,12 @@ export function startPicoTimeBoundScheduler(
         // this family exists to prevent.
         continue;
       }
+      if (stopped) {
+        // Stopped while this entry was being announced: the store may be
+        // closing. The mark is left for the next start, which will announce
+        // it again - twice is the loud failure, never the quiet one.
+        return announced;
+      }
       if (options.store.markPicoTimeBoundEntryAnnounced({
         memoryItemId: entry.memoryItemId,
         announcedAt: now().toISOString(),
@@ -127,6 +165,9 @@ export function startPicoTimeBoundScheduler(
       }
     }
 
+    if (stopped) {
+      return announced;
+    }
     arm(options.store.picoUnannouncedTimeBoundEntries());
     return announced;
   };

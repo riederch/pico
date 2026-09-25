@@ -1949,6 +1949,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   let calendarConsentReported = false;
 
   const timeBoundScheduler = startPicoTimeBoundScheduler({
+    reportFailure: (error: unknown) => {
+      app.log.warn(
+        { reason: error instanceof Error ? error.message : 'failed' },
+        'Appointments due now could not be announced; trying again shortly.',
+      );
+    },
     store: {
       picoUnannouncedTimeBoundEntries: (limit) => store.picoUnannouncedTimeBoundEntries(limit),
       markPicoTimeBoundEntryAnnounced: (input) => store.markPicoTimeBoundEntryAnnounced(input),

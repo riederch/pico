@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
-import { startPicoTimeBoundScheduler } from './time-bound-scheduler.js';
+import { picoTimeBoundRetryMs, startPicoTimeBoundScheduler } from './time-bound-scheduler.js';
 
 const tempDirs: string[] = [];
 
@@ -224,6 +224,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
       recordEntry(store, 'entry-1', '2020-01-01T00:00:00.000Z');
       const announced: string[] = [];
       const scheduler = startPicoTimeBoundScheduler({
+        reportFailure: (error: unknown) => { throw error; },
         store,
         announce: (entry: { memoryItemId: string }) => {
           announced.push(entry.memoryItemId);
@@ -249,6 +250,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
       recordEntry(store, 'entry-old', '2019-05-05T08:00:00.000Z');
       const announced: string[] = [];
       const scheduler = startPicoTimeBoundScheduler({
+        reportFailure: (error: unknown) => { throw error; },
         store,
         announce: (entry: { memoryItemId: string }) => {
           announced.push(entry.memoryItemId);
@@ -271,6 +273,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
       recordEntry(store, 'entry-future', '2099-01-01T00:00:00.000Z');
       const announced: string[] = [];
       const scheduler = startPicoTimeBoundScheduler({
+        reportFailure: (error: unknown) => { throw error; },
         store,
         announce: (entry: { memoryItemId: string }) => {
           announced.push(entry.memoryItemId);
@@ -296,6 +299,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
       const announced: string[] = [];
       let failFirst = true;
       const scheduler = startPicoTimeBoundScheduler({
+        reportFailure: (error: unknown) => { throw error; },
         store,
         announce: (entry: { memoryItemId: string }) => {
           if (entry.memoryItemId === 'entry-a' && failFirst) {
@@ -332,6 +336,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
     try {
       recordEntry(store, 'entry-1', '2020-01-01T00:00:00.000Z');
       const scheduler = startPicoTimeBoundScheduler({
+        reportFailure: (error: unknown) => { throw error; },
         store,
         announce: () => {},
         setTimer: () => ({ unref: () => {} }) as never,
@@ -367,6 +372,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
       const setTimer = vi.fn((_handler: () => void, _delayMs: number) => ({ unref: () => {} }) as never);
       recordEntry(store, 'entry-future', '2099-01-01T00:00:00.000Z');
       const scheduler = startPicoTimeBoundScheduler({
+        reportFailure: (error: unknown) => { throw error; },
         store,
         announce: () => {},
         setTimer,
@@ -388,6 +394,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
     try {
       const setTimer = vi.fn(() => ({ unref: () => {} }) as never);
       const scheduler = startPicoTimeBoundScheduler({
+        reportFailure: (error: unknown) => { throw error; },
         store,
         announce: () => {},
         setTimer,
@@ -399,6 +406,84 @@ describe('ADR 0118 O1 time-bound entries', () => {
     } finally {
       store.close();
     }
+  });
+
+  /**
+   * Finding B273. The timer is the only caller the Home has, and it discarded
+   * the tick's promise: a store that would not take the mark became an
+   * unhandled rejection, which ends a Node process, and nothing armed the
+   * timer again. Driven through the timer here, because a test that awaits
+   * `tick()` itself is the caller that could never see it.
+   */
+  it('reports a tick the store failed and tries again, rather than ending the Home', async () => {
+    const handlers: Array<{ handler: () => void; delayMs: number }> = [];
+    const failures: unknown[] = [];
+    let reads = 0;
+    const entry = {
+      memoryItemId: 'entry-1',
+      contentType: 'application/vnd.pico.reminder',
+      dueAt: '2020-01-01T00:00:00.000Z',
+    };
+    startPicoTimeBoundScheduler({
+      reportFailure: (error: unknown) => { failures.push(error); },
+      store: {
+        picoUnannouncedTimeBoundEntries: () => {
+          reads += 1;
+          return [entry] as never;
+        },
+        markPicoTimeBoundEntryAnnounced: () => {
+          throw new Error('SQLITE_FULL: database or disk is full');
+        },
+      },
+      announce: () => {},
+      setTimer: (handler: () => void, delayMs: number) => {
+        handlers.push({ handler, delayMs });
+        return { unref: () => {} } as never;
+      },
+      clearTimer: () => {},
+    });
+
+    expect(handlers).toHaveLength(1);
+    handlers[0]?.handler();
+    await vi.waitFor(() => { expect(failures).toHaveLength(1); });
+
+    expect((failures[0] as Error).message).toContain('SQLITE_FULL');
+    expect(handlers).toHaveLength(2);
+    expect(handlers[1]?.delayMs).toBe(picoTimeBoundRetryMs);
+    expect(reads).toBe(2);
+  });
+
+  it('leaves the store alone once stopped mid-announcement', async () => {
+    let marks = 0;
+    let reads = 0;
+    let stop = (): void => {};
+    const scheduler = startPicoTimeBoundScheduler({
+      reportFailure: (error: unknown) => { throw error; },
+      store: {
+        picoUnannouncedTimeBoundEntries: () => {
+          reads += 1;
+          return [{
+            memoryItemId: 'entry-1',
+            contentType: 'application/vnd.pico.reminder',
+            dueAt: '2020-01-01T00:00:00.000Z',
+          }] as never;
+        },
+        markPicoTimeBoundEntryAnnounced: () => {
+          marks += 1;
+          return true;
+        },
+      },
+      // The Home closing its store while an announcement is in flight: the
+      // onClose hook stops the scheduler and closes the store next.
+      announce: () => { stop(); },
+      setTimer: () => ({ unref: () => {} }) as never,
+      clearTimer: () => {},
+    });
+    stop = scheduler.stop;
+
+    expect(await scheduler.tick()).toBe(0);
+    expect(marks).toBe(0);
+    expect(reads).toBe(2);
   });
 });
 
