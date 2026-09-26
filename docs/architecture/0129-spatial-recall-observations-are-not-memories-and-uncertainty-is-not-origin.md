@@ -2,6 +2,30 @@
 
 ## Status
 
+Status note, 2026-09-26: **Die Erfassung ist entschieden, und zwar ohne
+fremden Klassifikator.** Dem Nutzer mit dem Stand von heute vorgelegt:
+Standorte kommen seit dem 2026-08-26 an, der Puffer liegt seit dem 2026-09-03
+auf dem Geraet, und der Ableitung fehlt genau ein Signal - der Wechsel von
+"im Auto" zu "zu Fuss". Vier Wege standen zur Wahl: eine eigene Erkennung
+aus der Geschwindigkeit aufeinanderfolgender Standorte, die Google-Play-Dienste,
+das Abreissen der Bluetooth-Verbindung zum Auto, oder weiter vertagen.
+
+**Entschieden: die eigene Erkennung, auf dem Geraet.** Sie braucht keine neue
+Berechtigung - die Standortberechtigung ist schon deklariert -, keine
+Abhaengigkeit von Google, und sie bleibt modellfrei und netzfrei wie SR1 es
+fuer die Ableitung verlangt. Die Play-Dienste wurden verworfen, weil Pico dann
+auf jedem Android-Geraet Google voraussetzen und ein Signal ueber die Bewegung
+einer Person in fremden Code legen wuerde. Bluetooth bleibt als spaetere
+Verfeinerung offen, falls die Messung zeigt, dass die Geschwindigkeit allein
+zu oft danebenliegt.
+
+**Was damit nicht behauptet ist:** dass sie trifft. Die Genauigkeit ist
+ungemessen; der erste Schritt ist die Messung auf echten Fahrten mit dem A34,
+und die bekannte Grenze steht schon fest - in einer Tiefgarage faellt GPS aus,
+dann ist die Einfahrt der letzte gute Punkt. Gebaut wird zuerst in der
+Android-Sonde; einen installierbaren Android-Produktclient gibt es noch nicht.
+Die Vertagung vom 2026-08-22 unten ist damit abgeloest.
+
 Status note, 2026-09-03: **SR2s Puffer liegt jetzt auf dem Geraet.** ADR 0126
 P3 wurde vom Nutzer aufgemacht und gebaut: das Telefon verdichtet mit
 `picoDeriveParkingCandidate`, und nur die Ableitung ueberquert die Grenze. Der
