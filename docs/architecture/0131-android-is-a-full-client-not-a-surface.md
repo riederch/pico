@@ -2,6 +2,34 @@
 
 ## Status
 
+Status note, 2026-09-27: **Die Sonde wird die ausgelieferte App, und drei
+Fragen, die dieser ADR nie gestellt hat, sind beantwortet.** Rolle, Laufzeit,
+Prozessgrenze und die verworfenen Wege stehen seit dem 2026-08-09 fest und
+wurden nicht neu vorgelegt. Vorgelegt wurde, was zwischen dem Laborartefakt
+unter `tools/android-runtime-probe` und einer App liegt, die eine Person ohne
+Terminal installiert: Debug-Signatur mit Passwort im Skript, Installation per
+`adb`, ein Skript, das die Beitrittscodes traegt, und kein Update-Weg.
+
+- **Wann: jetzt, als naechster Milestone.** Beitritt, Termine und Erfassung
+  laufen bereits in der Sonde; die echte Fahrt fuer ADR 0129 macht danach die
+  App, die eine Person tatsaechlich installiert.
+- **Verteilung: eine APK am GitHub-Release, neben dem `.deb`.** Derselbe Kanal
+  wie fuer Linux, ohne Store und ohne Google. F-Droid wurde nicht gewaehlt,
+  weil es selbst baut und reproduzierbare Builds verlangt, was mit einem
+  eingebetteten Node und nativem Code aufwendig ist; Google Play nicht, weil es
+  die Auslieferung an Google bindet - dieselbe Linie wie das Nein zu den
+  Play-Diensten in ADR 0129. Auf dem Telefon heisst das: einmal "Apps aus
+  unbekannten Quellen" erlauben, Updates zunaechst von Hand.
+- **Signierschluessel: in der CI, als verschluesseltes Secret.** Damit gilt
+  fuer die APK dieselbe Kette wie fuer das `.deb`: was im Release liegt, hat
+  die CI gebaut und nachgewiesen. Der benannte Preis: wer das GitHub-Konto
+  uebernimmt, koennte ein Update signieren. Und ein Backup des Schluessels
+  beim Nutzer ist Pflicht - ist er verloren, laesst sich keine installierte
+  App mehr aktualisieren.
+
+Erzeugen des Schluessels und Eintragen des Secrets bleiben beim Nutzer: beides
+ist GitHub-Sync und ein Geheimnis, das kein Agent sehen soll.
+
 Status note, 2026-08-19 (later): **the probe ran under nodejs-mobile
 itself, in the decided two-process shape, and A1 is implemented.** A
 hand-assembled APK (`tools/android-runtime-probe/apk/` - build-tools and NDK

@@ -579,6 +579,11 @@ das Telefon trägt den Kern und ist am 2026-08-21 vollständig in ein echtes
 Home eingezogen — drei Codes, zwei Geräte, die Sätze aus dem Kern —, aber die
 Fläche ist ein Laborartefakt und keine ausgelieferte App.
 
+**Entschieden am 2026-09-27 (ADR 0131, Status note):** die Sonde wird die
+ausgelieferte App, jetzt, als nächster Milestone; verteilt als APK am
+GitHub-Release neben dem `.deb`; signiert in der CI mit dem Schlüssel als
+verschlüsseltem Secret, gesichert beim Nutzer.
+
 ## Siebzehn Entscheidungen, 2026-09-22
 
 Alle offenen Punkte aus `.agent-context.md` sind an diesem Tag vom Nutzer
