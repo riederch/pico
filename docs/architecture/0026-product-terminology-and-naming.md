@@ -4,6 +4,30 @@
 
 Accepted as a product and code naming direction.
 
+Status note, 2026-09-27: **ein Geraet heisst wie sein Hersteller, und der
+Hersteller heisst wie dieses Projekt.** Der Nutzer hat eine PICO 4 Ultra
+(Hersteller PICO, VR-Headset); ein VR-Client ist geplant, dieses Headset soll
+das erste unterstuetzte sein. Vom Nutzer am 2026-09-27 entschieden:
+
+- **Das Headset heisst P4U.** Beim ersten Vorkommen in einem Dokument
+  "PICO 4 Ultra (P4U)", danach nur "P4U"; im Code `p4u`. Das Wort "Pico"
+  allein bleibt diesem Projekt vorbehalten. Gross-/Kleinschreibung ("PICO"
+  gegen "Pico") ist ausdruecklich **keine** Unterscheidung - sie ueberlebt
+  weder Commit-Messages noch Chats.
+- **Der Client heisst nach seiner Rolle: VR-Client**, nicht nach dem ersten
+  Geraet. So heissen die Clients hier schon (Android-Client in ADR 0131,
+  mobile und desktop clients in ADR 0009); ein zweites Headset braucht dann
+  keine Umbenennung.
+
+Verworfen: **picoVr** - es liest sich als "Picos VR-Anteil", also als dieser
+VR-Client, und baut damit genau die Verwechslung ein, die der Name verhindern
+sollte.
+
+Offen und nicht Teil dieser Notiz: ob der VR-Client ein Pico Client oder eine
+Pico Surface ist, und ob er auf dem Android-Client aus ADR 0131 aufsetzt
+(OpenXR nativ, WebXR im Browser). Das entscheidet ein eigener ADR, wenn der
+VR-Client konkret wird. Vorher gibt es keinen VR-Code und keine Runtime-Aussage.
+
 Status note, 2026-08-21: **the vocabulary named a topology, and the product
 grew a third name for one of its roles.** The table below maps ADR 0015's
 `Full Client` to **Pico Vault**, and that was written before anything shipped.
