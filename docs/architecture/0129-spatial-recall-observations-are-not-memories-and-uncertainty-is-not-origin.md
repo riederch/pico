@@ -2,29 +2,32 @@
 
 ## Status
 
-Status note, 2026-09-26: **Die Erfassung ist entschieden, und zwar ohne
-fremden Klassifikator.** Dem Nutzer mit dem Stand von heute vorgelegt:
-Standorte kommen seit dem 2026-08-26 an, der Puffer liegt seit dem 2026-09-03
-auf dem Geraet, und der Ableitung fehlt genau ein Signal - der Wechsel von
-"im Auto" zu "zu Fuss". Vier Wege standen zur Wahl: eine eigene Erkennung
-aus der Geschwindigkeit aufeinanderfolgender Standorte, die Google-Play-Dienste,
-das Abreissen der Bluetooth-Verbindung zum Auto, oder weiter vertagen.
+Status note, 2026-09-26, am 2026-09-27 berichtigt: **Die Erfassung war
+schon entschieden, und diese Notiz hat es zuerst nicht gesehen.** Am 2026-09-26
+wurde dem Nutzer die Frage "woher kommt der Wechsel von 'im Auto' zu 'zu
+Fuss'" noch einmal vorgelegt - gestuetzt auf die Notiz vom 2026-09-03 darunter,
+die das Signal als fehlend fuehrt. Der Code sagte etwas anderes: der Nutzer
+hatte am **2026-09-04** genau diesen Weg gewaehlt, und er ist gebaut -
+`speed-mobility.ts` (Commit 433dc5ee), die Verdichtung auf dem Geraet ruft ihn
+auf (43ce4ccd), und Befund B61 fand am selben Tag auf dem A34 eine Luecke, die
+seither eine Hoechstdauer hat. Die Notiz vom 2026-09-03 war nie nachgefuehrt
+worden; die Vorlage haette den Code vor der Notiz lesen muessen.
 
-**Entschieden: die eigene Erkennung, auf dem Geraet.** Sie braucht keine neue
-Berechtigung - die Standortberechtigung ist schon deklariert -, keine
-Abhaengigkeit von Google, und sie bleibt modellfrei und netzfrei wie SR1 es
-fuer die Ableitung verlangt. Die Play-Dienste wurden verworfen, weil Pico dann
-auf jedem Android-Geraet Google voraussetzen und ein Signal ueber die Bewegung
-einer Person in fremden Code legen wuerde. Bluetooth bleibt als spaetere
-Verfeinerung offen, falls die Messung zeigt, dass die Geschwindigkeit allein
-zu oft danebenliegt.
+Die Antwort vom 2026-09-26 war dieselbe wie am 2026-09-04: eigene Erkennung
+aus der Geschwindigkeit, auf dem Geraet, ohne Play-Dienste. Sie bestaetigt,
+sie entscheidet nichts Neues.
 
-**Was damit nicht behauptet ist:** dass sie trifft. Die Genauigkeit ist
-ungemessen; der erste Schritt ist die Messung auf echten Fahrten mit dem A34,
-und die bekannte Grenze steht schon fest - in einer Tiefgarage faellt GPS aus,
-dann ist die Einfahrt der letzte gute Punkt. Gebaut wird zuerst in der
-Android-Sonde; einen installierbaren Android-Produktclient gibt es noch nicht.
-Die Vertagung vom 2026-08-22 unten ist damit abgeloest.
+**Was tatsaechlich offen ist, zwei Dinge:**
+
+- **Ein echter Parkvorgang mit echtem Sensor.** Der Weg ist am 2026-09-04 auf
+  dem A34 durchgelaufen, aber mit gestellten Messungen und einem echten Fix
+  dazu. Ob die Erkennung auf einer echten Fahrt trifft, ist ungemessen; dafuer
+  muss jemand mit dem Telefon fahren und parken. In einer Tiefgarage ist die
+  Einfahrt der letzte gute Punkt.
+- **Eine Erfassung im Produkt.** Heute legt nur die Laborsonde unter
+  `tools/android-runtime-probe` etwas ab; einen installierbaren
+  Android-Produktclient gibt es nicht, und die Electron-Schale erfasst nichts.
+  Darum bleibt der Parkabschnitt im Fenster ungebaut.
 
 Status note, 2026-09-03: **SR2s Puffer liegt jetzt auf dem Geraet.** ADR 0126
 P3 wurde vom Nutzer aufgemacht und gebaut: das Telefon verdichtet mit
