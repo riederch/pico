@@ -1,5 +1,7 @@
 package com.pico.a1probe;
 
+import io.github.riederch.pico.*;
+
 /**
  * ADR 0131 A3. Die eine Frage, die nur ein zweiter Prozess beantworten kann:
  * öffnet sich das Versiegelte noch, nachdem das Telefon den ersten
@@ -13,7 +15,7 @@ package com.pico.a1probe;
  * Eigener Prozess aus demselben Grund wie die Konformanzsonde: nodejs-mobile
  * hält eine Node-Instanz je Prozess.
  */
-public final class ReopenService extends ProbeService {
+public final class ReopenService extends PicoService {
   @Override protected String script() { return "stage/reopen.mjs"; }
   @Override protected String log() { return "reopen.log"; }
 

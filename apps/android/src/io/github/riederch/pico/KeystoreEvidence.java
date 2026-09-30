@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -114,7 +114,7 @@ public final class KeystoreEvidence {
    * anything; the encoded certificate is the thing that would have to be
    * forged.
    */
-  static String pinnedRootVerdict(Certificate root) {
+  public static String pinnedRootVerdict(Certificate root) {
     try {
       byte[] encoded = root.getEncoded();
       for (int i = 0; i < PINNED_ATTESTATION_ROOTS.length; i++) {
@@ -239,7 +239,7 @@ public final class KeystoreEvidence {
     return hex.toString();
   }
 
-  static String securityLevelName(long value) {
+  public static String securityLevelName(long value) {
     if (value == 0) {
       return "software";
     }

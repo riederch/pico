@@ -135,8 +135,9 @@ export function condensePicoCompanionObservations(
  * Was das Gerät behalten muss, nachdem eine Ableitung angekommen ist.
  *
  * **Hier liegt der leise Fehlschlag**, und deshalb steht diese Entscheidung
- * hier und nicht im Sondenskript: `tools/android-runtime-probe` liegt nicht im
- * Arbeitsbereich und hat keine Tests, also wäre eine Zeile dort eine Zeile,
+ * hier und nicht im Geräteskript: `apps/android/stage/capture.mjs` (bis zum
+ * 2026-09-27 unter `tools/android-runtime-probe`) gehört zu keinem
+ * Workspace-Paket und hat keine Tests, also wäre eine Zeile dort eine Zeile,
  * die niemand prüfen kann. Verlorene Messungen sind genau das, was ADR 0129
  * SR5 der Wiederholung vorzieht zu vermeiden.
  *

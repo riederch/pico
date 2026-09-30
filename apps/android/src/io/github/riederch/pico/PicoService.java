@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -14,7 +14,7 @@ import java.io.File;
  * of the probe extend this; each subclass names its script, and the process
  * split comes from the manifest's android:process, not from code.
  */
-public abstract class ProbeService extends Service {
+public abstract class PicoService extends Service {
   private boolean started = false;
 
   protected abstract String script();
@@ -76,7 +76,7 @@ public abstract class ProbeService extends Service {
       started = true;
       NotificationManager manager = getSystemService(NotificationManager.class);
       manager.createNotificationChannel(
-        new NotificationChannel("pico_a1", "Pico A1 Probe",
+        new NotificationChannel("pico_a1", "Pico",
           NotificationManager.IMPORTANCE_LOW));
       startForeground(getClass().getName().hashCode() & 0xffff,
         new Notification.Builder(this, "pico_a1")
@@ -84,6 +84,26 @@ public abstract class ProbeService extends Service {
           .setContentTitle(getClass().getSimpleName())
           .build());
       File files = getFilesDir();
+      /**
+       * The core first (ADR 0131, 2026-09-27): the shipped app carries it
+       * inside the APK, and Node must never start over a missing or
+       * half-unpacked one. A failure is written where this service writes its
+       * log, and the service ends rather than running a script that is not
+       * there.
+       */
+      try {
+        AppStage.ensure(this);
+      } catch (java.io.IOException unpackFailed) {
+        try {
+          java.nio.file.Files.write(new File(files, log()).toPath(),
+            ("{\"step\":\"stage_unpack_failed\",\"reason\":\""
+              + unpackFailed.getMessage() + "\"}\n").getBytes("UTF-8"));
+        } catch (java.io.IOException unwritable) {
+          // Nothing else to tell: the stop below is the statement.
+        }
+        stopSelf();
+        return START_NOT_STICKY;
+      }
       if (offersKeystorePort()) {
         // Vor Node, nicht danach: der Anschluss muss stehen, bevor der erste
         // Frager kommt. Node wartet zwar, aber ein Warten, das nur meistens

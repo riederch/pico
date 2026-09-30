@@ -12,6 +12,7 @@ __pycache__/
 .pnpm-store/
 apps/core/data/
 apps/companion-shell/out/
+apps/android/out/
 package-lock.json
 yarn.lock
 

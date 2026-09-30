@@ -17,6 +17,7 @@ apps/core/data
 # Gepacktes Electron: 268 MB, die in jedem der sechs Bauschritte hochgeladen
 # wurden und in keinem der beiden Bilder vorkommen.
 apps/companion-shell/out
+apps/android/out
 **/out
 
 # Fremde Sperrdateien und Python-Artefakte aus den Werkzeugen: kein Leck, aber

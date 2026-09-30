@@ -35,28 +35,24 @@ esac
 bt="$(ls -d "$sdk"/build-tools/* | sort | tail -1)"
 aj="$(ls "$sdk"/platforms/*/android.jar | sort | tail -1)"
 
-mkdir -p "$work/lib/arm64-v8a" "$work/src"
-cp -r "$here/src/." "$work/src/"
-cp "$here/AndroidManifest.xml" "$here/pico_node_jni.cpp" "$work/"
-
+mkdir -p "$work"
+# Built the one way every APK here is built (apps/android/build-apk.sh), and
+# signed with the probe's own debug key: the phones on this desk carry the
+# probe installed under it, and `adb install -r` with another key would fail -
+# or, forced, erase the joined vault in `files/`.
+[ -f "$work/debug.keystore" ] || keytool -genkeypair -keystore "$work/debug.keystore" \
+  -alias pico -keyalg RSA -keysize 2048 -validity 30 -storepass picodebug -dname "CN=PicoA1Probe"
+PICO_APK_KEYSTORE="$work/debug.keystore" PICO_APK_KEYSTORE_PASS=picodebug PICO_APK_KEY_ALIAS=pico \
+  "$repo/apps/android/build-apk.sh" --manifest "$here/AndroidManifest.xml" \
+  --extra-src "$here/src" --out "$work/pico-a1-probe.apk"
 cd "$work"
-rm -rf classes classes.dex base.apk aligned.apk pico-a1-probe.apk
-zxing="${PICO_ZXING_JAR:-$HOME/.cache/pico-apk-libs/zxing-core.jar}"
-"$javac_bin" --release 11 -classpath "$aj:$zxing" -d classes src/com/pico/a1probe/*.java
-"$bt/d8" --lib "$aj" --output . classes/com/pico/a1probe/*.class "$zxing"
-"$bt/aapt2" link -o base.apk --manifest AndroidManifest.xml -I "$aj"
-zip -q base.apk classes.dex
-zip -qX base.apk lib/arm64-v8a/*.so
-"$bt/zipalign" -f -p 4 base.apk aligned.apk
-"$bt/apksigner" sign --ks debug.keystore --ks-pass pass:picodebug \
-  --out pico-a1-probe.apk aligned.apk
 
 # Ueber die bestehende App, damit `files/` bleibt - Beitritt, Vault, Profil.
 adb install -r "$work/pico-a1-probe.apk"
 
 # Nur die geaenderten Buehnenteile. Das Skript und der Kern, aus dem seine
 # Worte kommen; alles andere steht schon dort.
-adb push "$here/capture.mjs" /data/local/tmp/pico-capture.mjs > /dev/null
+adb push "$repo/apps/android/stage/capture.mjs" /data/local/tmp/pico-capture.mjs > /dev/null
 # Der schalenfreie Kern, aus dem die Uebergabe kommt. Ganz statt einzeln:
 # welche Datei sich geaendert hat, ist nach einem Bau nicht zu sehen, und ein
 # vergessenes Modul sieht auf dem Telefon aus wie ein Fehler im Skript.

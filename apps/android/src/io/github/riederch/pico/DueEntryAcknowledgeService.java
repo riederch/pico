@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 /**
  * ADR 0118 O1s andere Hälfte: das Gerät sagt, dass es die Person erreicht hat.
@@ -13,7 +13,7 @@ package com.pico.a1probe;
  * Ein eigener Dienst statt eines Arguments an den Leser, weil beide Läufe
  * einen eigenen Node-Prozess brauchen und ein Dienst hier ein Prozess ist.
  */
-public final class DueEntryAcknowledgeService extends ProbeService {
+public final class DueEntryAcknowledgeService extends PicoService {
   @Override protected String script() { return "stage/entries.mjs"; }
   @Override protected String log() { return "entries-acknowledge.log"; }
   @Override protected boolean offersKeystorePort() { return true; }

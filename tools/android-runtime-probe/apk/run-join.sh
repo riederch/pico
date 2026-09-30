@@ -29,42 +29,17 @@ die() { echo "$*" >&2; exit 1; }
 bt="$(ls -d "$sdk"/build-tools/* | sort | tail -1)"
 aj="$(ls "$sdk"/platforms/*/android.jar | sort | tail -1)"
 
-mkdir -p "$work/lib/arm64-v8a" "$work/src"
-cp -r "$here/src/." "$work/src/"
-cp "$here/AndroidManifest.xml" "$here/pico_node_jni.cpp" "$work/"
-if [ ! -f "$work/lib/arm64-v8a/libpiconode.so" ]; then
-  clang="$(ls "$ndk"/toolchains/llvm/prebuilt/*/bin/aarch64-linux-android2[4-9]-clang++ | head -1)"
-  cp "$njm/bin/arm64-v8a/libnode.so" "$work/lib/arm64-v8a/"
-  cp "$(dirname "$clang")/../sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" \
-    "$work/lib/arm64-v8a/"
-  # 16 KB-aligned segments. Android 16 warns that nodejs-mobile's
-  # libraries are not, and a device with 16 KB pages will not load them
-  # at all; this shim is one flag away from being ready, libnode.so is a
-  # rebuild away, and the NDK's libc++ is an NDK upgrade away.
-  "$clang" -fPIC -shared -std=c++17 -I "$njm/include/node" \
-    -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 \
-    -o "$work/lib/arm64-v8a/libpiconode.so" "$work/pico_node_jni.cpp" \
-    -L "$njm/bin/arm64-v8a" -lnode -llog
-fi
-
+mkdir -p "$work"
+# Built the one way every APK here is built (apps/android/build-apk.sh), and
+# signed with the probe's own debug key: the phones on this desk carry the
+# probe installed under it, and `adb install -r` with another key would fail -
+# or, forced, erase the joined vault in `files/`.
+[ -f "$work/debug.keystore" ] || keytool -genkeypair -keystore "$work/debug.keystore" \
+  -alias pico -keyalg RSA -keysize 2048 -validity 30 -storepass picodebug -dname "CN=PicoA1Probe"
+PICO_APK_KEYSTORE="$work/debug.keystore" PICO_APK_KEYSTORE_PASS=picodebug PICO_APK_KEY_ALIAS=pico \
+  "$repo/apps/android/build-apk.sh" --manifest "$here/AndroidManifest.xml" \
+  --extra-src "$here/src" --out "$work/pico-a1-probe.apk"
 cd "$work"
-rm -rf classes classes.dex base.apk aligned.apk pico-a1-probe.apk
-# ZXing's `core`, a pure-Java jar with no resources - the one shape of
-# dependency a hand-assembled APK can take, and what makes the camera path
-# possible without Gradle.
-zxing="${PICO_ZXING_JAR:-$HOME/.cache/pico-apk-libs/zxing-core.jar}"
-[ -f "$zxing" ] || curl -sL -o "$zxing" --create-dirs \
-  https://repo1.maven.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar
-"$javac_bin" --release 11 -classpath "$aj:$zxing" -d classes src/com/pico/a1probe/*.java
-"$bt/d8" --lib "$aj" --output . classes/com/pico/a1probe/*.class "$zxing"
-"$bt/aapt2" link -o base.apk --manifest AndroidManifest.xml -I "$aj"
-zip -q base.apk classes.dex
-zip -qX base.apk lib/arm64-v8a/*.so
-"$bt/zipalign" -f -p 4 base.apk aligned.apk
-[ -f debug.keystore ] || keytool -genkeypair -keystore debug.keystore -alias pico \
-  -keyalg RSA -keysize 2048 -validity 30 -storepass picodebug -dname "CN=PicoA1Probe"
-"$bt/apksigner" sign --ks debug.keystore --ks-pass pass:picodebug \
-  --out pico-a1-probe.apk aligned.apk
 
 echo "== staging the shell-free core"
 # Inside the workspace, deliberately: a deploy target outside it makes pnpm
@@ -76,8 +51,8 @@ rm -rf "$stage"
 # resolves a cache of its own and has been seen to land somewhere unwritable.
 (cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir /tmp/pico-pnpm-store \
   deploy --prod --frozen-lockfile "$stage")
-cp "$here/join.mjs" "$here/keystore-port.mjs" "$here/reopen.mjs" "$here/daemon.mjs" \
-  "$here/preload.cjs" "$here/conformance.mjs" "$here/reachability.mjs" "$stage/"
+cp "$repo/apps/android/stage/join.mjs" "$repo/apps/android/stage/keystore-port.mjs" "$here/reopen.mjs" "$repo/apps/android/stage/daemon.mjs" \
+  "$repo/apps/android/stage/preload.cjs" "$here/conformance.mjs" "$repo/apps/android/stage/reachability.mjs" "$stage/"
 tar -C "$repo/.pico-stage" -c --hard-dereference -f "$work/probe-stage.tar" probe-stage
 
 adb install -r "$work/pico-a1-probe.apk"

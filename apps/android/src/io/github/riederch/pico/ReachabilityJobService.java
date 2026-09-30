@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 import android.app.job.JobParameters;
 import android.app.job.JobService;

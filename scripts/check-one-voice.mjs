@@ -152,7 +152,7 @@ for (const path of files) {
  * Ausnahmen. Das wäre eine Schuldenliste im Gewand eines Prüfers.
  */
 const activity = join(root,
-  'tools/android-runtime-probe/apk/src/com/pico/a1probe/JoinActivity.java');
+  'apps/android/src/io/github/riederch/pico/JoinActivity.java');
 const java = readFileSync(activity, 'utf8');
 /** Die Methoden, die Worte aus einem Schritt wählen dürfen. */
 const wordChoosers = ['titleFor', 'bodyFor'];

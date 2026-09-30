@@ -37,12 +37,12 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <application android:label="Pico A1 Probe" android:debuggable="true"
       android:extractNativeLibs="true">
-    <service android:name=".CustodyService" android:process=":custody"
+    <service android:name="io.github.riederch.pico.CustodyService" android:process=":custody"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
     </service>
-    <service android:name=".ClientService"
+    <service android:name="com.pico.a1probe.ClientService"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
@@ -53,12 +53,12 @@
          noch öffnet. Eigener Prozess, weil nodejs-mobile eine Node-Instanz je
          Prozess hält - und weil ein Siegel, das nur im erzeugenden Prozess
          aufgeht, kein Siegel ist. -->
-    <service android:name=".ReopenService" android:process=":reopen"
+    <service android:name="com.pico.a1probe.ReopenService" android:process=":reopen"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
     </service>
-    <service android:name=".ConformanceService" android:process=":conformance"
+    <service android:name="com.pico.a1probe.ConformanceService" android:process=":conformance"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_conformance" />
@@ -67,7 +67,7 @@
          a ceremony another device is waiting on. Same process as the
          Activity - one Node instance per process is nodejs-mobile's rule -
          but its own component, which is what keeps the process alive. -->
-    <service android:name=".JoinService"
+    <service android:name="io.github.riederch.pico.JoinService"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a5_enrolment_walk" />
@@ -75,9 +75,9 @@
     <!-- ADR 0131 A5, first vertical: this phone asking to be let in. Plain
          views, typed path only - no camera, because that would mean a
          dependency this machine has no build system for. -->
-    <activity android:name=".ScanActivity" android:exported="false"
+    <activity android:name="io.github.riederch.pico.ScanActivity" android:exported="false"
         android:label="Pico" />
-    <activity android:name=".JoinActivity" android:exported="true"
+    <activity android:name="io.github.riederch.pico.JoinActivity" android:exported="true"
         android:label="Pico">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
@@ -87,18 +87,18 @@
     <!-- ADR 0131 A4: the reachability contract. Its own process, because
          what is being measured is what the system does to a process that
          only wants to keep checking. -->
-    <service android:name=".ReachabilityProbeService" android:process=":reach"
+    <service android:name="com.pico.a1probe.ReachabilityProbeService" android:process=":reach"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a4_reachability_probe" />
     </service>
-    <service android:name=".ReachabilityJobService" android:process=":reach"
+    <service android:name="io.github.riederch.pico.ReachabilityJobService" android:process=":reach"
         android:exported="false"
         android:permission="android.permission.BIND_JOB_SERVICE" />
     <!-- ADR 0131 A7: der Lauf, der das Home wirklich fragt. Eigener Prozess,
          weil nodejs-mobile eine Node-Instanz je Prozess hält und der
          Vault-Daemon in `:custody` schon eine hat. -->
-    <service android:name=".ReachabilityConditionService" android:process=":conditions"
+    <service android:name="io.github.riederch.pico.ReachabilityConditionService" android:process=":conditions"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a7_reachability_conditions" />
@@ -107,12 +107,12 @@
          weil nodejs-mobile eine Node-Instanz je Prozess haelt - und getrennt
          voneinander, weil das Lesen einem Takt folgt und die Quittung einem
          Menschen. -->
-    <service android:name=".DueEntriesService" android:process=":entries"
+    <service android:name="io.github.riederch.pico.DueEntriesService" android:process=":entries"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_o1_due_entries" />
     </service>
-    <service android:name=".DueEntryAcknowledgeService" android:process=":entryack"
+    <service android:name="io.github.riederch.pico.DueEntryAcknowledgeService" android:process=":entryack"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_o1_due_entry_acknowledge" />
@@ -121,11 +121,11 @@
          Eigener Prozess wie jede Sonde; der Vordergrundtyp ist `location`,
          weil Android genau dafuer einen eigenen kennt und `specialUse` hier
          eine Verschleierung waere. -->
-    <service android:name=".LocationCaptureService" android:process=":capture"
+    <service android:name="io.github.riederch.pico.LocationCaptureService" android:process=":capture"
         android:exported="true" android:foregroundServiceType="location" />
     <!-- ADR 0131 A3: no Node, no stage - pure platform API, so it neither
          loads libnode nor shares a process with anything that does. -->
-    <service android:name=".KeystoreProbeService" android:process=":keystore"
+    <service android:name="com.pico.a1probe.KeystoreProbeService" android:process=":keystore"
         android:exported="true" android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a3_keystore_probe" />

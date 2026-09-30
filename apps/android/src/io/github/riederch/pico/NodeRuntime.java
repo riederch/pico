@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 /**
  * ADR 0131 A1/A2. One embedded Node instance per process - nodejs-mobile's

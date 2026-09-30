@@ -278,6 +278,7 @@ Details are documented in:
 ```text
 .
 ├── apps
+│   ├── android           # the shipped Android app over the same core, and the one APK build (ADR 0131)
 │   ├── companion         # shell-free companion service core (ADR 0113 C1)
 │   ├── companion-shell   # the Electron shell over it, and the Linux package
 │   ├── core              # Pico Core: the runtime a Pico Home runs

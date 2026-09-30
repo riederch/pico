@@ -129,9 +129,13 @@ describe('who belongs to this tree, asked rather than written down', () => {
      * 2026-09-10; the workspace has seventeen, and `pnpm list -r` counts the
      * same seventeen beside the root. The five that were missing could hold a
      * version of their own without any gate saying so.
+     *
+     * Eighteen since 2026-09-27: `apps/android` became a member when the
+     * probe's product half moved there (ADR 0131), so its APK's version is
+     * held equal with everything else's.
      */
     const manifests = picoWorkspaceManifests(repoRoot);
-    expect(manifests).toHaveLength(17);
+    expect(manifests).toHaveLength(18);
     for (const missed of [
       'packages/gesture/package.json',
       'modules/calendar/package.json',

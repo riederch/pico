@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 /**
  * ADR 0118 O1 auf dem Telefon - der Lauf, der fragt, was fällig ist.
@@ -11,7 +11,7 @@ package com.pico.a1probe;
  * Er entscheidet nichts und schreibt keinen Satz: das Skript lässt den Kern
  * die Worte setzen und legt sie als fertige Zeilen ab.
  */
-public final class DueEntriesService extends ProbeService {
+public final class DueEntriesService extends PicoService {
   @Override protected String script() { return "stage/entries.mjs"; }
   @Override protected String log() { return "entries.log"; }
 

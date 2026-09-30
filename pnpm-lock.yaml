@@ -24,6 +24,8 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.20.0)
 
+  apps/android: {}
+
   apps/companion:
     dependencies:
       '@pico/link-relay-client':

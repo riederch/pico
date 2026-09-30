@@ -1,7 +1,9 @@
 package com.pico.a1probe;
 
+import io.github.riederch.pico.*;
+
 /** The client process: the probe's custody walk across the socket. */
-public final class ClientService extends ProbeService {
+public final class ClientService extends PicoService {
   @Override protected String script() { return "stage/client.mjs"; }
   @Override protected String log() { return "client.log"; }
 

@@ -1,7 +1,7 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 /** The custody process (android:process=":custody"): the real vault daemon. */
-public final class CustodyService extends ProbeService {
+public final class CustodyService extends PicoService {
   @Override protected String script() { return "stage/daemon.mjs"; }
 
   /**

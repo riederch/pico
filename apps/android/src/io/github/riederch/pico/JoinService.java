@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 /**
  * ADR 0131 A5. The ceremony's own process-resident home.
@@ -12,7 +12,7 @@ package com.pico.a1probe;
  * way custody already does one process over, and for the same reason: what
  * is in flight is a ceremony somebody else is waiting on.
  */
-public final class JoinService extends ProbeService {
+public final class JoinService extends PicoService {
   @Override protected String script() { return "stage/join.mjs"; }
   @Override protected String log() { return "join.log"; }
 

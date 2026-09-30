@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 import android.content.Context;
 import android.location.Location;
@@ -27,7 +27,7 @@ import java.io.FileOutputStream;
  * getroffen ist. Ein Sensoradapter, der sie mitträfe, hätte die Einwilligung
  * in die Schicht gelegt, die sie am wenigsten durchsetzen kann.
  */
-public final class LocationCaptureService extends ProbeService {
+public final class LocationCaptureService extends PicoService {
   @Override protected String script() { return "stage/capture.mjs"; }
   @Override protected String log() { return "capture.log"; }
   @Override protected boolean offersKeystorePort() { return true; }

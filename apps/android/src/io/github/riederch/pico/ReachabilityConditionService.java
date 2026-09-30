@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -20,7 +20,7 @@ import android.net.NetworkCapabilities;
  * zutrifft - entscheidet der schalenfreie Kern. Diese Klasse reicht eine
  * Tatsache weiter und schreibt keinen Satz.
  */
-public final class ReachabilityConditionService extends ProbeService {
+public final class ReachabilityConditionService extends PicoService {
   @Override protected String script() { return "stage/reachability.mjs"; }
   @Override protected String log() { return "reachability-conditions.log"; }
 

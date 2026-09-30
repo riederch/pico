@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The shipped Pico app (ADR 0131, status note 2026-09-27). The probe under
+     tools/android-runtime-probe builds from the same sources with a manifest
+     of its own; this one is what a person installs.
+
+     What it deliberately does not carry, against the probe's:
+     * no `android:debuggable` - a debuggable app hands its private files,
+       custody socket and keystore port to anybody with adb;
+     * no component with `android:exported="true"` except the launcher - the
+       probe exports its services because adb starts them, and in an app that
+       would let any other app on the phone start custody or the location
+       capture;
+     * none of the probe's measuring services, and neither of the two
+       permissions only they redeem (USE_FULL_SCREEN_INTENT,
+       PACKAGE_USAGE_STATS). A product whose thesis is restraint asks for
+       what it uses. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.github.riederch.pico">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+  <!-- The Link client opens sockets to the person's own Home. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- ADR 0131 A7: whether this phone sees a network is the system's fact. -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- ADR 0131 A5: a grant is eleven hundred characters and lives four
+       minutes, so the camera is the path rather than a convenience. -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
+  <!-- ADR 0129 SR5: capture, only after the Home says it may (SR6). -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+  <application android:label="Pico" android:extractNativeLibs="true"
+      android:allowBackup="false">
+    <!-- `allowBackup="false"`: ADR 0072 - keys and the data they protect
+         never share a backup artifact, and Android's cloud backup would put
+         the vault's keyfiles into one. -->
+    <activity android:name="io.github.riederch.pico.JoinActivity" android:exported="true"
+        android:label="Pico">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+    <activity android:name="io.github.riederch.pico.ScanActivity" android:exported="false"
+        android:label="Pico" />
+    <!-- ADR 0131 A2: custody in its own process. -->
+    <service android:name="io.github.riederch.pico.CustodyService" android:process=":custody"
+        android:exported="false" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_vault_custody" />
+    </service>
+    <!-- ADR 0131 A5: the walk outlives the view; same process as the view,
+         one Node instance per process. -->
+    <service android:name="io.github.riederch.pico.JoinService"
+        android:exported="false" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_enrolment_walk" />
+    </service>
+    <service android:name="io.github.riederch.pico.ReachabilityJobService" android:process=":reach"
+        android:exported="false"
+        android:permission="android.permission.BIND_JOB_SERVICE" />
+    <service android:name="io.github.riederch.pico.ReachabilityConditionService"
+        android:process=":conditions"
+        android:exported="false" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_reachability_conditions" />
+    </service>
+    <service android:name="io.github.riederch.pico.DueEntriesService" android:process=":entries"
+        android:exported="false" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_due_entries" />
+    </service>
+    <service android:name="io.github.riederch.pico.DueEntryAcknowledgeService"
+        android:process=":entryack"
+        android:exported="false" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_due_entry_acknowledge" />
+    </service>
+    <!-- ADR 0129 SR5: the one place a location API is used, with the
+         foreground type Android has for exactly that. -->
+    <service android:name="io.github.riederch.pico.LocationCaptureService"
+        android:process=":capture"
+        android:exported="false" android:foregroundServiceType="location" />
+  </application>
+</manifest>

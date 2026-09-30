@@ -33,7 +33,7 @@ const root = dirname(here);
 const core = readFileSync(
   join(root, 'apps/companion/src/platform-secrets.ts'), 'utf8');
 const probe = readFileSync(
-  join(root, 'tools/android-runtime-probe/apk/src/com/pico/a1probe/KeystoreEvidence.java'),
+  join(root, 'apps/android/src/io/github/riederch/pico/KeystoreEvidence.java'),
   'utf8');
 /**
  * Befund B211. Dasselbe Paar, eine Datei weiter - und dort war es unbewacht.
@@ -50,10 +50,10 @@ const probe = readFileSync(
  * man ein Tor baut, und nicht der, an dem man eines braucht.
  */
 const portServer = readFileSync(
-  join(root, 'tools/android-runtime-probe/apk/src/com/pico/a1probe/KeystorePort.java'),
+  join(root, 'apps/android/src/io/github/riederch/pico/KeystorePort.java'),
   'utf8');
 const portClient = readFileSync(
-  join(root, 'tools/android-runtime-probe/apk/keystore-port.mjs'), 'utf8');
+  join(root, 'apps/android/stage/keystore-port.mjs'), 'utf8');
 
 const failures = [];
 

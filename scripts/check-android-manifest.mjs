@@ -30,23 +30,30 @@ import { fileURLToPath } from 'node:url';
  * question the one that failed could not answer.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const probeRoot = 'tools/android-runtime-probe';
 const errors = [];
 
-const tracked = execFileSync('git', ['ls-files', probeRoot], { cwd: repoRoot, encoding: 'utf8' })
-  .split('\n')
-  .filter((path) => path !== '');
-const manifestPath = tracked.find((path) => path.endsWith('AndroidManifest.xml'));
-if (manifestPath === undefined) {
-  console.error('Android manifest check failed:');
-  console.error(`- ${probeRoot} has no AndroidManifest.xml, so this check has nothing to read.`);
-  process.exit(1);
-}
-const manifest = readFileSync(join(repoRoot, manifestPath), 'utf8');
-
-const javaFiles = tracked.filter((path) => path.endsWith('.java'));
-const java = new Map(javaFiles.map((path) => [path, readFileSync(join(repoRoot, path), 'utf8')]));
-const corpora = { java: [...java.values()].join('\n'), manifest };
+/**
+ * **Two manifests since 2026-09-27, and one source tree under both.** ADR
+ * 0131's status note of that day made the probe's product half the shipped
+ * app: its classes moved to `apps/android/src` under the app's own package,
+ * and the probe builds from them plus its measuring services. So there are two
+ * promises to read now, and each is read against the Java that can actually
+ * end up in its APK - the app against its own sources, the probe against both.
+ */
+const subjects = [
+  {
+    label: 'the app',
+    manifest: 'apps/android/AndroidManifest.xml',
+    sources: ['apps/android/src'],
+    shipped: true,
+  },
+  {
+    label: 'the probe',
+    manifest: 'tools/android-runtime-probe/apk/AndroidManifest.xml',
+    sources: ['apps/android/src', 'tools/android-runtime-probe/apk/src'],
+    shipped: false,
+  },
+];
 
 /**
  * What must be there for a permission to stay declared, **and where**.
@@ -72,82 +79,149 @@ const evidence = new Map([
   ['ACCESS_FINE_LOCATION', { where: 'java', token: 'LocationManager' }],
 ]);
 
-const declaredPermissions = [...new Set(
-  [...manifest.matchAll(/<uses-permission[^>]*android:name="android\.permission\.([A-Z_]+)"/gu)]
-    .map(([, name]) => name),
-)];
-if (declaredPermissions.length === 0) {
-  errors.push('the manifest declares no permission at all, so half this check has no subject');
-}
-for (const permission of declaredPermissions) {
-  const entry = evidence.get(permission);
-  if (entry === undefined) {
-    errors.push(
-      `${permission} is declared and nothing here says what redeems it. Name the token that `
-      + 'proves this probe uses it, or take the permission out - a right nobody can use is a '
-      + 'right nobody should ask for.',
-    );
+const trackedUnder = (root) => execFileSync('git', ['ls-files', root], { cwd: repoRoot, encoding: 'utf8' })
+  .split('\n')
+  .filter((path) => path !== '');
+
+const frameworkBases = new Set(['Service', 'Activity', 'JobService', 'BroadcastReceiver', 'ContentProvider']);
+const declaredAnywhere = new Set();
+const summary = [];
+
+for (const subject of subjects) {
+  let manifest;
+  try {
+    manifest = readFileSync(join(repoRoot, subject.manifest), 'utf8');
+  } catch {
+    errors.push(`${subject.label}: ${subject.manifest} is missing, so this check has nothing to read.`);
     continue;
   }
-  if (!corpora[entry.where].includes(entry.token)) {
-    errors.push(
-      `${permission} is declared because of \`${entry.token}\` in the ${entry.where}, which no `
-      + 'longer says it. The permission outlived what it was for.',
-    );
+  // The comments go before anything is read: the probe's manifest explains a
+  // `<receiver>` it does not have, and a comment is not a declaration (B188).
+  manifest = manifest.replace(/<!--[\s\S]*?-->/gu, '');
+  const javaFiles = subject.sources.flatMap(trackedUnder).filter((path) => path.endsWith('.java'));
+  const java = new Map(javaFiles.map((path) => [path, readFileSync(join(repoRoot, path), 'utf8')]));
+  const corpora = { java: [...java.values()].join('\n'), manifest };
+
+  const declaredPermissions = [...new Set(
+    [...manifest.matchAll(/<uses-permission[^>]*android:name="android\.permission\.([A-Z_]+)"/gu)]
+      .map(([, name]) => name),
+  )];
+  if (declaredPermissions.length === 0) {
+    errors.push(`${subject.label}: the manifest declares no permission at all, so half this check has no subject`);
   }
+  for (const permission of declaredPermissions) {
+    declaredAnywhere.add(permission);
+    const entry = evidence.get(permission);
+    if (entry === undefined) {
+      errors.push(
+        `${subject.label}: ${permission} is declared and nothing here says what redeems it. Name `
+        + 'the token that proves it is used, or take the permission out - a right nobody can use '
+        + 'is a right nobody should ask for.',
+      );
+      continue;
+    }
+    if (!corpora[entry.where].includes(entry.token)) {
+      errors.push(
+        `${subject.label}: ${permission} is declared because of \`${entry.token}\` in the `
+        + `${entry.where}, which no longer says it. The permission outlived what it was for.`,
+      );
+    }
+  }
+
+  /**
+   * Components by their full name. The manifests name classes fully since
+   * the sources live in two packages, so a class is known by its package
+   * declaration plus its file name.
+   */
+  const declaredComponents = [...manifest.matchAll(
+    /<(service|activity|receiver|provider)\b([^>]*)>/gu,
+  )].map(([, kind, attributes]) => ({
+    kind,
+    name: /android:name="([A-Za-z0-9_.]+)"/u.exec(attributes)?.[1] ?? '',
+    exported: /android:exported="true"/u.test(attributes),
+  }));
+
+  const bases = new Map();
+  for (const [path, text] of java) {
+    const pkg = /^package ([a-z0-9_.]+);/mu.exec(text)?.[1] ?? '';
+    const name = basename(path, '.java');
+    const declaration = new RegExp(`(abstract )?class ${name} extends ([A-Za-z0-9_]+)`, 'u').exec(text);
+    bases.set(name, {
+      full: `${pkg}.${name}`,
+      abstract: declaration !== null && declaration[1] !== undefined,
+      base: declaration === null ? undefined : declaration[2],
+    });
+  }
+  const isComponent = (name, seen = new Set()) => {
+    if (seen.has(name)) return false;
+    seen.add(name);
+    const entry = bases.get(name);
+    if (entry === undefined || entry.base === undefined) return false;
+    return frameworkBases.has(entry.base) || isComponent(entry.base, seen);
+  };
+  const fullNames = new Set([...bases.values()].map((entry) => entry.full));
+  for (const component of declaredComponents) {
+    if (!fullNames.has(component.name)) {
+      errors.push(
+        `${subject.label}: the manifest declares ${component.kind} ${component.name} and no such `
+        + 'class is in its sources. Android fails to start a component whose class is gone.',
+      );
+    }
+  }
+  let components = 0;
+  for (const [name, entry] of bases) {
+    if (entry.abstract || !isComponent(name)) continue;
+    components += 1;
+    if (!declaredComponents.some((component) => component.name === entry.full)) {
+      errors.push(
+        `${subject.label}: ${entry.full} is a component and the manifest does not declare it, so `
+        + 'nothing can start it.',
+      );
+    }
+  }
+  if (components === 0) {
+    errors.push(`${subject.label}: no component class was found, so the other half of this check has no subject`);
+  }
+
+  /**
+   * What the shipped app owes on top (ADR 0131, 2026-09-27). Each of these
+   * is right for a probe driven over adb and wrong for an app a person
+   * installs, and each was the probe's setting when its classes moved.
+   */
+  if (subject.shipped) {
+    if (/android:debuggable="true"/u.test(manifest)) {
+      errors.push(
+        `${subject.label}: it is debuggable, which hands its private files, the custody socket `
+        + 'and the keystore port to anybody with adb.',
+      );
+    }
+    for (const component of declaredComponents) {
+      const launcher = component.kind === 'activity'
+        && new RegExp(`android:name="${component.name.replace(/\./gu, '\\.')}"[\\s\\S]*?category\\.LAUNCHER`, 'u')
+          .test(manifest.slice(manifest.indexOf(`android:name="${component.name}"`)).split('</activity>')[0] ?? '');
+      if (component.exported && !launcher) {
+        errors.push(
+          `${subject.label}: ${component.name} is exported, so any app on the phone can start it. `
+          + 'Only the launcher is reachable from outside; the probe exports its services because '
+          + 'adb starts them, and an app has no adb.',
+        );
+      }
+    }
+    if (!/android:allowBackup="false"/u.test(manifest)) {
+      errors.push(
+        `${subject.label}: it allows Android's backup, which would put the vault's keyfiles into one `
+        + 'artifact with the data they protect - the thing ADR 0072 forbids.',
+      );
+    }
+  }
+  summary.push(`${subject.label}: ${declaredComponents.length} components, ${components} classes, `
+    + `${declaredPermissions.length} permissions`);
 }
+
 for (const permission of evidence.keys()) {
-  if (!declaredPermissions.includes(permission)) {
-    errors.push(`${permission} is argued here and the manifest no longer declares it`);
+  if (!declaredAnywhere.has(permission)) {
+    errors.push(`${permission} is argued here and no manifest declares it any more`);
   }
-}
-
-/** Every component the manifest declares, with the dot Android writes. */
-const declaredComponents = [...manifest.matchAll(
-  /<(service|activity|receiver|provider)[^>]*android:name="\.([A-Za-z0-9_]+)"/gu,
-)].map(([, kind, name]) => ({ kind, name }));
-
-/** A class is a component when it reaches a framework base, directly or through one of its own. */
-const bases = new Map();
-for (const [path, text] of java) {
-  const name = basename(path, '.java');
-  const declaration = new RegExp(`(abstract )?class ${name} extends ([A-Za-z0-9_]+)`, 'u').exec(text);
-  bases.set(name, {
-    abstract: declaration !== null && declaration[1] !== undefined,
-    base: declaration === null ? undefined : declaration[2],
-  });
-}
-const frameworkBases = new Set(['Service', 'Activity', 'JobService', 'BroadcastReceiver', 'ContentProvider']);
-function isComponent(name, seen = new Set()) {
-  if (seen.has(name)) return false;
-  seen.add(name);
-  const entry = bases.get(name);
-  if (entry === undefined || entry.base === undefined) return false;
-  return frameworkBases.has(entry.base) || isComponent(entry.base, seen);
-}
-
-for (const component of declaredComponents) {
-  if (!bases.has(component.name)) {
-    errors.push(
-      `the manifest declares ${component.kind} .${component.name} and no such class is in the `
-      + 'probe. Android fails to start a component whose class is gone, at the moment somebody '
-      + 'is running a measurement.',
-    );
-  }
-}
-let components = 0;
-for (const [name, entry] of bases) {
-  if (entry.abstract || !isComponent(name)) continue;
-  components += 1;
-  if (!declaredComponents.some((component) => component.name === name)) {
-    errors.push(
-      `${name} is a component and the manifest does not declare it, so nothing can start it. A `
-      + 'probe service that cannot run is a measurement that silently did not happen.',
-    );
-  }
-}
-if (components === 0) {
-  errors.push('no component class was found, so the other half of this check has no subject');
 }
 
 if (errors.length > 0) {
@@ -157,8 +231,7 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Android manifest check passed (${declaredComponents.length} components declared and `
-  + `${components} concrete component classes, each named by the other; `
-  + `${declaredPermissions.length} permissions, every one of them redeemed by a token this probe `
-  + 'still carries).',
+  `Android manifest check passed (${summary.join('; ')}; every component named by its class and `
+  + 'every permission redeemed by a token its sources still carry; the app is not debuggable, '
+  + 'exports only its launcher and keeps out of Android backup).',
 );

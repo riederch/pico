@@ -1,4 +1,4 @@
-package com.pico.a1probe;
+package io.github.riederch.pico;
 
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
