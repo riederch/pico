@@ -11,4 +11,5 @@ public final class CustodyService extends PicoService {
    */
   @Override protected boolean staysResident() { return true; }
   @Override protected String log() { return "daemon.log"; }
+  @Override protected String notice() { return "Keeping your keys on this device"; }
 }

@@ -18,6 +18,7 @@ import io.github.riederch.pico.*;
 public final class ReopenService extends PicoService {
   @Override protected String script() { return "stage/reopen.mjs"; }
   @Override protected String log() { return "reopen.log"; }
+  @Override protected String notice() { return "Probe: reopening the seal"; }
 
   /** Ohne Anschluss gäbe es nichts zu öffnen. */
   @Override protected boolean offersKeystorePort() { return true; }

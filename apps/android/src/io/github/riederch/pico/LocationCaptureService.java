@@ -30,6 +30,7 @@ import java.io.FileOutputStream;
 public final class LocationCaptureService extends PicoService {
   @Override protected String script() { return "stage/capture.mjs"; }
   @Override protected String log() { return "capture.log"; }
+  @Override protected String notice() { return "Noting where this device is"; }
   @Override protected boolean offersKeystorePort() { return true; }
   @Override protected String keystoreSocket() { return "keystore-capture.sock"; }
 

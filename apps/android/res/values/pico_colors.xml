@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from pico.tokens.json; do not edit by hand. -->
+<resources>
+  <color name="pico_bg_deep">#04101C</color>
+  <color name="pico_bg_base">#071827</color>
+  <color name="pico_surface_1">#0C2032</color>
+  <color name="pico_surface_2">#112A3E</color>
+  <color name="pico_surface_3">#17344A</color>
+  <color name="pico_border">#27475D</color>
+  <color name="pico_border_strong">#6A808F</color>
+  <color name="pico_text_primary">#E8F3FA</color>
+  <color name="pico_text_secondary">#A7BDCB</color>
+  <color name="pico_text_muted">#8A9DAB</color>
+  <color name="pico_text_disabled">#536876</color>
+  <color name="pico_text_on_primary">#03111C</color>
+  <color name="pico_primary">#2CCFFF</color>
+  <color name="pico_primary_strong">#15AEE8</color>
+  <color name="pico_primary_soft">#123E55</color>
+  <color name="pico_focus">#72E1FF</color>
+  <color name="pico_status_active">#2CCFFF</color>
+  <color name="pico_status_listening">#348CFF</color>
+  <color name="pico_status_thinking">#9A70FF</color>
+  <color name="pico_status_warning">#FFB13B</color>
+  <color name="pico_status_blocked">#FF4E5D</color>
+  <color name="pico_status_success">#59E579</color>
+  <color name="pico_context_technology">#358DFF</color>
+  <color name="pico_context_water">#26D3D0</color>
+  <color name="pico_context_fire">#E84B42</color>
+  <color name="pico_context_organization">#49CDB1</color>
+  <color name="pico_context_smart_home">#FF963D</color>
+  <color name="pico_context_communication">#29CFF2</color>
+  <color name="pico_context_energy">#F5A62E</color>
+  <color name="pico_context_focus">#8767E8</color>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher mark: a lower-case "p", ring and stem, in the brand colour.
+     Drawn on the 108-unit adaptive-icon canvas and kept inside the 66-unit
+     safe zone around its centre (21 to 87), so no mask a launcher applies
+     cuts into it. The bounding box is 34.5 to 73.5 across and 27 to 80
+     down; the farthest point from the centre, the stem's lower left corner,
+     lies 32.5 units out. A first draft ran the stem to 82 and put that corner
+     at 34.1 - outside the zone, and seen only once the icon was rendered. Colours come from pico.tokens.json, never from here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+  <path android:fillColor="@color/pico_primary"
+      android:pathData="M34.5,31 h7 v49 h-7 z" />
+  <path android:fillColor="@android:color/transparent" android:strokeColor="@color/pico_primary"
+      android:strokeWidth="7"
+      android:pathData="M54,30.5 a16,16 0 1,1 0,32 a16,16 0 1,1 0,-32" />
+</vector>

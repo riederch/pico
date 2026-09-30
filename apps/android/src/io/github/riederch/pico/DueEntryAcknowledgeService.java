@@ -16,6 +16,7 @@ package io.github.riederch.pico;
 public final class DueEntryAcknowledgeService extends PicoService {
   @Override protected String script() { return "stage/entries.mjs"; }
   @Override protected String log() { return "entries-acknowledge.log"; }
+  @Override protected String notice() { return "Telling your Pico Home you saw it"; }
   @Override protected boolean offersKeystorePort() { return true; }
   @Override protected String keystoreSocket() { return "keystore-ack.sock"; }
 

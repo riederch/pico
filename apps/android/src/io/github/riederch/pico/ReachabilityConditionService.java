@@ -23,6 +23,7 @@ import android.net.NetworkCapabilities;
 public final class ReachabilityConditionService extends PicoService {
   @Override protected String script() { return "stage/reachability.mjs"; }
   @Override protected String log() { return "reachability-conditions.log"; }
+  @Override protected String notice() { return "Checking that your Pico Home answers"; }
 
   /** Ohne Anschluss ließe sich die Passphrase nicht entsiegeln. */
   @Override protected boolean offersKeystorePort() { return true; }

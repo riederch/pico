@@ -136,16 +136,20 @@ version_code=$(( v_major * 1000000 + v_minor * 1000 + v_patch ))
 echo "== APK $version ($version_code)"
 (
   cd "$work"
+  # Resources: the launcher icon and the colours generated from
+  # pico.tokens.json. Compiled for every APK, because a manifest that does not
+  # name them simply does not use them.
+  "$bt/aapt2" compile --dir "$here/res" -o res.zip
   find src -name '*.java' > sources.txt
   "$javac_bin" --release 11 -classpath "$aj:$zxing" -d classes @sources.txt
   find classes -name '*.class' > classes.txt
   "$bt/d8" --lib "$aj" --output . @classes.txt "$zxing"
   if [ "$embed" = 1 ]; then
-    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" -A assets \
-      --version-code "$version_code" --version-name "$version"
+    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" -A assets -R res.zip \
+      --auto-add-overlay --version-code "$version_code" --version-name "$version"
   else
-    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" \
-      --version-code "$version_code" --version-name "$version"
+    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" -R res.zip \
+      --auto-add-overlay --version-code "$version_code" --version-name "$version"
   fi
   zip -q base.apk classes.dex
   zip -qX base.apk lib/arm64-v8a/*.so

@@ -20,11 +20,13 @@
  * eine Beobachtung trägt, und der Home nennt sie. Dieses Skript reicht
  * Messungen weiter und behauptet nichts über sie.
  *
- * **Bewegungsarten fehlen, und das steht hier statt nirgends.** Eine
- * Aktivitätserkennung kommt bei Android aus den Play-Diensten, die diese
- * handgebaute APK nicht hat. `readMobilitySamples` gibt deshalb nichts zurück -
- * leer, nicht erfunden. Der Port hält die beiden Hälften ausdrücklich
- * getrennt, damit die ärmere nicht mit der reicheren verschwindet.
+ * **Bewegungsarten kommen nicht von hier, sondern aus den Messungen selbst.**
+ * Eine Aktivitätserkennung gäbe es bei Android nur aus den Play-Diensten, und
+ * die sind verworfen (ADR 0129, Nutzerentscheidung vom 2026-09-04, am
+ * 2026-09-26 bestätigt). `readMobilitySamples` gibt deshalb nichts zurück -
+ * leer, nicht erfunden -, und die Verdichtung leitet die Bewegungsarten aus
+ * der Geschwindigkeit der Standorte ab (`speed-mobility.ts`). Bis zum
+ * 2026-09-30 stand hier, sie fehlten; das war seit dem 2026-09-04 falsch.
  */
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

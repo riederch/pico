@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from pico.tokens.json; do not edit by hand. -->
+<resources>
+  <color name="pico_bg_deep">#EAF3F8</color>
+  <color name="pico_bg_base">#F5F9FC</color>
+  <color name="pico_surface_1">#FFFFFF</color>
+  <color name="pico_surface_2">#EDF4F8</color>
+  <color name="pico_surface_3">#E0EDF3</color>
+  <color name="pico_border">#AAC2CF</color>
+  <color name="pico_border_strong">#778790</color>
+  <color name="pico_text_primary">#0A2132</color>
+  <color name="pico_text_secondary">#355568</color>
+  <color name="pico_text_muted">#546C7B</color>
+  <color name="pico_text_disabled">#8BA0AC</color>
+  <color name="pico_primary_soft">#D7F4FC</color>
+  <color name="pico_focus">#118CBB</color>
+</resources>

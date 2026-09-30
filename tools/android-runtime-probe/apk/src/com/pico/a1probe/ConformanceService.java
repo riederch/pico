@@ -12,4 +12,5 @@ import io.github.riederch.pico.*;
 public final class ConformanceService extends PicoService {
   @Override protected String script() { return "stage/conformance.mjs"; }
   @Override protected String log() { return "conformance.log"; }
+  @Override protected String notice() { return "Probe: conformance"; }
 }

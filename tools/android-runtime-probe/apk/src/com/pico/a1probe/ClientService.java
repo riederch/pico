@@ -6,6 +6,7 @@ import io.github.riederch.pico.*;
 public final class ClientService extends PicoService {
   @Override protected String script() { return "stage/client.mjs"; }
   @Override protected String log() { return "client.log"; }
+  @Override protected String notice() { return "Probe: walking the custody path"; }
 
   /**
    * **Teilt den Prozess mit der Fläche**, wie der Beitritt daneben - und darf

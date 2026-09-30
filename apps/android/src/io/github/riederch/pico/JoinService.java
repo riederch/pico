@@ -15,6 +15,7 @@ package io.github.riederch.pico;
 public final class JoinService extends PicoService {
   @Override protected String script() { return "stage/join.mjs"; }
   @Override protected String log() { return "join.log"; }
+  @Override protected String notice() { return "Adding this device to your Pico"; }
 
   /**
    * **Teilt den Prozess mit der Fläche** (Manifest: kein `android:process`),

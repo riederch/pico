@@ -21,6 +21,17 @@ public abstract class PicoService extends Service {
   protected abstract String log();
 
   /**
+   * What this service is doing, in the words a person reads in the
+   * notification shade while it runs (ADR 0131, 2026-09-27).
+   *
+   * Abstract on purpose. Until then every foreground service showed its class
+   * name - "CustodyService" was the first thing Pico ever said to somebody who
+   * pulled down the shade - and a default would let the next service do the
+   * same. The compiler asks each one instead.
+   */
+  protected abstract String notice();
+
+  /**
    * Ob dieser Dienst weiterläuft, wenn sein Skript fertig ist.
    *
    * **Am 2026-08-26 auf dem Bildschirm gefunden.** `nodejs-mobile` hält eine
@@ -76,12 +87,12 @@ public abstract class PicoService extends Service {
       started = true;
       NotificationManager manager = getSystemService(NotificationManager.class);
       manager.createNotificationChannel(
-        new NotificationChannel("pico_a1", "Pico",
+        new NotificationChannel("pico_background", "Running in the background",
           NotificationManager.IMPORTANCE_LOW));
       startForeground(getClass().getName().hashCode() & 0xffff,
-        new Notification.Builder(this, "pico_a1")
+        new Notification.Builder(this, "pico_background")
           .setSmallIcon(android.R.drawable.stat_notify_sync)
-          .setContentTitle(getClass().getSimpleName())
+          .setContentTitle(notice())
           .build());
       File files = getFilesDir();
       /**

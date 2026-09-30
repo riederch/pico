@@ -13,6 +13,11 @@ const outputs = {
   companionShellTypescript:
     'apps/companion-shell/src/pico-design-tokens.generated.ts',
   contrastReport: 'docs/design-system/06_Accessibility/Contrast_Report.md',
+  // The Android app (ADR 0131): its colours as resources, from the same
+  // source and under the same names as the CSS, so the launcher icon is not
+  // a second copy of the brand (ADR 0133).
+  androidColors: 'apps/android/res/values/pico_colors.xml',
+  androidLightColors: 'apps/android/res/values-notnight/pico_colors.xml',
 };
 // These styles live in real stylesheets instead of inline <style> blocks so
 // both surfaces can serve a strict CSP (`default-src 'self'` for the
@@ -187,6 +192,9 @@ const expected = new Map([
   [outputs.vaultDaemonTypescript, typescript],
   [outputs.companionShellTypescript, typescript],
   [outputs.contrastReport, renderContrastReport()],
+  [outputs.androidColors, renderAndroidColors(baseTokens, (path) => path)],
+  [outputs.androidLightColors, renderAndroidColors(lightTokens,
+    (path) => path.slice('theme.light.'.length))],
 ]);
 for (const path of stylesheetPaths) {
   expected.set(path, injectGeneratedCss(read(path), css, path));
@@ -344,6 +352,29 @@ function renderCss(base, light) {
     );
   }
   lines.push('}', '');
+  return lines.join('\n');
+}
+
+/**
+ * Android colour resources. The base set is the dark theme, as it is for
+ * CSS, so it goes to `values/`; the light overrides go to `values-notnight/`,
+ * which Android picks when the system is not in night mode. The names are the
+ * CSS names with underscores, because a resource name cannot carry a dash.
+ */
+function renderAndroidColors(tokensToRender, basePathOf) {
+  const lines = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<!-- Generated from pico.tokens.json; do not edit by hand. -->',
+    '<resources>',
+  ];
+  for (const token of tokensToRender) {
+    if (token.type !== 'color') {
+      continue;
+    }
+    const name = cssNames.get(basePathOf(token.path)).replace(/-/gu, '_');
+    lines.push(`  <color name="pico_${name}">${token.value.hex.toUpperCase()}</color>`);
+  }
+  lines.push('</resources>', '');
   return lines.join('\n');
 }
 
