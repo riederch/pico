@@ -643,6 +643,8 @@ Release rule:
 
 Version bump locations and the release checklist are documented in `docs/release/versioning.md`.
 
+The Android app's release key - who holds it, how CI signs with it, and what a lost or leaked key means - is documented in `docs/release/android-signing.md`.
+
 Documentation consistency rules are documented in `docs/release/documentation-consistency.md`.
 
 ## Binary asset workflow

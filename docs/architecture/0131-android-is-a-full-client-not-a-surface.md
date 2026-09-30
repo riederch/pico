@@ -2,6 +2,22 @@
 
 ## Status
 
+Status note, 2026-09-30: **Die App ist gebaut und hat ihren CI-Weg; auf einem
+Geraet ist sie noch nicht gelaufen.** `apps/android` traegt die Produkthaelfte
+der Sonde unter `io.github.riederch.pico`, und `apps/android/build-apk.sh` ist
+der eine Bauweg fuer App und Sonde. Die App packt ihren Kern selbst aus
+(`AppStage`), ist nicht debuggable, exportiert nur ihren Starter und nimmt an
+keiner Android-Sicherung teil - `manifest:check` haelt das an der Quelle,
+`apps/android/check-apk.mjs` an der gebauten Datei. Die CI baut bei jedem Push
+mit einem Wegwerfschluessel und prueft (`android_package`); bei einem Tag baut
+sie mit dem Release-Schluessel, prueft gegen das angepinnte Zertifikat und
+haengt die APK als Entwurf ans Release (`android_release`).
+
+Offen, und jedes davon braucht den Nutzer: der Release-Schluessel samt
+angepinntem Zertifikat (`docs/release/android-signing.md`), der erste
+CI-Lauf auf einem echten Runner, und der Geraetetest - Installation aus der
+Datei, Auspacken des Kerns, Beitritt ohne Skript.
+
 Status note, 2026-09-27: **Die Sonde wird die ausgelieferte App, und drei
 Fragen, die dieser ADR nie gestellt hat, sind beantwortet.** Rolle, Laufzeit,
 Prozessgrenze und die verworfenen Wege stehen seit dem 2026-08-09 fest und

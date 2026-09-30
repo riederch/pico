@@ -117,7 +117,15 @@ if [ "$embed" = 1 ]; then
   stage="$repo/.pico-stage/app-stage"
   rm -rf "$stage"
   mkdir -p "$repo/.pico-stage"
-  (cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir /tmp/pico-pnpm-store \
+  # The store the workspace was installed from, read from pnpm's own record
+  # rather than named here: this machine keeps it in /tmp, CI keeps it where
+  # setup-node's cache puts it, and pnpm refuses a deploy from any other store
+  # than the one node_modules was linked from. The record carries the layout
+  # suffix (`/v3`), which --store-dir adds itself.
+  pnpm_store="$(sed -n 's/^storeDir: //p' "$repo/node_modules/.modules.yaml")"
+  [ -n "$pnpm_store" ] || die "no storeDir in node_modules/.modules.yaml - run pnpm install first"
+  pnpm_store="${pnpm_store%/v[0-9]*}"
+  (cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir "$pnpm_store" \
     deploy --prod --frozen-lockfile "$stage")
   cp "$here"/stage/*.mjs "$here"/stage/*.cjs "$stage/"
   for file in "${stage_extra[@]}"; do cp "$file" "$stage/"; done

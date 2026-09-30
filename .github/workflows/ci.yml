@@ -188,6 +188,131 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # ADR 0131, status note 2026-09-27: the probe became the shipped Android
+  # app. Beside the chain rather than inside it, because the APK needs the
+  # Android SDK and NDK - the runner images carry both, a developer machine
+  # need not - and nothing in the chain depends on it.
+  #
+  # Two jobs for the reason the Linux package has two: the one that runs on
+  # every push only reads, and only the tag job holds a token that can write
+  # a release and the key that can sign one.
+  android_package:
+    name: Build and check the Pico Android app
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    needs: [verify, suites]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Signed with a throwaway key made on the runner: this proves the APK
+      # builds and holds its rules on every push, and a key that exists for
+      # one job can sign nothing anybody installs.
+      - name: Build the APK
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          apps/android/build-apk.sh --manifest apps/android/AndroidManifest.xml \
+            --embed-stage --out "apps/android/out/pico-android-${version}.apk"
+
+      - name: Check the APK
+        run: node apps/android/check-apk.mjs apps/android/out/pico-android-*.apk
+
+  android_release:
+    name: Publish the Pico Android app
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    needs: [android_package]
+    # Only on a tag, like the Linux package: an asset on every commit would
+    # make "released" mean nothing.
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release tag matches package version
+        run: pnpm release:tag-check
+
+      # ADR 0131, 2026-09-27: the key lives here as an encrypted secret, and
+      # its only other copy is the person's own backup. It is written to the
+      # runner's temporary directory for the one command that signs, handed
+      # its password through the environment, never an argument, and removed
+      # whatever happens. A missing secret fails the release rather than
+      # letting build-apk.sh fall back - `--release` refuses a throwaway key.
+      - name: Build the APK with the release key
+        env:
+          PICO_APK_KEYSTORE_BASE64: ${{ secrets.PICO_APK_KEYSTORE_BASE64 }}
+          PICO_APK_KEYSTORE_PASS: ${{ secrets.PICO_APK_KEYSTORE_PASS }}
+        run: |
+          set -euo pipefail
+          [ -n "$PICO_APK_KEYSTORE_BASE64" ] || { echo "no release key secret" >&2; exit 1; }
+          export PICO_APK_KEYSTORE="$RUNNER_TEMP/pico-release.keystore"
+          trap 'rm -f "$PICO_APK_KEYSTORE"' EXIT
+          printf '%s' "$PICO_APK_KEYSTORE_BASE64" | base64 --decode > "$PICO_APK_KEYSTORE"
+          export PICO_APK_KEY_ALIAS=pico
+          version="$(node -p "require('./package.json').version")"
+          apps/android/build-apk.sh --manifest apps/android/AndroidManifest.xml \
+            --embed-stage --release --out "apps/android/out/pico-android-${version}.apk"
+
+      # Against the certificate pinned in the repository: an APK signed with
+      # any other key never reaches the release.
+      - name: Check the APK against the pinned release certificate
+        run: node apps/android/check-apk.mjs apps/android/out/pico-android-*.apk --release
+
+      # The same shape as the Linux package: a draft a person publishes by
+      # hand, attached once and never replaced. The repository is private, so
+      # GitHub stores no provenance attestation for it (ADR 0122 Y2 unmet, as
+      # for the .deb); the checksum says which bytes were checked, not who
+      # built them.
+      - name: Attach the APK to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --notes "Pico $tag" --draft
+          fi
+          gh release view "$tag" --json assets > release-assets.json
+          node scripts/check-release-asset-absent.mjs release-assets.json \
+            apps/android/out/pico-android-*.apk apps/android/out/pico-android-*.apk.sha256
+          gh release upload "$tag" apps/android/out/pico-android-*.apk \
+            apps/android/out/pico-android-*.apk.sha256
+          echo "### Published Android app" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat apps/android/out/pico-android-*.apk.sha256 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
   # ADR 0122 Y1 mit Befund B67. Dieselbe Testmenge dreimal - normal, unter
   # verschobener Uhr, an den beiden Enden des Tages - macht 92 Prozent der
   # Kette aus, und die drei wissen voneinander nichts. Sie standen bis zum

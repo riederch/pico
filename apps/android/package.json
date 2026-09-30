@@ -5,6 +5,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "scripts": {
-    "apk": "./build-apk.sh --manifest AndroidManifest.xml --out out/pico.apk --embed-stage"
+    "apk": "./build-apk.sh --manifest AndroidManifest.xml --out out/pico.apk --embed-stage",
+    "apk:check": "node check-apk.mjs out/pico.apk"
   }
 }

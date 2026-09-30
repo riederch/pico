@@ -493,6 +493,38 @@ geschrieben und ausgegeben, sodass auch ein fehlgeschlagener CI-Lauf die
 entscheidungsfaehige Evidenz enthaelt. Alle temporaeren Paket-, Lifecycle- und
 Probe-Verzeichnisse werden auch nach einem Fehlschlag entfernt.
 
+## Android-App
+
+Die App liegt unter `apps/android` (ADR 0131, Statusnotiz 2026-09-27); die
+Sonde unter `tools/android-runtime-probe` baut aus denselben Quellen plus ihren
+Messdiensten. Es gibt genau einen Bauweg, `apps/android/build-apk.sh`, fuer
+beide - keine Gradle, von Hand aus Build-Tools und NDK.
+
+```bash
+export JAVAC=$HOME/.local/share/JetBrains/Toolbox/apps/android-studio/jbr/bin/javac
+apps/android/build-apk.sh --manifest apps/android/AndroidManifest.xml \
+  --embed-stage --out apps/android/out/pico.apk
+node apps/android/check-apk.mjs apps/android/out/pico.apk
+```
+
+- **`JAVAC`** muss gesetzt sein: das System-JDK dieser Maschine ist nur eine JRE.
+- **SDK und NDK** sucht der Bauweg unter `ANDROID_SDK`/`ANDROID_SDK_ROOT` und
+  `ANDROID_NDK`/`ANDROID_NDK_HOME`, sonst unter `~/Android/Sdk` und
+  `~/.cache/android-ndk-r26d`.
+- **nodejs-mobile und ZXing** laedt er selbst nach `~/.cache/pico-apk-dl` und
+  prueft sie gegen festgenagelte Pruefsummen; eine Abweichung bricht den Bau.
+- **Der pnpm-Store** kommt aus `node_modules/.modules.yaml`, also aus der
+  Installation selbst - `pnpm deploy` verweigert jeden anderen.
+- **`check-apk.mjs`** nimmt die fertige APK auseinander: Kennung, Version,
+  nicht debuggable, keine Sicherung, nur der Starter exportiert, Kern darin;
+  mit `--release` zusaetzlich das Zertifikat gegen
+  `apps/android/release-certificate.sha256`.
+- **Die Sonde** signiert weiter mit `~/.cache/pico-apk-app/debug.keystore`.
+  Ein anderer Schluessel liesse `adb install -r` scheitern, und ein erzwungenes
+  Neuinstallieren loeschte den beigetretenen Tresor auf dem Telefon.
+- **Der Release-Schluessel** gehoert dem Nutzer und der CI, nie einem Agenten;
+  Einrichtung in `docs/release/android-signing.md`.
+
 ## Container- und Runtime-Smokes
 
 Lokales Core-Image:
@@ -555,11 +587,14 @@ naechste Schritte nur nach direkter Repository-Pruefung aktualisieren.
 
 - `pnpm` ist moeglicherweise nicht global auf dem `PATH`; `npx pnpm@9.0.0` ist
   der portable Standardweg.
-- Die Arbeitsmaschine bringt kein passendes globales Node mit. Node 22.20.0 und
-  Hilfsbinaries werden dort unter `/tmp/node-v22.20.0-linux-x64/bin` bzw.
-  `/tmp/pico-bin` bereitgestellt und beiden `PATH` vorangestellt. `/tmp` ist
-  tmpfs: nach einem Neustart ist das erneut bereitzustellen, und grosse
-  Fixtures gehoeren nicht dorthin.
+- **Node kommt seit dem 2026-09-30 vom System** (`/usr/bin/node`, 22.22.2),
+  und die CI verlangt nur "Node 22". Bis dahin lag ein Node 22.20.0 unter
+  `/tmp/node-v22.20.0-linux-x64` und Hilfsbinaries unter `/tmp/pico-bin`, beide
+  dem `PATH` vorangestellt; an diesem Tag war `/tmp` geleert, ohne Neustart.
+  `/tmp` ist tmpfs: grosse Fixtures gehoeren nicht dorthin, und der
+  pnpm-Store dort (rund 630 MB) belegt Arbeitsspeicher. Ist er weg, legt ihn
+  `npx pnpm@9.0.0 install --force --frozen-lockfile --store-dir
+  /tmp/pico-pnpm-store` neu an (knapp eine Minute).
 - **Nach vielen Kettenlaeufen in `/tmp` nachsehen** (Befund B172). Es liegt hier
   im Arbeitsspeicher, und liegengebliebene Testverzeichnisse summieren sich
   lautlos: am 2026-09-14 standen dort **2.367 `pico-*`-Verzeichnisse** und die
