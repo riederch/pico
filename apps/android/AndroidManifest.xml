@@ -32,6 +32,7 @@
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <application android:label="Pico" android:icon="@mipmap/ic_launcher"
+      android:theme="@style/PicoTheme"
       android:extractNativeLibs="true" android:allowBackup="false">
     <!-- `allowBackup="false"`: ADR 0072 - keys and the data they protect
          never share a backup artifact, and Android's cloud backup would put

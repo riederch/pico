@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The light window theme, picked by Android when the system is not in night
+     mode. Same roles as values/pico_theme.xml; the colours behind them come
+     from values-notnight/pico_colors.xml. Dark status-bar icons, because the
+     bar is light. -->
+<resources>
+  <style name="PicoTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <item name="android:windowBackground">@color/pico_bg_deep</item>
+    <item name="android:statusBarColor">@color/pico_bg_deep</item>
+    <item name="android:navigationBarColor">@color/pico_bg_deep</item>
+    <item name="android:windowLightStatusBar">true</item>
+    <item name="android:colorPrimary">@color/pico_primary</item>
+    <item name="android:colorAccent">@color/pico_primary</item>
+    <item name="android:colorButtonNormal">@color/pico_primary</item>
+    <item name="android:textColorPrimary">@color/pico_text_primary</item>
+    <item name="android:textColorSecondary">@color/pico_text_secondary</item>
+    <item name="android:textColorHint">@color/pico_text_muted</item>
+    <item name="android:buttonStyle">@style/PicoButton</item>
+  </style>
+  <style name="PicoButton" parent="@android:style/Widget.Material.Button.Colored">
+    <item name="android:textColor">@color/pico_text_on_primary</item>
+  </style>
+</resources>

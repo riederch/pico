@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The launcher mark: a lower-case "p", ring and stem, in the brand colour.
+<!-- The launcher mark: a lower-case "p", ring and stem, dark on the brand
+     colour - the design system's own "text on primary" pairing. Both colours
+     are ones the light set does not override, so the icon looks the same in
+     day and night mode; on bg-deep it turned into cyan on pale blue in light
+     mode, which was found on 2026-10-01 when the window theme was added.
      Drawn on the 108-unit adaptive-icon canvas and kept inside the 66-unit
      safe zone around its centre (21 to 87), so no mask a launcher applies
      cuts into it. The bounding box is 34.5 to 73.5 across and 27 to 80
@@ -9,9 +13,9 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-  <path android:fillColor="@color/pico_primary"
+  <path android:fillColor="@color/pico_text_on_primary"
       android:pathData="M34.5,31 h7 v49 h-7 z" />
-  <path android:fillColor="@android:color/transparent" android:strokeColor="@color/pico_primary"
+  <path android:fillColor="@android:color/transparent" android:strokeColor="@color/pico_text_on_primary"
       android:strokeWidth="7"
       android:pathData="M54,30.5 a16,16 0 1,1 0,32 a16,16 0 1,1 0,-32" />
 </vector>

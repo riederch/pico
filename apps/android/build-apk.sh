@@ -69,6 +69,10 @@ done
 [ -n "$out" ] || die "--out is required"
 manifest="$(cd "$(dirname "$manifest")" && pwd)/$(basename "$manifest")"
 out="$(mkdir -p "$(dirname "$out")" && cd "$(dirname "$out")" && pwd)/$(basename "$out")"
+# A failed build must not leave the last good one behind under the same name:
+# on 2026-10-01 a resource error stopped this script, and the APK from the run
+# before was checked and installed as if it were new.
+rm -f "$out" "$out.sha256"
 
 fetch() { # url sha256 file
   if [ ! -f "$3" ] || ! echo "$2  $3" | sha256sum --check --status; then

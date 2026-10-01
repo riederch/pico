@@ -1069,10 +1069,26 @@ Farbdateien, darf weder einen Hex-Wert noch `parseColor` noch eine benannte
 Android-Farbe tragen. Zwei Pflanzungen beißen: die alte Ansicht zurück und ein
 Hex-Wert im Symbol.
 
-**Offen und sichtbar:** die Titelleiste ist noch die des Systemthemas, und der
-Knopf ist grau — die App setzt bisher kein Fensterthema. Der dunkle Modus ist
-nicht auf dem Gerät gesehen; das hieße, eine Systemeinstellung des Telefons
-umzustellen.
+**Nachgezogen am selben Tag: das Fensterthema.** Die App setzte keines und
+trug darum die dunkle Titelleiste und den grauen Knopf des Systems.
+`PicoTheme` (`values/` dunkel, `values-notnight/` hell) nennt nur Rollen und
+verweist auf die generierten Farben: ohne Titelleiste, Status- und
+Navigationsleiste im Pico-Hintergrund, der Knopf in der Markenfarbe mit
+`text-on-primary`. Auf dem A34 gesehen.
+
+Dabei kippte das Symbol: es stand auf `bg-deep`, und das ist im hellen Satz
+ein helles Blau — Cyan auf Hellblau. Es ist jetzt ein dunkles „p" auf der
+Markenfarbe, das Paar „Text auf Primär" des Designsystems, und beide Farben
+überschreibt der helle Satz nicht; aus den echten Dateien gerendert, sieht es
+in beiden Modi gleich aus.
+
+**Und eine Lücke im Bauweg, die nur zufällig nichts kostete:** ein Ressourcenfehler
+brach `build-apk.sh` ab, und die APK des vorigen Laufs lag noch am selben
+Ort — sie wurde geprüft, für gut befunden und installiert, als wäre sie neu.
+Der Bauweg löscht seine Ausgabe jetzt, bevor er baut.
+
+Der dunkle Modus ist nicht auf dem Gerät gesehen; das hieße, eine
+Systemeinstellung des Telefons umzustellen.
 
 **B281 — die App lief zum ersten Mal auf einem Telefon, und zweimal stimmte
 der Schreibtisch nicht (2026-10-01).** Die App aus `apps/android` auf dem A34

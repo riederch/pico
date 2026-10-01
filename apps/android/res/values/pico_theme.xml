@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's window theme (2026-10-01). Without one the app wore the
+     platform's: a dark title bar over Pico's colours and a grey button. Every
+     colour here is a reference into the generated pico_colors.xml; this file
+     names roles, never values. The base set is the dark theme, as for the
+     colours; values-notnight/ carries the light one. -->
+<resources>
+  <style name="PicoTheme" parent="@android:style/Theme.Material.NoActionBar">
+    <item name="android:windowBackground">@color/pico_bg_deep</item>
+    <item name="android:statusBarColor">@color/pico_bg_deep</item>
+    <item name="android:navigationBarColor">@color/pico_bg_deep</item>
+    <item name="android:colorPrimary">@color/pico_primary</item>
+    <item name="android:colorAccent">@color/pico_primary</item>
+    <item name="android:colorButtonNormal">@color/pico_primary</item>
+    <item name="android:textColorPrimary">@color/pico_text_primary</item>
+    <item name="android:textColorSecondary">@color/pico_text_secondary</item>
+    <item name="android:textColorHint">@color/pico_text_muted</item>
+    <item name="android:buttonStyle">@style/PicoButton</item>
+  </style>
+  <style name="PicoButton" parent="@android:style/Widget.Material.Button.Colored">
+    <item name="android:textColor">@color/pico_text_on_primary</item>
+  </style>
+</resources>
