@@ -1039,6 +1039,43 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B281 — die App lief zum ersten Mal auf einem Telefon, und zweimal stimmte
+der Schreibtisch nicht (2026-10-01).** Die App aus `apps/android` auf dem A34
+(Android 16), installiert aus der Datei, ohne ein Skript dahinter. Das
+Paketflag sagt, was das Manifest verspricht: weder `DEBUGGABLE` noch
+`ALLOW_BACKUP`, und Android hält App und Sonde voneinander getrennt.
+
+**Erster Start: „Pico wird wiederholt beendet".** Jeder Dienst starb beim
+ersten Node-Start mit `UnsatisfiedLinkError`. JNI findet eine native Methode
+über einen Namen, der das Java-Paket ausschreibt, und die Brücke
+`pico_node_jni.cpp` exportierte noch `Java_com_pico_a1probe_…` — beim Umzug
+von `NodeRuntime` ins Paket der App am 2026-09-27 stehen geblieben. Gebaut,
+gelinkt und geprüft hatte alles; der Name wird erst zur Laufzeit aufgelöst.
+Den Fehler habe ich selbst in Schritt 1 eingeführt, und er hätte die Sonde
+beim nächsten Neubau genauso getroffen. `manifest:check` hält jetzt jede
+native Methode gegen ein Symbol der Brücke und umgekehrt; die alte Brücke
+zurückgepflanzt, fällt er in beide Richtungen.
+
+Danach läuft es: der Kern wird aus der APK ausgepackt, der Tresor-Prozess
+startet, und der Bildschirm zeigt den ersten Beitrittsschritt mit den Worten
+des Kerns — *„Choose a Vault passphrase for this device"* —, die der
+Node-Prozess über den UI-Socket schickt.
+
+**Zweiter Befund: im Hintergrund lief alles, und nichts davon war zu sehen.**
+Die App erbat die Benachrichtigungs-Berechtigung nie. Die Sonde hatte das
+verdeckt, weil ihre Skripte sie per `adb shell pm grant` von außen setzten —
+der Produktpfad hat sie nie selbst gebraucht. Ein Hintergrund, den niemand
+sieht, ist die versteckte Automation, die Pico nicht haben will. Jetzt fragt
+die App beim ersten Start, in dem Moment, in dem der Tresor-Prozess
+anläuft; nach dem Zulassen stehen da *„Keeping your keys on this device"* und
+*„Adding this device to your Pico"*.
+
+**Was nicht geprüft ist:** ein Beitritt mit dieser App — der braucht eine
+Person, ihre Passphrase und ein zweites Gerät —, die Termine danach und die
+Erfassung. Die Test-App ist mit einem Wegwerfschlüssel signiert und bleibt
+installiert; vor der ersten Release-APK muss sie deinstalliert werden, weil
+Android ein Update unter einem anderen Schlüssel ablehnt.
+
 **B280 — die Freigabe war eine Form, kein Beweis (2026-09-25).** Die erste
 Produktinvariante in AGENTS.md: *Assistant macht Vorschläge; Pico Rules/Policy
 entscheidet; Action Runner führt nur freigegebene Aktionen aus.* Gemessen

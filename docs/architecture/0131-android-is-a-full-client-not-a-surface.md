@@ -2,6 +2,13 @@
 
 ## Status
 
+Status note, 2026-10-01: **Die App laeuft auf einem Telefon** (A34, Android
+16), aus der APK installiert: Kern ausgepackt, Tresor-Prozess gestartet,
+erster Beitrittsschritt mit den Worten des Kerns. Zwei Fehler fand erst das
+Geraet (Befund B281): die JNI-Bruecke trug noch den Paketnamen der Sonde, und
+die App erbat die Benachrichtigungs-Berechtigung nie. Beides behoben, das
+erste haelt jetzt `manifest:check`. Ein Beitritt mit der App steht noch aus.
+
 Status note, 2026-09-30: **Die App ist gebaut und hat ihren CI-Weg; auf einem
 Geraet ist sie noch nicht gelaufen.** `apps/android` traegt die Produkthaelfte
 der Sonde unter `io.github.riederch.pico`, und `apps/android/build-apk.sh` ist
