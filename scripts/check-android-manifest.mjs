@@ -218,6 +218,47 @@ for (const subject of subjects) {
     + `${declaredPermissions.length} permissions`);
 }
 
+/**
+ * Every native method has its symbol in the JNI shim, and every symbol its
+ * method (2026-10-01). JNI finds a native method by a name that spells out
+ * the Java package; when NodeRuntime moved to the app's package on 2026-09-27
+ * the shim kept the probe's, and every service of the app died on its first
+ * Node start. Nothing compiled wrong and nothing linked wrong - the mismatch is
+ * only resolved at runtime, so this reads both sides instead.
+ */
+const jniShim = 'apps/android/pico_node_jni.cpp';
+const exported = new Set(
+  [...readFileSync(join(repoRoot, jniShim), 'utf8')
+    .replace(/\/\/.*$/gmu, '')
+    .matchAll(/\b(Java_[A-Za-z0-9_]+)\s*\(/gu)].map(([, symbol]) => symbol),
+);
+const jniEscape = (name) => name.replace(/_/gu, '_1');
+const natives = new Set();
+for (const path of trackedUnder('apps/android/src').filter((file) => file.endsWith('.java'))) {
+  const text = readFileSync(join(repoRoot, path), 'utf8');
+  const pkg = /^package ([a-z0-9_.]+);/mu.exec(text)?.[1] ?? '';
+  const owner = basename(path, '.java');
+  for (const [, method] of text.matchAll(/\bnative\s+[\w.<>\[\]]+\s+(\w+)\s*\(/gu)) {
+    natives.add(`Java_${pkg.split('.').map(jniEscape).join('_')}_${jniEscape(owner)}_${jniEscape(method)}`);
+  }
+}
+for (const symbol of natives) {
+  if (!exported.has(symbol)) {
+    errors.push(
+      `${symbol} is what JNI looks for and ${jniShim} does not export it - the call fails at `
+      + 'runtime with UnsatisfiedLinkError, on the phone, not at build time.',
+    );
+  }
+}
+for (const symbol of exported) {
+  if (!natives.has(symbol)) {
+    errors.push(`${jniShim} exports ${symbol} and no Java class declares that native method.`);
+  }
+}
+if (natives.size === 0) {
+  errors.push('no native method found in apps/android/src, so the JNI half of this check has no subject');
+}
+
 for (const permission of evidence.keys()) {
   if (!declaredAnywhere.has(permission)) {
     errors.push(`${permission} is argued here and no manifest declares it any more`);
@@ -233,5 +274,6 @@ if (errors.length > 0) {
 console.log(
   `Android manifest check passed (${summary.join('; ')}; every component named by its class and `
   + 'every permission redeemed by a token its sources still carry; the app is not debuggable, '
-  + 'exports only its launcher and keeps out of Android backup).',
+  + `exports only its launcher and keeps out of Android backup; ${natives.size} native method(s), `
+  + 'each exported by the JNI shim under its package\'s name).',
 );

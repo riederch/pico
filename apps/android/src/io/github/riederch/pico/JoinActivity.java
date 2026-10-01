@@ -63,6 +63,7 @@ public final class JoinActivity extends Activity {
 
   private static final int SCAN_REQUEST = 0xA5;
   private static final int CAMERA_PERMISSION = 0xCA;
+  private static final int NOTIFICATION_PERMISSION = 0x0B;
 
   @Override protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -73,6 +74,24 @@ public final class JoinActivity extends Activity {
      * made Back end a ceremony that another device was waiting on.
      */
     startForegroundService(new Intent(this, CustodyService.class));
+    /**
+     * Asked here because this is the moment it is needed: custody has just
+     * started working in the background, and from now on there is always
+     * something running that a person should be able to see (2026-10-01).
+     *
+     * The probe never asked - its scripts granted the permission over adb,
+     * which hid the gap until the app ran on an A34 with no adb behind it:
+     * every service ran, and not one of them was visible. A background that
+     * cannot be seen is the hidden automation Pico promises not to have. On
+     * Android 12 and older the permission does not exist and is granted.
+     */
+    if (android.os.Build.VERSION.SDK_INT >= 33
+        && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+          != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      requestPermissions(
+        new String[] { android.Manifest.permission.POST_NOTIFICATIONS },
+        NOTIFICATION_PERMISSION);
+    }
     /**
      * **Nur, wenn es noch keinen Beitritt gibt** (am 2026-08-26 auf dem
      * Bildschirm gesehen). Der Beitritt lief bei jedem Öffnen, also stand
