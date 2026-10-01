@@ -27,7 +27,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,11 +44,12 @@ if (apk === undefined || !existsSync(apk)) {
 
 const sdk = process.env.ANDROID_SDK ?? process.env.ANDROID_SDK_ROOT
   ?? join(process.env.HOME ?? '', 'Android/Sdk');
-const buildTools = join(sdk, 'build-tools');
-const newest = readdirSync(buildTools)
-  .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  .at(-1);
-const tool = (name) => join(buildTools, newest, name);
+// The build-tools build-apk.sh used, from the one place both read: taking the
+// newest instead met apksigner 37 on the first CI run, which words its
+// certificate line differently from 36.1 (2026-10-01).
+const buildToolsVersion = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
+  .androidToolchain.buildTools;
+const tool = (name) => join(sdk, 'build-tools', buildToolsVersion, name);
 const run = (command, args) => execFileSync(command, args, {
   encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
 });
@@ -143,8 +144,18 @@ if (!entries.includes('lib/arm64-v8a/libnode.so')) {
 let certificate = '';
 try {
   const printed = run(tool('apksigner'), ['verify', '--print-certs', apk]);
-  certificate = /Signer #1 certificate SHA-256 digest: ([0-9a-f]{64})/u.exec(printed)?.[1] ?? '';
-  if (certificate === '') errors.push('apksigner verified but printed no certificate digest');
+  // Every certificate line, however a version words it - 36.1 writes
+  // "Signer #1 certificate SHA-256 digest:", 37 writes "V3.0 Signer:
+  // certificate SHA-256 digest:". And exactly one signer: an APK carrying a
+  // second certificate is not one this project made.
+  const digests = new Set([...printed.matchAll(/certificate SHA-256 digest: ([0-9a-f]{64})/giu)]
+    .map(([, digest]) => digest.toLowerCase()));
+  if (digests.size !== 1) {
+    errors.push(`apksigner printed ${digests.size} certificate digests where one signer is expected:\n`
+      + printed.split('\n').filter((line) => /digest|Signer/u.test(line)).join('\n'));
+  } else {
+    certificate = [...digests][0];
+  }
 } catch (error) {
   errors.push(`apksigner refused the signature: ${String(error.stderr ?? error.message).trim()}`);
 }

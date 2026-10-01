@@ -27,14 +27,15 @@
 # and PICO_APK_KEY_ALIAS. Without them, and without --release, a throwaway
 # debug key is made - an APK signed so is for a device on this desk only.
 #
-# Tools: ANDROID_SDK (build-tools + platforms/android-*), ANDROID_NDK, and a
-# javac (JAVAC) - on this machine the system JDK is a JRE only.
+# Tools: an SDK (ANDROID_SDK or ANDROID_SDK_ROOT) carrying the build-tools and
+# platform pinned in apps/android/package.json, the pinned NDK (found by its
+# revision, see below), and a javac (JAVAC) - on this machine the system JDK
+# is a JRE only.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 sdk="${ANDROID_SDK:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
-ndk="${ANDROID_NDK:-${ANDROID_NDK_HOME:-$HOME/.cache/android-ndk-r26d}}"
 javac_bin="${JAVAC:-javac}"
 cache="${PICO_APK_CACHE:-$HOME/.cache/pico-apk-dl}"
 
@@ -83,11 +84,36 @@ fetch() { # url sha256 file
   fi
 }
 
-bt="$(ls -d "$sdk"/build-tools/* 2>/dev/null | sort -V | tail -1)"
-aj="$(ls "$sdk"/platforms/*/android.jar 2>/dev/null | sort -V | tail -1)"
-clang="$(ls "$ndk"/toolchains/llvm/prebuilt/*/bin/aarch64-linux-android2[4-9]-clang++ 2>/dev/null | head -1)"
-[ -n "$bt" ] && [ -n "$aj" ] || die "no build-tools or android.jar under $sdk"
-[ -n "$clang" ] || die "no NDK clang under $ndk"
+# The toolchain, pinned in apps/android/package.json and read by
+# check-apk.mjs too (2026-10-01). Both used to take whatever was newest, and
+# the first CI run showed what that means: the runner carries build-tools
+# 37.0.0, whose apksigner words its certificate line differently, and an
+# android-37.2 *beta* platform the app would have been compiled against.
+# These three versions are preinstalled on the GitHub runner image; locally
+# they are installed once.
+toolchain() { node -p "require('$here/package.json').androidToolchain.$1"; }
+bt_version="$(toolchain buildTools)"
+platform="$(toolchain platform)"
+ndk_version="$(toolchain ndk)"
+bt="$sdk/build-tools/$bt_version"
+aj="$sdk/platforms/$platform/android.jar"
+[ -x "$bt/aapt2" ] || die "build-tools $bt_version not under $sdk (pinned in apps/android/package.json)"
+[ -f "$aj" ] || die "platform $platform not under $sdk (pinned in apps/android/package.json)"
+# The NDK by its revision, wherever it is: the runner keeps it under the SDK,
+# this machine under ~/.cache. A directory is taken only if its
+# source.properties names the pinned revision.
+ndk=""
+for candidate in "${ANDROID_NDK:-}" "${ANDROID_NDK_HOME:-}" "$sdk/ndk/$ndk_version" "$HOME"/.cache/android-ndk-*; do
+  [ -n "$candidate" ] && [ -f "$candidate/source.properties" ] || continue
+  if grep -q "^Pkg.Revision = $ndk_version\$" "$candidate/source.properties"; then
+    ndk="$candidate"
+    break
+  fi
+done
+[ -n "$ndk" ] || die "NDK $ndk_version not found (pinned in apps/android/package.json)"
+clang="$(ls "$ndk"/toolchains/llvm/prebuilt/*/bin/aarch64-linux-android26-clang++ 2>/dev/null | head -1)"
+[ -n "$clang" ] || die "no API-26 clang in NDK $ndk_version at $ndk"
+echo "== toolchain: build-tools $bt_version, $platform, NDK $ndk_version"
 command -v "$javac_bin" > /dev/null || die "no javac ($javac_bin); set JAVAC"
 
 njm_zip="$cache/nodejs-mobile-${njm_version}-android.zip"

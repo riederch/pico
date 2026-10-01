@@ -1039,6 +1039,35 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B283 — der erste CI-Lauf baute mit anderen Werkzeugen als der Schreibtisch
+(2026-10-01).** Nach dem Push lief `android_package` auf dem GitHub-Runner:
+der Bau ging durch — SDK, NDK und `javac` tragen dort —, und `check-apk.mjs`
+fiel mit *„apksigner verified but printed no certificate digest"*.
+
+Nachgemessen statt geraten: das Runner-Image bringt Build-Tools 37.0.0,
+eine Plattform android-37.2-beta3 und NDK 27.3 als Vorgabe; diese Maschine
+hatte 36.1.0, android-36 und r26d. Bauweg und Prüfung griffen beide zur
+**neuesten** Version. Mit dem `apksigner` aus den Build-Tools 37, aus Googles
+Repository geladen und gegen dessen SHA-1 geprüft, steht die Zeile als
+`V3.0 Signer: certificate SHA-256 digest: …`, wo 36.1 `Signer #1 certificate
+SHA-256 digest: …` schreibt. Dieselbe Prüfsumme, anders gesagt — und auf dem
+Runner wäre die App obendrein gegen eine Beta-Plattform kompiliert worden.
+
+Die Zeile war das Symptom; die Ursache war, dass der Bau sich seine Werkzeuge
+selbst aussuchte. Jetzt stehen Build-Tools 36.1.0, android-36 und NDK
+27.3.13750724 an einer Stelle (`apps/android/package.json`), alle drei auf dem
+Runner vorinstalliert, und Bauweg und Prüfung lesen sie dort. Das NDK findet
+der Bauweg über die Revision in seiner `source.properties`, wo immer es liegt;
+lokal ist r27d nachgeladen. Die JNI-Brücke baut jetzt für API 26, die
+Mindestversion der App, statt für das erste Ziel ab 24. Weil damit Brücke und
+`libc++_shared.so` aus einem anderen NDK kommen, lief die App danach erneut auf
+dem A34: Kern ausgepackt, Tresor-Prozess, Beitrittsbildschirm, kein Absturz.
+
+Die Prüfung liest außerdem jede Zeile mit `certificate SHA-256 digest`, wie
+immer sie formuliert ist, gegen beide Versionen gemessen, und verlangt genau
+**einen** Unterzeichner — eine APK mit einem zweiten Zertifikat ist keine, die
+dieses Projekt gebaut hat.
+
 **B282 — die Android-App trug die Farben von GitHub (2026-10-01).** Auf dem
 Bildschirmfoto von B281 stand das untere Drittel des Fensters in Grau, und
 der Inhalt darüber in einem dunklen Thema, das nicht nach Pico aussah.

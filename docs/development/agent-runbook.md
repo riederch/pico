@@ -508,9 +508,15 @@ node apps/android/check-apk.mjs apps/android/out/pico.apk
 ```
 
 - **`JAVAC`** muss gesetzt sein: das System-JDK dieser Maschine ist nur eine JRE.
-- **SDK und NDK** sucht der Bauweg unter `ANDROID_SDK`/`ANDROID_SDK_ROOT` und
-  `ANDROID_NDK`/`ANDROID_NDK_HOME`, sonst unter `~/Android/Sdk` und
-  `~/.cache/android-ndk-r26d`.
+- **Der Werkzeugstand ist festgenagelt** in `apps/android/package.json`
+  (`androidToolchain`): Build-Tools 36.1.0, Plattform android-36, NDK
+  27.3.13750724 (r27d) - alle drei auf dem GitHub-Runner vorinstalliert. Das SDK
+  kommt aus `ANDROID_SDK`/`ANDROID_SDK_ROOT` oder `~/Android/Sdk`; das NDK
+  findet der Bauweg ueber die Revision in seiner `source.properties`, unter
+  `ANDROID_NDK`, `ANDROID_NDK_HOME`, `<sdk>/ndk/<revision>` oder
+  `~/.cache/android-ndk-*` (auf dieser Maschine `~/.cache/android-ndk-r27d`).
+  Bis zum 2026-10-01 nahmen Bauweg und Pruefung die jeweils neueste Version;
+  der erste CI-Lauf fand dort Build-Tools 37 und eine Beta-Plattform (B283).
 - **nodejs-mobile und ZXing** laedt er selbst nach `~/.cache/pico-apk-dl` und
   prueft sie gegen festgenagelte Pruefsummen; eine Abweichung bricht den Bau.
 - **Der pnpm-Store** kommt aus `node_modules/.modules.yaml`, also aus der

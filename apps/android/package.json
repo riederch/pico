@@ -7,5 +7,10 @@
   "scripts": {
     "apk": "./build-apk.sh --manifest AndroidManifest.xml --out out/pico.apk --embed-stage",
     "apk:check": "node check-apk.mjs out/pico.apk"
+  },
+  "androidToolchain": {
+    "buildTools": "36.1.0",
+    "platform": "android-36",
+    "ndk": "27.3.13750724"
   }
 }
