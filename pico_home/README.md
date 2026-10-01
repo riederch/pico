@@ -75,7 +75,7 @@ Foundation phase.
 Current version:
 
 ```text
-0.2.1
+0.3.0
 ```
 
 **Not production-ready.** The Foundation HTTP and WebSocket surface is local

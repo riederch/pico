@@ -1,5 +1,5 @@
 name: Pico Home
-version: "0.2.1"
+version: "0.3.0"
 slug: pico_home
 description: A place where your Pico lives, on your own Home Assistant.
 url: https://github.com/riederch/pico

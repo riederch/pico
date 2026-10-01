@@ -146,7 +146,7 @@ Updates arrive through the normal Home Assistant add-on update flow. The
 add-on version and the image tag move together:
 
 ```text
-ghcr.io/riederch/pico/relay:0.2.1
+ghcr.io/riederch/pico/relay:0.3.0
 ```
 
 All three Pico deliverables carry one version and ship from one Git tag, so a

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0
+
+```text
+ghcr.io/riederch/pico/relay:0.3.0
+```
+
+**Fixes to the relay itself, none of which changes how you configure it:**
+
+- Expired packets are cleared even when no Home comes by to collect them, and
+  a second quota bounds the rows an account leaves behind.
+- A refusal says why in a word and nothing more: one used to hand an anonymous
+  caller the relay's database path.
+- The database writes with `synchronous = FULL` and `secure_delete`, so an
+  acknowledged packet survives a power cut and a removed one leaves the file.
+- The operator reset marker has a name and a documented path.
+
 ## 0.2.1
 
 **The first release of Pico Relay as a Home Assistant add-on.**

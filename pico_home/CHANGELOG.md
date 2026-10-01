@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.0
+
+```text
+ghcr.io/riederch/pico/home:0.3.0
+```
+
+**Pico for Android.** The same release carries a signed Android app beside
+the Linux client. A phone joins your Home the way a second desktop does - by
+holding two screens up to each other - and keeps its own keys. The app is
+new: it has run on one phone, and joining has been proven with the probe it
+grew out of, not yet with the app itself. Noting where you parked is not in
+it yet.
+
+**What changed in the Home since 0.2.1**, in the words of what you can do:
+
+- Host a shared space for someone else and end it again; hand a second device
+  the right to read a part of your memory, and take that right back from the
+  device that granted it.
+- Export the keys of your memory domains into a file sealed with a passphrase
+  of its own, and bring them back into a Home - the half of a recovery you
+  hold yourself.
+- Decide what Pico may do without asking you, and see what is waiting for
+  your answer and why.
+
+**Storage that keeps what it confirmed.** The database now writes with
+`synchronous = FULL`, so a write the Home acknowledged survives a power cut,
+and with `secure_delete`, so what you delete leaves the file instead of only
+the answer. Domain keys and host keys are on the disk before anything is
+encrypted under them.
+
+**Upgrading from 0.2.1.** Every database step 0.2.1 shipped is unchanged, and
+four are appended (`0025` to `0028`); none of them rewrites existing data.
+One can refuse: `0027` makes each device's event counter unique, and a
+database that two Pico Cores ever wrote to at the same time may hold a
+duplicate. Then the step does not run, nothing is changed, and the Home does
+not start - the previous version still opens that database. This upgrade was
+checked against the shipped migration list, not by running a 0.2.1 database
+through it; see `docs/release/upgrade-contract.md` for what that leaves open.
+
 ## 0.2.1
 
 **The first tag this add-on was actually published under.** 0.2.0 existed as

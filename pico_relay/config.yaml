@@ -1,5 +1,5 @@
 name: Pico Relay
-version: "0.2.1"
+version: "0.3.0"
 slug: pico_relay
 description: A queue with a door on it. Forwards sealed packets and holds no authority.
 url: https://github.com/riederch/pico
