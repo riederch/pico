@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -332,6 +333,35 @@ for (const [path, remedy] of literalFreeMarkupAndCode) {
     errors.push(`${path} contains a copied color literal; ${remedy}.`);
   }
 }
+/**
+ * The Android app (2026-10-01). It was the one surface outside this gate, and
+ * it showed: its screens were drawn in GitHub's dark palette, written into
+ * the Java by hand (`#0d1117`, `#e6edf3`, `#7ee787` ...), with the platform's
+ * grey below the last line. The list above is by hand and the app was not on
+ * it, so this half reads every tracked file under the app's sources and
+ * resources instead - a new screen is covered the day it is written. The two
+ * generated colour files are the one place a value may stand.
+ */
+const androidGenerated = new Set([
+  'apps/android/res/values/pico_colors.xml',
+  'apps/android/res/values-notnight/pico_colors.xml',
+]);
+const androidFiles = execFileSync('git', ['ls-files', 'apps/android/src', 'apps/android/res'], {
+  cwd: repoRoot, encoding: 'utf8',
+}).split('\n').filter((path) => path !== '' && !androidGenerated.has(path));
+if (androidFiles.length === 0) {
+  errors.push('no tracked file under apps/android/src or apps/android/res - the Android half of this gate reads nothing.');
+}
+for (const path of androidFiles) {
+  const text = read(path);
+  if (/#[0-9a-f]{3,8}\b/iu.test(text)) {
+    errors.push(`${path} contains a copied color literal; read @color/pico_* or R.color.pico_* instead.`);
+  }
+  if (/\bparseColor\s*\(|\bColor\.(?:BLACK|WHITE|GRAY|DKGRAY|LTGRAY|RED|GREEN|BLUE|YELLOW|CYAN|MAGENTA)\b/u.test(text)) {
+    errors.push(`${path} names a colour of its own; read R.color.pico_* instead.`);
+  }
+}
+
 if (!read('apps/companion-shell/src/window-options.ts').includes("from './pico-design-tokens.generated.js'")) {
   errors.push('apps/companion-shell/src/window-options.ts does not import generated PICO design tokens.');
 }

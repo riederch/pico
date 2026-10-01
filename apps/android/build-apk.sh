@@ -148,17 +148,24 @@ echo "== APK $version ($version_code)"
   # pico.tokens.json. Compiled for every APK, because a manifest that does not
   # name them simply does not use them.
   "$bt/aapt2" compile --dir "$here/res" -o res.zip
-  find src -name '*.java' > sources.txt
+  # Linked first, because linking writes R.java and the Java needs it: the
+  # app reads its colours as resources (2026-10-01). The R class is generated
+  # under the app's package for the probe too, so one source tree compiles
+  # against one name.
+  mkdir -p gen
+  if [ "$embed" = 1 ]; then
+    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" -A assets -R res.zip \
+      --auto-add-overlay --java gen --custom-package io.github.riederch.pico \
+      --version-code "$version_code" --version-name "$version"
+  else
+    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" -R res.zip \
+      --auto-add-overlay --java gen --custom-package io.github.riederch.pico \
+      --version-code "$version_code" --version-name "$version"
+  fi
+  find src gen -name '*.java' > sources.txt
   "$javac_bin" --release 11 -classpath "$aj:$zxing" -d classes @sources.txt
   find classes -name '*.class' > classes.txt
   "$bt/d8" --lib "$aj" --output . @classes.txt "$zxing"
-  if [ "$embed" = 1 ]; then
-    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" -A assets -R res.zip \
-      --auto-add-overlay --version-code "$version_code" --version-name "$version"
-  else
-    "$bt/aapt2" link -o base.apk --manifest "$manifest" -I "$aj" -R res.zip \
-      --auto-add-overlay --version-code "$version_code" --version-name "$version"
-  fi
   zip -q base.apk classes.dex
   zip -qX base.apk lib/arm64-v8a/*.so
   "$bt/zipalign" -f -p 4 base.apk aligned.apk

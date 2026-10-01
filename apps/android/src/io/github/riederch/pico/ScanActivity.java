@@ -3,7 +3,6 @@ package io.github.riederch.pico;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -87,14 +86,14 @@ public final class ScanActivity extends Activity {
     }
 
     FrameLayout frame = new FrameLayout(this);
-    frame.setBackgroundColor(Color.BLACK);
+    frame.setBackgroundColor(getColor(R.color.pico_bg_deep));
     preview = new TextureView(this);
     frame.addView(preview, new FrameLayout.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     status = new TextView(this);
     status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-    status.setTextColor(Color.WHITE);
-    status.setBackgroundColor(Color.parseColor("#aa000000"));
+    status.setTextColor(getColor(R.color.pico_text_primary));
+    status.setBackgroundColor(scrim());
     status.setPadding(36, 36, 36, 36);
     status.setText("Hold the code on your other device in front of the camera.");
     frame.addView(status, new FrameLayout.LayoutParams(
@@ -113,7 +112,7 @@ public final class ScanActivity extends Activity {
      */
     lenses = new LinearLayout(this);
     lenses.setOrientation(LinearLayout.HORIZONTAL);
-    lenses.setBackgroundColor(Color.parseColor("#aa000000"));
+    lenses.setBackgroundColor(scrim());
     lenses.setPadding(18, 18, 18, 18);
     FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -438,5 +437,16 @@ public final class ScanActivity extends Activity {
       thread.quitSafely();
       thread = null;
     }
+  }
+
+  /**
+   * A dark veil over the camera image, so a line stays readable whatever the
+   * lens shows. The colour is Pico's deepest background; only the opacity is
+   * stated here, because the tokens carry no transparency (2026-10-01 - until
+   * then this was a hand-written black).
+   */
+  private int scrim() {
+    final int opacity = 0xAA;
+    return (getColor(R.color.pico_bg_deep) & 0x00FFFFFF) | (opacity << 24);
   }
 }

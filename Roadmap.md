@@ -1039,6 +1039,41 @@ der nächste Start bekommt einen frischen. Wer wohnen bleibt, sagt es —
 `ClientService`, weil sie sich den Prozess mit der Fläche teilen und ein
 `System.exit` dort das Fenster mitten in einer Zeremonie mitnähme.
 
+**B282 — die Android-App trug die Farben von GitHub (2026-10-01).** Auf dem
+Bildschirmfoto von B281 stand das untere Drittel des Fensters in Grau, und
+der Inhalt darüber in einem dunklen Thema, das nicht nach Pico aussah.
+Nachgesehen: `JoinActivity` setzte jede Farbe mit `Color.parseColor` von Hand
+— `#0d1117`, `#e6edf3`, `#9aa7b4`, `#7ee787`, `#d29922`, die Palette des
+dunklen GitHub-Themas. Die Android-Oberfläche war die eine Fläche außerhalb des
+Designsystems. Das Grau kam daher, dass nur die Spalte einen Hintergrund hatte
+und die `ScrollView` darum das Fenster nicht füllte.
+
+**Warum es niemand sah:** `design-system:check` hält farbfreie Oberflächen
+seit Langem, aber über eine Liste von Hand — Web-Dashboard, Desktop-Fenster,
+Fensteroptionen, Wiederherstellungskarte. Die Android-App stand nicht darauf,
+weil es sie als Oberfläche in diesem Baum bis zum 2026-09-27 nicht gab und die
+Sonde niemand als Oberfläche las.
+
+Jetzt liest die App ihre Farben als Ressourcen aus `pico.tokens.json`
+(`R.color.pico_*`), dieselben Rollen wie das Desktop-Fenster: Hintergrund
+`bg-deep`, Text primär, sekundär und gedämpft, der Code in der Markenfarbe, der
+Erreichbarkeitshinweis in `status-warning`. Der Bauweg erzeugt dafür die
+`R`-Klasse vor dem Kompilieren. Der Schleier über dem Kamerabild leitet sich
+aus `bg-deep` ab und nennt nur seine Deckkraft. Auf dem A34, das im hellen
+Modus läuft, wählt Android den hellen Satz aus `values-notnight` von selbst —
+gesehen, nicht angenommen.
+
+**Das Netz** steht in `design-system:check`, ohne Liste: jede verfolgte Datei
+unter `apps/android/src` und `apps/android/res`, außer den zwei generierten
+Farbdateien, darf weder einen Hex-Wert noch `parseColor` noch eine benannte
+Android-Farbe tragen. Zwei Pflanzungen beißen: die alte Ansicht zurück und ein
+Hex-Wert im Symbol.
+
+**Offen und sichtbar:** die Titelleiste ist noch die des Systemthemas, und der
+Knopf ist grau — die App setzt bisher kein Fensterthema. Der dunkle Modus ist
+nicht auf dem Gerät gesehen; das hieße, eine Systemeinstellung des Telefons
+umzustellen.
+
 **B281 — die App lief zum ersten Mal auf einem Telefon, und zweimal stimmte
 der Schreibtisch nicht (2026-10-01).** Die App aus `apps/android` auf dem A34
 (Android 16), installiert aus der Datei, ohne ein Skript dahinter. Das

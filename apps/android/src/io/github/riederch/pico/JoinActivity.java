@@ -2,7 +2,6 @@ package io.github.riederch.pico;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
@@ -187,9 +186,9 @@ public final class JoinActivity extends Activity {
     LinearLayout column = new LinearLayout(this);
     column.setOrientation(LinearLayout.VERTICAL);
     column.setPadding(48, 96, 48, 48);
-    column.setBackgroundColor(Color.parseColor("#0d1117"));
+    column.setBackgroundColor(getColor(R.color.pico_bg_deep));
 
-    title = text(column, 22, Color.parseColor("#e6edf3"), Typeface.DEFAULT_BOLD);
+    title = text(column, 22, getColor(R.color.pico_text_primary), Typeface.DEFAULT_BOLD);
     /**
      * **"Phone" hier und "device" elf Sätze später - geprüft und so gelassen**
      * (2026-08-22). Am Vortag wurde genau diese Uneinigkeit vom
@@ -210,7 +209,7 @@ public final class JoinActivity extends Activity {
      * gefunden hat.
      */
     title.setText("Add this phone to your Home");
-    body = text(column, 15, Color.parseColor("#9aa7b4"), Typeface.DEFAULT);
+    body = text(column, 15, getColor(R.color.pico_text_secondary), Typeface.DEFAULT);
     body.setText("Your other device grants this one. Nothing is sent until you say so.");
     /**
      * **Ein beigetretenes Gerät wird nicht gefragt.** Die Einladung wird
@@ -224,12 +223,12 @@ public final class JoinActivity extends Activity {
       body.setVisibility(View.GONE);
     }
 
-    code = text(column, 13, Color.parseColor("#7ee787"), Typeface.MONOSPACE);
+    code = text(column, 13, getColor(R.color.pico_primary), Typeface.MONOSPACE);
     code.setTextIsSelectable(true);
     code.setVisibility(View.GONE);
 
     answer = new EditText(this);
-    answer.setTextColor(Color.parseColor("#e6edf3"));
+    answer.setTextColor(getColor(R.color.pico_text_primary));
     answer.setHint("");
     answer.setVisibility(View.GONE);
     column.addView(answer, wide());
@@ -251,7 +250,7 @@ public final class JoinActivity extends Activity {
     scan.setOnClickListener(view -> startScan());
     column.addView(scan, wide());
 
-    status = text(column, 13, Color.parseColor("#8b949e"), Typeface.DEFAULT);
+    status = text(column, 13, getColor(R.color.pico_text_muted), Typeface.DEFAULT);
     /**
      * Der Fortschritt der Zeremonie - und nur dann. Auf einem beigetretenen
      * Gerät lief die Zeremonie nicht, also hätte dieser Satz für immer
@@ -267,7 +266,7 @@ public final class JoinActivity extends Activity {
      * `picoCompanionConditionsFor` gesagt hat; sie wählt nichts aus und
      * formuliert nichts nach.
      */
-    condition = text(column, 13, Color.parseColor("#d29922"), Typeface.DEFAULT);
+    condition = text(column, 13, getColor(R.color.pico_status_warning), Typeface.DEFAULT);
     condition.setText("");
 
     /**
@@ -278,7 +277,7 @@ public final class JoinActivity extends Activity {
      * die Drift, die `check-one-voice` beim Beitritt gemessen hat, fängt genau
      * so an.
      */
-    due = text(column, 15, Color.parseColor("#e6edf3"), Typeface.DEFAULT_BOLD);
+    due = text(column, 15, getColor(R.color.pico_text_primary), Typeface.DEFAULT_BOLD);
     due.setText("");
 
     /**
@@ -296,7 +295,17 @@ public final class JoinActivity extends Activity {
     });
     column.addView(seen, wide());
 
+    /**
+     * The whole window in Pico's colours (2026-10-01). Until then only the
+     * column had a background, the scroller around it had none and did not
+     * fill the screen, so everything below the last line was the platform's
+     * grey - and the colours above it were GitHub's dark theme, written here
+     * by hand. They come from pico.tokens.json now, as resources, so night
+     * mode picks the light set on its own.
+     */
     ScrollView scroller = new ScrollView(this);
+    scroller.setFillViewport(true);
+    scroller.setBackgroundColor(getColor(R.color.pico_bg_deep));
     scroller.addView(column);
     return scroller;
   }
