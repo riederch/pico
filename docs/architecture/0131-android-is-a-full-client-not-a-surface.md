@@ -2,6 +2,14 @@
 
 ## Status
 
+Status note, 2026-10-01 (spaeter): **Der CI-Weg traegt.** Nach B283 - der Bau
+hatte sich seine Werkzeuge selbst ausgesucht und auf dem Runner Build-Tools 37
+und eine Beta-Plattform gefunden - ist `android_package` auf dem GitHub-Runner
+gruen: die APK wird gebaut und besteht `check-apk.mjs`. `android_release` ist
+noch nie gelaufen; er laeuft nur bei einem Versions-Tag und braucht den
+Release-Schluessel aus `docs/release/android-signing.md`, den es noch nicht
+gibt.
+
 Status note, 2026-10-01: **Die App laeuft auf einem Telefon** (A34, Android
 16), aus der APK installiert: Kern ausgepackt, Tresor-Prozess gestartet,
 erster Beitrittsschritt mit den Worten des Kerns. Zwei Fehler fand erst das
