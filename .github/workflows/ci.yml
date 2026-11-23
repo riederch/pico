@@ -60,11 +60,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # Befund B97. `migration:check` haelt jede ausgelieferte Wanderung
-          # gegen das letzte Versionsschild. Ein Auscheckvorgang bringt per
-          # Vorgabe keine Schilder mit, und der Pruefer wuerde sich dann
-          # ueberspringen - hier, wo er am meisten zaehlt.
-          fetch-tags: true
+          # The pinned checkout only fetched the event commit with fetch-tags
+          # and the default depth. The migration check needs the release tags.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -120,6 +118,18 @@ jobs:
             echo "no AppArmor userns restriction on this image; nothing to lift"
           fi
 
+      - name: Pause the host dpkg status logger
+        run: |
+          set -euo pipefail
+          # The host's needrestart logger writes to /run/needrestart even
+          # for dpkg operations in the lifecycle test's temporary root.
+          # dpkg ignores dotfiles in its configuration directory.
+          cd /etc/dpkg/dpkg.cfg.d
+          if [ -f needrestart ]; then
+            test ! -e .needrestart-pico-ci
+            sudo -n mv -- needrestart .needrestart-pico-ci
+          fi
+
       # Die Tore ohne die drei Testdurchgaenge - die stehen im Auftrag
       # darunter, nebeneinander statt hintereinander (Befund B67). Dass keine
       # der beiden Haelften einen Schritt verliert, haelt `split:check`
@@ -128,6 +138,15 @@ jobs:
         env:
           PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE: "1"
         run: pnpm verify:gates
+
+      - name: Restore the host dpkg status logger
+        if: always()
+        run: |
+          set -euo pipefail
+          cd /etc/dpkg/dpkg.cfg.d
+          if [ -f .needrestart-pico-ci ]; then
+            sudo -n mv -- .needrestart-pico-ci needrestart
+          fi
 
       # Externes Review vom 2026-09-09, §5. Was das Paket wirklich mitbringt,
       # gegen das, was bekannt kaputt ist.
@@ -333,12 +352,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          # Befund B97. `migration:check` haelt jede ausgelieferte Wanderung
-          # gegen das letzte Versionsschild. Ein Auscheckvorgang bringt per
-          # Vorgabe keine Schilder mit, und der Pruefer wuerde sich dann
-          # ueberspringen - hier, wo er am meisten zaehlt.
-          fetch-tags: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4

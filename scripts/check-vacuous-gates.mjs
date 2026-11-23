@@ -90,12 +90,9 @@ const forceTheWorkingPath = new Map([
       + 'ausgelieferten Wanderungen mit `git show <tag>:…` und haelt sie gegen die von '
       + 'heute. Der gespiegelte Baum hat kein `.git` und kann keines bekommen, ohne dass '
       + 'dieses Audit ein Repositorium mit einem Schild baut - also eine zweite Wahrheit '
-      + 'darueber, was ausgeliefert wurde. **Und weil ein Sprung, den niemand sieht, keiner '
-      + 'ist:** der Auscheckschritt in `ci.yml` holt seit demselben Tag die Schilder mit '
-      + '(`fetch-tags: true`), sonst spraenge er auf dem Laeufer aus demselben Grund - dort, '
-      + 'wo er am meisten zaehlt. Was er ueber einem leeren Baum taete, zeigen die drei '
-      + 'Pflanzungen neben ihm: geaenderter Rumpf, verschwundene Wanderung, und eine neu '
-      + 'eingefuegte, die er richtig *nicht* meldet.',
+      + 'darueber, was ausgeliefert wurde. Lokal ist der Vergleich ohne Tags optional. '
+      + 'In GitHub Actions verlangt der Pruefer die Vergleichsbasis. Der Checkout im '
+      + 'Release-Gate holt sie mit `fetch-depth: 0`.',
   }],
   ['check-release-monotonic.mjs', {
     unforceable: true,

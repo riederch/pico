@@ -54,7 +54,9 @@ const support = JSON.parse(
   readFileSync(join(appRoot, 'electron-support.json'), 'utf8'),
 );
 const rootOwnedPackageProbe = rootOwnedPackageProbeRequested();
+console.log('Building the Debian package');
 const { artifact, checksum } = buildPicoCompanionLinuxPackage();
+console.log('Inspecting the built Debian package');
 const extractionRoot = temporaryRoot('pico-companion-extract-');
 const packageContents = run('dpkg-deb', ['--contents', artifact]).stdout;
 if (rootOwnedPackageProbe) {
@@ -434,7 +436,7 @@ function runReachabilityProbe(root, prefix = []) {
     // temporary root. Quoted here or lost.
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(`${reason}\nReachability probe output (tail):\n${
-      reachabilityOutputTail(outputPath)}`);
+      commandOutputTail(outputPath)}`);
   } finally {
     closeSync(output);
   }
@@ -450,11 +452,11 @@ function runReachabilityProbe(root, prefix = []) {
   return parsed;
 }
 
-function reachabilityOutputTail(path) {
+function commandOutputTail(path) {
   try {
-    return readFileSync(path, 'utf8').slice(-4_000) || '(the probe wrote nothing)';
+    return readFileSync(path, 'utf8').slice(-4_000) || '(the command wrote nothing)';
   } catch {
-    return '(no probe output file was written)';
+    return '(no output file was written)';
   }
 }
 
@@ -635,6 +637,7 @@ function assertRuntimeOnlyPicoPackages(root) {
 
 function verifyDebianLifecycle(artifactPath) {
   const lifecycleRoot = temporaryRoot('pico-companion-lifecycle-');
+  console.log('Building the synthetic Debian upgrade package');
   const upgrade = createSyntheticUpgradePackage(artifactPath);
   const adminDirectory = join(lifecycleRoot, 'var', 'lib', 'dpkg');
   const personHome = join(lifecycleRoot, 'home', 'pico');
@@ -647,33 +650,54 @@ function verifyDebianLifecycle(artifactPath) {
   mkdirSync(adminDirectory, { recursive: true });
   writeFileSync(join(adminDirectory, 'status'), '');
 
-  const dpkg = (...args) => run('fakeroot', [
-    'dpkg',
-    `--root=${lifecycleRoot}`,
-    `--admindir=${adminDirectory}`,
-    '--force-depends',
-    '--force-not-root',
-    '--no-triggers',
-    ...args,
-  ], { HOME: personHome });
+  const dpkg = (operation, ...args) => {
+    console.log(`Running Debian lifecycle check ${operation}`);
+    // A fakeroot descendant can hold a pipe open beyond the timeout. Capture
+    // output in a file so the check can return when the deadline expires.
+    const outputPath = join(lifecycleRoot, `${operation}.log`);
+    const output = openSync(outputPath, 'w');
+    try {
+      run('timeout', [
+        '--verbose',
+        '--kill-after=5s',
+        '180s',
+        'fakeroot',
+        'dpkg',
+        `--root=${lifecycleRoot}`,
+        `--admindir=${adminDirectory}`,
+        `--log=${join(adminDirectory, 'actions.log')}`,
+        '--force-depends',
+        '--force-not-root',
+        '--no-triggers',
+        ...args,
+      ], { HOME: personHome }, ['ignore', output, output]);
+    } catch (error) {
+      throw new Error(`Debian lifecycle check ${operation} failed\n${commandOutputTail(outputPath)}`, {
+        cause: error,
+      });
+    } finally {
+      closeSync(output);
+    }
+    return readFileSync(outputPath, 'utf8');
+  };
 
   try {
-    dpkg('--install', artifactPath);
+    dpkg('install', '--install', artifactPath);
     assertLifecycleInstalled(lifecycleRoot);
     assertSentinelsUnchanged(sentinels);
 
-    dpkg('--install', upgrade.artifact);
+    dpkg('upgrade', '--install', upgrade.artifact);
     assertLifecycleInstalled(lifecycleRoot);
     assertSentinelsUnchanged(sentinels);
-    const status = dpkg('--status', 'pico-companion').stdout;
+    const status = dpkg('status', '--status', 'pico-companion');
     assert(status.includes(`Version: ${upgrade.version}`)
       && status.includes('Status: install ok installed'),
     'Synthetic Debian upgrade did not replace the installed package version.');
 
-    dpkg('--remove', 'pico-companion');
+    dpkg('remove', '--remove', 'pico-companion');
     assertLifecycleRemoved(lifecycleRoot);
     assertSentinelsUnchanged(sentinels);
-    dpkg('--purge', 'pico-companion');
+    dpkg('purge', '--purge', 'pico-companion');
     assertSentinelsUnchanged(sentinels);
     return {
       schema: 'pico.companion.debian-lifecycle.v1',

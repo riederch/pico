@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,8 +23,9 @@ import { fileURLToPath } from 'node:url';
  * ist die Wahrheit darueber, und eine gepflegte Liste waere die zweite Fassung
  * davon - die driftet (Befund B69).
  *
- * **Ohne Schilder wird uebersprungen und gesagt.** Ein flacher Klon hat keine,
- * und ein Ueberspringen ist keine Behauptung (`check-vacuous-gates.mjs`).
+ * Der CI-Checkout braucht die Release-Tags. Lokal darf ein Checkout ohne
+ * Tags den historischen Vergleich ueberspringen. Beim Tag-Build ist der
+ * vorherige Release-Tag die Vergleichsbasis.
  */
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const relativePath = 'apps/core/src/migrations.ts';
@@ -90,36 +91,50 @@ function migrationBodies(source) {
   return { bodies, order };
 }
 
-let releaseTag;
+const inGitHubActions = process.env.GITHUB_ACTIONS === 'true';
+let releaseTags;
 try {
-  releaseTag = execSync('git tag --list "v*" --sort=-v:refname', {
+  releaseTags = execFileSync('git', ['tag', '--list', 'v*', '--sort=-v:refname'], {
     cwd: repoRoot,
     encoding: 'utf8',
-  }).split('\n')[0]?.trim();
-} catch {
-  releaseTag = undefined;
+  }).trim().split('\n').filter(Boolean);
+} catch (error) {
+  missingReleaseBaseline('could not list the Git release tags', error);
 }
 
-if (releaseTag === undefined || releaseTag === '') {
-  console.log(
-    'Migration immutability check skipped: this checkout carries no release tag, '
-    + 'so there is nothing to compare a shipped migration against.',
-  );
-  process.exit(0);
+let releaseTag = releaseTags[0];
+if (inGitHubActions && process.env.GITHUB_REF_TYPE === 'tag') {
+  const candidate = process.env.GITHUB_REF_NAME;
+  const index = releaseTags.indexOf(candidate);
+  if (index < 0) {
+    missingReleaseBaseline(`the candidate tag ${candidate} is absent from this checkout`);
+  }
+  releaseTag = releaseTags[index + 1];
+}
+if (releaseTag === undefined) {
+  missingReleaseBaseline('this checkout has no previous release tag to compare');
 }
 
 let released;
 try {
-  released = execSync(`git show ${releaseTag}:${relativePath}`, {
+  released = execFileSync('git', ['show', `${releaseTag}:${relativePath}`], {
     cwd: repoRoot,
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
   });
-} catch {
-  console.log(
-    `Migration immutability check skipped: ${releaseTag} does not carry `
-    + `${relativePath}, so there is nothing to compare.`,
-  );
+} catch (error) {
+  missingReleaseBaseline(`could not read ${relativePath} from ${releaseTag}`, error);
+}
+
+function missingReleaseBaseline(reason, error) {
+  if (inGitHubActions) {
+    console.error(`Migration immutability check failed: ${reason}.`);
+    if (error?.message) {
+      console.error(error.message);
+    }
+    process.exit(1);
+  }
+  console.log(`Migration immutability check skipped: ${reason}.`);
   process.exit(0);
 }
 
