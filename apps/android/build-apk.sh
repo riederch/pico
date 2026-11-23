@@ -78,7 +78,9 @@ rm -f "$out" "$out.sha256"
 fetch() { # url sha256 file
   if [ ! -f "$3" ] || ! echo "$2  $3" | sha256sum --check --status; then
     mkdir -p "$(dirname "$3")"
-    curl -sSfL -o "$3.part" "$1"
+    echo "== downloading $(basename "$3") from $1"
+    curl -sSfL --retry 5 --retry-max-time 120 --connect-timeout 15 \
+      --max-time 120 -o "$3.part" "$1" || die "download failed for $1"
     echo "$2  $3.part" | sha256sum --check --status || die "digest mismatch for $1"
     mv "$3.part" "$3"
   fi
