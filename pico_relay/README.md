@@ -73,7 +73,7 @@ Foundation phase.
 Current version:
 
 ```text
-0.3.0
+0.3.1
 ```
 
 **Not production-ready.** No relay has run outside a test and a CI smoke

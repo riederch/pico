@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+```text
+ghcr.io/riederch/pico/home:0.3.1
+```
+
+The release workflow now checks the tag before starting the publication jobs.
+The previous tag published Relay and built the clients, while the Home image
+failed before publication. This release includes the Home changes and the
+upgrade from `0.2.1` described below.
+
 ## 0.3.0
 
 ```text

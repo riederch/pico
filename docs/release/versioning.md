@@ -5,7 +5,7 @@ This document is the central checklist for version bumps in Pico.
 ## Current version
 
 ```text
-0.3.0
+0.3.1
 ```
 
 ## Version locations
@@ -46,11 +46,11 @@ ADR 0153 PK4 named three; ADR 0131's status note of 2026-09-27 added the
 Android app as the fourth. A tag publishes all four at the same number:
 
 ```text
-v0.3.0
-├── ghcr.io/riederch/pico/home:0.3.0     Pico Home, the Home Assistant add-on
-├── ghcr.io/riederch/pico/relay:0.3.0    Pico Relay, an add-on and a container
-├── pico-companion_0.3.0_amd64.deb       Pico Client for Linux, attached to the release
-└── pico-android-0.3.0.apk               Pico for Android, signed in CI, attached to the release
+v0.3.1
+├── ghcr.io/riederch/pico/home:0.3.1     Pico Home, the Home Assistant add-on
+├── ghcr.io/riederch/pico/relay:0.3.1    Pico Relay, an add-on and a container
+├── pico-companion_0.3.1_amd64.deb       Pico Client for Linux, attached to the release
+└── pico-android-0.3.1.apk               Pico for Android, signed in CI, attached to the release
 ```
 
 The APK is signed with the release key described in `android-signing.md`
@@ -171,7 +171,7 @@ This check compares the root package version with package metadata, Pico Home Co
 
 The CI workflow does not carry a hardcoded version number. Semver container tags are derived from pushed Git tags such as `v0.2.0`, so `.github/workflows/ci.yml` is not a version-bearing file.
 
-Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is generated. A tag build must use the exact Git tag `v${package.json.version}`; for example, package version `0.3.0` must be released from Git tag `v0.3.0`.
+The shared `verify` job runs `pnpm release:tag-check` before the publication jobs start. The tag must match `v${package.json.version}`. Package version `0.3.1` requires Git tag `v0.3.1`.
 
 ## Container image tags
 
@@ -181,10 +181,10 @@ Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is g
 ghcr.io/riederch/pico/home
 ```
 
-The versioned release artifact for add-on version `0.3.0` is the matching semver image tag:
+The versioned release artifact for add-on version `0.3.1` is the matching semver image tag:
 
 ```text
-ghcr.io/riederch/pico/home:0.3.0
+ghcr.io/riederch/pico/home:0.3.1
 ```
 
 The CI workflow publishes different tag classes for different events:
@@ -219,7 +219,7 @@ Before a release with backup-requiring migrations is tagged, the release must do
 
 ## Release bump procedure
 
-1. Choose the next semantic version, for example `0.3.0`.
+1. Choose the next semantic version, for example `0.3.1`.
 2. Update every location listed in the table above.
 3. Check whether the release contains backup-requiring database migrations. If yes, apply the backup-before-migration release rule.
 4. Run the release gates locally:
@@ -233,8 +233,8 @@ Before a release with backup-requiring migrations is tagged, the release must do
 7. Create and push the matching Git tag. The tag build publishes the versioned image tag:
 
    ```bash
-   git tag v0.3.0
-   git push origin v0.3.0
+   git tag v0.3.1
+   git push origin v0.3.1
    ```
 
 ## Upgrade contract

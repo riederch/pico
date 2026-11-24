@@ -73,6 +73,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # Every publication job depends on verify. Check the tag here, after
+      # setting up pnpm and before any artifact can be published.
+      - name: Verify release tag matches package version
+        if: github.ref_type == 'tag'
+        run: pnpm release:tag-check
+
       # ADR 0122 Y1. Install scripts stay enabled, and the exception is
       # recorded here rather than remembered: better-sqlite3 is a native module
       # whose build runs during install, so turning script execution off would
@@ -265,9 +271,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify release tag matches package version
-        run: pnpm release:tag-check
-
       # ADR 0131, 2026-09-27: the key lives here as an encrypted secret, and
       # its only other copy is the person's own backup. It is written to the
       # runner's temporary directory for the one command that signs, handed
@@ -412,14 +415,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Ueber den Skriptnamen und nicht am ihm vorbei: `release:tag-check` war
-      # der einzige der 90 Skripte dieses Baums ohne jeden Aufrufer, weil hier
-      # die Datei direkt stand. Zwei Wege zu einer Pruefung heissen, dass der
-      # eine sich aendern kann, ohne dass der andere es merkt (2026-09-02).
-      - name: Verify release tag matches package version
-        if: github.ref_type == 'tag'
-        run: pnpm release:tag-check
 
       # ADR 0122 Y4. Before the build, not after: a refusal is only useful
       # while nothing has been pushed. Nothing here makes a GHCR tag immutable

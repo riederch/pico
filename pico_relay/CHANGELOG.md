@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+```text
+ghcr.io/riederch/pico/relay:0.3.1
+```
+
+This patch release gives Relay a shared version with the complete set of
+Pico Home, Linux and Android artifacts. The Relay changes are listed below.
+
 ## 0.3.0
 
 ```text
